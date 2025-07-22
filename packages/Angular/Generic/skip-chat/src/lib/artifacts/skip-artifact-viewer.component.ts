@@ -280,7 +280,21 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         // Initialize from AI message or Configuration
         let configData = null;
         
-        if (this.conversationDetailRecord && 
+        try {
+          if (typeof this.artifactVersion.Configuration === 'string') {
+            configData = JSON.parse(this.artifactVersion.Configuration);
+          } else {
+            // If it's already an object, use it directly
+            configData = this.artifactVersion.Configuration;
+          }
+        } catch (parseErr) {
+          LogError('Error parsing artifact configuration', parseErr instanceof Error ? parseErr.message : String(parseErr));
+          configData = null;
+        }
+
+        // If we couldn't get data from Artifact Version, try to get it from AI message
+        if (!configData && 
+            this.conversationDetailRecord && 
             this.conversationDetailRecord.Role.trim().toLowerCase() === 'ai' &&
             this.conversationDetailRecord.ID?.length > 0) {
           try {
@@ -292,21 +306,6 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
             }
           } catch (parseErr) {
             LogError('Error parsing AI message', parseErr instanceof Error ? parseErr.message : String(parseErr));
-          }
-        }
-        
-        // If we couldn't get data from AI message, try using the artifact version Configuration
-        if (!configData) {
-          try {
-            if (typeof this.artifactVersion.Configuration === 'string') {
-              configData = JSON.parse(this.artifactVersion.Configuration);
-            } else {
-              // If it's already an object, use it directly
-              configData = this.artifactVersion.Configuration;
-            }
-          } catch (parseErr) {
-            LogError('Error parsing artifact configuration', parseErr instanceof Error ? parseErr.message : String(parseErr));
-            configData = null;
           }
         }
         

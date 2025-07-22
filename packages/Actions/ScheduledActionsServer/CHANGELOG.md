@@ -1,5 +1,72 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/actions-content-autotag@2.74.0
+  - @memberjunction/actions@2.74.0
+  - @memberjunction/scheduled-actions@2.74.0
+  - @memberjunction/ai-vectors-pinecone@2.74.0
+  - @memberjunction/ai-vector-sync@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/ai-mistral@2.74.0
+  - @memberjunction/ai-openai@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/ai-vectors-pinecone@2.73.0
+  - @memberjunction/ai-vector-sync@2.73.0
+  - @memberjunction/actions@2.73.0
+  - @memberjunction/actions-content-autotag@2.73.0
+  - @memberjunction/scheduled-actions@2.73.0
+  - @memberjunction/ai-mistral@2.73.0
+  - @memberjunction/ai-openai@2.73.0
+  - @memberjunction/core@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/actions-content-autotag@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/scheduled-actions@2.72.0
+  - @memberjunction/ai-vectors-pinecone@2.72.0
+  - @memberjunction/ai-vector-sync@2.72.0
+  - @memberjunction/ai@2.72.0
+  - @memberjunction/ai-mistral@2.72.0
+  - @memberjunction/ai-openai@2.72.0
+  - @memberjunction/core@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/ai-mistral@2.71.0
+  - @memberjunction/ai-openai@2.71.0
+  - @memberjunction/ai-vectors-pinecone@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/actions-content-autotag@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/scheduled-actions@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

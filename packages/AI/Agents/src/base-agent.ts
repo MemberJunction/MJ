@@ -325,6 +325,8 @@ export class BaseAgent {
                 ...params,
                 onProgress: this.wrapProgressCallback(params.onProgress)
             };
+
+            await this.initializeStartingPayload(wrappedParams);
             
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
@@ -352,6 +354,12 @@ export class BaseAgent {
             // Check for cancellation after initialization
             if (params.cancellationToken?.aborted) {
                 return await this.createCancelledResult('Cancelled during initialization', params.contextUser);
+            }
+
+            // Handle starting payload validation if configured
+            const startingValidationResult = await this.handleStartingPayloadValidation(wrappedParams);
+            if (startingValidationResult) {
+                return startingValidationResult;
             }
 
             // Report validation progress
@@ -406,6 +414,15 @@ export class BaseAgent {
             });
             return await this.createFailureResult(error.message, params.contextUser);
         }
+    }
+
+    /**
+     * Sub-classes can override this method to perform any specialized initialization
+     * @param params 
+     */
+    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> { 
+        // the base class doesn't do anything here, this allows sub-classes
+        // to do specialized initialization of the starting payload
     }
 
     /**
@@ -555,6 +572,120 @@ export class BaseAgent {
             };
         }
         return null;
+    }
+
+    /**
+     * Handles validation of the starting payload if configured.
+     * 
+     * This method validates the input payload against the agent's StartingPayloadValidation
+     * schema before execution begins. It respects the agent's PayloadScope if configured.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @returns {Promise<ExecuteAgentResult | null>} Error result if validation fails and mode is 'Fail', null otherwise
+     * @protected
+     */
+    protected async handleStartingPayloadValidation<P = any>(params: ExecuteAgentParams<any, P>): Promise<ExecuteAgentResult | null> {
+        const agent = params.agent;
+        
+        // Skip if no validation configured or no payload provided
+        if (!agent.StartingPayloadValidation || params.payload === undefined) {
+            return null;
+        }
+
+        try {
+            // Parse the validation schema
+            let validationSchema: any;
+            try {
+                validationSchema = JSON.parse(agent.StartingPayloadValidation);
+            } catch (parseError) {
+                this.logError(`Invalid StartingPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
+                    category: 'StartingPayloadValidation',
+                    metadata: {
+                        agentName: agent.Name,
+                        agentId: agent.ID,
+                        validationSchema: agent.StartingPayloadValidation
+                    }
+                });
+                // Invalid schema, skip validation
+                return null;
+            }
+
+            // Determine which payload to validate based on PayloadScope
+            let payloadToValidate = params.payload;
+
+            // Validate the payload using JSONValidator
+            const jsonValidator = new JSONValidator();
+            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
+
+            if (!validationResult.Success) {
+                // Validation failed
+                const errorMessages = validationResult.Errors.map(e => e.Message);
+                return this.handleStartingValidationFailure(params, errorMessages);
+            }
+
+            // Validation passed
+            this.logStatus(`✅ Starting payload validation passed for agent ${agent.Name}`, true, params);
+            return null;
+
+        } catch (error) {
+            this.logError(`Unexpected error during starting payload validation: ${error.message}`, {
+                category: 'StartingPayloadValidation',
+                metadata: {
+                    agentName: agent.Name,
+                    agentId: agent.ID,
+                    error: error.message
+                }
+            });
+            // On unexpected errors, let execution proceed
+            return null;
+        }
+    }
+
+    /**
+     * Handles starting payload validation failures based on the configured mode.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @param {string[]} errorMessages - The validation error messages
+     * @returns {ExecuteAgentResult | null} Error result if mode is 'Fail', null if mode is 'Warn'
+     * @private
+     */
+    private handleStartingValidationFailure(
+        params: ExecuteAgentParams,
+        errorMessages: string[]
+    ): ExecuteAgentResult | null {
+        const mode = params.agent.StartingPayloadValidationMode || 'Fail';
+        const validationFeedback = `Starting payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+
+        if (mode === 'Fail') {
+            this.logError(`Starting payload validation failed for agent ${params.agent.Name}`, {
+                agent: params.agent,
+                category: 'StartingPayloadValidation',
+                metadata: { errors: errorMessages }
+            });
+
+            // Update agent run with validation failure
+            if (this._agentRun) {
+                this._agentRun.ErrorMessage = validationFeedback;
+                this._agentRun.Status = 'Failed';
+                this._agentRun.Success = false;
+                this._agentRun.FinalStep = 'Failed';
+                // Note: We don't save here as the agent run will be saved in finalizeAgentRun
+            }
+
+            return {
+                success: false,
+                agentRun: this._agentRun!,
+                payload: params.payload // must pass back the original payload for consistency
+            };
+        } else { // if (mode === 'Warn') {
+            // Log warning but continue execution
+            this.logStatus(
+                `⚠️ WARNING: ${validationFeedback}`,
+                false,
+                params
+            );
+            return null;
+        }
     }
 
     /**
@@ -722,14 +853,19 @@ export class BaseAgent {
     }
 
     /**
-     * Executes the configured prompt.
+     * Executes the configured prompt. Always uses the attemptJSONRepair option to try to fix LLM
+     * JSON syntax issues if they arise.
      * 
      * @param {AIPromptParams} promptParams - The prompt parameters
      * @returns {Promise<AIPromptRunResult>} The prompt execution result
      * @protected
      */
     protected async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
-        return await this._promptRunner.ExecutePrompt(promptParams);
+        const newParams = {
+            ...promptParams,
+            attemptJSONRepair: true
+        }
+        return await this._promptRunner.ExecutePrompt(newParams);
     }
 
     /**
@@ -1413,13 +1549,13 @@ export class BaseAgent {
      * @protected
      */
     protected async processNextStep<P>(
+        nextStep: BaseAgentNextStep<P>,
         params: ExecuteAgentParams,
         agentType: AIAgentTypeEntity,
         promptResult: AIPromptRunResult,
         currentPayload: P,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const nextStep = await this.determineNextStep<P>(params, agentType, promptResult, currentPayload);
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
@@ -1566,8 +1702,6 @@ export class BaseAgent {
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
         try {
-            this.logStatus(`⚡ Executing action '${action.name}'`, true, params);
-            
             const actionEngine = ActionEngineServer.Instance;
 
             // Convert params object to ActionParam array
@@ -1576,8 +1710,6 @@ export class BaseAgent {
                 Value: value,
                 Type: 'Input' as const
             }));
-            
-            this.logStatus(`📥 Action parameters: ${JSON.stringify(action.params)}`, true, params);
             
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
@@ -1589,11 +1721,11 @@ export class BaseAgent {
                 Context: params.context // pass along our context to actions so they can use it however they need
             });
             
-            if (!result.Success) {
-                throw new Error(`Action '${action.name}' failed: ${result.Message || 'Unknown error'}`);
+            if (result.Success) {
+                this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
+            } else {
+                this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
             }
-            
-            this.logStatus(`✅ Action '${action.name}' completed successfully`, true, params);
             
             return result;
             
@@ -1693,15 +1825,15 @@ export class BaseAgent {
             });
             
             // Check if execution was successful
-            if (!result.success) {
-                throw new Error(`Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`);
+            if (result.success) {
+                this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
             }
-            
-            this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
+            else {
+                this.logStatus(`Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`);
+            }
             
             // Return the full result for tracking
             return result;
-            
         } catch (error) {
             this.logError(error, {
                 category: 'SubAgentExecution',
@@ -2355,13 +2487,13 @@ export class BaseAgent {
                 displayMode: 'both' // Show in both live and historical modes
             });
             
-            // Determine next step using agent type
-            const nextStep = await this.processNextStep<P>(params, config.agentType!, promptResult, payload, stepEntity);
+            // Determine next step using agent type, this doesn't validate, just gets the LLM response and then we can process payload changes
+            const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
             let finalPayload = payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
-            if (nextStep.payloadChangeRequest) {
+            if (initialNextStep.payloadChangeRequest) {
                 // Parse the allowed paths if configured
                 const allowedPaths = params.agent.PayloadSelfWritePaths 
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
@@ -2370,7 +2502,7 @@ export class BaseAgent {
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
                     payload,
-                    nextStep.payloadChangeRequest,
+                    initialNextStep.payloadChangeRequest,
                     {
                         validateChanges: true,
                         logChanges: true,
@@ -2393,15 +2525,19 @@ export class BaseAgent {
                 // Set the final payload - the changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
             }
-             
+
+            // now that we have processed the payload, we can process the next step which does validation and changes the next step if
+            // validation fails
+            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
+
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
             // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
-                    ...nextStep,
-                    reasoning: this.getNextStepReasoning(nextStep),
+                    ...updatedNextStep,
+                    reasoning: this.getNextStepReasoning(updatedNextStep),
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
@@ -2420,21 +2556,21 @@ export class BaseAgent {
             }
             
             // Update nextStep to include the final payload
-            nextStep.newPayload = finalPayload;
-            nextStep.previousPayload = payload;
+            updatedNextStep.newPayload = finalPayload;
+            updatedNextStep.previousPayload = payload;
             
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, promptResult.success, 
                 promptResult.success ? undefined : promptResult.errorMessage, outputData);
             
             // Return based on next step
-            if (nextStep.step === 'Chat') {
-                return { ...nextStep, terminate: true };
+            if (updatedNextStep.step === 'Chat') {
+                return { ...updatedNextStep, terminate: true };
             }
-            else if (nextStep.step === 'Success' || nextStep.step === 'Failed') {
-                return { ...nextStep, terminate: true };
+            else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
+                return { ...updatedNextStep, terminate: true };
             } else {
-                return { ...nextStep, terminate: false };
+                return { ...updatedNextStep, terminate: false };
             }
             
         } catch (error) {
@@ -2574,95 +2710,107 @@ export class BaseAgent {
                 scopedPayload as SR
             );
             
-            // Handle scope transformation for the result
-            let resultPayloadForMerge = subAgentResult.payload;
-            if (subAgentEntity.PayloadScope) {
-                // The sub-agent returned a scoped payload, we need to wrap it back
-                resultPayloadForMerge = this._payloadManager.reversePayloadScope(
-                    subAgentResult.payload,
-                    subAgentEntity.PayloadScope
-                );
-            }
-            
-            // Merge upstream changes back into parent payload
-            const mergeResult = this._payloadManager.mergeUpstreamPayload(
-                subAgentRequest.name,
-                previousDecision.newPayload,
-                resultPayloadForMerge,
-                upstreamPaths,
-                params.verbose === true || IsVerboseLoggingEnabled()
-            );
-            
-            const mergedPayload = mergeResult.result;
-            
-            // Track the merge operation to detect what changed
-            // We create a synthetic change request that represents the merge
-            const mergeChangeRequest: AgentPayloadChangeRequest<any> = {
-                newElements: {},
-                updateElements: {},
-                removeElements: {}
-            };
-            
-            // Identify what changed in the merge by comparing original and merged payloads
-            const originalKeys = Object.keys(previousDecision.newPayload || {});
-            const mergedKeys = Object.keys(mergedPayload || {});
-            
-            // Find updates and additions
-            for (const key of mergedKeys) {
-                if (!(key in (previousDecision.newPayload || {}))) {
-                    mergeChangeRequest.newElements![key] = mergedPayload[key];
-                } else if (!_.isEqual(previousDecision.newPayload[key], mergedPayload[key])) {
-                    mergeChangeRequest.updateElements![key] = mergedPayload[key];
-                }
-            }
-            
-            // Find removals
-            for (const key of originalKeys) {
-                if (!(key in (mergedPayload || {}))) {
-                    mergeChangeRequest.removeElements![key] = '_DELETE_';
-                }
-            }
-            
+            let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
-
-            // Analyze the merge if there were any changes
-            if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
-                Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
-                Object.keys(mergeChangeRequest.removeElements!).length > 0) {
+            if (subAgentResult.success) {
+                // Handle scope transformation for the result
+                let resultPayloadForMerge = subAgentResult.payload;
+                if (subAgentEntity.PayloadScope) {
+                    // The sub-agent returned a scoped payload, we need to wrap it back
+                    resultPayloadForMerge = this._payloadManager.reversePayloadScope(
+                        subAgentResult.payload,
+                        subAgentEntity.PayloadScope
+                    );
+                }
                 
-                const mergeAnalysis = this._payloadManager.applyAgentChangeRequest<SR>(
-                    previousDecision.previousPayload,
-                    mergeChangeRequest as AgentPayloadChangeRequest<SR>,
-                    {
-                        validateChanges: false,
-                        logChanges: true,
-                        analyzeChanges: true,
-                        generateDiff: true,
-                        agentName: `${subAgentRequest.name} (upstream merge)`,
-                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
-                    }
+                // Merge upstream changes back into parent payload
+                const mergeResult = this._payloadManager.mergeUpstreamPayload(
+                    subAgentRequest.name,
+                    previousDecision.newPayload,
+                    resultPayloadForMerge,
+                    upstreamPaths,
+                    params.verbose === true || IsVerboseLoggingEnabled()
                 );
                 
-                // Store merge analysis with upstream violations
-                currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                // update the merged payload with the result
+                mergedPayload = mergeResult.result;                
                 
-                // Add upstream merge violations if any occurred
-                if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
-                    if (!currentStepPayloadChangeResult.payloadValidation) {
-                        currentStepPayloadChangeResult.payloadValidation = {};
+                // Track the merge operation to detect what changed
+                // We create a synthetic change request that represents the merge
+                const mergeChangeRequest: AgentPayloadChangeRequest<any> = {
+                    newElements: {},
+                    updateElements: {},
+                    removeElements: {}
+                };
+                
+                // Identify what changed in the merge by comparing original and merged payloads
+                const originalKeys = Object.keys(previousDecision.newPayload || {});
+                const mergedKeys = Object.keys(mergedPayload || {});
+                
+                // Find updates and additions
+                for (const key of mergedKeys) {
+                    if (!(key in (previousDecision.newPayload || {}))) {
+                        mergeChangeRequest.newElements![key] = mergedPayload[key];
+                    } else if (!_.isEqual(previousDecision.newPayload[key], mergedPayload[key])) {
+                        mergeChangeRequest.updateElements![key] = mergedPayload[key];
                     }
-                    currentStepPayloadChangeResult.payloadValidation.upstreamMergeViolations = {
-                        subAgentName: subAgentRequest.name,
-                        attemptedOperations: mergeResult.blockedOperations,
-                        authorizedPaths: upstreamPaths,
-                        timestamp: new Date().toISOString()
-                    };
                 }
                 
-                if (mergeAnalysis.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
-                    LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
+                // Find removals
+                for (const key of originalKeys) {
+                    if (!(key in (mergedPayload || {}))) {
+                        mergeChangeRequest.removeElements![key] = '_DELETE_';
+                    }
+                }
+                
+                // Analyze the merge if there were any changes
+                if (Object.keys(mergeChangeRequest.newElements!).length > 0 || 
+                    Object.keys(mergeChangeRequest.updateElements!).length > 0 || 
+                    Object.keys(mergeChangeRequest.removeElements!).length > 0) {
+                    
+                    const mergeAnalysis = this._payloadManager.applyAgentChangeRequest<SR>(
+                        previousDecision.previousPayload,
+                        mergeChangeRequest as AgentPayloadChangeRequest<SR>,
+                        {
+                            validateChanges: false,
+                            logChanges: true,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            agentName: `${subAgentRequest.name} (upstream merge)`,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+                    
+                    // Store merge analysis with upstream violations
+                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                    
+                    // Add upstream merge violations if any occurred
+                    if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
+                        if (!currentStepPayloadChangeResult.payloadValidation) {
+                            currentStepPayloadChangeResult.payloadValidation = {};
+                        }
+                        currentStepPayloadChangeResult.payloadValidation.upstreamMergeViolations = {
+                            subAgentName: subAgentRequest.name,
+                            attemptedOperations: mergeResult.blockedOperations,
+                            authorizedPaths: upstreamPaths,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                    
+                    if (mergeAnalysis.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Sub-agent merge warnings: ${mergeAnalysis.warnings.join('; ')}`);
+                    }
                 }
             }
+            else {
+                // if we have a failed sub-agent run we do NOT update the payload!!!
+                const msg = `Sub-agent '${subAgentRequest.name}' execution failed: ${subAgentResult.agentRun?.ErrorMessage || 'Unknown error'}`;
+                LogError(msg);
+                // merged payload is already set to the original payload so the rest of the below is okay
+                stepEntity.Success = false; // we had a failure
+                stepEntity.ErrorMessage = msg;
+            }
+
 
             // Update step entity with AIAgentRun ID if available
             if (subAgentResult.agentRun?.ID) {

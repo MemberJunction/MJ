@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ng-container-directives@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.73.0
+- @memberjunction/core@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.72.0
+- @memberjunction/core@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/core@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

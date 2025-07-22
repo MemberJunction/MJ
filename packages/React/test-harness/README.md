@@ -680,6 +680,14 @@ const result = await harness.evaluateInPage(() => {
 const screenshot = await harness.screenshot('./output.png');
 ```
 
+## Limitations
+
+Due to the architecture of the test harness (Node.js controlling a browser via Playwright), there are some important limitations to be aware of. See [docs/limitations.md](./docs/limitations.md) for details on:
+
+- Serialization requirements between Node.js and browser
+- BaseEntity method access limitations
+- Differences between test and production environments
+
 ## Best Practices
 
 1. **Always close the harness** after tests to free resources:

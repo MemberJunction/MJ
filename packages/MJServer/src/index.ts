@@ -40,6 +40,7 @@ LoadAgentManagementActions();
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
+import { LoadAIEngine } from '@memberjunction/aiengine';
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
@@ -48,6 +49,7 @@ import { LoadMistralLLM } from '@memberjunction/ai-mistral';
 // Load AI LLMs and Base AI Engine
 // These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
 // system. They are not tree-shaken because they are dynamically loaded at runtime.
+LoadAIEngine();
 LoadOpenAILLM();
 LoadAnthropicLLM();
 LoadGroqLLM();
@@ -83,13 +85,14 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
+export * from './resolvers/QueryResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-
+export * from './resolvers/CreateQueryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 
 export * from './generated/generated.js';

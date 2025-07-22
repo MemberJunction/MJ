@@ -1,5 +1,72 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core-entities-server@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ai-core-plus@2.74.0
+  - @memberjunction/actions@2.74.0
+  - @memberjunction/communication-engine@2.74.0
+  - @memberjunction/content-autotagging@2.74.0
+  - @memberjunction/external-change-detection@2.74.0
+  - @memberjunction/ai-vector-sync@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [e99336f]
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai-vector-sync@2.73.0
+  - @memberjunction/actions@2.73.0
+  - @memberjunction/content-autotagging@2.73.0
+  - @memberjunction/core-entities-server@2.73.0
+  - @memberjunction/ai-core-plus@2.73.0
+  - @memberjunction/communication-engine@2.73.0
+  - @memberjunction/external-change-detection@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/ai-core-plus@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/communication-engine@2.72.0
+  - @memberjunction/content-autotagging@2.72.0
+  - @memberjunction/external-change-detection@2.72.0
+  - @memberjunction/core-entities-server@2.72.0
+  - @memberjunction/ai-vector-sync@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-core-plus@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/communication-engine@2.71.0
+  - @memberjunction/content-autotagging@2.71.0
+  - @memberjunction/external-change-detection@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/core-entities-server@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/global
 
+## 2.74.0
+
+## 2.73.0
+
+## 2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- c5a409c: Add missing 'lodash' dependency to MJGlobal package.
+- 5a127bb: Remove status badge dots
+
 ## 2.70.0
 
 ### Minor Changes

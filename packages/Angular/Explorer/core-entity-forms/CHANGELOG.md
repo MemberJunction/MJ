@@ -1,5 +1,110 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ai-engine-base@2.74.0
+  - @memberjunction/ai-core-plus@2.74.0
+  - @memberjunction/ng-action-gallery@2.74.0
+  - @memberjunction/ng-ai-test-harness@2.74.0
+  - @memberjunction/ng-code-editor@2.74.0
+  - @memberjunction/ng-join-grid@2.74.0
+  - @memberjunction/ng-timeline@2.74.0
+  - @memberjunction/ng-base-forms@2.74.0
+  - @memberjunction/ng-form-toolbar@2.74.0
+  - @memberjunction/ng-container-directives@2.74.0
+  - @memberjunction/ng-deep-diff@2.74.0
+  - @memberjunction/ng-tabstrip@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- e99336f: UI tweaks
+- Updated dependencies [e99336f]
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai-engine-base@2.73.0
+  - @memberjunction/ai-core-plus@2.73.0
+  - @memberjunction/ng-action-gallery@2.73.0
+  - @memberjunction/ng-ai-test-harness@2.73.0
+  - @memberjunction/ng-code-editor@2.73.0
+  - @memberjunction/ng-join-grid@2.73.0
+  - @memberjunction/ng-timeline@2.73.0
+  - @memberjunction/ng-form-toolbar@2.73.0
+  - @memberjunction/ng-base-forms@2.73.0
+  - @memberjunction/ng-container-directives@2.73.0
+  - @memberjunction/ng-deep-diff@2.73.0
+  - @memberjunction/ng-tabstrip@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Minor Changes
+
+- 636b6ee: migration
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/ai-engine-base@2.72.0
+  - @memberjunction/ai-core-plus@2.72.0
+  - @memberjunction/ng-action-gallery@2.72.0
+  - @memberjunction/ng-ai-test-harness@2.72.0
+  - @memberjunction/ng-code-editor@2.72.0
+  - @memberjunction/ng-join-grid@2.72.0
+  - @memberjunction/ng-timeline@2.72.0
+  - @memberjunction/ng-form-toolbar@2.72.0
+  - @memberjunction/ng-base-forms@2.72.0
+  - @memberjunction/ng-container-directives@2.72.0
+  - @memberjunction/ng-deep-diff@2.72.0
+  - @memberjunction/ng-tabstrip@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- e75f0a4: Major AI Agent and AI Prompt Management Enhancements
+
+  - **AI Agent Forms**: Complete redesign with comprehensive sub-agent creation, advanced settings management, and transaction-based persistence
+  - **AI Prompt Forms**: Implemented atomic "Create New Prompt" feature with template linking and proper MemberJunction navigation
+  - **User Permissions**: Added comprehensive user permission reflection across AI forms and dashboards
+  - **UX Improvements**: Enhanced prompt selector with visual indicators for already linked prompts, proper cancel/revert functionality
+  - **Template Management**: Resolved template management issues with improved template editor and selector dialogs
+  - **Sub-Agent System**: Full implementation of sub-agent selector with deferred transactions and database constraint compliance
+  - **Advanced Settings**: New dialogs for AI Agent prompts, sub-agents, and actions with modern UI components
+  - **CLI**: Fixed AUTH0 environment variable casing in install command
+
+  This release significantly improves the AI management experience with better transaction handling, user permissions, and modern UI components.
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-engine-base@2.71.0
+  - @memberjunction/ai-core-plus@2.71.0
+  - @memberjunction/ng-base-forms@2.71.0
+  - @memberjunction/ng-form-toolbar@2.71.0
+  - @memberjunction/ng-action-gallery@2.71.0
+  - @memberjunction/ng-ai-test-harness@2.71.0
+  - @memberjunction/ng-code-editor@2.71.0
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/ng-deep-diff@2.71.0
+  - @memberjunction/ng-join-grid@2.71.0
+  - @memberjunction/ng-tabstrip@2.71.0
+  - @memberjunction/ng-timeline@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+
 ## 2.70.0
 
 ### Minor Changes

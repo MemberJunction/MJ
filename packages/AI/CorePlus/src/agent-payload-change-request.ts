@@ -1,5 +1,24 @@
 /**
- * Defines a structured way to request changes to the payload
+ * Defines a structured way to request changes to the payload. If you are making a COMPLEX change to an object
+ * you can either use `updateElements` as described below to make **surgical** changes to the payload, OR, a simple
+ * approach is to use `replaceElements` to remove the entire object and replace it with a new object.
+ * 
+ * If you are providing the ENTIRE object again, use the **replaceElements** instead of **updateElements** approach like this:
+ * {
+ *   replaceElements: {
+ *     user: { // user object will REPLACE the entire existing object
+ *       id: "new-id",
+ *       name: "new-name"
+ *       moreComplexData: {
+ *         keyA: "valA",
+ *         keyB: "valB"
+ *       }
+ *     }
+ *   }
+ * }
+ * 
+ * Alternatively, to make surgical changes review the documentation below for @see updateElements where you can make
+ * small incremental additions/updates/removals to the payload which is more token efficient and cleaner.
  */
 export type AgentPayloadChangeRequest<P = any> = {
     /**
@@ -26,42 +45,140 @@ export type AgentPayloadChangeRequest<P = any> = {
      * A partial of P that includes all elements that should be updated in the payload.
      * The structure is identical to the payload type P with just the portions filled out
      * that need to be updated. **DO NOT INCLUDE ELEMENTS THAT ARE NOT CHANGING**.
+     * 
+     * Example - update single item:
+     *  {
+     *     "itemToUpdate": "newValue"
+     *  }
+     * 
+     *  To update multiple items:
+     *  {
+     *      itemToUpdate1: "newValue1",
+     *      itemToUpdate2: "newValue2"
+     *  }
+     * 
+     *  Arrays: Include placeholder objects `{}` for items that are being kept in the array.
+     *  For example, if the payload was:
+     *  {
+     *      items: [
+     *          {}, // placeholder object is ignored
+     *          { someKey: 'this is a new value for someKey' },
+     *          {} // placeholder object is ignored - since it is trailing, can be ommitted, this is for illustration
+     *      ]
+     *  }
+     * 
+     * DELETION WITHIN UPDATES:
+     * You can use "__DELETE__" within updateElements to remove properties or array elements at any depth:
+     * 
+     * Deleting object properties:
+     * {
+     *   updateElements: {
+     *     user: {
+     *       name: "New Name",      // update this property
+     *       tempData: "__DELETE__"   // remove this property
+     *     }
+     *   }
+     * }
+     * 
+     * Deleting array elements:
+     * {
+     *   updateElements: {
+     *     items: [
+     *       {},          // keep item 0
+     *       "__DELETE__",  // remove item 1
+     *       { value: 5 }, // update item 2
+     *       "__DELETE__"   // remove item 3
+     *     ]
+     *   }
+     * }
+     * 
+     * Complex nested example - updating and deleting within deep structures:
+     * {
+     *   updateElements: {
+     *     dataRequirements: {
+     *       dynamicData: {
+     *         requiredEntities: [
+     *           {
+     *             displayFields: ["Name", "UpdatedAt"], // update array
+     *             fieldMetadata: [
+     *               {},          // keep field 0
+     *               {},          // keep field 1
+     *               {},          // keep field 2
+     *               "__DELETE__"   // remove field 3 (e.g., LastUpdated)
+     *             ],
+     *             oldProperty: "__DELETE__"  // remove this property
+     *           }
+     *         ]
+     *       }
+     *     }
+     *   }
+     * }
+     * 
+     * IMPORTANT: When using "__DELETE__" in arrays, deletions are processed after updates at each depth level,
+     * ensuring correct index management. Multiple deletions in the same array are handled properly.
+     * 
+     * Alternative for complete replacement: If you need to completely replace a complex structure,
+     * you can use replaceElements pattern INSTEAD of updateElements:
+     * {
+     *   replaceElements: { complexObject: { keyA: "valA", keyB: "valB" } } // This replaces the entire complexObject
+     * }
      */
     updateElements?: Partial<P>;
 
     /**
+     * This partial of P includes all elements that should be replaced in the payload.
+     * The structure is identical to the payload type P with just the portions filled out
+     * that need to be replaced. This is useful when you want to replace an entire object
+     * or array with a new version. See @see updateElements for surgical updates instead of doing
+     * complete replacements.
+     */
+    replaceElements?: Partial<P>;
+
+    /**
      * This partial of P includes all elements that should be removed from the payload. When an
-     * item needs to be removed, include the item here with a value of "_DELETE_".
+     * item needs to be removed, include the item here with a value of "__DELETE__".
      * 
      * For 1 removal:
      * {
-     *   itemToRemove: '_DELETE_'
+     *   itemToRemove: '__DELETE__'
      * }
      * 
      * This indicates that the itemToRemove should be removed from the payload.
      * 
      * For multiple removals:
      * {
-     *   itemToRemove1: '_DELETE_',
-     *   itemToRemove2: '_DELETE_'
+     *   itemToRemove1: '__DELETE__',
+     *   itemToRemove2: '__DELETE__'
      * }
      * 
-     * ARRAYS: It is important to include **ALL** array elements so the order is specified properly but the contents of array items being kept does **NOT**
-     * need to be specified. For example, if the payload was:
+     * Arrays: Include placeholder objects `{}` for items that are being kept in the array.
+     * For updating object elements in arrays, only include the properties to change:
+     * 
+     * Original array:
      * {
      *   items: [
-     *     { id: '1', value: 'keep' },
-     *     { id: '2', value: 'this one goes away' }, 
-     *     { id: '3', value: 'keep' }
+     *     { id: 1, name: "Item 1", value: 100 },
+     *     { id: 2, name: "Item 2", value: 200 },
+     *     { id: 3, name: "Item 3", value: 300 }
      *   ]
      * }
      * 
-     * To remove the 2nd item:
+     * To update only the value of the second item:
      * {
-     *  items: [
-     *   {},
-     *   "_DELETE_",
-     *   {}
+     *   items: [
+     *     {}, // placeholder - keeps item 1 unchanged
+     *     { value: 250 }, // updates ONLY the value property of item 2
+     *     {} // placeholder - keeps item 3 unchanged (can be omitted if trailing)
+     *   ]
+     * }
+     * 
+     * Result after merge:
+     * {
+     *   items: [
+     *     { id: 1, name: "Item 1", value: 100 },
+     *     { id: 2, name: "Item 2", value: 250 }, // only value changed
+     *     { id: 3, name: "Item 3", value: 300 }
+     *   ]
      * }
      * 
      * NOTE: For token efficiency, do **NOT** emit array elements that are being **kept** 
@@ -70,7 +187,7 @@ export type AgentPayloadChangeRequest<P = any> = {
      * NESTED OBJECTS:
      * {
      *   nestedObject: {
-     *     itemToRemove: '_DELETE_'
+     *     itemToRemove: '__DELETE__'
      *   }
      * }
      * 
@@ -80,7 +197,7 @@ export type AgentPayloadChangeRequest<P = any> = {
      *    itemToRemove: 'value',
      *    itemToKeep: 'value'
      *   },
-     *   anotherItemToRemove: '_DELETE_',
+     *   anotherItemToRemove: '__DELETE__',
      *   anotherItemToKeep: 12345  
      * }
      *

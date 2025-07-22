@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ai-recommendations-rex
 
+## 2.74.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations@2.74.0
+- @memberjunction/ai@2.74.0
+- @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [eebfb9a]
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/ai-recommendations@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations@2.72.0
+- @memberjunction/ai@2.72.0
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/ai-recommendations@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes

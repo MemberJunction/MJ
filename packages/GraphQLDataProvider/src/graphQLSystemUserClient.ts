@@ -538,10 +538,51 @@ export class GraphQLSystemUserClient {
         }
     }
 
+    /**
+     * Creates a new query using the CreateQuery mutation. This method is restricted to system users only.
+     * @param input - CreateQueryInput containing all the query attributes including optional CategoryPath
+     * @returns Promise containing the result of the query creation
+     */
+    public async CreateQuery(input: CreateQueryInput): Promise<CreateQueryResult> {
+        try {
+            const query = `mutation CreateQuery($input: CreateQueryInputType!) {
+                CreateQuery(input: $input) {
+                    Success
+                    ErrorMessage
+                    QueryData
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { CreateQuery: CreateQueryResult };
+            if (result && result.CreateQuery) {
+                // Parse the QueryData JSON if it exists and was successful
+                if (result.CreateQuery.Success && result.CreateQuery.QueryData) {
+                    return {
+                        ...result.CreateQuery,
+                        QueryData: result.CreateQuery.QueryData // Already JSON string from resolver
+                    };
+                }
+                return result.CreateQuery;
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to create query'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::CreateQuery - Error creating query - ${e}`);
+            return {
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
 }
 
 /**
- * Output type for GetData calls
+ * Output type for GetData calls - contains results from executing multiple SQL queries
  */
 export class GetDataOutput {
     /**
@@ -549,7 +590,7 @@ export class GetDataOutput {
      */
     Success: boolean;
     /**
-     * The original input of Queries that were run
+     * The original input of Queries that were run - same order as provided in the request
      */
     Queries: string[];
     /**
@@ -557,19 +598,25 @@ export class GetDataOutput {
      */
     ErrorMessages: (string | null)[];
     /**
-     * An ordered array of results for each query that was run. This array will always have the same # of entries as Queries. If a query failed, the corresponding entry will be null.
+     * An ordered array of results for each query that was run. This array will always have the same # of entries as Queries. If a query failed, the corresponding entry will be null. Successful results are JSON strings containing the query data.
      */
     Results: (string | null)[];
 }
 
 /**
- * Return type for calls to the GetAllRemoteEntities query
+ * Return type for calls to the GetAllRemoteEntities query - provides lightweight entity metadata
  */
 export class SimpleRemoteEntityOutput {
+    /**
+     * Indicates whether the remote entity retrieval was successful
+     */
     Success: boolean;
+    /**
+     * Error message if the operation failed, undefined if successful
+     */
     ErrorMessage?: string;
     /**
-     * An array of simple entity types that are returned from the remote server
+     * An array of simple entity types that are returned from the remote server - contains basic metadata for each entity
      */
     Results: SimpleRemoteEntity[];
 }
@@ -579,144 +626,481 @@ export class SimpleRemoteEntityOutput {
  */
 export class SimpleRemoteEntity {
     /**
-     * ID of the entity on the remote server
+     * Unique identifier of the entity on the remote server
      */
     ID: string;
+    /**
+     * Display name of the entity (e.g., "Users", "Companies")
+     */
     Name: string;
+    /**
+     * Optional description explaining the entity's purpose
+     */
     Description?: string;
+    /**
+     * Database schema name where the entity resides (e.g., "dbo", "custom")
+     */
     SchemaName: string;
+    /**
+     * Name of the database view used for reading this entity
+     */
     BaseView: string;
+    /**
+     * Name of the database table used for storing this entity
+     */
     BaseTable: string;
+    /**
+     * Optional code-friendly name for the entity (typically PascalCase)
+     */
     CodeName?: string;
+    /**
+     * Optional TypeScript/JavaScript class name for the entity
+     */
     ClassName?: string;
+    /**
+     * Array of field definitions for this entity
+     */
     Fields: SimpleRemoteEntityField[];
 }
 
+/**
+ * Represents a field within a remote entity - contains basic field metadata
+ */
 export class SimpleRemoteEntityField {
     /**
-     * ID of the entity field on the remote server
+     * Unique identifier of the entity field on the remote server
      */
     ID: string;
+    /**
+     * Field name (e.g., "FirstName", "Email", "CreatedAt")
+     */
     Name: string;
+    /**
+     * Optional description explaining the field's purpose
+     */
     Description?: string;
+    /**
+     * Data type of the field (e.g., "nvarchar", "int", "datetime", "bit")
+     */
     Type: string;
+    /**
+     * Whether the field can contain null values
+     */
     AllowsNull: boolean;
+    /**
+     * Maximum length for string fields, -1 for unlimited, 0 for non-string types
+     */
     MaxLength: number;
 }
 
 /**
- * Input type for RunViewByNameSystemUser method calls
+ * Input type for RunViewByNameSystemUser method calls - executes a saved view by name
  */
 export interface RunViewByNameSystemUserInput {
+    /**
+     * Name of the saved view to execute
+     */
     ViewName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to save the view execution results for future reference (optional)
+     */
     SaveViewResults?: boolean;
+    /**
+     * Whether to exclude data from all prior view runs (optional)
+     */
     ExcludeDataFromAllPriorViewRuns?: boolean;
+    /**
+     * Whether to ignore the view's MaxRows setting and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return, overrides view setting if specified (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunViewByIDSystemUser method calls
+ * Input type for RunViewByIDSystemUser method calls - executes a saved view by its unique ID
  */
 export interface RunViewByIDSystemUserInput {
+    /**
+     * Unique identifier of the saved view to execute
+     */
     ViewID: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to save the view execution results for future reference (optional)
+     */
     SaveViewResults?: boolean;
+    /**
+     * Whether to exclude data from all prior view runs (optional)
+     */
     ExcludeDataFromAllPriorViewRuns?: boolean;
+    /**
+     * Whether to ignore the view's MaxRows setting and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return, overrides view setting if specified (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunDynamicViewSystemUser method calls
+ * Input type for RunDynamicViewSystemUser method calls - creates and executes a view dynamically based on entity
  */
 export interface RunDynamicViewSystemUserInput {
+    /**
+     * Name of the entity to query (e.g., "Users", "Companies")
+     */
     EntityName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to ignore MaxRows limits and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunViewsSystemUser method calls
+ * Input type for RunViewsSystemUser method calls - executes multiple views in parallel
  */
 export interface RunViewSystemUserInput {
+    /**
+     * Name of the entity to query (e.g., "Users", "Companies")
+     */
     EntityName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to ignore MaxRows limits and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Result row type for view execution results
+ * Result row type for view execution results - represents a single data row
  */
 export interface RunViewSystemUserResultRow {
+    /**
+     * Unique identifier of the record
+     */
     ID: string;
+    /**
+     * ID of the entity type this record belongs to
+     */
     EntityID: string;
+    /**
+     * JSON string containing the actual record data
+     */
     Data: string;
 }
 
 /**
- * Result type for RunViewsSystemUser method calls
+ * Result type for RunViewsSystemUser method calls - contains execution results and metadata
  */
 export interface RunViewSystemUserResult {
+    /**
+     * Array of result rows containing the actual data
+     */
     Results: RunViewSystemUserResultRow[];
+    /**
+     * Unique identifier for this view execution run (optional)
+     */
     UserViewRunID?: string;
+    /**
+     * Number of rows returned in this result set (optional)
+     */
     RowCount?: number;
+    /**
+     * Total number of rows available (before pagination) (optional)
+     */
     TotalRowCount?: number;
+    /**
+     * Time taken to execute the view in milliseconds (optional)
+     */
     ExecutionTime?: number;
+    /**
+     * Error message if the execution failed (optional)
+     */
     ErrorMessage?: string;
+    /**
+     * Whether the view execution was successful
+     */
     Success: boolean;
 }
 
 /**
- * Result type for query execution methods
+ * Result type for query execution methods - contains query results and execution metadata
  */
 export interface RunQuerySystemUserResult {
+    /**
+     * Unique identifier of the executed query
+     */
     QueryID: string;
+    /**
+     * Display name of the executed query
+     */
     QueryName: string;
+    /**
+     * Whether the query execution was successful
+     */
     Success: boolean;
+    /**
+     * Query results data (parsed from JSON)
+     */
     Results: any;
+    /**
+     * Number of rows returned by the query
+     */
     RowCount: number;
+    /**
+     * Time taken to execute the query in milliseconds
+     */
     ExecutionTime: number;
+    /**
+     * Error message if the query execution failed
+     */
     ErrorMessage: string;
+}
+
+/**
+ * Input type for CreateQuery mutation calls - creates a new query with optional hierarchical category path
+ */
+export interface CreateQueryInput {
+    /**
+     * Required name for the query (must be unique within category)
+     */
+    Name: string;
+    /**
+     * Optional existing category ID to assign the query to
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path for automatic hierarchy creation (e.g., "Reports/Sales/Monthly") - takes precedence over CategoryID
+     */
+    CategoryPath?: string;
+    /**
+     * Optional natural language question this query answers
+     */
+    UserQuestion?: string;
+    /**
+     * Optional general description of what the query does
+     */
+    Description?: string;
+    /**
+     * Optional SQL query text to execute (can contain Nunjucks template syntax)
+     */
+    SQL?: string;
+    /**
+     * Optional technical documentation for developers
+     */
+    TechnicalDescription?: string;
+    /**
+     * Optional original SQL before optimization or modification
+     */
+    OriginalSQL?: string;
+    /**
+     * Optional user feedback about the query
+     */
+    Feedback?: string;
+    /**
+     * Optional query approval status (defaults to 'Pending')
+     */
+    Status?: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
+    /**
+     * Optional quality indicator (higher = better quality, defaults to 0)
+     */
+    QualityRank?: number;
+    /**
+     * Optional execution cost indicator (higher = more expensive to run)
+     */
+    ExecutionCostRank?: number;
+    /**
+     * Optional flag indicating if the query uses Nunjucks template syntax (auto-detected if not specified)
+     */
+    UsesTemplate?: boolean;
+}
+
+/**
+ * Result type for CreateQuery mutation calls - contains creation success status and query data
+ */
+export interface CreateQueryResult {
+    /**
+     * Whether the query creation was successful
+     */
+    Success: boolean;
+    /**
+     * Error message if the creation failed (optional)
+     */
+    ErrorMessage?: string;
+    /**
+     * JSON string containing the complete created query data if successful (optional)
+     */
+    QueryData?: string;
 }
 
  

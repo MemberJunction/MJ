@@ -48,8 +48,8 @@ Advanced payload access control for hierarchical agent execution:
 - Supports JSON path patterns with wildcards
 - Detects suspicious changes with configurable rules
 - Generates human-readable diffs for audit trails
-- **NEW**: PayloadScope support for narrowing sub-agent data access
-- **NEW**: Path transformation for scoped payload merging
+- PayloadScope support for narrowing sub-agent data access
+    - Transformation for scoped payload merging
 
 ## Installation
 
@@ -286,9 +286,39 @@ Benefits:
 - **Automatic merging**: Changes are properly placed back in parent payload
 - **Error handling**: Critical failures if scope path doesn't exist
 
+### Input Payload Validation
+
+Agents can validate their input payload before execution begins to ensure data quality and prevent errors:
+
+```typescript
+// Configure validation in AIAgent entity
+{
+    StartingPayloadValidation: JSON.stringify({
+        "customerId": "string:!empty",
+        "orderItems": "array:[1+]",
+        "shippingAddress": {
+            "street": "string:!empty",
+            "city": "string:!empty",
+            "zipCode": "string:[5]"
+        },
+        "priority": "string?:enum:normal,high,urgent"  // Optional with enum values
+    }),
+    StartingPayloadValidationMode: "Fail"  // or "Warn" (default: "Fail")
+}
+```
+
+Input validation features:
+- **Early failure detection**: Validates before any processing begins
+- **Two modes**:
+  - `Fail`: Reject invalid input immediately (default)
+  - `Warn`: Log warning but proceed with execution
+- **Deterministic guardrails**: Ensures agents receive valid data
+- **Cost savings**: Prevents expensive operations with invalid input
+- **Parent responsibility**: Parent agents provide properly scoped payloads to children
+
 ### Final Payload Validation
 
-Agents can now validate their final output before marking execution as successful:
+Agents can validate their final output before marking execution as successful:
 
 ```typescript
 // Configure validation in AIAgent entity
@@ -488,6 +518,8 @@ Key entities used by the agent framework:
   - `PayloadDownstreamPaths`: JSON array of paths sub-agents can read
   - `PayloadUpstreamPaths`: JSON array of paths sub-agents can write
   - **NEW** `PayloadScope`: Path to narrow payload for sub-agents (e.g., "/functionalRequirements")
+  - **NEW** `StartingPayloadValidation`: JSON validation schema for input validation
+  - **NEW** `StartingPayloadValidationMode`: How to handle input validation failures (Fail/Warn)
   - **NEW** `FinalPayloadValidation`: JSON validation schema for success validation
   - **NEW** `FinalPayloadValidationMode`: How to handle validation failures (Retry/Fail/Warn)
   - **NEW** `FinalPayloadValidationMaxRetries`: Maximum retry attempts for validation (default: 3)
@@ -522,9 +554,11 @@ Key entities used by the agent framework:
 8. **Payload Security**: Use path-based access control for sub-agents
 9. **Change Monitoring**: Review payload change warnings in OutputData
 10. **Payload Scoping**: Use PayloadScope to reduce token usage for sub-agents
-11. **Validation Schemas**: Define FinalPayloadValidation for output quality control
-12. **Set Guardrails**: Configure cost/token/time limits to prevent runaway execution
-13. **Monitor Retries**: Track validation retry counts to avoid infinite loops
+11. **Input Validation**: Define StartingPayloadValidation to catch errors early
+12. **Output Validation**: Define FinalPayloadValidation for output quality control
+13. **Set Guardrails**: Configure cost/token/time limits to prevent runaway execution
+14. **Monitor Retries**: Track validation retry counts to avoid infinite loops
+15. **Fail Fast**: Use StartingPayloadValidation with 'Fail' mode for deterministic behavior
 
 ## Examples
 

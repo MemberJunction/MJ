@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/aiengine@2.74.0
+  - @memberjunction/ai-vector-dupe@2.74.0
+  - @memberjunction/actions@2.74.0
+  - @memberjunction/queue@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [26c2b03]
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/aiengine@2.73.0
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/ai-vector-dupe@2.73.0
+  - @memberjunction/actions@2.73.0
+  - @memberjunction/queue@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/aiengine@2.72.0
+  - @memberjunction/ai-vector-dupe@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/queue@2.72.0
+  - @memberjunction/ai@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/aiengine@2.71.0
+  - @memberjunction/ai-vector-dupe@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/queue@2.71.0
+
 ## 2.70.0
 
 ### Patch Changes
