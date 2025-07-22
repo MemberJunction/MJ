@@ -11,6 +11,7 @@ interface QueryRunResult {
     Results: string;  // This is a JSON string that needs to be parsed
     ErrorMessage: string;
     RowCount: number;
+    TotalRowCount: number;
     ExecutionTime: number;
     AppliedParameters?: string;  // JSON string of applied parameters
 }
@@ -41,10 +42,13 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
     public parameterPairs: ParameterPair[] = [];
     public parametersExpanded = true;
     public resultsExpanded = true;
+    public paginationExpanded = false;
     public runResult: QueryRunResult | null = null;
     public resultColumns: any[] = [];
     public resultRows: any[] = [];
     public selectedRows: any[] = [];
+    public maxRows: number | null = null;
+    public startRow: number = 0;
 
     ngOnInit() {
         this.initializeParameters();
@@ -97,7 +101,7 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
         return true;
     }
 
-    async runQuery() {
+    async runQuery(isPaginationRequest: boolean = false) {
         if (!this.query?.ID) return;
 
         // Validate required parameters
@@ -105,7 +109,8 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
         if (invalidParams.length > 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Required parameters missing: ${invalidParams.map(p => p.name).join(', ')}`,
-                'warning'
+                'warning',
+                3000
             );
             return;
         }
@@ -137,24 +142,35 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
             
             // Execute the GetQueryData GraphQL query
             const query = `
-                query GetQueryData($QueryID: String!, $Parameters: JSONObject) {
-                    GetQueryData(QueryID: $QueryID, Parameters: $Parameters) {
+                query GetQueryData($QueryID: String!, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                    GetQueryData(QueryID: $QueryID, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                         QueryID
                         QueryName
                         Success
                         Results
                         ErrorMessage
                         RowCount
+                        TotalRowCount
                         ExecutionTime
                         AppliedParameters
                     }
                 }
             `;
 
-            const variables = {
+            const variables: any = {
                 QueryID: this.query.ID,
                 Parameters: queryParameters
             };
+            
+            // Only include MaxRows if it's set
+            if (this.maxRows && this.maxRows > 0) {
+                variables.MaxRows = this.maxRows;
+            }
+            
+            // Only include StartRow if it's set and greater than 0
+            if (this.startRow && this.startRow > 0) {
+                variables.StartRow = this.startRow;
+            }
 
             console.log('Executing query with variables:', variables);
             
@@ -171,23 +187,42 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
                     try {
                         const parsedResults = JSON.parse(this.runResult.Results);
                         this.processResults(parsedResults);
-                        MJNotificationService.Instance.CreateSimpleNotification(
-                            `Query executed successfully. ${this.runResult.RowCount} rows returned.`,
-                            'success'
-                        );
+                        // Only show notification on first run (not pagination)
+                        if (!isPaginationRequest) {
+                            const rowCountMsg = this.runResult.TotalRowCount > this.runResult.RowCount
+                                ? `Query executed successfully. Showing ${this.runResult.RowCount} of ${this.runResult.TotalRowCount} total rows.`
+                                : `Query executed successfully. ${this.runResult.RowCount} rows returned.`;
+                            MJNotificationService.Instance.CreateSimpleNotification(
+                                rowCountMsg,
+                                'success',
+                                3000
+                            );
+                        }
+                        
+                        // Automatically expand results and collapse other sections
+                        this.parametersExpanded = false;
+                        this.paginationExpanded = false;
+                        this.resultsExpanded = true;
                     } catch (error) {
                         console.error('Error parsing results:', error);
                         MJNotificationService.Instance.CreateSimpleNotification(
                             'Failed to parse query results',
-                            'error'
+                            'error',
+                            3000
                         );
                     }
                 } else {
                     console.error('Query execution failed:', this.runResult);
                     MJNotificationService.Instance.CreateSimpleNotification(
                         this.runResult?.ErrorMessage || 'Query execution failed',
-                        'error'
+                        'error',
+                        3000
                     );
+                    
+                    // Expand results section to show error
+                    this.parametersExpanded = false;
+                    this.paginationExpanded = false;
+                    this.resultsExpanded = true;
                 }
             } else {
                 throw new Error('No response from server');
@@ -201,11 +236,13 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
                 Results: '[]',
                 ErrorMessage: error instanceof Error ? error.message : 'Unknown error occurred',
                 RowCount: 0,
+                TotalRowCount: 0,
                 ExecutionTime: 0
             };
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to execute query. Please check your parameters and try again.',
-                'error'
+                'error',
+                3000
             );
         } finally {
             this.isRunning = false;
@@ -255,7 +292,8 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
         if (!this.resultRows || this.resultRows.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No data to export',
-                'warning'
+                'warning',
+                3000
             );
             return;
         }
@@ -288,7 +326,8 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
 
         MJNotificationService.Instance.CreateSimpleNotification(
             'Results exported to CSV',
-            'success'
+            'success',
+            3000
         );
     }
 
@@ -296,7 +335,8 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
         if (!this.resultRows || this.resultRows.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No data to copy',
-                'warning'
+                'warning',
+                3000
             );
             return;
         }
@@ -313,13 +353,15 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
 
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Results copied to clipboard',
-                'success'
+                'success',
+                3000
             );
         } catch (error) {
             console.error('Failed to copy to clipboard:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to copy to clipboard',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -334,6 +376,7 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
         this.resultColumns = [];
         this.resultRows = [];
         this.selectedRows = [];
+        this.startRow = 0;
     }
 
     getAppliedParametersCount(): number {
@@ -342,5 +385,33 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
     
     hasInvalidParameters(): boolean {
         return this.parameterPairs.some(p => !this.isParameterValid(p));
+    }
+    
+    // Pagination methods
+    goToFirstPage() {
+        this.startRow = 0;
+        this.runQuery(true);
+    }
+    
+    goToPreviousPage() {
+        if (this.startRow > 0 && this.maxRows) {
+            this.startRow = Math.max(0, this.startRow - this.maxRows);
+            this.runQuery(true);
+        }
+    }
+    
+    goToNextPage() {
+        if (this.maxRows && this.runResult && this.startRow + this.runResult.RowCount < this.runResult.TotalRowCount) {
+            this.startRow += this.maxRows;
+            this.runQuery(true);
+        }
+    }
+    
+    goToLastPage() {
+        if (this.maxRows && this.runResult) {
+            const totalPages = Math.ceil(this.runResult.TotalRowCount / this.maxRows);
+            this.startRow = (totalPages - 1) * this.maxRows;
+            this.runQuery(true);
+        }
     }
 }

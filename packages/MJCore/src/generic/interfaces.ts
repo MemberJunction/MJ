@@ -537,6 +537,11 @@ export type RunQueryResult = {
     Success: boolean;
     Results: any[];
     RowCount: number;
+    /**
+     * Total number of rows that would be returned without pagination.
+     * Only differs from RowCount when StartRow or MaxRows are used.
+     */
+    TotalRowCount: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**

@@ -307,27 +307,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser, params.Parameters);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser, params.Parameters);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON, $MaxRows: Int, $StartRow: Int) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any> } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -336,6 +336,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Parameters !== undefined) {
             variables.Parameters = Parameters;
+        }
+        if (MaxRows !== undefined) {
+            variables.MaxRows = MaxRows;
+        }
+        if (StartRow !== undefined) {
+            variables.StartRow = StartRow;
         }
     
         const result = await this.ExecuteGQL(query, variables);
@@ -344,17 +350,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any> } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -363,6 +369,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Parameters !== undefined) {
             variables.Parameters = Parameters;
+        }
+        if (MaxRows !== undefined) {
+            variables.MaxRows = MaxRows;
+        }
+        if (StartRow !== undefined) {
+            variables.StartRow = StartRow;
         }
     
         const result = await this.ExecuteGQL(query, variables);
@@ -378,6 +390,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 QueryName
                 Results
                 RowCount
+                TotalRowCount
                 ExecutionTime
                 ErrorMessage
                 AppliedParameters`
@@ -390,6 +403,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success: data.Success,
                 Results: JSON.parse(data.Results),
                 RowCount: data.RowCount,
+                TotalRowCount: data.TotalRowCount,
                 ExecutionTime: data.ExecutionTime,
                 ErrorMessage: data.ErrorMessage,
                 AppliedParameters: data.AppliedParameters ? JSON.parse(data.AppliedParameters) : undefined

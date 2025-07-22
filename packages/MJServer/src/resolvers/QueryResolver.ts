@@ -24,6 +24,9 @@ export class RunQueryResultType {
   RowCount: number;
 
   @Field()
+  TotalRowCount: number;
+
+  @Field()
   ExecutionTime: number;
 
   @Field()
@@ -74,15 +77,19 @@ export class RunQueryResolver {
                      @Ctx() context: AppContext,
                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
                      @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
-                     @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
+                     @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
+                     @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
+                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
-    console.log('GetQueryData called with:', { QueryID, Parameters });
+    console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow });
     const result = await runQuery.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
         CategoryName: CategoryName,
-        Parameters: Parameters 
+        Parameters: Parameters,
+        MaxRows: MaxRows,
+        StartRow: StartRow
       }, 
       context.userPayload.userRecord);
     console.log('RunQuery result:', { 
@@ -110,6 +117,7 @@ export class RunQueryResolver {
       Success: result.Success ?? false,
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
+      TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
@@ -121,14 +129,18 @@ export class RunQueryResolver {
                            @Ctx() context: AppContext,
                            @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
                            @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
-                           @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
+                           @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
+                           @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
+                           @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryName: QueryName, 
         CategoryID: CategoryID,
         CategoryName: CategoryName,
-        Parameters: Parameters
+        Parameters: Parameters,
+        MaxRows: MaxRows,
+        StartRow: StartRow
       },
       context.userPayload.userRecord);
       
@@ -138,6 +150,7 @@ export class RunQueryResolver {
       Success: result.Success ?? false,
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
+      TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
@@ -150,14 +163,18 @@ export class RunQueryResolver {
                                @Ctx() context: AppContext,
                                @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
                                @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
-                               @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>): Promise<RunQueryResultType> {
+                               @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
+                               @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
+                               @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
         CategoryName: CategoryName,
-        Parameters: Parameters 
+        Parameters: Parameters,
+        MaxRows: MaxRows,
+        StartRow: StartRow
       }, 
       context.userPayload.userRecord);
     
@@ -180,6 +197,7 @@ export class RunQueryResolver {
       Success: result.Success ?? false,
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
+      TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined

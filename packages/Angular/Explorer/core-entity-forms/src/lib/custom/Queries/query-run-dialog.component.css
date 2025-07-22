@@ -13,8 +13,38 @@
     gap: 4px;
 }
 
-kendo-grid {
-    font-size: 0.9em;
+/* Professional Results Table Styling */
+.results-table-container {
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.results-table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.results-table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.results-table-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.results-table-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.results-table tbody tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+.results-table tbody tr:nth-child(even) {
+    background-color: #fafbfc;
 }
 
 .dialog-content {
@@ -28,4 +58,21 @@ kendo-grid {
 .param-actions button {
     min-width: 30px;
     padding: 4px 6px;
+}
+
+/* Ensure expansion panel content flexes properly */
+::ng-deep .k-expander-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+::ng-deep .k-expander-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }

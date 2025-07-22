@@ -60,6 +60,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   async ngOnInit() {
     if (this.record) {
+      if (!this.record.IsSaved) {
+        // we have a new record so by definition we are in edit mode
+        this.StartEditMode();
+      }
       const md: Metadata = new Metadata();
    
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
@@ -154,6 +158,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public StartEditMode(): void {
     this.EditMode = true;
+  }
+
+  public EndEditMode(): void {
+    this.EditMode = false;
   }
 
   public handleHistoryDialog(): void {
@@ -371,7 +379,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             // we have saved the record, so clear the pending records
             this._pendingRecords = [];
             if (StopEditModeAfterSave)
-              this.EditMode = false;
+              this.EndEditMode();
 
             this.sharedService.CreateSimpleNotification('Record saved succesfully', 'success', 2500)
             return true;
@@ -420,7 +428,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         }
 
         // if we get here we are good to go
-        this.EditMode = false;
+        this.EndEditMode();
     }
   }
 

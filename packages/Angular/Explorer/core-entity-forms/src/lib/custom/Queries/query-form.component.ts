@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { QueryEntity, QueryParameterEntity, QueryCategoryEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -21,7 +21,7 @@ interface CategoryTreeNode {
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
-export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy {
+export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public override cdr!: ChangeDetectorRef;
     public record!: QueryEntity;
     public queryParameters: QueryParameterEntity[] = [];
@@ -66,6 +66,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
     private destroy$ = new Subject<void>();
+    private isUpdatingEditorValue = false;
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -78,9 +79,63 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         ]);
     }
 
+
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    ngAfterViewInit() {
+        super.ngAfterViewInit();
+
+        this.sqlEditor?.setEditable(this.EditMode);
+
+        // Set initial SQL value in the editor
+        this.updateEditorValue();
+        
+        // Watch for SQL changes in the record
+        this.cdr.detectChanges();
+    }
+ 
+    override EndEditMode(): void {
+        super.EndEditMode();
+        this.sqlEditor?.setEditable(false);
+    }
+
+    override StartEditMode(): void {
+        super.StartEditMode();
+        this.sqlEditor?.setEditable(true);
+    }
+
+    override CancelEdit(): void {
+        super.CancelEdit();
+        this.updateEditorValue(); // Reset editor value to record SQL
+        this.sqlEditor?.setEditable(false);
+        this.updateUnsavedChangesFlag(); // Reset unsaved changes flag
+    }
+
+    private updateEditorValue() {
+        if (!this.sqlEditor || this.isUpdatingEditorValue) {
+            return;
+        }
+        
+        // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+        setTimeout(() => {
+            if (!this.sqlEditor) {
+                return;
+            }
+            
+            this.isUpdatingEditorValue = true;
+            const sqlValue = this.record?.SQL || '';
+            
+            // Use the setValue method from mj-code-editor component
+            this.sqlEditor.setValue(sqlValue);
+            this.isUpdatingEditorValue = false;
+        }, 0);
+    }
+
+    public isFormReadOnly(): boolean {
+        return !this.EditMode;
     }
 
     async loadQueryParameters() {
@@ -137,12 +192,13 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 const results = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'EntityName ASC',
+                    OrderBy: 'Entity ASC',
                     ResultType: 'entity_object'
                 });
                 
                 if (results.Success) {
                     this.queryEntities = results.Results || [];
+                    console.log('Loaded query entities:', this.queryEntities);
                 }
             } catch (error) {
                 console.error('Error loading query entities:', error);
@@ -271,7 +327,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                     this.record.CategoryID = existingCategory.value;
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Category "${existingCategory.text}" already exists. Using existing category.`, 
-                        'warning'
+                        'warning',
+                        3000
                     );
                 }
                 return;
@@ -293,19 +350,22 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                     this.record.CategoryID = newCategory.ID;
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `New category "${newCategory.Name}" created successfully.`, 
-                        'success'
+                        'success',
+                        3000
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Failed to create new category. ${newCategory.LatestResult?.Message || ''}`, 
-                        'error'
+                        'error',
+                        3000
                     );
                 }
             } catch (error) {
                 console.error('Error creating new category:', error);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Error creating new category. Please try again.', 
-                    'error'
+                    'error',
+                    3000
                 );
             }
         }
@@ -338,7 +398,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         if (!this.record?.IsSaved) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Please save the query before running it.', 
-                'warning'
+                'warning',
+                3000
             );
             return;
         }
@@ -349,7 +410,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             if (!saveResult) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Failed to save query changes.', 
-                    'error'
+                    'error',
+                    3000
                 );
                 return;
             }
@@ -387,19 +449,22 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Parameter added successfully',
-                    'success'
+                    'success',
+                    3000
                 );
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Failed to add parameter',
-                    'error'
+                    'error',
+                    3000
                 );
             }
         } catch (error) {
             console.error('Error adding parameter:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Error adding parameter',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -429,19 +494,22 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 }
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Parameter deleted successfully',
-                    'success'
+                    'success',
+                    3000
                 );
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Failed to delete parameter',
-                    'error'
+                    'error',
+                    3000
                 );
             }
         } catch (error) {
             console.error('Error deleting parameter:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Error deleting parameter',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -480,7 +548,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                     this.record.CategoryID = existingCategory.value;
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Category "${existingCategory.text}" already exists. Using existing category.`, 
-                        'warning'
+                        'warning',
+                        3000
                     );
                 }
             } else {
@@ -515,11 +584,33 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             }
         }
 
+        // Save any unsaved query entities first
+        if (this.EditMode) {
+            for (const entity of this.queryEntities) {
+                if (!entity.IsSaved && entity.EntityID) {
+                    try {
+                        await entity.Save();
+                    } catch (error) {
+                        console.error('Error saving query entity:', error);
+                    }
+                }
+            }
+        }
+
         // Call the parent save method
         const result = await super.SaveRecord(StopEditModeAfterSave);
         
         if (result) {
             this.updateUnsavedChangesFlag();
+            
+            // Reload related data after successful save as server-side processes may have updated them
+            if (this.record && this.record.ID) {
+                await Promise.all([
+                    this.loadQueryParameters(),
+                    this.loadQueryFields(),
+                    this.loadQueryEntities()
+                ]);
+            }
         }
         
         return result;
@@ -542,12 +633,13 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
      * Handle SQL value changes from the code editor
      */
     onSQLChange(value: any) {
-        if (this.record) {
-            // Handle both direct string value and event object
-            const sqlValue = typeof value === 'string' ? value : value?.target?.value || '';
-            this.record.SQL = sqlValue;
-            this.updateUnsavedChangesFlag();
+        if (this.isUpdatingEditorValue || !this.record) {
+            return;
         }
+        
+        // Update the record SQL value
+        this.record.SQL = value;
+        this.updateUnsavedChangesFlag();
     }
 
     /**
@@ -571,14 +663,16 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field added successfully',
-                    'success'
+                    'success',
+                    3000
                 );
             }
         } catch (error) {
             console.error('Error adding field:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to add field',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -598,14 +692,16 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field deleted successfully',
-                    'success'
+                    'success',
+                    3000
                 );
             }
         } catch (error) {
             console.error('Error deleting field:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to delete field',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -619,20 +715,15 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities');
             newEntity.QueryID = this.record.ID;
             
-            const saved = await newEntity.Save();
-            if (saved) {
-                this.queryEntities.push(newEntity);
-                this.updateUnsavedChangesFlag();
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Entity added successfully',
-                    'success'
-                );
-            }
+            // Add to the list immediately for UI responsiveness
+            this.queryEntities.push(newEntity);
+            this.updateUnsavedChangesFlag();
         } catch (error) {
             console.error('Error adding entity:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to add entity',
-                'error'
+                'error',
+                3000
             );
         }
     }
@@ -652,14 +743,16 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Entity deleted successfully',
-                    'success'
+                    'success',
+                    3000
                 );
             }
         } catch (error) {
             console.error('Error deleting entity:', error);
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Failed to delete entity',
-                'error'
+                'error',
+                3000
             );
         }
     }

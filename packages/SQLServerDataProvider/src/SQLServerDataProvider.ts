@@ -760,12 +760,26 @@ export class SQLServerDataProvider
       const end = new Date().getTime();
 
       if (result) {
+        // Apply pagination if specified
+        const totalRowCount = result.length;
+        const startRow = params.StartRow || 0;
+        
+        // Apply StartRow offset and MaxRows limit
+        let paginatedResult = result;
+        if (startRow > 0) {
+          paginatedResult = paginatedResult.slice(startRow);
+        }
+        if (params.MaxRows && params.MaxRows > 0) {
+          paginatedResult = paginatedResult.slice(0, params.MaxRows);
+        }
+          
         return {
           Success: true,
           QueryID: query.ID,
           QueryName: query.Name,
-          Results: result,
-          RowCount: result.length,
+          Results: paginatedResult,
+          RowCount: paginatedResult.length,
+          TotalRowCount: totalRowCount,
           ExecutionTime: end - start,
           ErrorMessage: '',
           AppliedParameters: appliedParameters
@@ -781,6 +795,7 @@ export class SQLServerDataProvider
         QueryName: params.QueryName,
         Results: [],
         RowCount: 0,
+        TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: e.message,
       };

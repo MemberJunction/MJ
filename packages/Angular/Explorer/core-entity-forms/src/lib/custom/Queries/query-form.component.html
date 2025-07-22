@@ -69,34 +69,41 @@
                     [(expanded)]="sqlPanelExpanded"
                     style="margin-bottom: 16px;">
                     <ng-template kendoExpansionPanelTitleDirective>
-                        <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                            <i class="fa-solid fa-code" style="color: #17a2b8;"></i>
-                            SQL Query
-                            @if (record.SQL) {
-                                <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                                    <i class="fa-solid fa-check"></i> Defined
-                                </span>
-                            }
-                        </span>
-                    </ng-template>
-                    
-                    <div style="padding: 16px 0;">
-                        <!-- SQL Filters Help Toggle -->
-                        <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                        <span style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-code" style="color: #17a2b8;"></i>
+                                SQL
+                                @if (record.SQL) {
+                                    <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        <i class="fa-solid fa-check"></i> Defined
+                                    </span>
+                                }
+                            </span>
                             <button type="button"
                                     kendoButton 
                                     fillMode="flat"
                                     size="small"
-                                    (click)="toggleFiltersHelp()"
-                                    title="Show/hide SQL filters help">
-                                <i class="fa-solid fa-question-circle"></i> SQL Filters Help
-                                <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    (click)="toggleFiltersHelp(); $event.stopPropagation()"
+                                    title="Show/hide SQL filters help"
+                                    style="margin-right: 8px;">
+                                <i class="fa-solid fa-question-circle"></i>
+                                <span style="margin-left: 4px;">Filters Help</span>
+                                <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'" style="margin-left: 4px;"></i>
                             </button>
-                        </div>
-
-                        <!-- SQL Filters Help (Expandable) -->
+                        </span>
+                    </ng-template>
+                    
+                    <div style="display: flex; flex-direction: column;">
+                        <!-- Code Editor -->
+                        <mj-code-editor #sqlEditor
+                                       (change)="onSQLChange($event)"
+                                       [language]="'sql'"
+                                       style="flex: 1; height: 400px; border: 1px solid #ced4da; border-radius: 4px;">
+                        </mj-code-editor>
+                        
+                        <!-- SQL Filters Help (Below Editor) -->
                         @if (showFiltersHelp) {
-                            <div class="filters-help" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+                            <div class="filters-help" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-top: 16px;">
                                 <h6 style="margin: 0 0 12px 0; color: #495057; font-weight: 600;">
                                     <i class="fa-solid fa-filter"></i> Available SQL Filters for Parameterized Queries
                                 </h6>
@@ -123,15 +130,6 @@
                                 </div>
                             </div>
                         }
-
-                        <!-- Code Editor -->
-                        <mj-code-editor #sqlEditor
-                                       [value]="record.SQL || ''"
-                                       (change)="onSQLChange($event)"
-                                       [language]="'sql'"
-                                       [readonly]="!EditMode"
-                                       style="height: 400px; border: 1px solid #dee2e6; border-radius: 4px;">
-                        </mj-code-editor>
                     </div>
                 </kendo-expansionpanel>
 
@@ -284,78 +282,36 @@
                                     }
                                     
                                     <!-- Fields Grid -->
-                                    <div class="params-grid">
+                                    <div class="parameters-grid">
                                         @for (field of queryFields; track field.ID) {
-                                            <div class="param-card" [style.padding]="EditMode ? '20px' : '16px'">
-                                                <div class="param-header">
-                                                    @if (EditMode) {
-                                                        <kendo-textbox 
-                                                            [(ngModel)]="field.Name"
-                                                            [name]="'fieldName_' + field.ID"
-                                                            placeholder="Field name..."
-                                                            style="width: 70%; margin-right: 8px;">
-                                                        </kendo-textbox>
-                                                        <kendo-textbox 
-                                                            [(ngModel)]="field.SQLBaseType"
-                                                            [name]="'fieldType_' + field.ID"
-                                                            placeholder="Type..."
-                                                            style="width: 28%;">
-                                                        </kendo-textbox>
-                                                    } @else {
-                                                        <h6 class="param-name">{{ field.Name }}</h6>
-                                                        <span class="param-type-badge">{{ field.SQLBaseType }}</span>
-                                                    }
+                                            <div class="param-card">
+                                                <div class="param-card-header">
+                                                    <div class="param-name">
+                                                        <i class="fa-solid fa-columns" style="color: #17a2b8;"></i>
+                                                        {{ field.Name }}
+                                                    </div>
+                                                    <div class="param-badges">
+                                                        <span class="param-badge" style="background: #e3f2fd; color: #1976d2;">{{ field.SQLBaseType }}</span>
+                                                        @if (field.Sequence) {
+                                                            <span class="param-badge" style="background: #f3e5f5; color: #7b1fa2;">#{{ field.Sequence }}</span>
+                                                        }
+                                                    </div>
                                                 </div>
                                                 
-                                                <div class="param-content">
-                                                    @if (EditMode) {
-                                                        <div style="margin-top: 12px;">
-                                                            <kendo-textarea
-                                                                [(ngModel)]="field.Description"
-                                                                [name]="'fieldDesc_' + field.ID"
-                                                                placeholder="Field description..."
-                                                                [rows]="2"
-                                                                style="width: 100%;">
-                                                            </kendo-textarea>
-                                                        </div>
-                                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-                                                            <kendo-textbox
-                                                                [(ngModel)]="field.SQLFullType"
-                                                                [name]="'fieldFullType_' + field.ID"
-                                                                placeholder="Full SQL type..."
-                                                                style="width: 100%;">
-                                                            </kendo-textbox>
-                                                            <kendo-numerictextbox
-                                                                [(ngModel)]="field.Sequence"
-                                                                [name]="'fieldSeq_' + field.ID"
-                                                                placeholder="Sequence..."
-                                                                [min]="1"
-                                                                [step]="10"
-                                                                style="width: 100%;">
-                                                            </kendo-numerictextbox>
-                                                        </div>
-                                                    } @else {
-                                                        @if (field.Description) {
-                                                            <p class="param-description">{{ field.Description }}</p>
-                                                        }
-                                                        <div class="param-details">
-                                                            <div class="param-detail">
-                                                                <span class="detail-label">Type:</span>
-                                                                <span class="detail-value">{{ field.SQLFullType }}</span>
-                                                            </div>
-                                                            @if (field.Sequence) {
-                                                                <div class="param-detail">
-                                                                    <span class="detail-label">Sequence:</span>
-                                                                    <span class="detail-value">{{ field.Sequence }}</span>
-                                                                </div>
-                                                            }
-                                                        </div>
+                                                <div class="param-card-body">
+                                                    @if (field.Description) {
+                                                        <div class="param-description">{{ field.Description }}</div>
                                                     }
+                                                    <div class="param-meta">
+                                                        <span class="meta-item">
+                                                            <i class="fa-solid fa-code"></i> {{ field.SQLFullType || field.SQLBaseType }}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 
                                                 @if (EditMode) {
-                                                    <div class="param-actions" (click)="$event.stopPropagation()">
-                                                        <button type="button" class="param-action-btn" (click)="deleteField(field)" title="Delete field">
+                                                    <div class="param-card-actions">
+                                                        <button type="button" class="action-btn danger" (click)="deleteField(field)" title="Delete field">
                                                             <i class="fa-solid fa-trash"></i>
                                                         </button>
                                                     </div>
@@ -416,29 +372,43 @@
                                     }
                                     
                                     <!-- Entities Grid -->
-                                    <div class="params-grid">
+                                    <div class="parameters-grid">
                                         @for (entity of queryEntities; track entity.ID) {
                                             <div class="param-card">
-                                                <div class="param-header">
+                                                <div class="param-card-header">
+                                                    <div class="param-name">
+                                                        <i class="fa-solid fa-table" style="color: #28a745;"></i>
+                                                        {{ entity.Entity || 'Select Entity...' }}
+                                                    </div>
                                                     @if (EditMode) {
-                                                        <kendo-dropdownlist
-                                                            [(ngModel)]="entity.EntityID"
-                                                            [name]="'entity_' + entity.ID"
-                                                            [data]="getEntityOptions()"
-                                                            textField="text"
-                                                            valueField="id"
-                                                            [valuePrimitive]="true"
-                                                            placeholder="Select entity..."
-                                                            style="width: 100%;">
-                                                        </kendo-dropdownlist>
-                                                    } @else {
-                                                        <h6 class="param-name">{{ entity.Entity }}</h6>
+                                                        <div style="flex: 1; margin-left: 12px;">
+                                                            <kendo-dropdownlist
+                                                                [(ngModel)]="entity.EntityID"
+                                                                [name]="'entity_' + entity.ID"
+                                                                [data]="getEntityOptions()"
+                                                                textField="text"
+                                                                valueField="id"
+                                                                [valuePrimitive]="true"
+                                                                placeholder="Select entity..."
+                                                                style="width: 100%;">
+                                                            </kendo-dropdownlist>
+                                                        </div>
                                                     }
                                                 </div>
                                                 
+                                                @if (!EditMode && entity.Entity) {
+                                                    <div class="param-card-body">
+                                                        <div class="param-meta">
+                                                            <span class="meta-item">
+                                                                <i class="fa-solid fa-database"></i> Data Source
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                
                                                 @if (EditMode) {
-                                                    <div class="param-actions" (click)="$event.stopPropagation()">
-                                                        <button type="button" class="param-action-btn" (click)="deleteEntity(entity)" title="Delete entity">
+                                                    <div class="param-card-actions">
+                                                        <button type="button" class="action-btn danger" (click)="deleteEntity(entity)" title="Delete entity">
                                                             <i class="fa-solid fa-trash"></i>
                                                         </button>
                                                     </div>

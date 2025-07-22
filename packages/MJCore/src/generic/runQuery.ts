@@ -28,6 +28,16 @@ export type RunQueryParams = {
      * Values will be validated and type-converted based on parameter definitions.
      */
     Parameters?: Record<string, any>
+    /**
+     * Optional maximum number of rows to return from the query.
+     * If not provided, all rows will be returned.
+     */
+    MaxRows?: number
+    /**
+     * Optional - if provided, this value will be used to offset the rows returned.
+     * Used for pagination in conjunction with MaxRows.
+     */
+    StartRow?: number
 }
 
 /**
