@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.74.0
+
+### Minor Changes
+
+- d316670: migration - MJCore
+
+### Patch Changes
+
+- @memberjunction/global@2.74.0
+
 ## 2.73.0
 
 ### Patch Changes

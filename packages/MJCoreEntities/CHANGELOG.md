@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.74.0
+
+### Minor Changes
+
+- b70301e: migrations
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+  - @memberjunction/global@2.74.0
+
 ## 2.73.0
 
 ### Patch Changes

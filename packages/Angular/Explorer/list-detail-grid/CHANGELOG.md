@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ng-compare-records@2.74.0
+  - @memberjunction/ng-shared@2.74.0
+  - @memberjunction/ng-container-directives@2.74.0
+  - @memberjunction/global@2.74.0
+
 ## 2.73.0
 
 ### Patch Changes

@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.74.0
+
+### Patch Changes
+
+- e10780d: Allow MS Graph users to save sent emails in sender's sent items.
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/aiengine@2.74.0
+  - @memberjunction/communication-types@2.74.0
+  - @memberjunction/sqlserver-dataprovider@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/ai-openai@2.74.0
+  - @memberjunction/global@2.74.0
+
 ## 2.73.0
 
 ### Patch Changes
