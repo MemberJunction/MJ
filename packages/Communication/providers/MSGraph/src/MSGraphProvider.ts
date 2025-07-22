@@ -72,7 +72,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                         };
                     })
                 },
-                saveToSentItems: 'false'
+                saveToSentItems: message.ContextData?.saveToSentItems ?? false
             };
     
             const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/sendMail`;
