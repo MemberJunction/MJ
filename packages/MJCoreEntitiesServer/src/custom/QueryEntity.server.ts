@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity } from "@memberjunction/core-entities";
+import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
@@ -15,8 +15,24 @@ interface ExtractedParameter {
     defaultValue: string | null;
 }
 
+interface ExtractedField {
+    name: string;
+    dynamicName?: boolean;
+    description: string;
+    type: 'number' | 'string' | 'date' | 'boolean';
+    optional: boolean;
+}
+
+interface ExtractedEntity {
+    schemaName: string;
+    baseView: string;
+    alias?: string;
+}
+
 interface ParameterExtractionResult {
     parameters: ExtractedParameter[];
+    selectClause?: ExtractedField[];
+    fromClause?: ExtractedEntity[];
 }
 
 @RegisterClass(BaseEntity, 'Queries')
@@ -31,32 +47,38 @@ export class QueryEntityExtended extends QueryEntity {
             // Check if this is a new record or if SQL has changed
             const sqlField = this.GetFieldByName('SQL');
             const shouldExtractParams = !this.IsSaved || sqlField.Dirty;
-            
-            // Save the query first
-            const saveResult = await super.Save(options);
-            
-            if (!saveResult) {
-                await provider.RollbackTransaction();
-                return false;
-            }
-            
+                        
             // Extract and sync parameters if needed
             if (shouldExtractParams && this.SQL && this.SQL.trim().length > 0) {
                 await this.extractAndSyncParameters();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
-                // If SQL is empty, ensure UsesTemplate is false and remove any existing parameters
+                // If SQL is empty, ensure UsesTemplate is false and remove all related data
                 this.UsesTemplate = false;
-                await this.removeAllQueryParameters();
+                await Promise.all([
+                    this.removeAllQueryParameters(),
+                    this.removeAllQueryFields(),
+                    this.removeAllQueryEntities()
+                ]);
             }
             
             // Commit the transaction
-            await provider.CommitTransaction();
-            return true;
+            // Save the query now to incorporate any other changes that happened via the above that
+            // affected the query itself
+            const saveResult = await super.Save(options);
+            if (!saveResult) {
+                await provider.RollbackTransaction();
+                return false
+            }
+            else {
+                await provider.CommitTransaction();
+                return true;
+            }
         } catch (e) {
             // Rollback on any error
             await provider.RollbackTransaction();
             LogError('Failed to save query and extract parameters:', e);
-            throw e;
+            this.LatestResult?.Errors.push(e);
+            return false;
         }
     }
     
@@ -67,13 +89,13 @@ export class QueryEntityExtended extends QueryEntity {
             
             // Find the Template Parameter Extraction prompt (we'll reuse it for SQL)
             const aiPrompt = AIEngine.Instance.Prompts.find(p => 
-                p.Name === 'Template Parameter Extraction' && 
+                p.Name === 'SQL Query Parameter Extraction' && 
                 p.Category === 'MJ: System'
             );
             
             if (!aiPrompt) {
                 // Prompt not configured, non-fatal, just warn and return
-                console.warn('AI prompt for Template Parameter Extraction not found. Skipping parameter extraction.');
+                console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping parameter extraction.');
                 return;
             }
             
@@ -99,8 +121,20 @@ export class QueryEntityExtended extends QueryEntity {
                 return;
             }
             
-            // Process the extracted parameters
-            await this.syncQueryParameters(result.result.parameters);
+            // Process the extracted data in parallel
+            const syncPromises: Promise<void>[] = [
+                this.syncQueryParameters(result.result.parameters)
+            ];
+            
+            if (result.result.selectClause) {
+                syncPromises.push(this.syncQueryFields(result.result.selectClause));
+            }
+            
+            if (result.result.fromClause) {
+                syncPromises.push(this.syncQueryEntities(result.result.fromClause));
+            }
+            
+            await Promise.all(syncPromises);
             
             // Update UsesTemplate flag based on whether parameters were found
             this.UsesTemplate = result.result.parameters.length > 0;
@@ -121,7 +155,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get existing query parameters
             const rv = new RunView();
             const existingParamsResult = await rv.RunView<QueryParameterEntity>({
-                EntityName: 'Query Parameters',
+                EntityName: 'MJ: Query Parameters',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -153,10 +187,20 @@ export class QueryEntityExtended extends QueryEntity {
             
             // Add new parameters
             for (const param of paramsToAdd) {
-                const newParam = await md.GetEntityObject<QueryParameterEntity>('Query Parameters', this.ContextCurrentUser);
+                const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters', this.ContextCurrentUser);
                 newParam.QueryID = this.ID;
                 newParam.Name = param.name;
-                newParam.Type = param.type;
+                switch (param.type) {
+                    case "array":
+                    case "boolean":
+                    case "string":
+                    case "date":
+                    case "number":
+                        newParam.Type = param.type;
+                        break;
+                    default: 
+                        newParam.Type = 'string'; // Default to string if unknown
+                }
                 newParam.IsRequired = false; // Like templates, make all optional to avoid breaking queries
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
@@ -219,7 +263,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get all existing query parameters
             const rv = new RunView();
             const existingParamsResult = await rv.RunView<QueryParameterEntity>({
-                EntityName: 'Query Parameters',
+                EntityName: 'MJ: Query Parameters',
                 ExtraFilter: `QueryID='${this.ID}'`,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -240,6 +284,246 @@ export class QueryEntityExtended extends QueryEntity {
         } catch (e) {
             LogError('Failed to remove query parameters:', e);
             throw e; // Re-throw since we're in a transaction
+        }
+    }
+    
+    private async syncQueryFields(extractedFields: ExtractedField[]): Promise<void> {
+        const md = new Metadata();
+        
+        try {
+            // Get existing query fields
+            const rv = new RunView();
+            const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
+                EntityName: 'Query Fields',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            
+            if (!existingFieldsResult.Success) {
+                throw new Error(`Failed to load existing query fields: ${existingFieldsResult.ErrorMessage}`);
+            }
+            
+            const existingFields = existingFieldsResult.Results || [];
+            
+            // Convert extracted field names to lowercase for comparison
+            const extractedFieldNames = extractedFields.map(f => f.name.toLowerCase());
+            
+            // Find fields to add, update, or remove
+            const fieldsToAdd = extractedFields.filter(f => 
+                !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
+            );
+            
+            const fieldsToUpdate = existingFields.filter(ef =>
+                extractedFields.some(f => f.name.toLowerCase() === ef.Name.toLowerCase())
+            );
+            
+            const fieldsToRemove = existingFields.filter(ef =>
+                !extractedFieldNames.includes(ef.Name.toLowerCase())
+            );
+            
+            // Prepare all save/delete operations
+            const promises: Promise<boolean>[] = [];
+            
+            // Add new fields
+            for (let i = 0; i < fieldsToAdd.length; i++) {
+                const field = fieldsToAdd[i];
+                const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields', this.ContextCurrentUser);
+                newField.QueryID = this.ID;
+                newField.Name = field.name;
+                newField.Description = field.description;
+                newField.Sequence = i + 1;
+                
+                // Map type to SQL types
+                switch (field.type) {
+                    case 'number':
+                        newField.SQLBaseType = 'decimal';
+                        newField.SQLFullType = 'decimal(18,2)';
+                        break;
+                    case 'date':
+                        newField.SQLBaseType = 'datetime';
+                        newField.SQLFullType = 'datetime';
+                        break;
+                    case 'boolean':
+                        newField.SQLBaseType = 'bit';
+                        newField.SQLFullType = 'bit';
+                        break;
+                    default:
+                        newField.SQLBaseType = 'nvarchar';
+                        newField.SQLFullType = 'nvarchar(MAX)';
+                }
+                
+                newField.IsComputed = field.dynamicName || false;
+                if (field.dynamicName) {
+                    newField.SourceFieldName = field.name;
+                }
+                
+                promises.push(newField.Save());
+            }
+            
+            // Update existing fields if properties changed
+            for (const existingField of fieldsToUpdate) {
+                const extractedField = extractedFields.find(f => f.name.toLowerCase() === existingField.Name.toLowerCase());
+                if (extractedField) {
+                    let hasChanges = false;
+                    
+                    if (existingField.Description !== extractedField.description) {
+                        existingField.Description = extractedField.description;
+                        hasChanges = true;
+                    }
+                    
+                    const isDynamic = extractedField.dynamicName || false;
+                    if (existingField.IsComputed !== isDynamic) {
+                        existingField.IsComputed = isDynamic;
+                        hasChanges = true;
+                    }
+                    
+                    if (hasChanges) {
+                        promises.push(existingField.Save());
+                    }
+                }
+            }
+            
+            // Remove fields that are no longer in the SQL
+            for (const fieldToRemove of fieldsToRemove) {
+                promises.push(fieldToRemove.Delete());
+            }
+            
+            // Execute all operations in parallel
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+            
+        } catch (e) {
+            LogError('Failed to sync query fields:', e);
+            throw e; // Re-throw since we're in a transaction
+        }
+    }
+    
+    private async syncQueryEntities(extractedEntities: ExtractedEntity[]): Promise<void> {
+        const md = new Metadata();
+        
+        try {
+            // Get existing query entities
+            const rv = new RunView();
+            const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
+                EntityName: 'Query Entities',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            
+            if (!existingEntitiesResult.Success) {
+                throw new Error(`Failed to load existing query entities: ${existingEntitiesResult.ErrorMessage}`);
+            }
+            
+            const existingEntities = existingEntitiesResult.Results || [];
+            
+            // Look up MJ entity IDs for the extracted base views using pre-loaded metadata
+            const entityMappings = extractedEntities.map(extracted => {
+                // Find matching entity in metadata
+                const matchingEntity = md.Entities.find(e => 
+                    e.BaseView === extracted.baseView && 
+                    (e.SchemaName === extracted.schemaName || (!e.SchemaName && extracted.schemaName === 'dbo'))
+                );
+                
+                if (matchingEntity) {
+                    return {
+                        extracted,
+                        entityID: matchingEntity.ID,
+                        entityName: matchingEntity.Name
+                    };
+                }
+                return null;
+            }).filter(m => m !== null);
+            
+            // Find entities to add or remove
+            const entitiesToAdd = entityMappings.filter(mapping => 
+                !existingEntities.some(ee => ee.EntityID === mapping!.entityID)
+            );
+            
+            const entitiesToRemove = existingEntities.filter(ee =>
+                !entityMappings.some(mapping => mapping!.entityID === ee.EntityID)
+            );
+            
+            // Prepare all save/delete operations
+            const promises: Promise<boolean>[] = [];
+            
+            // Add new query entity relationships
+            for (const mapping of entitiesToAdd) {
+                if (mapping) {
+                    const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities', this.ContextCurrentUser);
+                    newEntity.QueryID = this.ID;
+                    newEntity.EntityID = mapping.entityID;
+                    newEntity.DetectionMethod = 'AI';
+                    newEntity.AutoDetectConfidenceScore = 0.95; // High confidence since we're matching exact base view names
+                    promises.push(newEntity.Save());
+                }
+            }
+            
+            // Remove entities that are no longer in the SQL
+            for (const entityToRemove of entitiesToRemove) {
+                promises.push(entityToRemove.Delete());
+            }
+            
+            // Execute all operations in parallel
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+            
+        } catch (e) {
+            LogError('Failed to sync query entities:', e);
+            throw e; // Re-throw since we're in a transaction
+        }
+    }
+    
+    private async removeAllQueryFields(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
+                EntityName: 'Query Fields',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            
+            if (!existingFieldsResult.Success) {
+                throw new Error(`Failed to load existing query fields: ${existingFieldsResult.ErrorMessage}`);
+            }
+            
+            const existingFields = existingFieldsResult.Results || [];
+            const deletePromises = existingFields.map(field => field.Delete());
+            
+            if (deletePromises.length > 0) {
+                await Promise.all(deletePromises);
+            }
+            
+        } catch (e) {
+            LogError('Failed to remove query fields:', e);
+            throw e;
+        }
+    }
+    
+    private async removeAllQueryEntities(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
+                EntityName: 'Query Entities',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            
+            if (!existingEntitiesResult.Success) {
+                throw new Error(`Failed to load existing query entities: ${existingEntitiesResult.ErrorMessage}`);
+            }
+            
+            const existingEntities = existingEntitiesResult.Results || [];
+            const deletePromises = existingEntities.map(entity => entity.Delete());
+            
+            if (deletePromises.length > 0) {
+                await Promise.all(deletePromises);
+            }
+            
+        } catch (e) {
+            LogError('Failed to remove query entities:', e);
+            throw e;
         }
     }
 }
