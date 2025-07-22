@@ -44,9 +44,9 @@ Return a JSON array of parameter objects with this structure:
   ],
   "fromClause": [
     {
-        "schemaName": "name of the schema the view is in",
-        "baseView": "name of the view - always selecting from base views, not tables",
-        "alias": "if an alias was used in the query for this base view, indicate it here"
+        "schemaName": "name of the schema the view or table is in",
+        "baseViewOrTable": "name of the view or table being selected from",
+        "alias": "if an alias was used in the query for this base view/table, indicate it here"
     }
   ]
 }
@@ -215,12 +215,12 @@ Example Output for the above template:
   "fromClause": [
     {
         "schemaName": "crm",
-        "baseView": "vwAccounts",
+        "baseViewOrTable": "vwAccounts",
         "alias": "a"
     },
     {
         "schemaName": "crm",
-        "baseView": "vwIndustries",
+        "baseViewOrTable": "vwIndustries",
         "alias": "i"
     }
   ]

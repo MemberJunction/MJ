@@ -25,7 +25,7 @@ interface ExtractedField {
 
 interface ExtractedEntity {
     schemaName: string;
-    baseView: string;
+    baseViewOrTable: string;
     alias?: string;
 }
 
@@ -434,8 +434,13 @@ export class QueryEntityExtended extends QueryEntity {
             const entityMappings = extractedEntities.map(extracted => {
                 // Find matching entity in metadata
                 const matchingEntity = md.Entities.find(e => 
-                    e.BaseView === extracted.baseView && 
-                    (e.SchemaName === extracted.schemaName || (!e.SchemaName && extracted.schemaName === 'dbo'))
+                    ( 
+                        e.BaseView.trim().toLowerCase() === extracted.baseViewOrTable?.trim().toLowerCase() || // match on the view
+                        e.BaseTable.trim().toLowerCase() === extracted.baseViewOrTable?.trim().toLowerCase()   // OR the base table
+                    )
+                    && 
+                    (e.SchemaName.trim().toLowerCase() === extracted.schemaName?.trim().toLowerCase() || 
+                     (e.SchemaName?.trim().toLowerCase() === 'dbo' && extracted.schemaName.trim().length === 0)) // match on schema, OR if no schema specified, match dbo if the entity is in dbo
                 );
                 
                 if (matchingEntity) {
