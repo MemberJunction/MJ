@@ -5,20 +5,76 @@
 
             <!-- Header Section -->
             <div class="query-header" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                <div style="display: flex; flex-direction: column; gap: 16px;">
                     
-                    <!-- Left: Query Info -->
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                            <i class="fa-solid fa-database" style="color: #17a2b8; font-size: 1.4em;"></i>
+                    <!-- Top Row: Name and Run Button -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                        <!-- Left: Query Name -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <i class="fa-solid fa-database" style="color: #17a2b8; font-size: 1.4em;"></i>
+                                @if (EditMode) {
+                                    <kendo-textbox [(ngModel)]="record.Name" 
+                                                  name="queryName"
+                                                  placeholder="Enter query name..."
+                                                  style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
+                                    </kendo-textbox>
+                                } @else {
+                                    <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Query' }}</h4>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Right: Action Buttons -->
+                        <div class="action-buttons" style="display: flex; gap: 8px; align-items: center;">
+                            @if (record.ID) {
+                                <button kendoButton 
+                                        [themeColor]="'primary'" 
+                                        [size]="'large'"
+                                        [disabled]="EditMode || record.Status !== 'Approved' || !record.SQL || record.SQL.trim().length === 0"
+                                        (click)="runQuery()"
+                                        title="Run Query">
+                                    <i class="fa-solid fa-play"></i> Run
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Second Row: Category and Status -->
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;">
+                        <!-- Category -->
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <label style="font-weight: 600; color: #495057; min-width: 80px;">Category:</label>
                             @if (EditMode) {
-                                <kendo-textbox [(ngModel)]="record.Name" 
-                                              name="queryName"
-                                              placeholder="Enter query name..."
-                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                </kendo-textbox>
+                                <kendo-dropdownlist
+                                    [(ngModel)]="record.CategoryID"
+                                    name="categoryId"
+                                    [data]="categoryOptions"
+                                    textField="text"
+                                    valueField="value"
+                                    [valuePrimitive]="true"
+                                    placeholder="Select category..."
+                                    style="flex: 1;">
+                                </kendo-dropdownlist>
                             } @else {
-                                <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Query' }}</h4>
+                                <span style="color: #495057;">{{ getCategoryPath() || 'Uncategorized' }}</span>
+                            }
+                        </div>
+
+                        <!-- Status -->
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <label style="font-weight: 600; color: #495057; min-width: 50px;">Status:</label>
+                            @if (EditMode) {
+                                <kendo-dropdownlist
+                                    [(ngModel)]="record.Status"
+                                    name="status"
+                                    [data]="statusOptions"
+                                    textField="text"
+                                    valueField="value"
+                                    [valuePrimitive]="true"
+                                    style="flex: 1;">
+                                </kendo-dropdownlist>
+                            } @else {
                                 <span class="badge" 
                                       [style.background]="getStatusBadgeColor()" 
                                       style="color: white; padding: 6px 12px; border-radius: 12px; font-size: 0.85em;">
@@ -29,35 +85,23 @@
                                 </span>
                             }
                         </div>
-
-                        @if (EditMode || record.Description) {
-                            <div style="margin-bottom: 12px;">
-                                @if (EditMode) {
-                                    <kendo-textarea [(ngModel)]="record.Description" 
-                                                   name="description"
-                                                   [rows]="2"
-                                                   placeholder="Enter query description..."
-                                                   style="width: 100%; max-width: 600px;">
-                                    </kendo-textarea>
-                                } @else {
-                                    <p style="margin: 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
-                                }
-                            </div>
-                        }
                     </div>
 
-                    <!-- Right: Action Buttons -->
-                    <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
-                        <div style="display: flex; gap: 8px;">
-                            @if (record.ID) {
-                                <button kendoButton [themeColor]="'primary'" [size]="'large'"
-                                        (click)="runQuery()"
-                                        title="Run Query">
-                                    <i class="fa-solid fa-play"></i> Run
-                                </button>
+                    <!-- Third Row: Description -->
+                    @if (EditMode || record.Description) {
+                        <div>
+                            @if (EditMode) {
+                                <kendo-textarea [(ngModel)]="record.Description" 
+                                               name="description"
+                                               [rows]="2"
+                                               placeholder="Enter query description..."
+                                               style="width: 100%;">
+                                </kendo-textarea>
+                            } @else {
+                                <p style="margin: 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
                             }
                         </div>
-                    </div>
+                    }
                 </div>
             </div>
 
@@ -435,59 +479,6 @@
                     
                     <div style="padding: 20px;">
                         <div class="details-grid">
-                            <!-- Category -->
-                            <div class="detail-item">
-                                <label class="detail-label">
-                                    <i class="fa-solid fa-folder"></i> Category
-                                </label>
-                                @if (EditMode) {
-                                    <div class="category-selector">
-                                        <kendo-dropdowntree
-                                            [(ngModel)]="record.CategoryID"
-                                            name="categoryId"
-                                            [data]="categoryTreeData"
-                                            [textField]="'name'"
-                                            [valueField]="'id'"
-                                            [valuePrimitive]="true"
-                                            placeholder="Select category..."
-                                            class="category-tree-dropdown"
-                                            style="width: 100%;">
-                                        </kendo-dropdowntree>
-                                        <button type="button" class="add-category-btn" (click)="showCategoryDialog = true" title="Create new category">
-                                            <i class="fa-solid fa-plus"></i>
-                                        </button>
-                                    </div>
-                                } @else {
-                                    <div class="detail-value">{{ getCategoryPath() || 'Uncategorized' }}</div>
-                                }
-                            </div>
-
-                            <!-- Status -->
-                            <div class="detail-item">
-                                <label class="detail-label">
-                                    <i class="fa-solid fa-flag"></i> Status
-                                </label>
-                                @if (EditMode) {
-                                    <kendo-dropdownlist
-                                        [(ngModel)]="record.Status"
-                                        name="status"
-                                        [data]="statusOptions"
-                                        textField="text"
-                                        valueField="value"
-                                        [valuePrimitive]="true"
-                                        style="width: 100%;">
-                                    </kendo-dropdownlist>
-                                } @else {
-                                    <div class="detail-value">
-                                        <span class="badge" 
-                                              [style.background]="getStatusBadgeColor()" 
-                                              style="color: white; padding: 4px 8px; border-radius: 4px;">
-                                            {{ record.Status || 'Unknown' }}
-                                        </span>
-                                    </div>
-                                }
-                            </div>
-
                             <!-- Uses Template -->
                             <div class="detail-item">
                                 <label class="detail-label">

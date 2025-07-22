@@ -51,6 +51,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     ];
     public categories: QueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
+    private isCategoriesLoaded = false;
     
     // Status options
     public statusOptions = [
@@ -70,13 +71,20 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
 
     async ngOnInit() {
         await super.ngOnInit();
+        
+        // Load categories first to ensure they're available for the dropdown
+        await this.loadCategories();
+        
+        // Then load other data in parallel
         await Promise.all([
             this.loadQueryParameters(),
             this.loadQueryFields(),
             this.loadQueryEntities(),
-            this.loadQueryPermissions(),
-            this.loadCategories()
+            this.loadQueryPermissions()
         ]);
+        
+        // Ensure form is properly initialized after all data is loaded
+        this.cdr.detectChanges();
     }
 
 
@@ -93,8 +101,18 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         // Set initial SQL value in the editor
         this.updateEditorValue();
         
-        // Watch for SQL changes in the record
-        this.cdr.detectChanges();
+        // Ensure all form controls are properly initialized with data
+        setTimeout(() => {
+            // Force Angular to update all bindings
+            this.cdr.detectChanges();
+            
+            // If in edit mode, trigger another update to ensure Kendo components are initialized
+            if (this.EditMode) {
+                setTimeout(() => {
+                    this.cdr.detectChanges();
+                }, 50);
+            }
+        }, 100);
     }
  
     override EndEditMode(): void {
@@ -105,6 +123,11 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     override StartEditMode(): void {
         super.StartEditMode();
         this.sqlEditor?.setEditable(true);
+        
+        // Force change detection after a brief delay to ensure form controls are initialized
+        setTimeout(() => {
+            this.cdr.detectChanges();
+        }, 50);
     }
 
     override CancelEdit(): void {
@@ -242,7 +265,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             
             if (results.Success && results.Results) {
                 this.categories = results.Results;
-                this.categoryTreeData = this.buildCategoryTree(this.categories);
                 
                 // Build flat options for legacy compatibility
                 this.categoryOptions = [
@@ -252,10 +274,17 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                         value: cat.ID
                     }))
                 ];
+                
+                // Build tree data after options are set
+                this.categoryTreeData = this.buildCategoryTree(this.categories);
+                
+                // Trigger change detection to update the view
+                this.cdr.detectChanges();
             }
         } catch (error) {
             console.error('Error loading categories:', error);
             this.categoryOptions = [{ text: 'Select Category...', value: '' }];
+            this.categoryTreeData = [];
         }
     }
     
@@ -372,7 +401,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     }
 
     private isDuplicateCategory(categoryName: string): boolean {
-        const normalizedName = categoryName.trim().toLowerCase();
+        const normalizedName = categoryName?.trim().toLowerCase();
         return this.categoryOptions.some(option => 
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
@@ -765,6 +794,13 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             text: e.Name,
             id: e.ID
         })).sort((a, b) => a.text.localeCompare(b.text));
+    }
+
+    /**
+     * Get the grid edit mode based on component edit mode
+     */
+    override GridEditMode(): "None" | "Save" | "Queue" {
+        return this.EditMode ? "Queue" : "None";
     }
 
 }
