@@ -92,7 +92,7 @@ export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-
+export * from './resolvers/CreateQueryResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 
 export * from './generated/generated.js';
