@@ -45,7 +45,9 @@ export type ComponentQueryDataRequirement = {
 
     /**
      * A list of the fields that the component will use out of the possible fields returned by the query.
-     * Uses the @see SimpleEntityFieldInfo type to describe each field.
+     * Uses the @see SimpleEntityFieldInfo type to describe each field. **NOTE** not all of the fields are actually
+     * directly related to entity fields as some might be computed/etc, but SimpleEntityFieldInfo helps define some key aspects
+     * like the data type of the column and a description of the field.
      */
     fields: SimpleEntityFieldInfo[];
 

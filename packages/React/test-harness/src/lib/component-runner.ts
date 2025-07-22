@@ -10,7 +10,7 @@ import {
   ComponentErrorAnalyzer
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
-import type { RunViewParams, RunQueryParams } from '@memberjunction/core';
+import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
 import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
 
 export interface ComponentExecutionOptions {
@@ -20,6 +20,7 @@ export interface ComponentExecutionOptions {
   timeout?: number;
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
+  contextUser: UserInfo
 }
 
 export interface ComponentSpec {
@@ -112,7 +113,7 @@ export class ComponentRunner {
       await this.injectRenderTracking(page);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page);
+      await this.exposeMJUtilities(page, options.contextUser);
 
       // Create and load the component
       const htmlContent = this.createHTMLTemplate(options);
@@ -716,7 +717,7 @@ ${cssLinks}
   /**
    * Expose MemberJunction utilities to the browser context
    */
-  private async exposeMJUtilities(page: any): Promise<void> {
+  private async exposeMJUtilities(page: any, contextUser: UserInfo): Promise<void> {
     // Check if utilities are already exposed
     const alreadyExposed = await page.evaluate(() => {
       return typeof (window as any).__mjGetEntityObject === 'function';
@@ -733,7 +734,7 @@ ${cssLinks}
     // Expose individual functions since we can't pass complex objects
     await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
       try {
-        const entity = await metadata.GetEntityObject(entityName);
+        const entity = await metadata.GetEntityObject(entityName, contextUser);
         return entity;
       } catch (error) {
         console.error('Error in __mjGetEntityObject:', error);
@@ -751,7 +752,7 @@ ${cssLinks}
     
     await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
       try {
-        return await runView.RunView(params);
+        return await runView.RunView(params, contextUser);
       } catch (error) {
         console.error('Error in __mjRunView:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -761,7 +762,7 @@ ${cssLinks}
     
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
       try {
-        return await runView.RunViews(params);
+        return await runView.RunViews(params, contextUser);
       } catch (error) {
         console.error('Error in __mjRunViews:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -771,7 +772,7 @@ ${cssLinks}
     
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
       try {
-        return await runQuery.RunQuery(params);
+        return await runQuery.RunQuery(params, contextUser);
       } catch (error) {
         console.error('Error in __mjRunQuery:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
