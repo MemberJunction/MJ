@@ -75,64 +75,7 @@ export class DataMapperAction extends BaseAction {
      * Setup custom Nunjucks filters
      */
     private setupCustomFilters(): void {
-        // Number formatting filter
-        this.nunjucksEnv.addFilter('number', (value: any, decimals: number = 2) => {
-            const num = Number(value);
-            return isNaN(num) ? value : num.toFixed(decimals);
-        });
-
-        // Currency formatting filter
-        this.nunjucksEnv.addFilter('currency', (value: any, symbol: string = '$', decimals: number = 2) => {
-            const num = Number(value);
-            return isNaN(num) ? value : `${symbol}${num.toFixed(decimals)}`;
-        });
-
-        // Date formatting filter (basic)
-        this.nunjucksEnv.addFilter('date', (value: any, format: string = 'YYYY-MM-DD') => {
-            const date = new Date(value);
-            if (isNaN(date.getTime())) return value;
-            
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
-            
-            return format
-                .replace('YYYY', String(year))
-                .replace('MM', month)
-                .replace('DD', day)
-                .replace('HH', hours)
-                .replace('mm', minutes)
-                .replace('ss', seconds);
-        });
-
-        // JSON stringify filter
-        this.nunjucksEnv.addFilter('json', (value: any, indent: number = 0) => {
-            return JSON.stringify(value, null, indent);
-        });
-
-        // Default value filter
-        this.nunjucksEnv.addFilter('default', (value: any, defaultValue: any) => {
-            return value === null || value === undefined || value === '' ? defaultValue : value;
-        });
-
-        // Truncate filter
-        this.nunjucksEnv.addFilter('truncate', (value: string, length: number = 50, suffix: string = '...') => {
-            if (!value || value.length <= length) return value;
-            return value.substring(0, length - suffix.length) + suffix;
-        });
-
-        // Slugify filter
-        this.nunjucksEnv.addFilter('slugify', (value: string) => {
-            if (!value) return '';
-            return value
-                .toLowerCase()
-                .replace(/[^\w\s-]/g, '')
-                .replace(/[\s_-]+/g, '-')
-                .replace(/^-+|-+$/g, '');
-        });
+        this.setupCustomFiltersOnEnvironment(this.nunjucksEnv);
     }
 
     /**
@@ -184,15 +127,21 @@ export class DataMapperAction extends BaseAction {
             const iterateArrays = iterateArraysParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
             const strictVariables = strictVariablesParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
 
-            // Configure Nunjucks environment
-            this.nunjucksEnv.opts.throwOnUndefined = strictVariables;
+            // Configure Nunjucks environment for strict variables if needed
+            let activeEnv = this.nunjucksEnv;
+            if (strictVariables) {
+                // Create a new environment with strict settings
+                activeEnv = new nunjucks.Environment(undefined, { throwOnUndefined: true });
+                // Copy filters from the main environment
+                this.copyFiltersToEnvironment(activeEnv);
+            }
 
             // Add custom filters if provided
             const customFilters = JSONParamHelper.getJSONParam(params, 'CustomFilters');
             if (customFilters) {
                 for (const [name, filterFunc] of Object.entries(customFilters)) {
                     if (typeof filterFunc === 'function') {
-                        this.nunjucksEnv.addFilter(name, filterFunc);
+                        activeEnv.addFilter(name, filterFunc as (...args: any[]) => any);
                     }
                 }
             }
@@ -202,10 +151,10 @@ export class DataMapperAction extends BaseAction {
             
             if (iterateArrays && Array.isArray(sourceData)) {
                 // Transform each array item
-                result = sourceData.map(item => this.transformData(item, mappingTemplate, templateType));
+                result = sourceData.map(item => this.transformData(item, mappingTemplate, templateType, activeEnv));
             } else {
                 // Transform single item
-                result = this.transformData(sourceData, mappingTemplate, templateType);
+                result = this.transformData(sourceData, mappingTemplate, templateType, activeEnv);
             }
 
             // Prepare output
@@ -233,13 +182,85 @@ export class DataMapperAction extends BaseAction {
     }
 
     /**
+     * Copy filters from main environment to a new environment
+     */
+    private copyFiltersToEnvironment(targetEnv: nunjucks.Environment): void {
+        // Set up the same custom filters on the target environment
+        this.setupCustomFiltersOnEnvironment(targetEnv);
+    }
+
+    /**
+     * Setup custom Nunjucks filters on a specific environment
+     */
+    private setupCustomFiltersOnEnvironment(env: nunjucks.Environment): void {
+        // Number formatting filter
+        env.addFilter('number', (value: any, decimals: number = 2) => {
+            const num = Number(value);
+            return isNaN(num) ? value : num.toFixed(decimals);
+        });
+
+        // Currency formatting filter
+        env.addFilter('currency', (value: any, symbol: string = '$', decimals: number = 2) => {
+            const num = Number(value);
+            return isNaN(num) ? value : `${symbol}${num.toFixed(decimals)}`;
+        });
+
+        // Date formatting filter (basic)
+        env.addFilter('date', (value: any, format: string = 'YYYY-MM-DD') => {
+            const date = new Date(value);
+            if (isNaN(date.getTime())) return value;
+            
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            
+            return format
+                .replace('YYYY', String(year))
+                .replace('MM', month)
+                .replace('DD', day)
+                .replace('HH', hours)
+                .replace('mm', minutes)
+                .replace('ss', seconds);
+        });
+
+        // JSON stringify filter
+        env.addFilter('json', (value: any, indent: number = 0) => {
+            return JSON.stringify(value, null, indent);
+        });
+
+        // Default value filter
+        env.addFilter('default', (value: any, defaultValue: any) => {
+            return value === null || value === undefined || value === '' ? defaultValue : value;
+        });
+
+        // Truncate filter
+        env.addFilter('truncate', (value: string, length: number = 50, suffix: string = '...') => {
+            if (!value || value.length <= length) return value;
+            return value.substring(0, length - suffix.length) + suffix;
+        });
+
+        // Slugify filter
+        env.addFilter('slugify', (value: string) => {
+            if (!value) return '';
+            return value
+                .toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/[\s_-]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        });
+    }
+
+    /**
      * Transform a single data item using templates
      */
-    private transformData(data: any, template: any, templateType: string): any {
+    private transformData(data: any, template: any, templateType: string, env: nunjucks.Environment = this.nunjucksEnv): any {
         try {
             if (templateType === 'string') {
                 // Render string template
-                return this.nunjucksEnv.renderString(template.toString(), data);
+                return env.renderString(template.toString(), data);
             } else if (templateType === 'object' && typeof template === 'object' && !Array.isArray(template)) {
                 // Transform object template
                 const result: any = {};
@@ -247,7 +268,7 @@ export class DataMapperAction extends BaseAction {
                 for (const [key, templateValue] of Object.entries(template)) {
                     if (typeof templateValue === 'string') {
                         // Render template string
-                        result[key] = this.nunjucksEnv.renderString(templateValue, data);
+                        result[key] = env.renderString(templateValue, data);
                         
                         // Try to parse as JSON if it looks like JSON
                         if (typeof result[key] === 'string' && 
@@ -260,7 +281,7 @@ export class DataMapperAction extends BaseAction {
                         }
                     } else if (typeof templateValue === 'object') {
                         // Recursively transform nested objects
-                        result[key] = this.transformData(data, templateValue, 'object');
+                        result[key] = this.transformData(data, templateValue, 'object', env);
                     } else {
                         // Copy non-string values as-is
                         result[key] = templateValue;
@@ -272,9 +293,9 @@ export class DataMapperAction extends BaseAction {
                 // Transform array template
                 return template.map(item => {
                     if (typeof item === 'string') {
-                        return this.nunjucksEnv.renderString(item, data);
+                        return env.renderString(item, data);
                     } else if (typeof item === 'object') {
-                        return this.transformData(data, item, 'object');
+                        return this.transformData(data, item, 'object', env);
                     } else {
                         return item;
                     }
