@@ -53,7 +53,7 @@
       "ID": "58658DAE-C1CE-4621-9540-0735FE98414E"
     },
     "sync": {
-      "lastModified": "2025-07-20T17:15:22.640Z",
+      "lastModified": "2025-07-22T02:48:15.416Z",
       "checksum": "67f92d1c19f2d20be8b0758fe24f5a5d797fbf87336aa145d0ef1ad099951cc1"
     }
   },
@@ -131,7 +131,7 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-07-20T18:00:45.743Z",
+      "lastModified": "2025-07-22T02:48:25.090Z",
       "checksum": "ba461e1fbfa773734c6214859981bfab13706342fb32c9cbb8dc3bc18d3338c8"
     }
   },
@@ -545,16 +545,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT 4.1-mini",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 1
           },
           "primaryKey": {
             "ID": "85E70E19-4C33-43E0-A150-016D122E0AA6"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:05:08.719Z",
-            "checksum": "36b85609a1dbe4487e7f611a68fdb8d4bf5e2993b8b1e2cfe75a8185b6da6105"
+            "lastModified": "2025-07-22T02:48:25.468Z",
+            "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
           }
         }
       ]
@@ -565,6 +565,54 @@
     "sync": {
       "lastModified": "2025-07-10T03:50:20.606Z",
       "checksum": "a85995d01401975ea07ab06ec5b323830df47fefc648f9fb7ab04f6828e91944"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SQL Query Parameter Extraction",
+      "Description": "Extracts Nunjucks variables and their types from Query strings",
+      "TemplateText": "@file:templates/system/sql-query-param-extraction.template.md",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "OutputExample": "@file:output/system/template-param-extraction.example.json",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "DA560AA4-35DA-4EDA-81AC-A74D196E102F"
+          },
+          "sync": {
+            "lastModified": "2025-07-22T02:48:26.705Z",
+            "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
+    },
+    "sync": {
+      "lastModified": "2025-07-22T02:53:12.350Z",
+      "checksum": "fb1841f8667667c6730534cb2baaab649d8acf7096c00ca680e8d91d5298c9aa"
     }
   },
   {

@@ -2702,6 +2702,19 @@ export class AIPromptRunner {
     params: AIPromptParams,
     currentPromptRun: AIPromptRunEntity
   ): Promise<unknown> {
+    // Step 0: First, see if the raw output has any { } [ ] characters at all
+    // if not, we KNOW it is not JSON and we should not attempt to repair it
+    if (!rawOutput.includes('{') && !rawOutput.includes('[')) {
+      this.logError(new Error('Raw output does not contain any JSON-like characters'), {
+        category: 'JSONRepairSkipped',
+        metadata: {
+          originalError: originalError.message,     
+          rawOutput: rawOutput.substring(0, 500)
+        }
+      });
+      throw new Error(`JSON repair skipped: raw output does not contain JSON-like characters. Original error: ${originalError.message}`);
+    }
+
     // Step 1: Try JSON5 parsing
     try {
       this.logStatus('   🔧 Attempting JSON repair with JSON5...', true, params);
@@ -2751,7 +2764,12 @@ export class AIPromptRunner {
         }
         // if we get here we have the text result in the reapairResult.result so let's try to parse it
         const repairedJSON = JSON.parse(repairResult.result as string);
-        
+        // make sure repairedJSON is not this object: { error: "not_json" } -- if it is that means the LLM said it isn't JSOn
+        if (repairedJSON && typeof repairedJSON === 'object' && Object.keys(repairedJSON).length === 1 && repairedJSON.error?.trim().toLowerCase() === 'not_json') {
+          throw new Error('AI-based JSON repair returned a non-JSON response indicating it could not repair the JSON');
+        }
+
+        // if we get here, we successfully repaired the JSON!!!
         this.logStatus('   ✅ AI successfully repaired the JSON', true, params);
         return repairedJSON;
       } catch (aiRepairError) {

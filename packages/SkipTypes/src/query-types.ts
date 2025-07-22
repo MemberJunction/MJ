@@ -98,6 +98,7 @@ export class SkipQueryInfo {
     createdAt: Date;
     updatedAt: Date;
     category: string;
+    categoryPath: string;
     fields: SkipQueryFieldInfo[];
 }
 

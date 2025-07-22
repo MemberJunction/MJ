@@ -325,6 +325,8 @@ export class BaseAgent {
                 ...params,
                 onProgress: this.wrapProgressCallback(params.onProgress)
             };
+
+            await this.initializeStartingPayload(wrappedParams);
             
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
@@ -412,6 +414,15 @@ export class BaseAgent {
             });
             return await this.createFailureResult(error.message, params.contextUser);
         }
+    }
+
+    /**
+     * Sub-classes can override this method to perform any specialized initialization
+     * @param params 
+     */
+    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> { 
+        // the base class doesn't do anything here, this allows sub-classes
+        // to do specialized initialization of the starting payload
     }
 
     /**
