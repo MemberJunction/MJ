@@ -1,7 +1,7 @@
 # Fix the JSON below. Output ONLY the corrected JSON.
 
 # Parsing Error
-{{ERROR_MESSAGE}}
+{{ ERROR_MESSAGE | safe }}
 
 # Rules
 These are suggestions, do what is needed to make the Malformed JSON compliant so it can be parsed by `JSON.parse()` in JavaScript.
@@ -12,9 +12,10 @@ These are suggestions, do what is needed to make the Malformed JSON compliant so
 - Do not add extra fields
 - Do not remove existing fields
 - Keep all original data
+- **CRITICAL** - do not make up JSON, if the Malformed JSON is not JSON and is just text, or something else, response back with `{ error: "not_json" }`
 
 # Malformed JSON
-{{MALFORMED_JSON}}
+{{ MALFORMED_JSON | safe }}
 
 # Response Format
 - Only tokens to return are the corrected JSON

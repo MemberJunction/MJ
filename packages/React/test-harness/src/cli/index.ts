@@ -55,7 +55,9 @@ program
         props,
         {
           waitForSelector: options.selector,
-          timeout: parseInt(options.timeout)
+          timeout: parseInt(options.timeout),
+          componentSpec: undefined!,
+          contextUser: undefined!
         }
       );
 
@@ -75,7 +77,7 @@ program
         }
 
         if (options.screenshot && result.screenshot) {
-          fs.writeFileSync(options.screenshot, result.screenshot);
+          fs.writeFileSync(options.screenshot, result.screenshot as any);
           console.log(chalk.blue(`Screenshot saved to: ${options.screenshot}`));
         }
       } else {

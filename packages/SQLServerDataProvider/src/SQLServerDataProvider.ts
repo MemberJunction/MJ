@@ -63,6 +63,7 @@ import {
   KeyValuePair,
   IRunQueryProvider,
   RunQueryResult,
+  RunQueryParams,
   PotentialDuplicateRequest,
   PotentialDuplicateResponse,
   LogStatus,
@@ -72,7 +73,9 @@ import {
   Metadata,
   DatasetItemResultType,
   DatabaseProviderBase,
+  QueryInfo,
 } from '@memberjunction/core';
+import { QueryParameterProcessor } from './queryParameterProcessor';
 
 import {
   AuditLogEntity,
@@ -102,7 +105,6 @@ import {
   InternalSQLOptions
 } from './types.js';
 
-import { RunQueryParams } from '@memberjunction/core/dist/generic/runQuery';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -673,41 +675,117 @@ export class SQLServerDataProvider
   // END ---- IRunReportProvider
   /**************************************************************************/
 
+  protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryName: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
+      // First, get the query metadata
+      const queries = this.Queries.filter(q => {
+        if (QueryID) {
+          return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
+        } else if (QueryName) {
+          let matches = q.Name.trim().toLowerCase() === QueryName.trim().toLowerCase();
+          if (CategoryID) {
+            matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
+          }
+          if (CategoryName) {
+            matches = matches && q.Category.trim().toLowerCase() === CategoryName.trim().toLowerCase();
+          }
+          return matches;
+        }
+        return false;
+      });
+
+      if (queries.length === 0) {
+        if (refreshMetadataIfNotFound) {
+          // If we didn't find the query, refresh metadata and try again
+          await this.Refresh();
+          return this.findQuery(QueryID, QueryName, CategoryID, CategoryName, false); // change the refresh flag to false so we don't loop infinitely
+        } 
+        else {
+          return null; // No query found and not refreshing metadata
+        }
+      }
+      else {
+        return queries[0];
+      }
+  }
+
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
   public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     try {
-      const QueryID = params.QueryID;
-      // run the sql and return the data
+      // Build filter to find the query
       let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
       if (params.CategoryID) {
-        filter += ` AND CategoryID = '${params.CategoryID}'`; /* if CategoryID is provided, we add it to the filter */
+        filter += ` AND CategoryID = '${params.CategoryID}'`;
       }
       if (params.CategoryName) {
-        filter += ` AND Category = '${params.CategoryName}'`; /* if CategoryName is provided, we add it to the filter */
+        filter += ` AND Category = '${params.CategoryName}'`;
       }
 
-      const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
-      const queryInfo = await this.ExecuteSQL(sqlQuery, undefined, undefined, contextUser);
-      if (queryInfo && queryInfo.length > 0) {
-        const start = new Date().getTime();
-        const sql = queryInfo[0].SQL;
-        const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
-        const end = new Date().getTime();
-        if (result)
-          return {
-            Success: true,
-            QueryID: queryInfo[0].ID,
-            QueryName: queryInfo[0].Name,
-            Results: result,
-            RowCount: result.length,
-            ExecutionTime: end - start,
-            ErrorMessage: '',
-          };
-        else throw new Error('Error running query SQL');
-      } else {
+      const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryName, true);
+      if (!query) {
         throw new Error('Query not found');
+      } 
+
+      // Check permissions and status
+      if (!query.UserCanRun(contextUser)) {
+        if (!query.UserHasRunPermissions(contextUser)) {
+          throw new Error('User does not have permission to run this query');
+        } else {
+          throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
+        }
+      }
+
+      // Process the query with parameters if it uses templates
+      let finalSQL = query.SQL;
+      let appliedParameters: Record<string, any> = {};
+
+      if (query.UsesTemplate) {
+        const processingResult = QueryParameterProcessor.processQueryTemplate(query, params.Parameters);
+        
+        if (!processingResult.success) {
+          throw new Error(processingResult.error);
+        }
+        
+        finalSQL = processingResult.processedSQL;
+        appliedParameters = processingResult.appliedParameters || {};
+      } else if (params.Parameters && Object.keys(params.Parameters).length > 0) {
+        // Warn if parameters were provided but query doesn't use templates
+        LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+      }
+
+      // Execute the query
+      const start = new Date().getTime();
+      const result = await this.ExecuteSQL(finalSQL, undefined, undefined, contextUser);
+      const end = new Date().getTime();
+
+      if (result) {
+        // Apply pagination if specified
+        const totalRowCount = result.length;
+        const startRow = params.StartRow || 0;
+        
+        // Apply StartRow offset and MaxRows limit
+        let paginatedResult = result;
+        if (startRow > 0) {
+          paginatedResult = paginatedResult.slice(startRow);
+        }
+        if (params.MaxRows && params.MaxRows > 0) {
+          paginatedResult = paginatedResult.slice(0, params.MaxRows);
+        }
+          
+        return {
+          Success: true,
+          QueryID: query.ID,
+          QueryName: query.Name,
+          Results: paginatedResult,
+          RowCount: paginatedResult.length,
+          TotalRowCount: totalRowCount,
+          ExecutionTime: end - start,
+          ErrorMessage: '',
+          AppliedParameters: appliedParameters
+        };
+      } else {
+        throw new Error('Error executing query SQL');
       }
     } catch (e) {
       LogError(e);
@@ -717,11 +795,13 @@ export class SQLServerDataProvider
         QueryName: params.QueryName,
         Results: [],
         RowCount: 0,
+        TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: e.message,
       };
     }
   }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/

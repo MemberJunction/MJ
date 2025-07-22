@@ -16,6 +16,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/uuid": "^10.0.0",
+    "@types/nunjucks": "^3.2.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   },
@@ -29,6 +30,7 @@
     "@memberjunction/global": "2.73.0",
     "@memberjunction/queue": "2.73.0",
     "mssql": "^11.0.1",
+    "nunjucks": "^3.2.4",
     "rxjs": "^7.8.1",
     "sql-formatter": "^15.3.2",
     "uuid": "^10.0.0"
