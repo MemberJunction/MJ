@@ -50,13 +50,15 @@
             {{ record.Success ? 'Success' : 'Failed' }}
           </span>
         </div>
-        <div class="stat" *ngIf="record.TotalTokensUsed">
+        <div class="stat" *ngIf="costMetrics && (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) > 0">
           <span class="label">Tokens</span>
-          <span class="value">{{ record.TotalTokensUsed | number:'1.0-0' }}</span>
+          <span class="value" *ngIf="!costMetrics.isLoading">{{ (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) | number:'1.0-0' }}</span>
+          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
-        <div class="stat" *ngIf="record.TotalCost != null && record.TotalCost > 0">
+        <div class="stat" *ngIf="costMetrics && costMetrics.totalCost > 0">
           <span class="label">Cost</span>
-          <span class="value">${{ record.TotalCost | number:'1.2-4' }}</span>
+          <span class="value" *ngIf="!costMetrics.isLoading">${{ costMetrics.totalCost | number:'1.2-4' }}</span>
+          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
       </div>
     </div>
