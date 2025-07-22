@@ -675,6 +675,39 @@ export class SQLServerDataProvider
   // END ---- IRunReportProvider
   /**************************************************************************/
 
+  protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryName: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
+      // First, get the query metadata
+      const queries = this.Queries.filter(q => {
+        if (QueryID) {
+          return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
+        } else if (QueryName) {
+          let matches = q.Name.trim().toLowerCase() === QueryName.trim().toLowerCase();
+          if (CategoryID) {
+            matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
+          }
+          if (CategoryName) {
+            matches = matches && q.Category.trim().toLowerCase() === CategoryName.trim().toLowerCase();
+          }
+          return matches;
+        }
+        return false;
+      });
+
+      if (queries.length === 0) {
+        if (refreshMetadataIfNotFound) {
+          // If we didn't find the query, refresh metadata and try again
+          await this.Refresh();
+          return this.findQuery(QueryID, QueryName, CategoryID, CategoryName, false); // change the refresh flag to false so we don't loop infinitely
+        } 
+        else {
+          return null; // No query found and not refreshing metadata
+        }
+      }
+      else {
+        return queries[0];
+      }
+  }
+
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
@@ -689,29 +722,11 @@ export class SQLServerDataProvider
         filter += ` AND Category = '${params.CategoryName}'`;
       }
 
-      // First, get the query metadata
-      const queries = this.Queries.filter(q => {
-        if (params.QueryID) {
-          return q.ID === params.QueryID;
-        } else if (params.QueryName) {
-          let matches = q.Name === params.QueryName;
-          if (params.CategoryID) {
-            matches = matches && q.CategoryID === params.CategoryID;
-          }
-          if (params.CategoryName) {
-            matches = matches && q.Category === params.CategoryName;
-          }
-          return matches;
-        }
-        return false;
-      });
-
-      if (queries.length === 0) {
+      const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryName, true);
+      if (!query) {
         throw new Error('Query not found');
-      }
+      } 
 
-      const query = queries[0];
-      
       // Check permissions and status
       if (!query.UserCanRun(contextUser)) {
         if (!query.UserHasRunPermissions(contextUser)) {
