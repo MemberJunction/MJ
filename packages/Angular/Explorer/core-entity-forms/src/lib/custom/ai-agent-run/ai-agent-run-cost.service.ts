@@ -54,8 +54,8 @@ export class AIAgentRunCostService {
       // Use the high-performance templated query
       const rq = new RunQuery();
       const queryResult = await rq.RunQuery({
-        QueryName: 'CalculateAIAgentRunCost',
-        CategoryName: 'AI',
+        QueryName: 'CalculateRunCost',
+        CategoryName: 'Agents',
         Parameters: {
           AIAgentRunID: agentRunId,
           MJCoreSchemaName: mjCoreSchemaName

@@ -3,7 +3,7 @@ WITH AgentRunHierarchy AS (
   -- Base case: Start with the specified agent run
   SELECT ID, AgentID, ParentRunID, 1 as Level
   FROM {{ MJCoreSchemaName }}.vwAIAgentRuns
-  WHERE ID = {{ AIAgentRunID | sqlString }}
+  WHERE ID = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
   
   UNION ALL
   

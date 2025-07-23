@@ -1,17 +1,47 @@
 [
   {
     "fields": {
-      "Name": "AI",
+      "Name": "MJ",
       "ParentID": null,
-      "Description": "Queries related to AI operations including AI Agent Runs, AI Prompt Runs, cost calculations, and performance analytics.",
+      "Description": "MemberJunction framework queries for core system operations, analytics, and administrative functions.",
       "UserID": "@lookup:Users.Name=System"
     },
     "primaryKey": {
-      "ID": "DE6AFA78-6DA3-44FF-B0A8-0ABE96A98E3C"
+      "ID": "FE1AE5B2-FC57-43B2-B560-A673713E1679"
     },
     "sync": {
-      "lastModified": "2025-07-22T21:00:24.588Z",
-      "checksum": "a25603d2bbe98062f6cba1a16677bf3d918b4fdffaee8dc800c0c2e9099997b0"
+      "lastModified": "2025-07-23T16:19:39.799Z",
+      "checksum": "770d810b4985d34f100ca56f74fa2cb149fc6bc3d9ee964238d685e5477ac387"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI",
+      "ParentID": "@lookup:Query Categories.Name=MJ",
+      "Description": "AI-related queries for operations, analytics, and management of AI services within MemberJunction.",
+      "UserID": "@lookup:Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "6C8C5BA5-D9D1-47A1-8EF8-E59DA57F9D22"
+    },
+    "sync": {
+      "lastModified": "2025-07-23T16:19:39.814Z",
+      "checksum": "4cae27397f3ae7009140b78b9795a6231f8c4b88ffc3210c9b31e2fd0d0ce5ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Agents",
+      "ParentID": "@lookup:Query Categories.Name=AI",
+      "Description": "AI Agent specific queries including run cost calculations, performance analytics, and execution monitoring.",
+      "UserID": "@lookup:Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "5609FBC7-381C-4F9C-9C74-04B52C1FF3DA"
+    },
+    "sync": {
+      "lastModified": "2025-07-23T16:19:39.826Z",
+      "checksum": "fb12a97eaf03ad1052f8311b50b4f4bce698862de22d28675a8820828d1a4a2c"
     }
   }
 ]
