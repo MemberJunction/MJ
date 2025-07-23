@@ -9469,14 +9469,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
-    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
+    
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -9962,16 +9962,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -9989,6 +9979,16 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', rows);
         return result;
     }
         
