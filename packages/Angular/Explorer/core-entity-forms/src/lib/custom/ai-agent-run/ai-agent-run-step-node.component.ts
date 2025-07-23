@@ -66,14 +66,6 @@ export class AIAgentRunStepNodeComponent {
   }
 
   handleExpandToggle(event: Event) {
-    console.log('🔄 StepNode: Expand toggle clicked:', {
-      itemId: this.item.id,
-      itemType: this.item.type,
-      isSubAgent: this.isSubAgent,
-      stepType: this.item.data?.StepType,
-      hasChildren: this.hasChildren,
-      currentExpanded: this.item.isExpanded
-    });
     if (this.isSubAgent) {
       this.expandToggle.emit(event);
     }

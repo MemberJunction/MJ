@@ -231,12 +231,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   ): TimelineItem[] {
     const items: TimelineItem[] = [];
     
-    console.log('🔍 Timeline: Building items with:', {
-      stepsCount: steps.length,
-      subRunsCount: subRuns.length,
-      actionLogsCount: actionLogs.length,
-      promptRunsCount: promptRuns.length
-    });
     
     // Build main timeline from steps
     steps.forEach(step => {
@@ -323,16 +317,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   async toggleItemExpansion(item: TimelineItem, event: Event) {
     event.stopPropagation();
-    console.log('🔄 Timeline: Toggling expansion for item:', {
-      id: item.id,
-      type: item.type,
-      title: item.title,
-      wasExpanded: item.isExpanded,
-      willBeExpanded: !item.isExpanded,
-      hasData: !!item.data,
-      dataId: item.data?.ID,
-      childrenLoaded: item.childrenLoaded
-    });
     
     // Toggle expansion state
     item.isExpanded = !item.isExpanded;
@@ -344,18 +328,11 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private async loadSubAgentChildren(item: TimelineItem) {
-    console.log('🔄 Timeline: Loading children for sub-agent step:', {
-      id: item.id,
-      targetId: item.data?.TargetID,
-      targetLogId: item.data?.TargetLogID,
-      stepType: item.data?.StepType
-    });
     
     try {
       const subAgentRunId = item.data?.TargetLogID;
       
       if (!subAgentRunId) {
-        console.log('🔄 Timeline: No TargetLogID found for sub-agent step');
         item.hasNoChildren = true;
         item.children = [];
         item.childrenLoaded = true;
@@ -365,7 +342,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       // Check cache first
       const cachedData = this.subAgentDataCache.get(subAgentRunId);
       if (cachedData) {
-        console.log('🔄 Timeline: Using cached data for sub-agent run');
         item.children = cachedData.steps.map(step => 
           this.createTimelineItemFromStep(step, item.level + 1, cachedData.promptRuns)
         );
@@ -383,7 +359,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       });
       
       if (!stepsResult.Success || !stepsResult.Results || stepsResult.Results.length === 0) {
-        console.log('🔄 Timeline: No steps found for sub-agent run');
         item.hasNoChildren = true;
         item.children = [];
         item.childrenLoaded = true;
@@ -391,7 +366,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       }
       
       const steps = stepsResult.Results;
-      console.log(`🔄 Timeline: Found ${steps.length} steps for sub-agent run ${subAgentRunId}`);
       
       // Get prompt run IDs
       const promptRunIds = steps

@@ -425,27 +425,35 @@ export class GraphQLSystemUserClient {
      * @param queryId - The ID of the query to execute
      * @param categoryId - Optional category ID filter
      * @param categoryName - Optional category name filter
+     * @param parameters - Optional parameters for templated queries
+     * @param maxRows - Optional maximum number of rows to return
+     * @param startRow - Optional starting row number for pagination
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataSystemUser(queryId: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+    public async GetQueryDataSystemUser(queryId: string, categoryId?: string, categoryName?: string, parameters?: Record<string, any>, maxRows?: number, startRow?: number): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
                     Results
                     RowCount
+                    TotalRowCount
                     ExecutionTime
                     ErrorMessage
+                    AppliedParameters
                 }
             }`
 
-            const result = await this.Client.request(query, { 
-                QueryID: queryId, 
-                CategoryID: categoryId, 
-                CategoryName: categoryName 
-            }) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
+            const variables: any = { QueryID: queryId };
+            if (categoryId !== undefined) variables.CategoryID = categoryId;
+            if (categoryName !== undefined) variables.CategoryName = categoryName;
+            if (parameters !== undefined) variables.Parameters = parameters;
+            if (maxRows !== undefined) variables.MaxRows = maxRows;
+            if (startRow !== undefined) variables.StartRow = startRow;
+
+            const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
             if (result && result.GetQueryDataSystemUser) {
                 // Parse the JSON results for easier consumption
@@ -460,6 +468,7 @@ export class GraphQLSystemUserClient {
                     Success: false,
                     Results: null,
                     RowCount: 0,
+                    TotalRowCount: 0,
                     ExecutionTime: 0,
                     ErrorMessage: 'Query execution failed'
                 };
@@ -473,6 +482,7 @@ export class GraphQLSystemUserClient {
                 Success: false,
                 Results: null,
                 RowCount: 0,
+                TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: e.toString()
             };
@@ -484,27 +494,35 @@ export class GraphQLSystemUserClient {
      * @param queryName - The name of the query to execute
      * @param categoryId - Optional category ID filter
      * @param categoryName - Optional category name filter
+     * @param parameters - Optional parameters for templated queries
+     * @param maxRows - Optional maximum number of rows to return
+     * @param startRow - Optional starting row number for pagination
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataByNameSystemUser(queryName: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+    public async GetQueryDataByNameSystemUser(queryName: string, categoryId?: string, categoryName?: string, parameters?: Record<string, any>, maxRows?: number, startRow?: number): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
                     Results
                     RowCount
+                    TotalRowCount
                     ExecutionTime
                     ErrorMessage
+                    AppliedParameters
                 }
             }`
 
-            const result = await this.Client.request(query, { 
-                QueryName: queryName, 
-                CategoryID: categoryId, 
-                CategoryName: categoryName 
-            }) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
+            const variables: any = { QueryName: queryName };
+            if (categoryId !== undefined) variables.CategoryID = categoryId;
+            if (categoryName !== undefined) variables.CategoryName = categoryName;
+            if (parameters !== undefined) variables.Parameters = parameters;
+            if (maxRows !== undefined) variables.MaxRows = maxRows;
+            if (startRow !== undefined) variables.StartRow = startRow;
+
+            const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
             if (result && result.GetQueryDataByNameSystemUser) {
                 // Parse the JSON results for easier consumption
@@ -519,6 +537,7 @@ export class GraphQLSystemUserClient {
                     Success: false,
                     Results: null,
                     RowCount: 0,
+                    TotalRowCount: 0,
                     ExecutionTime: 0,
                     ErrorMessage: 'Query execution failed'
                 };
@@ -532,6 +551,7 @@ export class GraphQLSystemUserClient {
                 Success: false,
                 Results: null,
                 RowCount: 0,
+                TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: e.toString()
             };
@@ -1018,6 +1038,10 @@ export interface RunQuerySystemUserResult {
      */
     RowCount: number;
     /**
+     * Total number of rows available (before pagination)
+     */
+    TotalRowCount: number;
+    /**
      * Time taken to execute the query in milliseconds
      */
     ExecutionTime: number;
@@ -1025,6 +1049,10 @@ export interface RunQuerySystemUserResult {
      * Error message if the query execution failed
      */
     ErrorMessage: string;
+    /**
+     * JSON string containing the applied parameters (optional)
+     */
+    AppliedParameters?: string;
 }
 
 /**
