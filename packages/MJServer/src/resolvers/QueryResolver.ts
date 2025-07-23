@@ -203,4 +203,38 @@ export class RunQueryResolver {
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
     };
   }
+
+  @RequireSystemUser()
+  @Query(() => RunQueryResultType)
+  async GetQueryDataByNameSystemUser(@Arg('QueryName', () => String) QueryName: string, 
+                                     @Ctx() context: AppContext,
+                                     @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
+                                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                                     @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
+                                     @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
+                                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
+    const runQuery = new RunQuery();
+    const result = await runQuery.RunQuery(
+      { 
+        QueryName: QueryName,
+        CategoryID: CategoryID,
+        CategoryName: CategoryName,
+        Parameters: Parameters,
+        MaxRows: MaxRows,
+        StartRow: StartRow
+      }, 
+      context.userPayload.userRecord);
+    
+    return {
+      QueryID: result.QueryID || '',
+      QueryName: QueryName,
+      Success: result.Success ?? false,
+      Results: JSON.stringify(result.Results ?? null),
+      RowCount: result.RowCount ?? 0,
+      TotalRowCount: result.TotalRowCount ?? 0,
+      ExecutionTime: result.ExecutionTime ?? 0,
+      ErrorMessage: result.ErrorMessage || '',
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
+    };
+  }
 }
