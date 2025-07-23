@@ -240,7 +240,7 @@ ${fields}
         }
   
         // now Log and Execute the SQL
-        await SQLLogging.LogSQLAndExecute(pool, sSQL);  
+        await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
       }
 
       return ret.code;
@@ -251,7 +251,20 @@ ${fields}
   }
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
-    const validators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    const validators = unsortedValidators.sort((a, b) => {
+      // sort by field name, then by function name
+      if (a.fieldName && b.fieldName) {
+        return a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+      } else if (a.fieldName) {
+        return -1; // a comes first
+      } else if (b.fieldName) {
+        return 1; // b comes first
+      } else {
+        return a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+      }
+    });
+
     if (validators.length === 0) {
       return null;
     }
