@@ -2,8 +2,9 @@ import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIPromptRunEntity, ActionExecutionLogEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntity } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
+import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
 interface PromptMetrics {
   totalCount: number;
@@ -33,6 +34,30 @@ interface TimelineMetrics {
   parallelExecutions: number;
   deepestNesting: number;
   criticalPath: { steps: string[]; totalTime: number };
+}
+
+interface SimpleAgentRun {
+  ID: string;
+  AgentID?: string;
+  Status?: string;
+  // Add other fields as needed
+}
+
+interface SimpleAgentRunStep {
+  ID: string;
+  StepType: string;
+  TargetLogID?: string;
+  // Add other fields as needed
+}
+
+interface SimpleActionLog {
+  ID: string;
+  Action: string | null;
+  StartedAt: Date | null;
+  EndedAt: Date | null;
+  ResultCode: string | null;
+  Message: string | null;
+  // Add other fields as needed
 }
 
 @Component({
@@ -66,11 +91,11 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   error: string | null = null;
   
   // Data
-  agentRun: AIAgentRunEntity | null = null;
+  agentRun: SimpleAgentRun | null = null;
   allPromptRuns: AIPromptRunEntity[] = [];
-  allActionLogs: ActionExecutionLogEntity[] = [];
-  allSteps: AIAgentRunStepEntity[] = [];
-  subAgentRuns: AIAgentRunEntity[] = [];
+  allActionLogs: SimpleActionLog[] = [];
+  allSteps: SimpleAgentRunStep[] = [];
+  subAgentRuns: SimpleAgentRun[] = [];
   
   // Metrics
   promptMetrics: PromptMetrics = this.initializePromptMetrics();
@@ -111,7 +136,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   @ViewChild('promptCountByNameChart', { static: false }) promptCountByNameChart!: ElementRef;
   
   constructor(
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private costService: AIAgentRunCostService
   ) {}
   
   ngOnInit() {
@@ -163,12 +189,10 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   private async loadAllRunData() {
     const rv = new RunView();
     
-    // Get all agent runs in the hierarchy (including the main run and all sub-agent runs)
+    // Get all agent run IDs in hierarchy (including root and children)
     const agentRunIds = await this.getAllAgentRunIds(this.agentRunId);
-    console.log('Loading analytics for agent run IDs:', agentRunIds);
-    console.log('Number of agent run IDs:', agentRunIds.length);
     
-    // Batch load all data
+    // Batch load all data (except prompt runs which we'll load via shared service)
     const results = await rv.RunViews([
       // Main agent run
       {
@@ -180,53 +204,33 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: agentRunIds.length > 1 ? `ID IN ('${agentRunIds.slice(1).join("','")}')` : `ID = '00000000-0000-0000-0000-000000000000'`,
       },
-      // All prompt runs for all agent runs - linked through AI Agent Run Steps
-      {
-        EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `ID IN (SELECT TargetLogID FROM __mj.vwAIAgentRunSteps WHERE AgentRunID IN ('${agentRunIds.join("','")}') AND StepType = 'Prompt')`,
-      },
       // All action logs - need to get via steps
       {
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID IN ('${agentRunIds.join("','")}') AND StepType = 'Actions'`,
       },
-      // All steps for timeline analysis
+      // All steps for timeline analysis - only need basic fields like StepType
       {
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID IN ('${agentRunIds.join("','")}')`,
-        ResultType: 'entity_object'
       }
     ]);
     
     // Process results
-    console.log('RunViews results:', results.map((r, i) => ({
-      index: i,
-      success: r.Success,
-      count: r.Results?.length || 0,
-      errorMessage: r.ErrorMessage
-    })));
     
     if (results[0].Success && results[0].Results && results[0].Results.length > 0) {
-      this.agentRun = results[0].Results[0] as AIAgentRunEntity;
+      this.agentRun = results[0].Results[0];
     }
     
     if (results[1].Success) {
-      this.subAgentRuns = results[1].Results as AIAgentRunEntity[] || [];
+      this.subAgentRuns = results[1].Results || [];
     }
+    
+    // Load all prompt runs for the agent run hierarchy
+    this.allPromptRuns = await this.loadAllPromptRuns(agentRunIds);
     
     if (results[2].Success) {
-      this.allPromptRuns = results[2].Results as AIPromptRunEntity[] || [];
-      console.log(`Found ${this.allPromptRuns.length} prompt runs for agent run IDs:`, agentRunIds);
-      console.log('Prompt runs query:', `ID IN (SELECT TargetLogID FROM __mj.vwAIAgentRunSteps WHERE AgentRunID IN ('${agentRunIds.join("','")}') AND StepType = 'Prompts')`);
-      if (this.allPromptRuns.length > 0) {
-        console.log('First prompt run sample:', this.allPromptRuns[0]);
-      }
-    } else {
-      console.error('Failed to load prompt runs:', results[2].ErrorMessage);
-    }
-    
-    if (results[3].Success) {
-      const actionSteps = results[3].Results as AIAgentRunStepEntity[] || [];
+      const actionSteps = results[2].Results || [];
       // Now load the actual action logs
       if (actionSteps.length > 0) {
         const actionLogIds = actionSteps
@@ -234,7 +238,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
           .filter(id => id != null);
           
         if (actionLogIds.length > 0) {
-          const actionResult = await rv.RunView<ActionExecutionLogEntity>({
+          const actionResult = await rv.RunView({
             EntityName: 'Action Execution Logs',
             ExtraFilter: `ID IN ('${actionLogIds.join("','")}')`
           });
@@ -246,36 +250,11 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       }
     }
     
-    if (results[4].Success) {
-      this.allSteps = results[4].Results as AIAgentRunStepEntity[] || [];
+    if (results[3].Success) {
+      this.allSteps = results[3].Results || [];
     }
   }
   
-  private async getAllAgentRunIds(rootRunId: string): Promise<string[]> {
-    const allIds = [rootRunId];
-    const rv = new RunView();
-    
-    // Recursively get all sub-agent run IDs
-    const getSubRunIds = async (parentId: string, depth: number = 0) => {
-      const result = await rv.RunView<AIAgentRunEntity>({
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `ParentRunID = '${parentId}'`,
-        ResultType: 'entity_object'
-      });
-      
-      if (result.Success && result.Results) {
-        console.log(`Found ${result.Results.length} sub-agent runs at depth ${depth} for parent ${parentId}`);
-        for (const subRun of result.Results) {
-          allIds.push(subRun.ID);
-          await getSubRunIds(subRun.ID, depth + 1); // Recursive call
-        }
-      }
-    };
-    
-    await getSubRunIds(rootRunId);
-    console.log(`Total agent run IDs found: ${allIds.length}`);
-    return allIds;
-  }
   
   private initializePromptMetrics(): PromptMetrics {
     return {
@@ -1531,5 +1510,74 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       .style('font-size', '16px')
       .style('font-weight', 'bold')
       .text('Prompt Execution Count');
+  }
+
+  /**
+   * Get all agent run IDs in hierarchy, starting from the root run
+   */
+  private async getAllAgentRunIds(rootRunId: string): Promise<string[]> {
+    const rv = new RunView();
+    const agentRunIds: string[] = [rootRunId];
+    
+    // Simple recursive approach to find all child runs
+    const findChildRuns = async (parentId: string): Promise<void> => {
+      const result = await rv.RunView({
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `ParentRunID = '${parentId}'`,
+      });
+      
+      if (result.Success && result.Results && result.Results.length > 0) {
+        for (const childRun of result.Results) {
+          if (!agentRunIds.includes(childRun.ID)) {
+            agentRunIds.push(childRun.ID);
+            await findChildRuns(childRun.ID); // Recursively find children
+          }
+        }
+      }
+    };
+    
+    await findChildRuns(rootRunId);
+    return agentRunIds;
+  }
+
+  /**
+   * Load all prompt runs for the given agent run IDs
+   * Uses the same approach as the cost calculation: find prompt runs via agent run steps
+   */
+  private async loadAllPromptRuns(agentRunIds: string[]): Promise<any[]> {
+    if (agentRunIds.length === 0) return [];
+    
+    const rv = new RunView();
+    
+    // First, get all the prompt steps for the agent runs
+    const stepsResult = await rv.RunView({
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: `AgentRunID IN ('${agentRunIds.join("','")}') AND StepType = 'Prompt'`,
+      ResultType: 'simple'
+    });
+    
+    if (!stepsResult.Success || !stepsResult.Results || stepsResult.Results.length === 0) {
+      return [];
+    }
+    
+    // Extract the TargetLogID values (these are the prompt run IDs)
+    const promptRunIds = stepsResult.Results
+      .map(step => step.TargetLogID)
+      .filter(id => id); // Remove any null/undefined values
+    
+    if (promptRunIds.length === 0) {
+      return [];
+    }
+    
+    
+    // Now get the actual prompt runs
+    const promptResult = await rv.RunView({
+      EntityName: 'MJ: AI Prompt Runs', 
+      ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
+      OrderBy: 'RunAt',
+      ResultType: 'simple'
+    });
+    
+    return promptResult.Success ? (promptResult.Results || []) : [];
   }
 }

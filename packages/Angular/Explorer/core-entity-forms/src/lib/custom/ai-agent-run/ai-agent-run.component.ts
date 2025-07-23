@@ -10,6 +10,7 @@ import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeli
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
+import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -34,6 +35,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   agent: AIAgentEntity | null = null;
   
+  // Cost metrics using shared service
+  costMetrics: AgentRunCostMetrics | null = null;
+  
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
 
@@ -42,7 +46,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
-    cdr: ChangeDetectorRef
+    cdr: ChangeDetectorRef,
+    private costService: AIAgentRunCostService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -52,6 +57,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     
     if (this.record) {
       await this.loadAgent();
+      await this.loadCostMetrics();
     }
   }
   
@@ -71,6 +77,25 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       }
     } catch (error) {
       console.error('Error loading agent:', error);
+    }
+  }
+
+  private async loadCostMetrics() {
+    if (!this.record?.ID) return;
+    
+    try {
+      this.costMetrics = await this.costService.getAgentRunCostMetrics(this.record.ID);
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error loading cost metrics:', error);
+      this.costMetrics = {
+        totalCost: 0,
+        totalPrompts: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+        isLoading: false,
+        error: 'Failed to load cost data'
+      };
     }
   }
   
@@ -139,6 +164,10 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     // Reload the agent run record to get latest status
     if (this.record?.ID) {
       this.record.Load(this.record.ID).then(() => {
+        // Clear cost cache and reload
+        this.costService.clearCache(this.record.ID);
+        this.loadCostMetrics();
+        
         // Trigger timeline refresh
         if (this.timelineComponent) {
           this.timelineComponent.loadData();
