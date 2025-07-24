@@ -164,28 +164,67 @@
 
                 <!-- Input Area -->
                 <div class="input-area">
-                    <div class="input-container">
-                        <kendo-textarea
-                            #messageInput
-                            [(ngModel)]="currentUserMessage"
-                            [rows]="3"
-                            placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
-                            (keypress)="handleKeyPress($event)"
-                            [disabled]="isExecuting"
-                            class="message-input">
-                        </kendo-textarea>
-                        <button
-                            class="send-button"
-                            (click)="sendMessage()"
-                            [disabled]="isExecuting || !currentUserMessage.trim()"
-                            title="Send message">
-                            @if (isExecuting) {
-                                <i class="fa-solid fa-spinner fa-spin"></i>
-                            } @else {
-                                <i class="fa-solid fa-paper-plane"></i>
-                            }
-                        </button>
-                    </div>
+                    @if (originalPromptRunId && conversationMessages.length > 0) {
+                        <!-- Re-run mode - show loaded message -->
+                        <div class="rerun-mode-container">
+                            <div class="rerun-message">
+                                <i class="fa-solid fa-rotate-right"></i>
+                                <span>Messages from Prompt Run <strong>{{ originalPromptRunId.substring(0, 8) }}</strong> loaded above</span>
+                            </div>
+                            <div class="rerun-buttons">
+                                @if (!hasExecutedRerun) {
+                                    <!-- Show Re-Run button if we haven't executed yet -->
+                                    <button
+                                        class="send-button rerun-button"
+                                        (click)="executeRerun()"
+                                        [disabled]="isExecuting"
+                                        title="Re-run with loaded messages">
+                                        @if (isExecuting) {
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                            <span>Running...</span>
+                                        } @else {
+                                            <i class="fa-solid fa-play"></i>
+                                            <span>Re-Run</span>
+                                        }
+                                    </button>
+                                } @else {
+                                    <!-- Show only Reset button after execution -->
+                                    <button
+                                        class="send-button reset-button"
+                                        (click)="resetToOriginalMessages()"
+                                        [disabled]="isExecuting"
+                                        title="Reset conversation messages to the original state from the prompt run. Model settings and parameters will be preserved.">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                        <span>Reset Messages</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    } @else {
+                        <!-- Normal mode - show text input -->
+                        <div class="input-container">
+                            <kendo-textarea
+                                #messageInput
+                                [(ngModel)]="currentUserMessage"
+                                [rows]="3"
+                                placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                                (keypress)="handleKeyPress($event)"
+                                [disabled]="isExecuting"
+                                class="message-input">
+                            </kendo-textarea>
+                            <button
+                                class="send-button"
+                                (click)="sendMessage()"
+                                [disabled]="isExecuting || !currentUserMessage.trim()"
+                                title="Send message">
+                                @if (isExecuting) {
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                } @else {
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                }
+                            </button>
+                        </div>
+                    }
                 </div>
                         </div>
                     </kendo-splitter-pane>

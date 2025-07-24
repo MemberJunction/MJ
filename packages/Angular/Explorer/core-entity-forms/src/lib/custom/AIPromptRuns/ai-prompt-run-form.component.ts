@@ -267,17 +267,29 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     }
     
     reRunPrompt() {
-        if (!this.record?.ID || !this.record.PromptID) return;
+        console.log('🚀 Re-Run button clicked');
+        console.log('📋 Current record:', this.record);
+        console.log('🆔 Record ID:', this.record?.ID);
+        console.log('🎯 Prompt ID:', this.record?.PromptID);
         
-        // Open AI Test Harness dialog with the prompt run ID
-        this.testHarnessWindowService.openPromptTestHarness({
+        if (!this.record?.ID || !this.record.PromptID) {
+            console.error('❌ Cannot re-run: missing record ID or PromptID');
+            return;
+        }
+        
+        const params = {
             promptId: this.record.PromptID,
             promptRunId: this.record.ID,
             title: `Re-Run: ${this.prompt?.Name || 'Prompt'}`,
             width: '80vw',
             height: '80vh',
             viewContainerRef: this.viewContainerRef
-        }).subscribe({
+        };
+        
+        console.log('📞 Calling openPromptTestHarness with params:', params);
+        
+        // Open AI Test Harness dialog with the prompt run ID
+        this.testHarnessWindowService.openPromptTestHarness(params).subscribe({
             next: (result: any) => {
                 if (result) {
                     // Optionally refresh the current view or show a success message

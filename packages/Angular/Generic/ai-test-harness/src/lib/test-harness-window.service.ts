@@ -72,6 +72,9 @@ export class TestHarnessWindowService {
         promptRunId?: string;
         viewContainerRef?: ViewContainerRef;
     }): Observable<TestResult> {
+        console.log('🎯 openPromptTestHarness called with options:', options);
+        console.log('📌 promptRunId:', options.promptRunId);
+        
         const data: AITestHarnessWindowData = {
             promptId: options.promptId,
             prompt: options.prompt,
@@ -83,6 +86,8 @@ export class TestHarnessWindowService {
             promptRunId: options.promptRunId,
             mode: 'prompt'
         };
+        
+        console.log('📦 Final AITestHarnessWindowData:', data);
         
         return this.openWindow(data, options.viewContainerRef);
     }

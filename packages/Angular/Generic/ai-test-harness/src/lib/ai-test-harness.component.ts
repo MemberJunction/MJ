@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -179,6 +179,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** The system prompt override to use instead of rendering from template */
     @Input() systemPromptOverride: string | null = null;
+    
+    /** Whether a re-run has been executed (shows Reset button instead of Re-Run) */
+    public hasExecutedRerun: boolean = false;
+    
+    /** Original messages from the prompt run for reset functionality */
+    private originalPromptRunMessages: ConversationMessage[] = [];
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
@@ -405,7 +411,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Component initialization. Loads saved conversations, sets up event subscriptions,
      * and initializes the harness to a clean state.
      */
-    ngOnInit() {
+    async ngOnInit() {
+        console.log('🚀 AITestHarnessComponent.ngOnInit');
+        console.log('📌 originalPromptRunId:', this.originalPromptRunId);
+        console.log('🎯 entity:', this.entity);
+        console.log('📊 mode:', this.mode);
+        
         // Ensure we have an entity
         if (!this.entity && this.aiAgent) {
             // Handle backward compatibility
@@ -419,6 +430,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Load configurations for both modes
         this.loadAvailableConfigurations();
+        
+        // If we have a prompt run ID, load the conversation history
+        if (this.originalPromptRunId && this.mode === 'prompt') {
+            console.log('🔄 Loading from prompt run in ngOnInit');
+            await this.loadFromPromptRun(this.originalPromptRunId);
+        }
         
         // Load models if in prompt mode
         if (this.mode === 'prompt') {
@@ -1029,7 +1046,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         this.lastAgentPayload = null;
         this.subAgentHistory = [];
         // Set default tab based on mode
-        this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'templateVariables';
+        this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'modelSettings';
         // Reset advanced parameters
         this.advancedParams = {
             temperature: null,
@@ -1226,6 +1243,39 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * await this.sendMessage();
      * ```
      */
+    /**
+     * Executes a re-run of a previously loaded prompt run.
+     * This bypasses the need for a new user message since we're re-running with existing messages.
+     */
+    public async executeRerun() {
+        if (this.mode === 'prompt' && this.conversationMessages.length > 0) {
+            // Mark that we've executed a re-run
+            this.hasExecutedRerun = true;
+            
+            // For prompt re-runs, we need to execute the prompt with the loaded messages
+            await this.executePrompt('');  // Empty message since we're using loaded conversation
+        }
+    }
+    
+    /**
+     * Resets the conversation back to the original messages from the prompt run.
+     * This is available after a re-run has been executed.
+     */
+    public resetToOriginalMessages() {
+        if (this.originalPromptRunMessages.length > 0) {
+            // Reset messages to the original state
+            this.conversationMessages = [...this.originalPromptRunMessages];
+            
+            // Reset the execution flag so Re-Run button shows again
+            this.hasExecutedRerun = false;
+            
+            // Trigger change detection
+            this.cdr.detectChanges();
+            
+            console.log('🔄 Reset to original messages from prompt run');
+        }
+    }
+    
     public async sendMessage() {
         if (!this.currentUserMessage.trim() || !this.entity) {
             return;
@@ -3155,6 +3205,106 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
             // Request minimization from our container
             this.minimizeRequested.emit();
+        }
+    }
+    
+    /**
+     * Loads data from an existing prompt run to pre-populate the test harness
+     * @param promptRunId - The ID of the prompt run to load
+     */
+    private async loadFromPromptRun(promptRunId: string): Promise<void> {
+        console.log('🔄 Loading from prompt run:', promptRunId);
+        const md = new Metadata();
+        const promptRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+        
+        if (await promptRun.Load(promptRunId)) {
+            console.log('✅ Prompt run loaded successfully');
+            console.log('📝 Raw Messages field:', promptRun.Messages);
+            
+            // Set the model/vendor/configuration
+            if (promptRun.ModelID) {
+                this.selectedModelId = promptRun.ModelID;
+            }
+            if (promptRun.VendorID) {
+                this.selectedVendorId = promptRun.VendorID;
+            }
+            if (promptRun.ConfigurationID) {
+                this.selectedConfigurationId = promptRun.ConfigurationID;
+            }
+            
+            // Set advanced parameters
+            if (promptRun.Temperature != null) {
+                this.advancedParams.temperature = promptRun.Temperature;
+            }
+            if (promptRun.TopP != null) {
+                this.advancedParams.topP = promptRun.TopP;
+            }
+            if (promptRun.TopK != null) {
+                this.advancedParams.topK = promptRun.TopK;
+            }
+            if (promptRun.MinP != null) {
+                this.advancedParams.minP = promptRun.MinP;
+            }
+            if (promptRun.FrequencyPenalty != null) {
+                this.advancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
+            }
+            if (promptRun.PresencePenalty != null) {
+                this.advancedParams.presencePenalty = promptRun.PresencePenalty;
+            }
+            if (promptRun.Seed != null) {
+                this.advancedParams.seed = promptRun.Seed;
+            }
+            
+            // Use the extended entity methods to get conversation messages
+            const parsedData = promptRun.ParseMessagesData();
+            console.log('🔍 Parsed messages data:', parsedData);
+            
+            const chatMessages = promptRun.GetChatMessages();
+            console.log('💬 Extracted chat messages:', chatMessages);
+            
+            if (chatMessages.length > 0) {
+                // Convert messages to the format expected by the test harness
+                const convertedMessages = chatMessages.map((msg, index) => ({
+                    id: `msg-${Date.now()}-${index}`,
+                    role: msg.role,
+                    content: typeof msg.content === 'string' ? msg.content : 
+                             Array.isArray(msg.content) ? 
+                             msg.content.filter(block => block.type === 'text').map(block => block.content).join('\n') : 
+                             '',
+                    timestamp: new Date(),
+                    isStreaming: false
+                }));
+                
+                console.log('🎯 Converted messages for test harness:', convertedMessages);
+                this.conversationMessages = convertedMessages;
+                
+                // Store original messages for reset functionality
+                this.originalPromptRunMessages = [...convertedMessages];
+                
+                // Reset re-run execution state
+                this.hasExecutedRerun = false;
+                
+                console.log('✅ conversationMessages set:', this.conversationMessages);
+                
+                // Trigger change detection
+                this.cdr.detectChanges();
+            } else {
+                console.log('⚠️ No chat messages found in prompt run');
+            }
+            
+            // Extract and store the system prompt for re-run
+            const systemPrompt = promptRun.GetSystemPrompt();
+            if (systemPrompt) {
+                this.systemPromptOverride = systemPrompt;
+                console.log('📋 System prompt override set');
+            }
+            
+            // Switch to model settings tab for prompt re-runs
+            if (this.activeTab !== 'modelSettings') {
+                this.selectTab('modelSettings');
+            }
+        } else {
+            console.error('❌ Failed to load prompt run:', promptRunId);
         }
     }
 }

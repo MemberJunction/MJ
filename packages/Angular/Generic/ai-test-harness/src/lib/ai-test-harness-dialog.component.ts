@@ -210,11 +210,17 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
      * AfterViewInit lifecycle hook to set initial data after view is initialized
      */
     async ngAfterViewInit(): Promise<void> {
+        console.log('🚀 ngAfterViewInit - testHarness available:', !!this.testHarness);
+        console.log('📊 Dialog data:', this.data);
+        console.log('🎯 Mode:', this.mode);
+        
         if (this.testHarness) {
             // Check if we need to load from a prompt run
             if (this.data.promptRunId && this.mode === 'prompt') {
+                console.log('🔄 Loading from prompt run in AfterViewInit:', this.data.promptRunId);
                 await this.loadFromPromptRun(this.data.promptRunId);
             } else {
+                console.log('📌 Not loading from prompt run - promptRunId:', this.data.promptRunId, 'mode:', this.mode);
                 if (this.mode === 'agent') {
                     // Agent mode: set agent variables
                     if (this.data.initialDataContext) {
@@ -259,7 +265,18 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             }
             
             // Trigger change detection to ensure view updates
+            console.log('🔄 Triggering change detection');
             this.cdr.detectChanges();
+            
+            // Check after change detection
+            setTimeout(() => {
+                console.log('⏱️ After timeout - conversationMessages:', this.testHarness?.conversationMessages);
+                console.log('⏱️ Test harness component state:', {
+                    mode: this.testHarness?.mode,
+                    entity: this.testHarness?.entity?.Name,
+                    messagesLength: this.testHarness?.conversationMessages?.length
+                });
+            }, 100);
         }
     }
     
@@ -281,10 +298,12 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
      * @param promptRunId - The ID of the prompt run to load
      */
     private async loadFromPromptRun(promptRunId: string): Promise<void> {
+        console.log('🔄 Loading from prompt run:', promptRunId);
         const md = new Metadata();
         const promptRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
         
         if (await promptRun.Load(promptRunId)) {
+            console.log('✅ Prompt run loaded successfully');
             // Load the prompt if not already loaded
             if (!this.prompt && promptRun.PromptID) {
                 this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
@@ -334,15 +353,30 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             // Note: responseFormat is handled separately, not in advancedParams
             
             // Use the extended entity methods to get conversation messages
+            console.log('📝 Raw Messages field:', promptRun.Messages);
+            const parsedData = promptRun.ParseMessagesData();
+            console.log('🔍 Parsed messages data:', parsedData);
+            
             const chatMessages = promptRun.GetChatMessages();
+            console.log('💬 Extracted chat messages:', chatMessages);
+            
             if (chatMessages.length > 0) {
                 // Convert messages to the format expected by the test harness
-                this.testHarness.conversationMessages = chatMessages.map((msg, index) => ({
+                const convertedMessages = chatMessages.map((msg, index) => ({
                     id: `msg-${Date.now()}-${index}`,
                     role: msg.role,
-                    content: msg.content,
+                    content: typeof msg.content === 'string' ? msg.content : 
+                             Array.isArray(msg.content) ? 
+                             msg.content.filter(block => block.type === 'text').map(block => block.content).join('\n') : 
+                             '',
                     timestamp: new Date()
                 }));
+                
+                console.log('🎯 Converted messages for test harness:', convertedMessages);
+                this.testHarness.conversationMessages = convertedMessages;
+                console.log('✅ Test harness conversationMessages set:', this.testHarness.conversationMessages);
+            } else {
+                console.log('⚠️ No chat messages found in prompt run');
             }
             
             // Store the original prompt run ID for reference
