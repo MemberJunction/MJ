@@ -58,7 +58,7 @@ export class YourModule { }
 
 ```typescript
 import { Component } from '@angular/core';
-import { SkipComponentRootSpec } from '@memberjunction/skip-types';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 @Component({
   selector: 'app-example',
@@ -70,9 +70,9 @@ import { SkipComponentRootSpec } from '@memberjunction/skip-types';
   `
 })
 export class ExampleComponent {
-  reactComponent: SkipComponentRootSpec = {
-    componentName: 'MyReactComponent',
-    componentCode: `
+  reactComponent: ComponentSpec = {
+    name: 'MyReactComponent',
+    code: `
       function MyReactComponent({ data, callbacks }) {
         return (
           <div>
@@ -163,17 +163,17 @@ async ngOnInit() {
 ### Component Hierarchies
 
 ```typescript
-const componentSpec: SkipComponentRootSpec = {
-  componentName: 'ParentComponent',
-  componentCode: '...',
-  childComponents: [
+const componentSpec: ComponentSpec = {
+  name: 'ParentComponent',
+  code: '...',
+  dependencies: [
     {
-      componentName: 'ChildComponent1',
-      componentCode: '...'
+      name: 'ChildComponent1',
+      code: '...'
     },
     {
-      componentName: 'ChildComponent2',
-      componentCode: '...'
+      name: 'ChildComponent2',
+      code: '...'
     }
   ]
 };
@@ -310,7 +310,7 @@ This package requires:
 - Angular 18+
 - React 18+
 - @memberjunction/react-runtime
-- @memberjunction/skip-types
+- @memberjunction/interactive-component-types
 - @memberjunction/core
 
 ## License

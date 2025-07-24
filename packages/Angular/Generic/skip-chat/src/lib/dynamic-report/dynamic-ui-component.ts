@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnDestroy, Output, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata } from '@memberjunction/core';
 import { SkipAPIAnalysisCompleteResponse} from '@memberjunction/skip-types';
-import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOption, BuildComponentCompleteCode } from '@memberjunction/interactive-component-types';
+import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOption, BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
@@ -780,7 +780,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         const option = this.reportOptions[index];
         if (!option) return `report ${index + 1}`;
         
-        const componentType = option.option.componentType || 'report';
+        const componentType = option.option.type || 'report';
         
         return `${componentType} ${index + 1}`;
     }
@@ -824,7 +824,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         try {
             // Update the component info - this can fail if placeholders are missing
             this.UIComponentCode = BuildComponentCompleteCode(selectedOption.option);
-            this.ComponentObjectName = selectedOption.option.componentName;
+            this.ComponentObjectName = selectedOption.option.name;
             
             // Create or update the component spec for this option
             if (!this.componentSpecs.has(this.selectedReportOptionIndex)) {
@@ -921,7 +921,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
      * Get the component type name for display
      */
     public getComponentTypeName(option: ComponentOption): string {
-        const type = option.option.componentType || 'report';
+        const type = option.option.type || 'report';
         return type.charAt(0).toUpperCase() + type.slice(1);
     }
     
@@ -1169,7 +1169,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
                 this.UIComponentCode = BuildComponentCompleteCode(component.option);
-                this.ComponentObjectName = component.option.componentName;
+                this.ComponentObjectName = component.option.name;
             } else {
                 // Fallback for old format
                 this.UIComponentCode = (d as any).htmlReport;
@@ -1200,7 +1200,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             this.selectedReportOptionIndex = 0;
             const bestOption = this.reportOptions[0];
             this.UIComponentCode = BuildComponentCompleteCode(bestOption.option);
-            this.ComponentObjectName = bestOption.option.componentName;
+            this.ComponentObjectName = bestOption.option.name;
             
             // Update cached component type name after current change detection cycle
             Promise.resolve().then(() => {
@@ -1240,7 +1240,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             this.currentError = {
                 type: errorType,
                 message: errorMessage,
-                technicalDetails: technicalDetails + '\n\nComponent Option: ' + (optionIndex + 1) + '\nComponent Name: ' + option.option.componentName
+                technicalDetails: technicalDetails + '\n\nComponent Option: ' + (optionIndex + 1) + '\nComponent Name: ' + option.option.name
             };
             
             LogError(e);

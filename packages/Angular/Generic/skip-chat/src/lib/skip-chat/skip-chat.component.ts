@@ -2258,7 +2258,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // For user-added components, return all registered components
       const item = this.registeredTestComponents.get(componentName);
       if (item) {
-        return item.childComponents;
+        return item.dependencies || item.childComponents || [];
       }
       else {
         console.warn(`No registered components found for ${componentName}`);

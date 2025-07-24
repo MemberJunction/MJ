@@ -56,7 +56,6 @@ program
         {
           waitForSelector: options.selector,
           timeout: parseInt(options.timeout),
-          componentSpec: undefined!,
           contextUser: undefined!
         }
       );

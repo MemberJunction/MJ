@@ -125,7 +125,14 @@ export type ComponentEntityDataRequirement = {
      * When/Where/How components should use this data
      */
     usageContext?: string;
+
+    /**
+     * Array of permissions required by the component
+     */
+    permissionLevelNeeded: ComponentEntitySimplePermission[];
 }
+
+export type ComponentEntitySimplePermission = 'read' | 'create' | 'update' | 'delete';
 
 /** 
  * Simple type to share more information about the relevant fields 

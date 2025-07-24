@@ -17,7 +17,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
-import { ComponentRootSpec, ComponentCallbacks, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
@@ -113,7 +113,7 @@ export interface StateChangeEvent {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
-  @Input() component!: ComponentRootSpec;
+  @Input() component!: ComponentSpec;
   
   private _data: any = {};
   @Input() 
@@ -209,8 +209,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       
       // Compile main component
       const result = await this.adapter.compileComponent({
-        componentName: this.component.componentName,
-        componentCode: this.component.componentCode,
+        componentName: this.component.name,
+        componentCode: this.component.code,
         styles: this.styles
       });
 
