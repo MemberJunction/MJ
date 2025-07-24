@@ -69,6 +69,7 @@ export class TestHarnessWindowService {
         height?: string | number;
         initialTemplateVariables?: Record<string, any>;
         selectedModelId?: string;
+        promptRunId?: string;
         viewContainerRef?: ViewContainerRef;
     }): Observable<TestResult> {
         const data: AITestHarnessWindowData = {
@@ -79,6 +80,7 @@ export class TestHarnessWindowService {
             height: options.height || '90vh',
             initialTemplateVariables: options.initialTemplateVariables,
             selectedModelId: options.selectedModelId,
+            promptRunId: options.promptRunId,
             mode: 'prompt'
         };
         

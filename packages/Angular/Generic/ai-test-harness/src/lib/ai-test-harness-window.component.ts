@@ -7,6 +7,7 @@ export interface AITestHarnessWindowData {
     agent?: AIAgentEntity;
     promptId?: string;
     prompt?: AIPromptEntity;
+    promptRunId?: string;
     title?: string;
     width?: string | number;
     height?: string | number;

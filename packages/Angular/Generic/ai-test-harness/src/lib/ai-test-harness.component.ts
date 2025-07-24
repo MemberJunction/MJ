@@ -174,6 +174,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** The entity to test - either an AI Agent or AI Prompt */
     @Input() entity: AIAgentEntity | AIPromptEntity | null = null;
     
+    /** The original prompt run ID when re-running a previous prompt execution */
+    @Input() originalPromptRunId: string | null = null;
+    
+    /** The system prompt override to use instead of rendering from template */
+    @Input() systemPromptOverride: string | null = null;
+    
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
     get aiAgent(): AIAgentEntity | null {
@@ -1579,8 +1585,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             
             // Execute the prompt using RunAIPrompt
             const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $overrideModelId: String, $overrideVendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, overrideModelId: $overrideModelId, overrideVendorId: $overrideVendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages) {
+                mutation RunAIPrompt($promptId: String!, $data: String, $overrideModelId: String, $overrideVendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String, $rerunFromPromptRunID: String, $systemPromptOverride: String) {
+                    RunAIPrompt(promptId: $promptId, data: $data, overrideModelId: $overrideModelId, overrideVendorId: $overrideVendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages, rerunFromPromptRunID: $rerunFromPromptRunID, systemPromptOverride: $systemPromptOverride) {
                         success
                         output
                         parsedResult
@@ -1614,7 +1620,9 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 stopSequences: this.advancedParams.stopSequences.length > 0 ? this.advancedParams.stopSequences : undefined,
                 includeLogProbs: this.advancedParams.includeLogProbs,
                 topLogProbs: this.advancedParams.includeLogProbs ? this.advancedParams.topLogProbs : undefined,
-                messages: messages.length > 0 ? JSON.stringify(messages) : undefined
+                messages: messages.length > 0 ? JSON.stringify(messages) : undefined,
+                rerunFromPromptRunID: this.originalPromptRunId || undefined,
+                systemPromptOverride: this.systemPromptOverride || undefined
             };
 
             const result = await dataProvider.ExecuteGQL(query, variables);

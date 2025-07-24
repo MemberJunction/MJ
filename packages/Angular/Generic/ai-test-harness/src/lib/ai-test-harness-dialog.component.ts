@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { AITestHarnessComponent } from './ai-test-harness.component';
+import { ChatMessage } from '@memberjunction/ai';
 
 /**
  * Configuration data interface for the AI Test Harness Dialog.
@@ -31,8 +32,14 @@ export interface AITestHarnessDialogData {
     initialTemplateVariables?: Record<string, any>;
     /** Pre-selected AI model ID for prompt execution */
     selectedModelId?: string;
+    /** Pre-selected AI vendor ID for prompt execution */
+    selectedVendorId?: string;
+    /** Pre-selected AI configuration ID for prompt execution */
+    selectedConfigurationId?: string;
     /** Mode of operation - 'agent' or 'prompt' */
     mode?: 'agent' | 'prompt';
+    /** ID of an existing prompt run to preload data from */
+    promptRunId?: string;
 }
 
 /**
@@ -202,41 +209,52 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
     /**
      * AfterViewInit lifecycle hook to set initial data after view is initialized
      */
-    ngAfterViewInit(): void {
+    async ngAfterViewInit(): Promise<void> {
         if (this.testHarness) {
-            if (this.mode === 'agent') {
-                // Agent mode: set agent variables
-                if (this.data.initialDataContext) {
-                    const variables = Object.entries(this.data.initialDataContext).map(([name, value]) => ({
-                        name,
-                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                        type: this.detectVariableType(value)
-                    }));
-                    this.testHarness.agentVariables = variables;
-                }
-                
-                if (this.data.initialTemplateData) {
-                    const templateVariables = Object.entries(this.data.initialTemplateData).map(([name, value]) => ({
-                        name,
-                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                        type: this.detectVariableType(value)
-                    }));
-                    this.testHarness.agentVariables = [...this.testHarness.agentVariables, ...templateVariables];
-                }
+            // Check if we need to load from a prompt run
+            if (this.data.promptRunId && this.mode === 'prompt') {
+                await this.loadFromPromptRun(this.data.promptRunId);
             } else {
-                // Prompt mode: set template variables
-                if (this.data.initialTemplateVariables) {
-                    const variables = Object.entries(this.data.initialTemplateVariables).map(([name, value]) => ({
-                        name,
-                        value: typeof value === 'object' ? JSON.stringify(value) : String(value),
-                        type: this.detectVariableType(value)
-                    }));
-                    this.testHarness.templateVariables = variables;
-                }
-                
-                // Set selected model if provided
-                if (this.data.selectedModelId) {
-                    this.testHarness.selectedModelId = this.data.selectedModelId;
+                if (this.mode === 'agent') {
+                    // Agent mode: set agent variables
+                    if (this.data.initialDataContext) {
+                        const variables = Object.entries(this.data.initialDataContext).map(([name, value]) => ({
+                            name,
+                            value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                            type: this.detectVariableType(value)
+                        }));
+                        this.testHarness.agentVariables = variables;
+                    }
+                    
+                    if (this.data.initialTemplateData) {
+                        const templateVariables = Object.entries(this.data.initialTemplateData).map(([name, value]) => ({
+                            name,
+                            value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                            type: this.detectVariableType(value)
+                        }));
+                        this.testHarness.agentVariables = [...this.testHarness.agentVariables, ...templateVariables];
+                    }
+                } else {
+                    // Prompt mode: set template variables
+                    if (this.data.initialTemplateVariables) {
+                        const variables = Object.entries(this.data.initialTemplateVariables).map(([name, value]) => ({
+                            name,
+                            value: typeof value === 'object' ? JSON.stringify(value) : String(value),
+                            type: this.detectVariableType(value)
+                        }));
+                        this.testHarness.templateVariables = variables;
+                    }
+                    
+                    // Set selected model if provided
+                    if (this.data.selectedModelId) {
+                        this.testHarness.selectedModelId = this.data.selectedModelId;
+                    }
+                    if (this.data.selectedVendorId) {
+                        this.testHarness.selectedVendorId = this.data.selectedVendorId;
+                    }
+                    if (this.data.selectedConfigurationId) {
+                        this.testHarness.selectedConfigurationId = this.data.selectedConfigurationId;
+                    }
                 }
             }
             
@@ -256,6 +274,97 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
         if (typeof value === 'number') return 'number';
         if (typeof value === 'object') return 'object';
         return 'string';
+    }
+    
+    /**
+     * Loads data from an existing prompt run to pre-populate the test harness
+     * @param promptRunId - The ID of the prompt run to load
+     */
+    private async loadFromPromptRun(promptRunId: string): Promise<void> {
+        const md = new Metadata();
+        const promptRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+        
+        if (await promptRun.Load(promptRunId)) {
+            // Load the prompt if not already loaded
+            if (!this.prompt && promptRun.PromptID) {
+                this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+                await this.prompt.Load(promptRun.PromptID);
+                this.testHarness.entity = this.prompt;
+                
+                // Update title to indicate we're re-running
+                this.title = `Re-Run: ${this.prompt.Name}`;
+            }
+            
+            // Set the model/vendor/configuration
+            if (promptRun.ModelID) {
+                this.testHarness.selectedModelId = promptRun.ModelID;
+            }
+            if (promptRun.VendorID) {
+                this.testHarness.selectedVendorId = promptRun.VendorID;
+            }
+            if (promptRun.ConfigurationID) {
+                this.testHarness.selectedConfigurationId = promptRun.ConfigurationID;
+            }
+            
+            // Note: We do NOT extract template variables because we want to use
+            // the already-rendered system prompt from the previous run, not re-render it
+            
+            // Set advanced parameters
+            if (promptRun.Temperature != null) {
+                this.testHarness.advancedParams.temperature = promptRun.Temperature;
+            }
+            if (promptRun.TopP != null) {
+                this.testHarness.advancedParams.topP = promptRun.TopP;
+            }
+            if (promptRun.TopK != null) {
+                this.testHarness.advancedParams.topK = promptRun.TopK;
+            }
+            if (promptRun.MinP != null) {
+                this.testHarness.advancedParams.minP = promptRun.MinP;
+            }
+            if (promptRun.FrequencyPenalty != null) {
+                this.testHarness.advancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
+            }
+            if (promptRun.PresencePenalty != null) {
+                this.testHarness.advancedParams.presencePenalty = promptRun.PresencePenalty;
+            }
+            if (promptRun.Seed != null) {
+                this.testHarness.advancedParams.seed = promptRun.Seed;
+            }
+            // Note: responseFormat is handled separately, not in advancedParams
+            
+            // Use the extended entity methods to get conversation messages
+            const chatMessages = promptRun.GetChatMessages();
+            if (chatMessages.length > 0) {
+                // Convert messages to the format expected by the test harness
+                this.testHarness.conversationMessages = chatMessages.map((msg, index) => ({
+                    id: `msg-${Date.now()}-${index}`,
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: new Date()
+                }));
+            }
+            
+            // Store the original prompt run ID for reference
+            this.testHarness.originalPromptRunId = promptRunId;
+            
+            // Extract and store the system prompt for re-run
+            const systemPrompt = promptRun.GetSystemPrompt();
+            if (systemPrompt) {
+                this.testHarness.systemPromptOverride = systemPrompt;
+            }
+            
+            // Add a note indicating this is a re-run
+            if (this.testHarness.conversationMessages.length > 0) {
+                // Add a system message indicating this is a re-run
+                this.testHarness.conversationMessages.unshift({
+                    id: `system-${Date.now()}`,
+                    role: 'system',
+                    content: `[Re-running from Prompt Run #${promptRunId.substring(0, 8)}]`,
+                    timestamp: new Date()
+                });
+            }
+        }
     }
     
     /**

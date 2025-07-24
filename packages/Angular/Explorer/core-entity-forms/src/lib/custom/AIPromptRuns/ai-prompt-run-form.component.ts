@@ -1,12 +1,14 @@
-import { Component, ElementRef, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { RegisterClass, ParseJSONRecursive, ParseJSONOptions, SafeJSONParse } from '@memberjunction/global';
+import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef } from '@angular/core';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptRunEntity, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ChatMessage } from '@memberjunction/ai';
+import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
@@ -15,13 +17,13 @@ import { ChatMessage } from '@memberjunction/ai';
     styleUrls: ['./ai-prompt-run-form.component.css']
 })
 export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit {
-    public record!: AIPromptRunEntity;
+    public record!: AIPromptRunEntityExtended;
     
     // Related entities
     public prompt: AIPromptEntity | null = null;
     public model: AIModelEntity | null = null;
-    public parentRun: AIPromptRunEntity | null = null;
-    public childRuns: AIPromptRunEntity[] = [];
+    public parentRun: AIPromptRunEntityExtended | null = null;
+    public childRuns: AIPromptRunEntityExtended[] = [];
     
     // UI state
     public isLoadingRelatedData = false;
@@ -55,7 +57,9 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         public sharedService: SharedService,
         router: Router,
         route: ActivatedRoute,
-        cdr: ChangeDetectorRef
+        cdr: ChangeDetectorRef,
+        private testHarnessWindowService: TestHarnessWindowService,
+        private viewContainerRef: ViewContainerRef
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -107,7 +111,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             
             // Load parent run if exists
             if (this.record.ParentID) {
-                this.parentRun = await md.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs');
+                this.parentRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
                 if (this.parentRun) {
                     await this.parentRun.Load(this.record.ParentID);
                 }
@@ -126,76 +130,32 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         if (!this.record.ID) return;
         
         const rv = new RunView();
-        const result = await rv.RunView<AIPromptRunEntity>({
+        const result = await rv.RunView<AIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
-            OrderBy: 'ExecutionOrder ASC, RunAt DESC' 
+            OrderBy: 'ExecutionOrder ASC, RunAt DESC',
+            ResultType: 'entity_object'
         });
         
-        this.childRuns = result.Results;
+        if (result.Success) {
+            this.childRuns = result.Results || [];
+        }
     }
     
     private formatJsonFields() {
         this.isParsingMessages = true; // Start parsing
         
-        const parseOptions: ParseJSONOptions = {
-            extractInlineJson: true,
-            maxDepth: 100,
-            debug: false
-        };
-
-        // Format messages with recursive JSON parsing
-        if (this.record.Messages) {
-            try {
-                const parsed = JSON.parse(this.record.Messages);
-                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
-                this.formattedMessages = JSON.stringify(recursivelyParsed, null, 2);
-                
-                // Extract messages array and data
-                if (recursivelyParsed && typeof recursivelyParsed === 'object') {
-                    // Extract chat messages if they exist
-                    if (recursivelyParsed.messages && Array.isArray(recursivelyParsed.messages)) {
-                        this.chatMessages = recursivelyParsed.messages as ChatMessage[];
-                    } else {
-                        this.chatMessages = [];
-                    }
-                    
-                    // Extract data object if it exists
-                    if (recursivelyParsed.data) {
-                        this.inputData = recursivelyParsed.data;
-                        this.formattedData = JSON.stringify(recursivelyParsed.data, null, 2);
-                    } else {
-                        this.inputData = null;
-                        this.formattedData = '';
-                    }
-                }
-            } catch {
-                this.formattedMessages = this.record.Messages;
-                this.chatMessages = [];
-                this.inputData = null;
-                this.formattedData = '';
-            }
-        } else {
-            this.formattedMessages = '';
-            this.chatMessages = [];
-            this.inputData = null;
-            this.formattedData = '';
-        }
+        // Use the extended entity methods to parse messages
+        const messageData = this.record.ParseMessagesData();
+        this.chatMessages = messageData.chatMessages;
+        this.inputData = messageData.inputData;
+        this.formattedMessages = messageData.formattedMessages;
+        this.formattedData = messageData.formattedData;
         
         this.isParsingMessages = false; // Done parsing
         
-        // Format result with recursive JSON parsing
-        if (this.record.Result) {
-            try {
-                const parsed = JSON.parse(this.record.Result);
-                const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
-                this.formattedResult = JSON.stringify(recursivelyParsed, null, 2);
-            } catch {
-                this.formattedResult = this.record.Result;
-            }
-        } else {
-            this.formattedResult = '';
-        }
+        // Format result using extended entity method
+        this.formattedResult = this.record.GetFormattedResult();
     }
     
     getStatusColor(): string {
@@ -298,6 +258,36 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         if (!recordId) return;
         
         SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+    }
+    
+    navigateToOriginalRun() {
+        if (this.record?.RerunFromPromptRunID) {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(this.record.RerunFromPromptRunID));
+        }
+    }
+    
+    reRunPrompt() {
+        if (!this.record?.ID || !this.record.PromptID) return;
+        
+        // Open AI Test Harness dialog with the prompt run ID
+        this.testHarnessWindowService.openPromptTestHarness({
+            promptId: this.record.PromptID,
+            promptRunId: this.record.ID,
+            title: `Re-Run: ${this.prompt?.Name || 'Prompt'}`,
+            width: '80vw',
+            height: '80vh',
+            viewContainerRef: this.viewContainerRef
+        }).subscribe({
+            next: (result: any) => {
+                if (result) {
+                    // Optionally refresh the current view or show a success message
+                    console.log('Test harness completed', result);
+                }
+            },
+            error: (error: any) => {
+                console.error('Error in test harness:', error);
+            }
+        });
     }
     
     copyToClipboard(text: string, fieldName: string) {

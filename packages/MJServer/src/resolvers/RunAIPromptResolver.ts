@@ -62,7 +62,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('stopSequences', () => [String], { nullable: true }) stopSequences?: string[],
         @Arg('includeLogProbs', { nullable: true }) includeLogProbs?: boolean,
         @Arg('topLogProbs', () => Int, { nullable: true }) topLogProbs?: number,
-        @Arg('messages', { nullable: true }) messages?: string
+        @Arg('messages', { nullable: true }) messages?: string,
+        @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
+        @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
         const startTime = Date.now();
         
@@ -141,6 +143,8 @@ export class RunAIPromptResolver extends ResolverBase {
             promptParams.configurationId = configurationId;
             promptParams.contextUser = currentUser;
             promptParams.skipValidation = skipValidation || false;
+            promptParams.rerunFromPromptRunID = rerunFromPromptRunID;
+            promptParams.systemPromptOverride = systemPromptOverride;
             
             // Set override if model or vendor ID provided
             if (overrideModelId || overrideVendorId) {

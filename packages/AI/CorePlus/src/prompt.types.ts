@@ -310,6 +310,21 @@ export class AIPromptParams {
    */
   agentRunId?: string;
 
+  /**
+   * Optional ID of a previous prompt run to indicate this is a rerun.
+   * When provided, the new AIPromptRun record will have its RerunFromPromptRunID
+   * field set to this value, establishing a link between the original and rerun executions.
+   */
+  rerunFromPromptRunID?: string;
+
+  /**
+   * Optional system prompt override that bypasses template rendering.
+   * When provided, this exact system prompt will be used instead of rendering
+   * the prompt's template. This is useful for re-running prompts with the exact
+   * system prompt from a previous run.
+   */
+  systemPromptOverride?: string;
+
 
   /**
    * Optional array of child prompts to execute before this prompt.
