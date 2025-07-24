@@ -220,6 +220,62 @@ export class ComponentLinter {
     
     // New rules for the controlled component pattern
     {
+      name: 'no-data-prop',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          // Check function parameters for 'data' prop
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
+                    violations.push({
+                      rule: 'no-data-prop',
+                      severity: 'error',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                      code: 'data prop in component signature'
+                    });
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check arrow functions
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+              const init = path.node.init;
+              if (t.isArrowFunctionExpression(init) && init.params[0]) {
+                const param = init.params[0];
+                if (t.isObjectPattern(param)) {
+                  for (const prop of param.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
+                      violations.push({
+                        rule: 'no-data-prop',
+                        severity: 'error',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                        code: 'data prop in component signature'
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'use-onStateChanged-pattern',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
@@ -443,6 +499,25 @@ function Component({ state, onStateChanged }) {
           });
           break;
           
+        case 'no-data-prop':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Replace generic data prop with specific named props',
+            example: `// Instead of:
+function Component({ data, utilities, styles, components, onStateChanged }) {
+  return <div>{data.items.map(...)}</div>;
+}
+
+// Use specific props:
+function Component({ items, customers, utilities, styles, components, onStateChanged }) {
+  return <div>{items.map(...)}</div>;
+}
+
+// Load data using utilities:
+const result = await utilities.rv.RunView({ entityName: 'Items' });`
+          });
+          break;
+          
         case 'no-data-fetching':
           suggestions.push({
             violation: violation.rule,
@@ -470,7 +545,7 @@ callbacks?.UpdateUserState({ someValue });
 onStateChanged?.({ someValue });
 
 // Component should accept onStateChanged in props:
-function Component({ data, onStateChanged, styles, utilities, components }) {
+function Component({ onStateChanged, styles, utilities, components }) {
   // Handle state changes
   const handleClick = () => {
     onStateChanged?.({ selectedId: id });
@@ -485,7 +560,8 @@ function Component({ data, onStateChanged, styles, utilities, components }) {
             suggestion: 'Always pass standard props (styles, utilities, components) to child components',
             example: `// Always include these props when calling child components:
 <ChildComponent
-  data={data}
+  items={items}  // Specific props, not generic 'data'
+  selectedId={selectedId}
   onStateChanged={onStateChanged}
   styles={styles}
   utilities={utilities}
