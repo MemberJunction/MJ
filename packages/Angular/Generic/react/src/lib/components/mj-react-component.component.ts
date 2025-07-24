@@ -391,9 +391,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private createCallbacks(): ComponentCallbacks {
     return {
-      RefreshData: () => {
-        this.refreshData.emit();
-      },
       OpenEntityRecord: (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
@@ -414,41 +411,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         if (keyToUse) {
           this.openEntityRecord.emit({ entityName, key: keyToUse });
         }  
-      },
-      UpdateUserState: (userState: any) => {
-        // Prevent updates during rendering or destruction
-        if (this.isRendering || this.isDestroying) {
-          return;
-        }
-        
-        // Deep comparison to detect actual changes
-        const hasChanges = Object.keys(userState).some(key => {
-          const currentValue = this.currentState[key];
-          const newValue = userState[key];
-          return !this.isEqual(currentValue, newValue);
-        });
-        
-        if (!hasChanges) {
-          // No actual changes, skip update to prevent infinite loop
-          return;
-        }
-        
-        this.currentState = {
-          ...this.currentState,
-          ...userState
-        };
-        
-        // Emit change for each key in the state update
-        Object.keys(userState).forEach(path => {
-          this.stateChange.emit({ path, value: userState[path] });
-        });
-        
-        // Schedule re-render
-        this.renderComponent();
-      },
-      NotifyEvent: (event: string, data: any) => {
-        this.componentEvent.emit({ type: event, payload: data });
-      }
+      } 
     };
   }
 
