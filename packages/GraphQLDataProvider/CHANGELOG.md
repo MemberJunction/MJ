@@ -1,5 +1,61 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.75.0
+
+### Minor Changes
+
+- 66640d6: This update brings the GraphQLSystemUserClient to feature parity with the
+  standard GraphQLDataProvider by adding full Parameters support for
+  templated queries, pagination capabilities, and the missing
+  GetQueryDataByNameSystemUser resolver.
+
+  Key Features:
+
+  - Parameters support for templated queries (enabling AI cost calculations)
+  - MaxRows and StartRow pagination support
+  - Complete resolver coverage for system user operations
+  - Fixed TypeScript compilation errors with missing TotalRowCount fields
+  - Updated both GetQueryDataSystemUser and GetQueryDataByNameSystemUser
+    methods with full parameter support
+
+    - Added missing GetQueryDataByNameSystemUser resolver with proper
+      @RequireSystemUser decoration
+    - Fixed error handling cases to include required TotalRowCount field
+    - Updated GraphQL query strings to include TotalRowCount and
+      AppliedParameters fields
+
+    This enables system user clients to leverage MemberJunction v2.74's
+    templated query functionality, particularly important for AI cost tracking
+    and other parameterized operations.
+
+- 6a65fad: feat: Add AI Agent Run cost calculation with high-performance templated
+  queries
+
+  - Add AIAgentRunCostService with intelligent caching and single-query
+    performance optimization
+  - Implement CalculateAIAgentRunCost templated query using recursive CTE for
+    hierarchical cost calculation
+  - Fix GraphQL scalar type error (JSON → JSONObject) in RunQuery operations
+  - Update AI Agent Run components to display consistent cost metrics in both
+    top banner and analytics tab
+  - Fix analytics component data loading to use proper entity relationships
+    via AI Agent Run Steps
+  - Add comprehensive metadata structure for AI queries with
+    cross-environment schema compatibility
+  - Remove debugging console statements for clean production output
+
+  This enhancement provides accurate, performant cost tracking for AI Agent
+  Runs including all nested sub-agent hierarchies up to 20 levels deep,
+  replacing inefficient multiple database calls with a single optimized
+  query.
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.75.0
+- @memberjunction/core@2.75.0
+- @memberjunction/core-entities@2.75.0
+- @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

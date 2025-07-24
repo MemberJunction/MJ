@@ -1,5 +1,20 @@
 # @memberjunction/ai-agents
 
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [9ccd145]
+  - @memberjunction/ai-prompts@2.75.0
+  - @memberjunction/actions@2.75.0
+  - @memberjunction/ai@2.75.0
+  - @memberjunction/ai-core-plus@2.75.0
+  - @memberjunction/aiengine@2.75.0
+  - @memberjunction/actions-base@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Minor Changes

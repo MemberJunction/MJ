@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-container-directives
 
+## 2.75.0
+
+### Patch Changes
+
+- b403003: Updates to interactive component types
+  - @memberjunction/core@2.75.0
+  - @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

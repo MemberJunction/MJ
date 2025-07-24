@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-data-context
 
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [b403003]
+  - @memberjunction/ng-container-directives@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

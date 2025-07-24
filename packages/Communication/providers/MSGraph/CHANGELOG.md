@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.75.0
+
+### Patch Changes
+
+- 1d0972d: Enabling custom Sender address when sending email using MS Graph Provider
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+  - @memberjunction/ai@2.75.0
+  - @memberjunction/aiengine@2.75.0
+  - @memberjunction/ai-openai@2.75.0
+  - @memberjunction/communication-types@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes
