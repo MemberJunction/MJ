@@ -264,6 +264,9 @@ export function isTokenValid(token: string) {
 export function recordTokenUse(token: string, usePayload: any) {
     const t = __accessTokens.find((t) => t.Token === token);
     if (t) {
+        if (!t.TokenUses) {
+            t.TokenUses = [];
+        }
         t.TokenUses.push({ Token: token, UsedAt: new Date(), UsePayload: usePayload });
     }
     else {

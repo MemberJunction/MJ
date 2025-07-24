@@ -72,7 +72,7 @@ export class GraphQLSystemUserClient {
                     Results
                 }
             }`
-            const result = await this.Client.request(query, {input: {Queries: queries, Token: 'nope'}}) as {GetData: GetDataOutput};
+            const result = await this.Client.request(query, {input: {Queries: queries, Token: accessToken}}) as {GetData: GetDataOutput};
             if (result && result.GetData) {
                 // for each succesful item, we will parse and return the array of objects instead of the string
                 return {
