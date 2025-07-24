@@ -72,12 +72,14 @@ export class ComponentRunner {
   async lintComponent(
     componentCode: string, 
     componentName: string,
-    componentType: ComponentType
+    componentType: ComponentType,
+    componentSpec?: any
   ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentType,
-      componentName
+      componentName,
+      componentSpec
     );
 
     const violations = lintResult.violations.map(v => v.message);

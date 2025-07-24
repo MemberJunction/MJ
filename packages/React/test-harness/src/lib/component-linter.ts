@@ -31,7 +31,8 @@ interface Rule {
 }
 
 export class ComponentLinter {
-  private static childComponentRules: Rule[] = [
+  // Universal rules that apply to all components in the new controlled pattern
+  private static universalComponentRules: Rule[] = [
     // State Management Rules
     {
       name: 'no-use-state',
@@ -215,129 +216,99 @@ export class ComponentLinter {
         
         return violations;
       }
-    }
-  ];
-  
-  private static rootComponentRules: Rule[] = [
+    },
+    
+    // New rules for the controlled component pattern
     {
-      name: 'must-use-update-state',
+      name: 'use-onStateChanged-pattern',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
-        let hasUpdateState = false;
+        let hasOnStateChanged = false;
+        let usesOldCallbackPattern = false;
         
         traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isIdentifier(path.node.id) && path.node.id.name === 'updateState') {
-              hasUpdateState = true;
-            }
-          },
+          // Check for onStateChanged in function parameters
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-            if (path.node.id && path.node.id.name === 'updateState') {
-              hasUpdateState = true;
-            }
-          }
-        });
-        
-        if (!hasUpdateState) {
-          violations.push({
-            rule: 'must-use-update-state',
-            severity: 'error',
-            line: 1,
-            column: 0,
-            message: `Root component "${componentName}" must have an updateState function that syncs with callbacks.UpdateUserState.`,
-          });
-        }
-        
-        return violations;
-      }
-    },
-    
-    {
-      name: 'sync-user-state',
-      test: (ast: t.File, componentName: string) => {
-        const violations: Violation[] = [];
-        let hasUserStateSync = false;
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            // Look for callbacks?.UpdateUserState or callbacks.UpdateUserState
-            if (t.isMemberExpression(callee)) {
-              // Check for callbacks.UpdateUserState
-              if (
-                t.isIdentifier(callee.object) && callee.object.name === 'callbacks' &&
-                t.isIdentifier(callee.property) && callee.property.name === 'UpdateUserState'
-              ) {
-                hasUserStateSync = true;
-              }
-            }
-            // Check for callbacks?.UpdateUserState (optional chaining)
-            else if (t.isOptionalMemberExpression(callee)) {
-              if (
-                t.isIdentifier(callee.object) && callee.object.name === 'callbacks' &&
-                t.isIdentifier(callee.property) && callee.property.name === 'UpdateUserState'
-              ) {
-                hasUserStateSync = true;
-              }
-            }
-          }
-        });
-        
-        if (!hasUserStateSync) {
-          violations.push({
-            rule: 'sync-user-state',
-            severity: 'error',
-            line: 1,
-            column: 0,
-            message: `Root component "${componentName}" must call callbacks?.UpdateUserState to sync state changes.`,
-          });
-        }
-        
-        return violations;
-      }
-    },
-    
-    {
-      name: 'spread-user-state',
-      test: (ast: t.File, componentName: string) => {
-        const violations: Violation[] = [];
-        let hasUserStateSpread = false;
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            // Check for useState call
-            if (
-              (t.isIdentifier(callee) && callee.name === 'useState') ||
-              (t.isMemberExpression(callee) && 
-               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
-               t.isIdentifier(callee.property) && callee.property.name === 'useState')
-            ) {
-              // Check if initial state includes ...userState
-              const initialState = path.node.arguments[0];
-              if (t.isObjectExpression(initialState)) {
-                for (const prop of initialState.properties) {
-                  if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument) && prop.argument.name === 'userState') {
-                    hasUserStateSpread = true;
-                    break;
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'onStateChanged') {
+                    hasOnStateChanged = true;
                   }
                 }
               }
             }
+          },
+          
+          // Check for old callbacks?.UpdateUserState pattern
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
+              if (
+                t.isIdentifier(callee.object) && callee.object.name === 'callbacks' &&
+                t.isIdentifier(callee.property) && callee.property.name === 'UpdateUserState'
+              ) {
+                usesOldCallbackPattern = true;
+              }
+            }
           }
         });
         
-        if (!hasUserStateSpread) {
+        if (usesOldCallbackPattern) {
           violations.push({
-            rule: 'spread-user-state',
+            rule: 'use-onStateChanged-pattern',
             severity: 'error',
             line: 1,
             column: 0,
-            message: `Root component "${componentName}" must spread ...userState in initial state to preserve user preferences.`,
+            message: `Component "${componentName}" uses old callbacks?.UpdateUserState pattern. Use onStateChanged instead.`,
           });
         }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'pass-standard-props',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        const requiredProps = ['styles', 'utilities', 'components'];
+        
+        traverse(ast, {
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            
+            // Check if this looks like a component (capitalized name)
+            if (t.isJSXIdentifier(openingElement.name) && /^[A-Z]/.test(openingElement.name.name)) {
+              const componentBeingCalled = openingElement.name.name;
+              const passedProps = new Set<string>();
+              
+              // Collect all props being passed
+              for (const attr of openingElement.attributes) {
+                if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                  passedProps.add(attr.name.name);
+                }
+              }
+              
+              // Check if required props are missing
+              const missingProps = requiredProps.filter(prop => !passedProps.has(prop));
+              
+              if (missingProps.length > 0 && passedProps.size > 0) {
+                // Only report if some props are passed (to avoid false positives on non-component JSX)
+                violations.push({
+                  rule: 'pass-standard-props',
+                  severity: 'error',
+                  line: openingElement.loc?.start.line || 0,
+                  column: openingElement.loc?.start.column || 0,
+                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All child components must receive styles, utilities, and components props.`,
+                  code: `<${componentBeingCalled} ... />`
+                });
+              }
+            }
+          }
+        });
         
         return violations;
       }
@@ -383,7 +354,8 @@ export class ComponentLinter {
   public static async lintComponent(
     code: string,
     componentType: ComponentType,
-    componentName: string
+    componentName: string,
+    componentSpec?: any
   ): Promise<LintResult> {
     try {
       const ast = parser.parse(code, {
@@ -392,14 +364,18 @@ export class ComponentLinter {
         errorRecovery: true
       });
       
-      const rules = componentType === 'root' 
-        ? this.rootComponentRules 
-        : this.childComponentRules;
+      // Use universal rules for all components in the new pattern
+      const rules = this.universalComponentRules;
       
       const violations: Violation[] = [];
       
       // Run each rule
       for (const rule of rules) {
+        // Skip data fetching rule if component has dataRequirements in spec
+        if (rule.name === 'no-data-fetching' && componentSpec?.dataRequirements) {
+          continue;
+        }
+        
         const ruleViolations = rule.test(ast, componentName);
         violations.push(...ruleViolations);
       }
@@ -436,8 +412,34 @@ export class ComponentLinter {
         case 'no-use-state':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Remove useState and accept the value as a prop from the parent component',
-            example: 'Replace: const [value, setValue] = useState(initialValue);\nWith: Accept "value" and "onValueChange" as props'
+            suggestion: 'Components must be controlled - receive state via props and update via onStateChanged',
+            example: `// Instead of:
+const [value, setValue] = useState(initialValue);
+
+// Use:
+function Component({ value, onStateChanged }) {
+  const handleChange = (newValue) => {
+    onStateChanged?.({ value: newValue });
+  };
+  return <input value={value} onChange={e => handleChange(e.target.value)} />;
+}`
+          });
+          break;
+          
+        case 'no-use-reducer':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Components must be purely controlled - remove useReducer',
+            example: `// Instead of:
+const [state, dispatch] = useReducer(reducer, initialState);
+
+// Use:
+function Component({ state, onStateChanged }) {
+  const handleAction = (action) => {
+    // Map action to state change
+    onStateChanged?.({ /* new state values */ });
+  };
+}`
           });
           break;
           
@@ -457,33 +459,38 @@ export class ComponentLinter {
           });
           break;
           
-        case 'must-use-update-state':
+        case 'use-onStateChanged-pattern':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Add an updateState function that syncs with callbacks',
-            example: `const updateState = (updates) => {
-  const newState = { ...state, ...updates };
-  setState(newState);
-  if (callbacks?.UpdateUserState) {
-    callbacks.UpdateUserState(newState);
-  }
-};`
+            suggestion: 'Use onStateChanged callback pattern instead of callbacks?.UpdateUserState',
+            example: `// Instead of:
+callbacks?.UpdateUserState({ someValue });
+
+// Use:
+onStateChanged?.({ someValue });
+
+// Component should accept onStateChanged in props:
+function Component({ data, onStateChanged, styles, utilities, components }) {
+  // Handle state changes
+  const handleClick = () => {
+    onStateChanged?.({ selectedId: id });
+  };
+}`
           });
           break;
           
-        case 'sync-user-state':
+        case 'pass-standard-props':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Call callbacks?.UpdateUserState in your updateState function',
-            example: 'Add: if (callbacks?.UpdateUserState) callbacks.UpdateUserState(newState);'
-          });
-          break;
-          
-        case 'spread-user-state':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Include ...userState in your initial state',
-            example: 'const [state, setState] = useState({ /* your fields */, ...userState });'
+            suggestion: 'Always pass standard props (styles, utilities, components) to child components',
+            example: `// Always include these props when calling child components:
+<ChildComponent
+  data={data}
+  onStateChanged={onStateChanged}
+  styles={styles}
+  utilities={utilities}
+  components={components}
+/>`
           });
           break;
           
