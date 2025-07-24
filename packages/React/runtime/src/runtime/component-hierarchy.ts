@@ -13,7 +13,7 @@ import {
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
-import { ComponentSpec } from '../registry/component-resolver';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Result of a hierarchy registration operation
@@ -89,7 +89,7 @@ export class ComponentHierarchyRegistrar {
     );
 
     if (rootResult.success) {
-      registeredComponents.push(rootSpec.componentName);
+      registeredComponents.push(rootSpec.name);
     } else {
       errors.push(rootResult.error!);
       if (!continueOnError) {
@@ -98,7 +98,7 @@ export class ComponentHierarchyRegistrar {
     }
 
     // Register child components recursively
-    const childComponents = rootSpec.childComponents || rootSpec.components || [];
+    const childComponents = rootSpec.dependencies || [];
     if (childComponents.length > 0) {
       const childResult = await this.registerChildComponents(
         childComponents,
@@ -136,7 +136,7 @@ export class ComponentHierarchyRegistrar {
 
     try {
       // Skip if no component code
-      if (!spec.componentCode) {
+      if (!spec.code) {
         return {
           success: true,
           error: undefined
@@ -144,12 +144,12 @@ export class ComponentHierarchyRegistrar {
       }
 
       // Check if component already exists
-      const existingComponent = this.registry.get(spec.componentName, namespace, version);
+      const existingComponent = this.registry.get(spec.name, namespace, version);
       if (existingComponent && !allowOverride) {
         return {
           success: false,
           error: {
-            componentName: spec.componentName,
+            componentName: spec.name,
             error: `Component already registered in ${namespace}/${version}`,
             phase: 'registration'
           }
@@ -158,8 +158,8 @@ export class ComponentHierarchyRegistrar {
 
       // Compile the component
       const compileOptions: CompileOptions = {
-        componentName: spec.componentName,
-        componentCode: spec.componentCode,
+        componentName: spec.name,
+        componentCode: spec.code,
         styles
       };
 
@@ -169,7 +169,7 @@ export class ComponentHierarchyRegistrar {
         return {
           success: false,
           error: {
-            componentName: spec.componentName,
+            componentName: spec.name,
             error: compilationResult.error?.message || 'Unknown compilation error',
             phase: 'compilation'
           }
@@ -181,7 +181,7 @@ export class ComponentHierarchyRegistrar {
 
       // Register the component
       this.registry.register(
-        spec.componentName,
+        spec.name,
         componentFactory.component,
         namespace,
         version
@@ -193,7 +193,7 @@ export class ComponentHierarchyRegistrar {
       return {
         success: false,
         error: {
-          componentName: spec.componentName,
+          componentName: spec.name,
           error: error instanceof Error ? error.message : String(error),
           phase: 'registration'
         }
@@ -226,8 +226,8 @@ export class ComponentHierarchyRegistrar {
       });
 
       if (childResult.success) {
-        if (child.componentCode) {
-          registeredComponents.push(child.componentName);
+        if (child.code) {
+          registeredComponents.push(child.name);
         }
       } else {
         errors.push(childResult.error!);
@@ -237,7 +237,7 @@ export class ComponentHierarchyRegistrar {
       }
 
       // Register nested children recursively
-      const nestedChildren = child.childComponents || child.components || [];
+      const nestedChildren = child.dependencies || [];
       if (nestedChildren.length > 0) {
         await this.registerChildComponents(
           nestedChildren,
@@ -279,26 +279,26 @@ export async function registerComponentHierarchy(
 export function validateComponentSpec(spec: ComponentSpec): string[] {
   const errors: string[] = [];
 
-  if (!spec.componentName) {
-    errors.push('Component specification must have a componentName');
+  if (!spec.name) {
+    errors.push('Component specification must have a name');
   }
 
   // If componentCode is provided, do basic validation
-  if (spec.componentCode) {
-    if (typeof spec.componentCode !== 'string') {
-      errors.push(`Component code for ${spec.componentName} must be a string`);
+  if (spec.code) {
+    if (typeof spec.code !== 'string') {
+      errors.push(`Component code for ${spec.name} must be a string`);
     }
-    if (spec.componentCode.trim().length === 0) {
-      errors.push(`Component code for ${spec.componentName} cannot be empty`);
+    if (spec.code.trim().length === 0) {
+      errors.push(`Component code for ${spec.name} cannot be empty`);
     }
   }
 
   // Validate child components recursively
-  const children = spec.childComponents || spec.components || [];
+  const children = spec.dependencies || [];
   children.forEach((child, index) => {
     const childErrors = validateComponentSpec(child);
     childErrors.forEach(error => {
-      errors.push(`Child ${index} (${child.componentName || 'unnamed'}): ${error}`);
+      errors.push(`Child ${index} (${child.name || 'unnamed'}): ${error}`);
     });
   });
 
@@ -313,7 +313,7 @@ export function validateComponentSpec(spec: ComponentSpec): string[] {
 export function flattenComponentHierarchy(rootSpec: ComponentSpec): ComponentSpec[] {
   const components: ComponentSpec[] = [rootSpec];
   
-  const children = rootSpec.childComponents || rootSpec.components || [];
+  const children = rootSpec.dependencies || [];
   children.forEach(child => {
     components.push(...flattenComponentHierarchy(child));
   });
@@ -333,11 +333,11 @@ export function countComponentsInHierarchy(
 ): number {
   let count = 0;
   
-  if (includeEmpty || rootSpec.componentCode) {
+  if (includeEmpty || rootSpec.code) {
     count = 1;
   }
 
-  const children = rootSpec.childComponents || rootSpec.components || [];
+  const children = rootSpec.dependencies || [];
   children.forEach(child => {
     count += countComponentsInHierarchy(child, includeEmpty);
   });

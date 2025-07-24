@@ -5,16 +5,7 @@
  */
 
 import { ComponentRegistry } from './component-registry';
-
-/**
- * Component specification interface matching Skip component structure
- */
-export interface ComponentSpec {
-  componentName: string;
-  componentCode?: string;
-  childComponents?: ComponentSpec[];
-  components?: ComponentSpec[]; // Alternative property name for children
-}
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Resolved component map for passing to React components
@@ -67,20 +58,20 @@ export class ComponentResolver {
     visited: Set<string> = new Set()
   ): void {
     // Prevent circular dependencies
-    if (visited.has(spec.componentName)) {
-      console.warn(`Circular dependency detected for component: ${spec.componentName}`);
+    if (visited.has(spec.name)) {
+      console.warn(`Circular dependency detected for component: ${spec.name}`);
       return;
     }
-    visited.add(spec.componentName);
+    visited.add(spec.name);
 
     // Try to get component from registry
-    const component = this.registry.get(spec.componentName, namespace);
+    const component = this.registry.get(spec.name, namespace);
     if (component) {
-      resolved[spec.componentName] = component;
+      resolved[spec.name] = component;
     }
 
-    // Process child components (handle both property names)
-    const children = spec.childComponents || spec.components || [];
+    // Process child components
+    const children = spec.dependencies || [];
     for (const child of children) {
       this.resolveComponentHierarchy(child, resolved, namespace, visited);
     }
@@ -114,16 +105,16 @@ export class ComponentResolver {
     missing: string[],
     checked: Set<string>
   ): void {
-    if (checked.has(spec.componentName)) return;
-    checked.add(spec.componentName);
+    if (checked.has(spec.name)) return;
+    checked.add(spec.name);
 
     // Check if component exists in registry
-    if (!this.registry.has(spec.componentName, namespace)) {
-      missing.push(spec.componentName);
+    if (!this.registry.has(spec.name, namespace)) {
+      missing.push(spec.name);
     }
 
     // Check children
-    const children = spec.childComponents || spec.components || [];
+    const children = spec.dependencies || [];
     for (const child of children) {
       this.checkDependencies(child, namespace, missing, checked);
     }
@@ -154,13 +145,13 @@ export class ComponentResolver {
     graph: Map<string, string[]>,
     visited: Set<string>
   ): void {
-    if (visited.has(spec.componentName)) return;
-    visited.add(spec.componentName);
+    if (visited.has(spec.name)) return;
+    visited.add(spec.name);
 
-    const children = spec.childComponents || spec.components || [];
-    const dependencies = children.map(child => child.componentName);
+    const children = spec.dependencies || [];
+    const dependencies = children.map(child => child.name);
     
-    graph.set(spec.componentName, dependencies);
+    graph.set(spec.name, dependencies);
 
     // Recursively process children
     for (const child of children) {
@@ -262,12 +253,12 @@ export class ComponentResolver {
     collected: ComponentSpec[],
     visited: Set<string>
   ): void {
-    if (visited.has(spec.componentName)) return;
-    visited.add(spec.componentName);
+    if (visited.has(spec.name)) return;
+    visited.add(spec.name);
 
     collected.push(spec);
 
-    const children = spec.childComponents || spec.components || [];
+    const children = spec.dependencies || [];
     for (const child of children) {
       this.collectComponentSpecs(child, collected, visited);
     }

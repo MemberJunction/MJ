@@ -10,6 +10,7 @@ import {
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
 import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -21,13 +22,7 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   libraryConfiguration?: LibraryConfiguration;
 }
-
-export interface ComponentSpec {
-  componentName: string;
-  componentCode?: string;
-  childComponents?: ComponentSpec[];
-  components?: ComponentSpec[]; // Alternative property name for children
-}
+ 
 
 export interface ComponentExecutionResult {
   success: boolean;
@@ -277,8 +272,8 @@ ${cssLinks}
       }
       
       async compile(options) {
-        const componentName = options.componentName;
-        const componentCode = options.componentCode;
+        const componentName = options.name;
+        const componentCode = options.code;
         
         try {
           // Transform JSX to JS using Babel
@@ -413,25 +408,25 @@ ${cssLinks}
         // Register components recursively
         const registerSpec = async (spec) => {
           // Register children first
-          const children = spec.childComponents || spec.components || [];
+          const children = spec.dependencies || [];
           for (const child of children) {
             await registerSpec(child);
           }
           
           // Register this component
-          if (spec.componentCode) {
+          if (spec.code) {
             const result = await this.compiler.compile({
-              componentName: spec.componentName,
-              componentCode: spec.componentCode
+              name: spec.name,
+              code: spec.code
             });
             
             if (result.success) {
               const factory = result.component.component(this.runtimeContext, {});
-              this.registry.register(spec.componentName, factory.component);
-              registeredComponents.push(spec.componentName);
+              this.registry.register(spec.name, factory.component);
+              registeredComponents.push(spec.name);
             } else {
               errors.push({
-                componentName: spec.componentName,
+                componentName: spec.name,
                 error: result.error.message,
                 phase: 'compilation'
               });
@@ -589,10 +584,10 @@ ${cssLinks}
       const components = registry.getAll();
       
       // Get the root component
-      const RootComponent = registry.get(componentSpec.componentName);
+      const RootComponent = registry.get(componentSpec.name);
       
       if (!RootComponent) {
-        console.error('Root component not found:', componentSpec.componentName);
+        console.error('Root component not found:', componentSpec.name);
         return;
       }
       
