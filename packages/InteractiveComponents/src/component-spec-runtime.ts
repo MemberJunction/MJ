@@ -222,7 +222,7 @@ export class ComponentSpecRuntime extends ComponentSpec {
      */
     public DependsOnLibrary(libraryNameOrGlobal: string): boolean {
         return this.libraries?.some(lib => 
-            lib.libraryName === libraryNameOrGlobal || 
+            lib.name === libraryNameOrGlobal || 
             lib.globalVariable === libraryNameOrGlobal
         ) || false;
     }

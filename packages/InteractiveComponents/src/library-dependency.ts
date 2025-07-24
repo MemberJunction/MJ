@@ -7,7 +7,7 @@ export interface ComponentLibraryDependency {
      * reuses npm style package names such as
      * "recharts", "lodash", "dayjs", "antd" or "@memberjunction/lib-name"
      */
-    libraryName: string;
+    name: string;
 
     /**
      * The global variable name used by the component to access the library in code.
