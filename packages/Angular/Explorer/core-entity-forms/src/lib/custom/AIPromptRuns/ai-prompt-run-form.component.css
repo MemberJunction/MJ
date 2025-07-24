@@ -110,6 +110,28 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+.original-run {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    background: #fff3cd;
+    font-size: 0.85em;
+}
+
+.original-link {
+    color: #ff6358;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.original-link:hover {
+    color: #ff4444;
+    text-decoration: underline;
+}
+
 .run-actions {
     display: flex;
     gap: 8px;

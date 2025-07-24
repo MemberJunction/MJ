@@ -1,11 +1,12 @@
 # @memberjunction/react-test-harness
 
-A powerful test harness for React components using Playwright, designed specifically for MemberJunction's React runtime components.
+A powerful test harness for React components using Playwright, designed specifically for MemberJunction's React runtime components with support for dynamic library configurations.
 
 ## Overview
 
 This package provides a comprehensive testing solution for React components, allowing you to:
 - Load and execute React components in a real browser environment
+- Dynamically configure external libraries for testing different scenarios
 - Run assertions on rendered output
 - Execute tests via CLI or programmatically
 - Capture screenshots and console output
@@ -59,6 +60,126 @@ mj-react-test create-example
 
 # Create in specific directory
 mj-react-test create-example --dir ./my-tests
+```
+
+## Dynamic Library Configuration (New)
+
+The test harness now supports dynamic library configuration, allowing you to test components with different sets of external libraries.
+
+### Basic Library Configuration
+
+```typescript
+import { ReactTestHarness } from '@memberjunction/react-test-harness';
+import type { LibraryConfiguration } from '@memberjunction/react-runtime';
+
+const customLibraryConfig: LibraryConfiguration = {
+  libraries: [
+    // Runtime libraries (always needed)
+    {
+      id: 'react',
+      name: 'React',
+      category: 'runtime',
+      globalVariable: 'React',
+      version: '18',
+      cdnUrl: 'https://unpkg.com/react@18/umd/react.development.js',
+      isEnabled: true,
+      isCore: true,
+      isRuntimeOnly: true
+    },
+    // Component libraries (available to components)
+    {
+      id: 'lodash',
+      name: 'lodash',
+      displayName: 'Lodash',
+      category: 'utility',
+      globalVariable: '_',
+      version: '4.17.21',
+      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js',
+      isEnabled: true,
+      isCore: false
+    },
+    {
+      id: 'chart-js',
+      name: 'Chart',
+      displayName: 'Chart.js',
+      category: 'charting',
+      globalVariable: 'Chart',
+      version: '4.4.0',
+      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js',
+      isEnabled: true,
+      isCore: false
+    }
+  ],
+  metadata: {
+    version: '1.0.0',
+    lastUpdated: '2024-01-01'
+  }
+};
+
+// Test with custom libraries
+const harness = new ReactTestHarness({ headless: true });
+await harness.initialize();
+
+const result = await harness.testComponent(
+  `const Component = () => {
+    if (!_) return <div>Lodash not available</div>;
+    const sorted = _.sortBy([3, 1, 2]);
+    return <div>{sorted.join(', ')}</div>;
+  }`,
+  {},
+  { libraryConfiguration: customLibraryConfig }
+);
+```
+
+### Testing Organization-Specific Libraries
+
+```typescript
+// Test with minimal libraries
+const minimalConfig: LibraryConfiguration = {
+  libraries: [
+    // Only runtime essentials
+    { id: 'react', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+    { id: 'react-dom', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+    { id: 'babel', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+    // Just one utility library
+    { id: 'lodash', category: 'utility', isEnabled: true, ... }
+  ],
+  metadata: { version: '1.0.0', lastUpdated: '2024-01-01' }
+};
+
+// Test with full library suite
+const fullConfig: LibraryConfiguration = {
+  libraries: [
+    // All runtime libraries
+    // All UI libraries (antd, react-bootstrap)
+    // All charting libraries (chart.js, d3)
+    // All utilities (lodash, dayjs)
+  ],
+  metadata: { version: '1.0.0', lastUpdated: '2024-01-01' }
+};
+
+// Test component behavior with different configurations
+const componentCode = `
+  const Component = () => {
+    const hasChart = typeof Chart !== 'undefined';
+    const hasAntd = typeof antd !== 'undefined';
+    
+    return (
+      <div>
+        <p>Chart.js: {hasChart ? 'Available' : 'Not Available'}</p>
+        <p>Ant Design: {hasAntd ? 'Available' : 'Not Available'}</p>
+      </div>
+    );
+  };
+`;
+
+const minimalResult = await harness.testComponent(componentCode, {}, {
+  libraryConfiguration: minimalConfig
+});
+
+const fullResult = await harness.testComponent(componentCode, {}, {
+  libraryConfiguration: fullConfig
+});
 ```
 
 ## Programmatic Usage via TypeScript/JavaScript
@@ -432,7 +553,7 @@ export class ReactComponentTester {
     await this.harness.close();
   }
   
-  async testSkipComponent(
+  async testMJComponent(
     componentCode: string,
     data: any,
     userState?: any,
@@ -440,7 +561,7 @@ export class ReactComponentTester {
     utilities?: any,
     styles?: any
   ): Promise<ComponentExecutionResult> {
-    // Test with Skip-style props structure
+    // Test with MJ-style props structure
     const props = { data, userState, callbacks, utilities, styles };
     return this.harness.testComponent(componentCode, props);
   }
@@ -465,8 +586,8 @@ export class ReactComponentTester {
 const tester = new ReactComponentTester();
 await tester.setup();
 
-const result = await tester.testSkipComponent(
-  skipComponentCode,
+const result = await tester.testMJComponent(
+  componentCode,
   { title: 'Test', items: [] },
   { viewMode: 'grid' }
 );
@@ -479,45 +600,40 @@ tester
 await tester.teardown();
 ```
 
-### Testing MemberJunction Skip Components
+### Testing with Different Library Configurations
 
 ```typescript
 import { ReactTestHarness } from '@memberjunction/react-test-harness';
-import type { 
-  SkipComponentRootSpec,
-  SkipComponentCallbacks,
-  SkipComponentStyles 
-} from '@memberjunction/skip-types';
+import type { LibraryConfiguration } from '@memberjunction/react-runtime';
 
-async function testSkipComponent(spec: SkipComponentRootSpec) {
-  const harness = new ReactTestHarness({ headless: true });
+class LibraryCompatibilityTester {
+  private harness: ReactTestHarness;
   
-  try {
-    await harness.initialize();
-    
-    // Create Skip-compatible props
-    const props = {
-      data: spec.data || {},
-      userState: spec.userState || {},
-      callbacks: {
-        RefreshData: () => console.log('Refresh requested'),
-        UpdateUserState: (state: any) => console.log('State update:', state),
-        OpenEntityRecord: (entity: string, id: string) => console.log('Open:', entity, id),
-        NotifyEvent: (event: string, data: any) => console.log('Event:', event, data)
-      } as SkipComponentCallbacks,
-      utilities: spec.utilities || {},
-      styles: spec.styles || {} as SkipComponentStyles
+  constructor() {
+    this.harness = new ReactTestHarness({ headless: true });
+  }
+  
+  async testWithLibraries(
+    componentCode: string,
+    enabledLibraries: string[]
+  ) {
+    const config: LibraryConfiguration = {
+      libraries: [
+        // Always include runtime
+        { id: 'react', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+        { id: 'react-dom', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+        { id: 'babel', category: 'runtime', isEnabled: true, isRuntimeOnly: true, ... },
+        // Conditionally enable other libraries
+        { id: 'lodash', category: 'utility', isEnabled: enabledLibraries.includes('lodash'), ... },
+        { id: 'chart-js', category: 'charting', isEnabled: enabledLibraries.includes('chart-js'), ... },
+        { id: 'antd', category: 'ui', isEnabled: enabledLibraries.includes('antd'), ... },
+      ],
+      metadata: { version: '1.0.0', lastUpdated: '2024-01-01' }
     };
     
-    const result = await harness.testComponent(spec.componentCode, props);
-    
-    if (!result.success) {
-      throw new Error(`Component failed: ${result.error}`);
-    }
-    
-    return result;
-  } finally {
-    await harness.close();
+    return this.harness.testComponent(componentCode, {}, {
+      libraryConfiguration: config
+    });
   }
 }
 ```
@@ -596,12 +712,14 @@ if (results.failed > 0) {
 
 ```typescript
 interface ComponentExecutionOptions {
-  componentCode: string;
+  componentSpec: ComponentSpec;
   props?: Record<string, any>;
   setupCode?: string;           // Additional setup code
   timeout?: number;              // Default: 30000ms
   waitForSelector?: string;      // Wait for element before capture
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
+  contextUser: UserInfo;
+  libraryConfiguration?: LibraryConfiguration; // New: Custom library configuration
 }
 ```
 
@@ -721,12 +839,26 @@ Due to the architecture of the test harness (Node.js controlling a browser via P
    ]);
    ```
 
+5. **Test with different library configurations** to ensure compatibility:
+   ```typescript
+   // Test with minimal libraries
+   const minimalResult = await harness.testComponent(code, props, {
+     libraryConfiguration: minimalLibraryConfig
+   });
+   
+   // Test with full libraries
+   const fullResult = await harness.testComponent(code, props, {
+     libraryConfiguration: fullLibraryConfig
+   });
+   ```
+
 ## Troubleshooting
 
 ### Component Not Rendering
 - Ensure your component is named `Component` or modify the execution template
 - Check for syntax errors in your component code
 - Enable debug mode to see console output
+- Verify required libraries are included in libraryConfiguration
 
 ### Timeout Errors
 - Increase timeout value: `--timeout 60000`
@@ -737,6 +869,12 @@ Due to the architecture of the test harness (Node.js controlling a browser via P
 - Ensure the screenshot path directory exists
 - Use absolute paths for consistent results
 - Check file permissions
+
+### Library Loading Issues
+- Verify CDN URLs are accessible
+- Check that globalVariable names match what components expect
+- Ensure runtime libraries (React, ReactDOM, Babel) are always included
+- Use isRuntimeOnly flag for libraries not exposed to components
 
 ## License
 

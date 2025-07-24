@@ -10,6 +10,7 @@ The `@memberjunction/ng-react` package enables Angular applications to render Re
 
 - **Dynamic React Component Rendering**: Compile and render React components from source code
 - **Automatic Dependency Loading**: Loads React, ReactDOM, and Babel from CDN
+- **Dynamic Library Management**: Configure external libraries per organization or use case
 - **Component Registry**: Manages compiled components with namespace support
 - **Error Boundaries**: Comprehensive error handling for React components
 - **Two-Way Data Binding**: Seamless data flow between Angular and React
@@ -113,6 +114,52 @@ interface ComponentProps {
 
 ## Advanced Features
 
+### Dynamic Library Configuration
+
+Configure which external libraries are available to React components:
+
+```typescript
+import { ScriptLoaderService, LibraryConfiguration } from '@memberjunction/ng-react';
+
+// Define organization-specific library configuration
+const orgLibraryConfig: LibraryConfiguration = {
+  libraries: [
+    {
+      id: 'lodash',
+      name: 'lodash',
+      displayName: 'Lodash',
+      category: 'utility',
+      globalVariable: '_',
+      version: '4.17.21',
+      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js',
+      isEnabled: true,
+      isCore: false
+    },
+    {
+      id: 'chart-js',
+      name: 'Chart',
+      displayName: 'Chart.js',
+      category: 'charting',
+      globalVariable: 'Chart',
+      version: '4.4.0',
+      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js',
+      isEnabled: true,
+      isCore: false
+    }
+    // Add more libraries as needed
+  ],
+  metadata: {
+    version: '1.0.0',
+    lastUpdated: '2024-01-01'
+  }
+};
+
+// Load libraries before rendering components
+async ngOnInit() {
+  await this.scriptLoader.loadReactEcosystem(orgLibraryConfig);
+}
+```
+
 ### Component Hierarchies
 
 ```typescript
@@ -171,12 +218,30 @@ function MyComponent({ userState, callbacks }) {
 
 ### ScriptLoaderService
 
-Manages loading of external scripts and CSS:
+Manages loading of external scripts and CSS with support for dynamic library configurations:
 
 ```typescript
 constructor(private scriptLoader: ScriptLoaderService) {}
 
-async loadCustomLibrary() {
+// Load with default configuration
+async loadDefaultLibraries() {
+  await this.scriptLoader.loadReactEcosystem();
+}
+
+// Load with custom configuration
+async loadCustomLibraries() {
+  const customConfig = {
+    libraries: [
+      // Define your custom library set
+    ],
+    metadata: { version: '1.0.0' }
+  };
+  
+  await this.scriptLoader.loadReactEcosystem(customConfig);
+}
+
+// Load individual library
+async loadSingleLibrary() {
   const lib = await this.scriptLoader.loadScript(
     'https://cdn.example.com/lib.js',
     'MyLibrary'

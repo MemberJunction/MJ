@@ -40016,6 +40016,10 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Total time spent in failover attempts in milliseconds`}) 
     TotalFailoverDuration?: number;
         
+    @Field({nullable: true, description: `If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`}) 
+    @MaxLength(16)
+    RerunFromPromptRunID?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -40226,6 +40230,9 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration: number | null;
+
+    @Field({ nullable: true })
+    RerunFromPromptRunID: string | null;
 }
     
 
@@ -40407,6 +40414,9 @@ export class UpdateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalFailoverDuration?: number | null;
+
+    @Field({ nullable: true })
+    RerunFromPromptRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

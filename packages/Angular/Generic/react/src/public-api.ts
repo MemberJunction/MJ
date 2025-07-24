@@ -16,13 +16,6 @@ export * from './lib/services/react-bridge.service';
 export * from './lib/services/angular-adapter.service';
 
 // Constants
-// CDN URLs are now provided by @memberjunction/react-runtime
-export { 
-  STANDARD_LIBRARY_URLS,
-  getCoreLibraryUrls,
-  getUILibraryUrls,
-  getCSSUrls
-} from '@memberjunction/react-runtime';
 export * from './lib/default-styles';
 
 // Re-export useful types from react-runtime for convenience

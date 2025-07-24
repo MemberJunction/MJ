@@ -46,12 +46,22 @@
                                         {{ record.Vendor }}
                                     </span>
                                 }
+                                @if (record.RerunFromPromptRunID) {
+                                    <span class="original-run" title="View Original Run">
+                                        <i class="fa-solid fa-level-up-alt"></i>
+                                        <a (click)="navigateToOriginalRun()" class="original-link">Original Run</a>
+                                    </span>
+                                }
                             </div>
                         </div>
                     </div>
                     
                     <!-- Action Buttons -->
                     <div class="run-actions">
+                        <button kendoButton fillMode="outline" size="small" (click)="reRunPrompt()" title="Re-run this prompt">
+                            <i class="fa-solid fa-play-circle"></i>
+                            Re-Run
+                        </button>
                         <button kendoButton fillMode="outline" size="small" (click)="refreshData()" title="Refresh data">
                             <i class="fa-solid fa-refresh"></i>
                         </button>

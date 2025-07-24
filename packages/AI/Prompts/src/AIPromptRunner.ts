@@ -283,31 +283,45 @@ export class AIPromptRunner {
           throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
         
-        // Render all child prompt templates recursively
-        childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
-        // Render the parent prompt with child templates embedded
-        renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
+        // Check if we have a system prompt override
+        if (params.systemPromptOverride) {
+          // Use the override instead of rendering child templates and parent template
+          renderedPromptText = params.systemPromptOverride;
+          this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing hierarchical template rendering)`, true, params);
+        } else {
+          // Render all child prompt templates recursively
+          childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
+          // Render the parent prompt with child templates embedded
+          renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
+        }
 
           // Create parent prompt run for the final composed prompt execution
         parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
-        // Regular template rendering mode
-        // Initialize template engine
-        await this._templateEngine.Config(false, params.contextUser);
+        // Check if we have a system prompt override
+        if (params.systemPromptOverride) {
+          // Use the override instead of rendering the template
+          renderedPromptText = params.systemPromptOverride;
+          this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing template rendering)`, true, params);
+        } else {
+          // Regular template rendering mode
+          // Initialize template engine
+          await this._templateEngine.Config(false, params.contextUser);
 
-        // Load the template for the prompt
-        const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
-        if (!template) {
-          throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
+          // Load the template for the prompt
+          const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
+          if (!template) {
+            throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
+          }
+
+          // Render the template with full params context
+          const renderedPrompt = await this.renderPromptTemplate(template, params);
+          if (!renderedPrompt.Success) {
+            throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
+          }
+
+          renderedPromptText = renderedPrompt.Output;
         }
-
-        // Render the template with full params context
-        const renderedPrompt = await this.renderPromptTemplate(template, params);
-        if (!renderedPrompt.Success) {
-          throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
-        }
-
-        renderedPromptText = renderedPrompt.Output;
       }
 
       // Check for cancellation after template rendering
@@ -1400,6 +1414,11 @@ export class AIPromptRunner {
       // Set ParentID for hierarchical prompt execution tracking
       if (params.parentPromptRunId) {
         promptRun.ParentID = params.parentPromptRunId;
+      }
+
+      // Set RerunFromPromptRunID if this is a rerun
+      if (params.rerunFromPromptRunID) {
+        promptRun.RerunFromPromptRunID = params.rerunFromPromptRunID;
       }
 
       // Always save the response format from the prompt if it exists
