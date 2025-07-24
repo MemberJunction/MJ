@@ -9,6 +9,7 @@ import {
   StandardLibraryManager
 } from './standard-libraries';
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
+import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
 
 /**
  * Represents a loaded script or CSS resource
@@ -65,55 +66,55 @@ export class LibraryLoader {
    * Load libraries based on the current configuration
    */
   static async loadLibrariesFromConfig(options?: ConfigLoadOptions): Promise<LibraryLoadResult> {
+    // Always load core runtime libraries first
+    const coreLibraries = getCoreRuntimeLibraries();
+    const corePromises = coreLibraries.map(lib => 
+      this.loadScript(lib.cdnUrl, lib.globalVariable)
+    );
+    
+    const coreResults = await Promise.all(corePromises);
+    const React = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'React');
+    const ReactDOM = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'ReactDOM');
+    const Babel = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'Babel');
+    
+    // Now load plugin libraries from configuration
     const config = StandardLibraryManager.getConfiguration();
     const enabledLibraries = StandardLibraryManager.getEnabledLibraries();
     
+    // Filter out any core runtime libraries from plugin configuration
+    let pluginLibraries = enabledLibraries.filter(lib => !isCoreRuntimeLibrary(lib.id));
+    
     // Apply options filters if provided
-    let librariesToLoad = enabledLibraries;
     if (options) {
       if (options.categories) {
-        librariesToLoad = librariesToLoad.filter(lib => 
+        pluginLibraries = pluginLibraries.filter(lib => 
           options.categories!.includes(lib.category)
         );
       }
       if (options.excludeRuntimeOnly) {
-        librariesToLoad = librariesToLoad.filter(lib => !lib.isRuntimeOnly);
+        pluginLibraries = pluginLibraries.filter(lib => !lib.isRuntimeOnly);
       }
     }
     
-    // Separate runtime and component libraries
-    const runtimeLibs = librariesToLoad.filter(lib => lib.category === 'runtime');
-    const componentLibs = librariesToLoad.filter(lib => lib.category !== 'runtime');
-    
-    // Load runtime libraries first (React, ReactDOM, Babel)
-    const runtimePromises = runtimeLibs.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable)
-    );
-    
-    const runtimeResults = await Promise.all(runtimePromises);
-    const React = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'React');
-    const ReactDOM = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'ReactDOM');
-    const Babel = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'Babel');
-    
-    // Load CSS files (non-blocking)
-    componentLibs.forEach(lib => {
+    // Load CSS files for plugin libraries (non-blocking)
+    pluginLibraries.forEach(lib => {
       if (lib.cdnCssUrl) {
         this.loadCSS(lib.cdnCssUrl);
       }
     });
     
-    // Load component libraries
-    const componentPromises = componentLibs.map(lib => 
+    // Load plugin libraries
+    const pluginPromises = pluginLibraries.map(lib => 
       this.loadScript(lib.cdnUrl, lib.globalVariable)
     );
     
-    const componentResults = await Promise.all(componentPromises);
+    const pluginResults = await Promise.all(pluginPromises);
     
-    // Build libraries object
+    // Build libraries object (only contains plugin libraries)
     const libraries: StandardLibraries = {};
     
-    componentLibs.forEach((lib, index) => {
-      libraries[lib.globalVariable] = componentResults[index];
+    pluginLibraries.forEach((lib, index) => {
+      libraries[lib.globalVariable] = pluginResults[index];
     });
     
     return {
