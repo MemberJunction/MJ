@@ -36,9 +36,12 @@ APOLLO_API_KEY=your_apollo_api_key_here
 
 The package uses the following configuration values (defined in `config.ts`):
 
+- `ApolloAPIEndpoint`: 'https://api.apollo.io/v1' - Apollo.io API base URL
+- `EmailSourceName`: 'Apollo.io' - Source name for enriched emails
 - `GroupSize`: 10 - Maximum records per API batch request
 - `ConcurrentGroups`: 1 - Number of concurrent API request groups
 - `MaxPeopleToEnrichPerOrg`: 500 - Maximum contacts to enrich per organization
+- `ApolloAPIKey`: Read from environment variable `APOLLO_API_KEY`
 
 ## Usage
 
@@ -48,53 +51,49 @@ This action enriches account/organization records by looking up company informat
 
 #### Parameters
 
+The action accepts the following parameters as JSON strings:
+
+**Required:**
+- `AccountEntityFieldNameJSON` - Maps account entity fields
+
+**Optional:**
+- `AccountTechnologyEntityFieldNameJSON` - Maps account technology relationship fields
+- `TechnologyCategoryEntityFieldNameJSON` - Maps technology category fields  
+- `ContactEntityFieldNameJSON` - Maps contact entity fields
+- `ContactEducationHistoryEntityFieldNameJSON` - Maps contact education history fields
+
+**AccountEntityFieldNameJSON Structure:**
 ```typescript
 {
-  // Required - JSON mapping for account entity fields
-  AccountEntityFieldNameJSON: {
-    EntityName: "Accounts",
-    DomainParamName: "Domain",
-    AccountIDName: "ID",
-    EnrichedAtField: "LastEnrichedAt",
-    AddressFieldName: "Address",
-    CityFieldNameName: "City",
-    StateProvinceFieldName: "State",
-    PostalCodeFieldName: "PostalCode",
-    DescriptionFieldName: "Description",
-    PhoneNumberFieldName: "Phone",
-    CountryFieldName: "Country",
-    LinkedInFieldName: "LinkedIn",
-    LogoURLFieldName: "LogoURL",
-    FacebookFieldName: "Facebook",
-    TwitterFieldName: "Twitter",
-    ExtraFilter: "Domain IS NOT NULL AND LastEnrichedAt IS NULL"
-  },
+  EntityName: string;           // Target entity name (e.g., "Accounts")
+  DomainParamName: string;      // Field containing company domain
+  AccountIDName: string;        // Primary key field name
+  EnrichedAtField: string;      // Timestamp field for tracking enrichment
+  ExtraFilter?: string;         // SQL filter for selecting records to process
+  
+  // Optional mapping fields
+  AddressFieldName?: string;    // Street address field
+  CityFieldNameName?: string;   // City field
+  StateProvinceFieldName?: string; // State/province field
+  PostalCodeFieldName?: string; // Postal code field
+  DescriptionFieldName?: string; // Company description field
+  PhoneNumberFieldName?: string; // Phone number field
+  CountryFieldName?: string;    // Country field
+  LinkedInFieldName?: string;   // LinkedIn URL field
+  LogoURLFieldName?: string;    // Company logo URL field
+  FacebookFieldName?: string;   // Facebook URL field
+  TwitterFieldName?: string;    // Twitter URL field
+}
+```
 
-  // Optional - JSON mapping for technology tracking
-  AccountTechnologyEntityFieldNameJSON: {
-    EntityName: "AccountTechnologies",
-    AccountIDFieldName: "AccountID",
-    TechnologyIDFieldName: "TechnologyID",
-    MatchFoundFieldName: "MatchFound",
-    EndedUseAtFieldName: "EndedAt"
-  },
-
-  // Optional - JSON mapping for technology categories
-  TechnologyCategoryEntityFieldNameJSON: {
-    EntityName: "TechnologyCategories",
-    NameFieldName: "Name",
-    IDFieldName: "ID"
-  },
-
-  // Optional - JSON mapping for contacts
-  ContactEntityFieldNameJSON: {
-    EntityName: "Contacts",
-    EmailFieldName: "Email",
-    AccountIDFieldName: "AccountID",
-    FirstNameFieldName: "FirstName",
-    LastNameFieldName: "LastName",
-    // ... other field mappings
-  }
+**AccountTechnologyEntityFieldNameJSON Structure:**
+```typescript
+{
+  EntityName: string;              // Technology relationship entity name
+  AccountIDFieldName: string;      // Foreign key to account
+  TechnologyIDFieldName: string;   // Foreign key to technology
+  MatchFoundFieldName: string;     // Field indicating if match was found
+  EndedUseAtFieldName: string;     // Field for marking end of technology use
 }
 ```
 
@@ -133,33 +132,40 @@ This action enriches contact records by matching on name and email combinations.
 
 #### Parameters
 
+The action accepts the following string parameters:
+
+**Required:**
+- `EntityName` - Target entity name containing contacts
+- `EmailField` - Field name containing email addresses  
+- `FirstNameField` - Field name containing first names
+- `LastNameField` - Field name containing last names
+- `AccountNameField` - Field name containing account/organization names
+- `EnrichedAtField` - Field name for tracking enrichment timestamp
+- `FilterParam` - SQL filter for selecting records to process
+
+**Optional:**
+- `domainParam` - Field name containing company domain
+- `linkedinParam` - Field name for storing LinkedIn URLs
+- `EmploymentHistoryFieldMappings` - JSON string with employment history field mappings
+- `EducationHistoryFieldMappings` - JSON string with education history field mappings
+
+**EmploymentHistoryFieldMappings Structure:**
 ```typescript
 {
-  EntityName: "Contacts",              // Target entity name
-  EmailField: "Email",                 // Email field name
-  FirstNameField: "FirstName",         // First name field name
-  LastNameField: "LastName",           // Last name field name
-  AccountNameField: "AccountName",     // Account name field name
-  EnrichedAtField: "LastEnrichedAt",  // Enrichment timestamp field
-  FilterParam: "Email IS NOT NULL",    // Filter for records to enrich
-  domainParam: "Domain",               // Domain field name (optional)
-  linkedinParam: "LinkedIn",           // LinkedIn URL field name (optional)
-  
-  // Optional - Employment history field mappings
-  EmploymentHistoryFieldMappings: {
-    EmploymentHistoryEntityName: "ContactEmploymentHistory",
-    EmploymentHistoryContactIDFieldName: "ContactID",
-    EmploymentHistoryOrganizationFieldName: "Organization",
-    EmploymentHistoryTitleFieldName: "Title"
-  },
-  
-  // Optional - Education history field mappings
-  EducationHistoryFieldMappings: {
-    EducationHistoryEntityName: "ContactEducationHistory",
-    EducationtHistoryContactIDFieldName: "ContactID",
-    EducationtHistoryInstitutionFieldName: "Institution",
-    EducationtHistoryDegreeFieldName: "Degree"
-  }
+  EmploymentHistoryEntityName: string;              // Employment history entity name
+  EmploymentHistoryContactIDFieldName: string;      // Foreign key to contact
+  EmploymentHistoryOrganizationFieldName: string;   // Organization name field
+  EmploymentHistoryTitleFieldName: string;          // Job title field
+}
+```
+
+**EducationHistoryFieldMappings Structure:**
+```typescript
+{
+  EducationHistoryEntityName: string;              // Education history entity name
+  EducationtHistoryContactIDFieldName: string;     // Foreign key to contact  
+  EducationtHistoryInstitutionFieldName: string;   // Institution name field
+  EducationtHistoryDegreeFieldName: string;        // Degree field
 }
 ```
 
@@ -169,7 +175,7 @@ This action enriches contact records by matching on name and email combinations.
 import { ApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
 
 const result = await engine.RunAction({
-  ActionName: 'Apollo Enrichment - Contacts',
+  ActionName: 'Apollo Enrichment - Contacts', 
   Params: [
     { Name: 'EntityName', Value: 'Contacts' },
     { Name: 'EmailField', Value: 'Email' },
@@ -177,7 +183,18 @@ const result = await engine.RunAction({
     { Name: 'LastNameField', Value: 'LastName' },
     { Name: 'AccountNameField', Value: 'AccountName' },
     { Name: 'EnrichedAtField', Value: 'LastEnrichedAt' },
-    { Name: 'FilterParam', Value: 'Email IS NOT NULL AND LastEnrichedAt IS NULL' }
+    { Name: 'FilterParam', Value: 'Email IS NOT NULL AND LastEnrichedAt IS NULL' },
+    { Name: 'domainParam', Value: 'Domain' },
+    { Name: 'linkedinParam', Value: 'LinkedIn' },
+    { 
+      Name: 'EmploymentHistoryFieldMappings', 
+      Value: JSON.stringify({
+        EmploymentHistoryEntityName: 'ContactEmploymentHistory',
+        EmploymentHistoryContactIDFieldName: 'ContactID',
+        EmploymentHistoryOrganizationFieldName: 'Organization', 
+        EmploymentHistoryTitleFieldName: 'Title'
+      })
+    }
   ],
   ContextUser: currentUser
 });
@@ -193,17 +210,21 @@ const result = await engine.RunAction({
 - Historical technology usage tracking
 
 ### Contact Enrichment
-- Email verification and discovery
-- Employment history tracking
-- Education history tracking
-- Social media profile URLs
-- Title exclusion filtering (excludes students, volunteers, etc.)
+- Bulk email verification and discovery (up to 10 contacts per API call)
+- Employment history tracking with date ranges
+- Education history tracking with degree information
+- Social media profile URLs (LinkedIn, Twitter, Facebook)
+- Title exclusion filtering (excludes members, students, volunteers)
+- Pagination support for processing large datasets
+- Duplicate contact detection across accounts
 
 ### Error Handling & Rate Limiting
-- Automatic retry with exponential backoff for rate limits
-- Handles both per-minute and per-hour rate limits
-- Comprehensive error logging
-- Batch processing to optimize API usage
+- Automatic retry with intelligent backoff for rate limits (1 minute for general limits, 1 hour for hourly limits)
+- Handles both per-minute and per-hour rate limits with different wait times
+- Comprehensive error logging using MemberJunction's logging system
+- Batch processing to optimize API usage and respect Apollo.io limits
+- Graceful handling of missing or incomplete data
+- Transaction rollback support for failed operations
 
 ## API Integration
 
@@ -236,9 +257,12 @@ The package integrates with the following Apollo.io API endpoints:
 ## Limitations
 
 - Maximum 10 records per bulk API request (Apollo.io limitation)
-- Rate limits apply based on your Apollo.io subscription
+- Rate limits apply based on your Apollo.io subscription (handled automatically with retries)
 - Personal emails may not be revealed in GDPR-compliant regions
 - Some enrichment data may be incomplete depending on Apollo.io's data coverage
+- Account enrichment processes domains sequentially to avoid overwhelming the system
+- Contact enrichment uses pagination with a maximum of 500 contacts per organization
+- Excluded job titles (member, student member, student, volunteer) are automatically skipped
 
 ## Troubleshooting
 

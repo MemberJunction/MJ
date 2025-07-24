@@ -24,7 +24,7 @@ export type ProcessPersonRecordGroupParams = {
     EducationHistoryDegreeFieldName?: string;
 };
 
-export type ApollowBulkPeopleRequest = {
+export type ApolloBulkPeopleRequest = {
 
     /**
      * The API key for the Apollo.io request (required)
@@ -34,7 +34,7 @@ export type ApollowBulkPeopleRequest = {
     /**
      * The list of people to enrich (required)
      */
-    details: ApollowBulkPeopleRequestDetail[];
+    details: ApolloBulkPeopleRequestDetail[];
 
     /**
      * Flag to reveal personal emails (optional) 
@@ -62,7 +62,7 @@ export type ApollowBulkPeopleRequest = {
     webhook_url?: string;
 };
 
-export type ApollowBulkPeopleRequestDetail = {
+export type ApolloBulkPeopleRequestDetail = {
     /**
     * The person's first name (optional)
     */
@@ -109,7 +109,7 @@ export type ApollowBulkPeopleRequestDetail = {
     linkedin_url?: string;
 };
 
-export type ApollowBulkPeopleResponse = {
+export type ApolloBulkPeopleResponse = {
     status: string;
     error_code: number,
     error_message: string,
@@ -203,10 +203,10 @@ export type OrganizationEnrichmentResponse = {
      * The company domain
      * @example "apollo.io"
      */
-    organization: OrganizationEnrichmentOrgainzation
+    organization: OrganizationEnrichmentOrganization
 };
 
-export type OrganizationEnrichmentOrgainzation = {
+export type OrganizationEnrichmentOrganization = {
     id: string, 
     name: string,
     website_url: string,
@@ -257,7 +257,7 @@ export type OrganizationEnrichmentOrgainzation = {
     departmental_head_count: Record<string, number>
 };
 
-export type OrganizationEnrichmentOrgainzationAccount = {
+export type OrganizationEnrichmentOrganizationAccount = {
     id: string,
     domain: string,
     name: string,
@@ -325,9 +325,9 @@ export type SearchPeopleResponsePerson = {
     city: string;
     country: string;
     organization_id: string;
-    organization: OrganizationEnrichmentOrgainzation;
+    organization: OrganizationEnrichmentOrganization;
     account_id: string;
-    account: OrganizationEnrichmentOrgainzationAccount;
+    account: OrganizationEnrichmentOrganizationAccount;
     departments: string[];
     subdepartments: string[];
     functions: string[];

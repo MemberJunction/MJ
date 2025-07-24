@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
 import { BaseEntity, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import axios, { AxiosResponse } from "axios";
-import { AccountEntityFieldNames, AccountTechnologyEntityFieldNames, ContactEducationHistoryEntityFieldNames, ContactEntityFieldNames, OrganizationEnrichmentOrgainzation, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFieldNames, TechnologyMap } from "./generic/apollo.types";
+import { AccountEntityFieldNames, AccountTechnologyEntityFieldNames, ContactEducationHistoryEntityFieldNames, ContactEntityFieldNames, OrganizationEnrichmentOrganization, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFieldNames, TechnologyMap } from "./generic/apollo.types";
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
 // ApolloEnrichContact this Action would use the www.apollo.io enrichment service and enrich a "contact" type of record. The parameters to this Action would be:
@@ -45,7 +45,7 @@ export class ApolloAccountsEnrichmentAction extends BaseAction {
 
         if(accountEntityFieldNamesParam && accountEntityFieldNamesParam.Value){
             accountEntityFieldNames = JSON.parse(accountEntityFieldNamesParam.Value);
-            if(accountEntityFieldNames){
+            if(!accountEntityFieldNames){
                 throw new Error('accountEntityFieldNames is empty');
             }
         }
@@ -160,7 +160,7 @@ export class ApolloAccountsEnrichmentAction extends BaseAction {
             const result = orgResponse.data
             let bSuccess: boolean = true;
             if (result && result.organization) {
-                const organization: OrganizationEnrichmentOrgainzation = result.organization;
+                const organization: OrganizationEnrichmentOrganization = result.organization;
                 // use the entity object to load up the account and then update some of the fields in it
                 const accountEntity: BaseEntity = await md.GetEntityObject(params.AccountEntity.EntityName, currentUser);
                 accountEntity.SetMany(record);
@@ -172,12 +172,8 @@ export class ApolloAccountsEnrichmentAction extends BaseAction {
                     accountEntity.Set(params.AccountEntity.CityFieldNameName, organization.city);
                 }
 
-                if(params.AccountEntity.CityFieldNameName){
-                    accountEntity.Set(params.AccountEntity.CityFieldNameName, organization.city);
-                }
-
                 if(params.AccountEntity.StateProvinceFieldName){
-                    //accountEntity.Set(params.StateProvinceFieldName, organization.state);
+                    accountEntity.Set(params.AccountEntity.StateProvinceFieldName, organization.state);
                 }
 
                 if(params.AccountEntity.PostalCodeFieldName){
@@ -392,7 +388,7 @@ export class ApolloAccountsEnrichmentAction extends BaseAction {
         for(let i = 1; i < data.pagination.total_pages && i < (Config.MaxPeopleToEnrichPerOrg / 10); i++){
             //get additional pages
             APIparams.page = i + 1;
-            const nextResponse = await this.WrapApolloCall('post', 'mixed_people/search', params, { headers: headers });
+            const nextResponse = await this.WrapApolloCall('post', 'mixed_people/search', APIparams, { headers: headers });
             if (nextResponse.status !== 200) {
                 console.error(`Error fetching data from Apollo.io: ${nextResponse.statusText}`);
                 return false;
@@ -461,13 +457,13 @@ export class ApolloAccountsEnrichmentAction extends BaseAction {
             contact.Set(CEntity.PhotoFieldName, person.photo_url);
             contact.Set(CEntity.LastEnrichedAtFieldName, new Date());
 
-            const saveResult = contact.Save();
+            const saveResult = await contact.Save();
             if(!saveResult){
                 LogError('Error updating contact record with enriched data', undefined, contact.LatestResult);
                 return false;
             }
 
-            return await contact.Save() && await this.CreateUpdateContactEmploymentAndEducationHistory(params, contact.Get("ID"), person, md, currentUser);
+            return await this.CreateUpdateContactEmploymentAndEducationHistory(params, contact.Get("ID"), person, md, currentUser);
         }
         catch (e) {
             LogError(e);
