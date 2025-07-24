@@ -1,0 +1,10 @@
+---
+"@memberjunction/ai-prompts": minor
+"@memberjunction/ng-ai-test-harness": minor
+"@memberjunction/ng-react": minor
+"@memberjunction/codegen-lib": minor
+"@memberjunction/react-runtime": minor
+"@memberjunction/react-test-harness": minor
+---
+
+migration
