@@ -224,3 +224,6 @@ export interface ErrorBoundaryOptions {
   /** Error recovery strategy */
   recovery?: 'retry' | 'reset' | 'none';
 }
+
+// Export library configuration types
+export * from './library-config';

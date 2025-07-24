@@ -6,11 +6,8 @@
 
 import { Injectable, OnDestroy } from '@angular/core';
 import { 
-  STANDARD_LIBRARY_URLS,
-  getCoreLibraryUrls,
-  getUILibraryUrls,
-  getCSSUrls,
-  LibraryLoader
+  LibraryLoader,
+  LibraryConfiguration
 } from '@memberjunction/react-runtime';
 
 /**
@@ -124,16 +121,17 @@ export class ScriptLoaderService implements OnDestroy {
 
   /**
    * Load common React libraries and UI frameworks
+   * @param config Optional library configuration
    * @returns Promise resolving to React ecosystem objects
    */
-  async loadReactEcosystem(): Promise<{
+  async loadReactEcosystem(config?: LibraryConfiguration): Promise<{
     React: any;
     ReactDOM: any;
     Babel: any;
     libraries: any;
   }> {
     // Use the new LibraryLoader from react-runtime for consistency
-    const result = await LibraryLoader.loadAllLibraries();
+    const result = await LibraryLoader.loadAllLibraries(config);
     
     // The LibraryLoader handles all the loading, but we need to ensure
     // ReactDOM.createRoot is available for Angular's specific needs

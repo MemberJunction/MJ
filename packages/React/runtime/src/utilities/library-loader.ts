@@ -5,12 +5,10 @@
  */
 
 import { 
-  STANDARD_LIBRARY_URLS,
   StandardLibraries,
-  getCoreLibraryUrls,
-  getUILibraryUrls,
-  getCSSUrls
+  StandardLibraryManager
 } from './standard-libraries';
+import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
 
 /**
  * Represents a loaded script or CSS resource
@@ -22,6 +20,7 @@ interface LoadedResource {
 
 /**
  * Options for loading libraries
+ * @deprecated Use LibraryLoadOptions from library-config instead
  */
 export interface LibraryLoadOptions {
   /** Load core libraries (lodash, d3, Chart.js, dayjs) */
@@ -54,16 +53,80 @@ export class LibraryLoader {
    * Load all standard libraries (core + UI + CSS)
    * This is the main method that should be used by test harness and Angular wrapper
    */
-  static async loadAllLibraries(): Promise<LibraryLoadResult> {
-    return this.loadLibraries({
-      loadCore: true,
-      loadUI: true,
-      loadCSS: true
-    });
+  static async loadAllLibraries(config?: LibraryConfiguration): Promise<LibraryLoadResult> {
+    if (config) {
+      StandardLibraryManager.setConfiguration(config);
+    }
+    
+    return this.loadLibrariesFromConfig();
   }
 
   /**
-   * Load libraries with specific options
+   * Load libraries based on the current configuration
+   */
+  static async loadLibrariesFromConfig(options?: ConfigLoadOptions): Promise<LibraryLoadResult> {
+    const config = StandardLibraryManager.getConfiguration();
+    const enabledLibraries = StandardLibraryManager.getEnabledLibraries();
+    
+    // Apply options filters if provided
+    let librariesToLoad = enabledLibraries;
+    if (options) {
+      if (options.categories) {
+        librariesToLoad = librariesToLoad.filter(lib => 
+          options.categories!.includes(lib.category)
+        );
+      }
+      if (options.excludeRuntimeOnly) {
+        librariesToLoad = librariesToLoad.filter(lib => !lib.isRuntimeOnly);
+      }
+    }
+    
+    // Separate runtime and component libraries
+    const runtimeLibs = librariesToLoad.filter(lib => lib.category === 'runtime');
+    const componentLibs = librariesToLoad.filter(lib => lib.category !== 'runtime');
+    
+    // Load runtime libraries first (React, ReactDOM, Babel)
+    const runtimePromises = runtimeLibs.map(lib => 
+      this.loadScript(lib.cdnUrl, lib.globalVariable)
+    );
+    
+    const runtimeResults = await Promise.all(runtimePromises);
+    const React = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'React');
+    const ReactDOM = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'ReactDOM');
+    const Babel = runtimeResults.find((_, i) => runtimeLibs[i].globalVariable === 'Babel');
+    
+    // Load CSS files (non-blocking)
+    componentLibs.forEach(lib => {
+      if (lib.cdnCssUrl) {
+        this.loadCSS(lib.cdnCssUrl);
+      }
+    });
+    
+    // Load component libraries
+    const componentPromises = componentLibs.map(lib => 
+      this.loadScript(lib.cdnUrl, lib.globalVariable)
+    );
+    
+    const componentResults = await Promise.all(componentPromises);
+    
+    // Build libraries object
+    const libraries: StandardLibraries = {};
+    
+    componentLibs.forEach((lib, index) => {
+      libraries[lib.globalVariable] = componentResults[index];
+    });
+    
+    return {
+      React: React || (window as any).React,
+      ReactDOM: ReactDOM || (window as any).ReactDOM,
+      Babel: Babel || (window as any).Babel,
+      libraries
+    };
+  }
+
+  /**
+   * Load libraries with specific options (backward compatibility)
+   * @deprecated Use loadLibrariesFromConfig instead
    */
   static async loadLibraries(options: LibraryLoadOptions): Promise<LibraryLoadResult> {
     const {
@@ -73,78 +136,32 @@ export class LibraryLoader {
       customLibraries = []
     } = options;
 
-    // Load React ecosystem first
-    const [React, ReactDOM, Babel] = await Promise.all([
-      this.loadScript(STANDARD_LIBRARY_URLS.REACT, 'React'),
-      this.loadScript(STANDARD_LIBRARY_URLS.REACT_DOM, 'ReactDOM'),
-      this.loadScript(STANDARD_LIBRARY_URLS.BABEL, 'Babel')
-    ]);
-
-    // Load CSS files if requested (non-blocking)
-    if (loadCSS) {
-      getCSSUrls().forEach(url => this.loadCSS(url));
-    }
-
-    // Prepare library loading promises
-    const libraryPromises: Promise<any>[] = [];
-    const libraryNames: string[] = [];
-
-    // Core libraries
+    // Map old options to new configuration approach
+    const categoriesToLoad: Array<ExternalLibraryConfig['category']> = ['runtime'];
     if (loadCore) {
-      const coreUrls = getCoreLibraryUrls();
-      coreUrls.forEach(url => {
-        const name = this.getLibraryNameFromUrl(url);
-        libraryNames.push(name);
-        libraryPromises.push(this.loadScript(url, name));
-      });
+      categoriesToLoad.push('utility', 'charting');
     }
-
-    // UI libraries
     if (loadUI) {
-      const uiUrls = getUILibraryUrls();
-      uiUrls.forEach(url => {
-        const name = this.getLibraryNameFromUrl(url);
-        libraryNames.push(name);
-        libraryPromises.push(this.loadScript(url, name));
+      categoriesToLoad.push('ui');
+    }
+    
+    const result = await this.loadLibrariesFromConfig({
+      categories: categoriesToLoad
+    });
+    
+    // Load custom libraries if provided
+    if (customLibraries.length > 0) {
+      const customPromises = customLibraries.map(({ url, globalName }) =>
+        this.loadScript(url, globalName)
+      );
+      
+      const customResults = await Promise.all(customPromises);
+      customLibraries.forEach(({ globalName }, index) => {
+        result.libraries[globalName] = customResults[index];
       });
     }
-
-    // Custom libraries
-    customLibraries.forEach(({ url, globalName }) => {
-      libraryNames.push(globalName);
-      libraryPromises.push(this.loadScript(url, globalName));
-    });
-
-    // Load all libraries
-    const loadedLibraries = await Promise.all(libraryPromises);
-
-    // Build libraries object
-    const libraries: StandardLibraries = {
-      _: undefined // Initialize with required property
-    };
-    libraryNames.forEach((name, index) => {
-      // Map common names
-      if (name === '_') {
-        libraries._ = loadedLibraries[index];
-      } else {
-        libraries[name] = loadedLibraries[index];
-      }
-    });
-
-    // Ensure all standard properties exist
-    if (!libraries._) libraries._ = (window as any)._;
-    if (!libraries.d3) libraries.d3 = (window as any).d3;
-    if (!libraries.Chart) libraries.Chart = (window as any).Chart;
-    if (!libraries.dayjs) libraries.dayjs = (window as any).dayjs;
-    if (!libraries.antd) libraries.antd = (window as any).antd;
-    if (!libraries.ReactBootstrap) libraries.ReactBootstrap = (window as any).ReactBootstrap;
-
-    return {
-      React,
-      ReactDOM,
-      Babel,
-      libraries
-    };
+    
+    return result;
   }
 
   /**
@@ -274,22 +291,6 @@ export class LibraryLoader {
     script.addEventListener('load', loadHandler);
   }
 
-  /**
-   * Get library name from URL for global variable mapping
-   */
-  private static getLibraryNameFromUrl(url: string): string {
-    // Map known URLs to their global variable names
-    if (url.includes('lodash')) return '_';
-    if (url.includes('d3')) return 'd3';
-    if (url.includes('Chart.js') || url.includes('chart')) return 'Chart';
-    if (url.includes('dayjs')) return 'dayjs';
-    if (url.includes('antd')) return 'antd';
-    if (url.includes('react-bootstrap')) return 'ReactBootstrap';
-    
-    // Default: extract name from URL
-    const match = url.match(/\/([^\/]+)(?:\.min)?\.js$/);
-    return match ? match[1] : 'unknown';
-  }
 
   /**
    * Get all loaded resources (for cleanup)
