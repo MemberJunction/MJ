@@ -1346,55 +1346,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
         // TODO: Handle other custom events as needed
     }
-
-    // SetupUtilities method removed - now using React runtime's RuntimeUtilities
-
-    // CreateSimpleMetadata method removed - now using React runtime's RuntimeUtilities
-
-    // SetupStyles method removed - now using React runtime's SetupStyles function
-    
-    // CreateSimpleRunQuery method removed - now using React runtime's RuntimeUtilities
-    // CreateSimpleRunView method removed - now using React runtime's RuntimeUtilities
-
-    private SetupCallbacks(): ComponentCallbacks {
-        const cb: ComponentCallbacks = {
-            RefreshData: () => {
-                // this is a callback function that can be called from the component to refresh data
-                console.log('Component requested data refresh');
-                // need to implement this
-            },
-            OpenEntityRecord: (entityName: string, key: CompositeKey) => {
-                // this is a callback function that can be called from the component to open an entity record
-                if (entityName) {
-                    // bubble this up to our parent component as we don't directly open records in this component
-                    const md = new Metadata();
-                    const entityMatch = md.EntityByName(entityName);
-                    if (!entityMatch) {
-                        // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
-                        const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                e.BaseView.toLowerCase() === entityName.toLowerCase() || 
-                                                                e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
-                        if (altMatch && altMatch.length === 1) { 
-                            entityName = altMatch[0].Name;
-                        }
-                    }
-                    const cKey = new CompositeKey(key as any as KeyValuePair[])
-                    this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
-                }
-            },
-            UpdateUserState: (userState: any) => {
-                // this is a callback function that can be called from the component to update user state
-                console.log('Component updated user state:', userState);
-                // need to implement this
-            },
-            NotifyEvent: (eventName: string, eventData: any) => {
-                // this is a callback function that can be called from the component to notify an event
-                console.log(`Component raised event: ${eventName} notified with data:`, eventData);
-            }
-        };
-        return cb;
-    }
+ 
 
     public async refreshReport(data?: any): Promise<void> {
         const currentComponent = this.getCurrentReactComponent();
