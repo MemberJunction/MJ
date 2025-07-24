@@ -1,13 +1,13 @@
-import { ComponentRootSpec } from "./root-spec";
+import { ComponentSpec } from "./component-spec";
 
 /**
  * Defines a given option for a generated component that the user can choose. The code/componentObjectName properties are used to render the component in the UI.
  */
 export type ComponentOption = {
     /**
-     * Full details of the generated component option including functional, technical, code, and child componentry.
+     * Full details of the generated component option including functional, technical, code, dependencies and libraries 
      */
-    option: ComponentRootSpec;
+    option: ComponentSpec;
 
     /**
      * If multiple component options are provided a "judge" AI will evaluate all the functional

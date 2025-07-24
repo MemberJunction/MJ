@@ -4,4 +4,5 @@
  */
 
 export { ComponentRegistry } from './component-registry';
-export { ComponentResolver, ComponentSpec, ResolvedComponents } from './component-resolver';
+export { ComponentResolver, ResolvedComponents } from './component-resolver';
+export { ComponentSpec } from '@memberjunction/interactive-component-types';

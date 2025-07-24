@@ -1,15 +1,17 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
-import { AIPromptRunEntity, AIModelVendorEntity } from "@memberjunction/core-entities";
+import { AIPromptRunEntityExtended } from "@memberjunction/core-entities";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
 
 /**
  * Server-side subclass for AIPromptRunEntity that automatically calculates costs
  * when a prompt run is completed or errors out. The cost calculation is based on
  * the active pricing configuration for the model and vendor used in the run.
+ * 
+ * Now extends AIPromptRunEntityExtended to inherit message parsing capabilities.
  */
 @RegisterClass(BaseEntity, "MJ: AI Prompt Runs")
-export class AIPromptRunEntityServer extends AIPromptRunEntity {
+export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
     
     /**
      * Override Save to calculate costs when status changes to Complete or Error

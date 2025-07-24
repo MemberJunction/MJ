@@ -319,7 +319,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON, $MaxRows: Int, $StartRow: Int) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
@@ -352,7 +352,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     
     public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSON, $MaxRows: Int, $StartRow: Int) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }

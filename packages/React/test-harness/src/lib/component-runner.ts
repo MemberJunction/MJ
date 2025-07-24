@@ -3,15 +3,14 @@ import {
   ComponentCompiler, 
   RuntimeContext,
   ComponentRegistry,
-  STANDARD_LIBRARY_URLS,
-  getCoreLibraryUrls,
-  getUILibraryUrls,
-  getCSSUrls,
-  ComponentErrorAnalyzer
+  ComponentErrorAnalyzer,
+  StandardLibraryManager,
+  LibraryConfiguration
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
 import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -20,15 +19,10 @@ export interface ComponentExecutionOptions {
   timeout?: number;
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
-  contextUser: UserInfo
+  contextUser: UserInfo;
+  libraryConfiguration?: LibraryConfiguration;
 }
-
-export interface ComponentSpec {
-  componentName: string;
-  componentCode?: string;
-  childComponents?: ComponentSpec[];
-  components?: ComponentSpec[]; // Alternative property name for children
-}
+ 
 
 export interface ComponentExecutionResult {
   success: boolean;
@@ -172,19 +166,32 @@ export class ComponentRunner {
     const propsJson = JSON.stringify(options.props || {});
     const specJson = JSON.stringify(options.componentSpec);
     
-    // Generate script tags for core libraries
-    const coreLibraryScripts = getCoreLibraryUrls()
-      .map(url => `  <script src="${url}"></script>`)
+    // Set configuration if provided
+    if (options.libraryConfiguration) {
+      StandardLibraryManager.setConfiguration(options.libraryConfiguration);
+    }
+    
+    // Get all enabled libraries from configuration
+    const enabledLibraries = StandardLibraryManager.getEnabledLibraries();
+    
+    // Separate runtime and component libraries
+    const runtimeLibraries = enabledLibraries.filter((lib: any) => lib.category === 'runtime');
+    const componentLibraries = enabledLibraries.filter((lib: any) => lib.category !== 'runtime');
+    
+    // Generate script tags for runtime libraries
+    const runtimeScripts = runtimeLibraries
+      .map((lib: any) => `  <script crossorigin src="${lib.cdnUrl}"></script>`)
       .join('\n');
     
-    // Generate script tags for UI libraries
-    const uiLibraryScripts = getUILibraryUrls()
-      .map(url => `  <script src="${url}"></script>`)
+    // Generate script tags for component libraries
+    const componentScripts = componentLibraries
+      .map((lib: any) => `  <script src="${lib.cdnUrl}"></script>`)
       .join('\n');
     
     // Generate CSS links
-    const cssLinks = getCSSUrls()
-      .map(url => `  <link rel="stylesheet" href="${url}">`)
+    const cssLinks = enabledLibraries
+      .filter((lib: any) => lib.cdnCssUrl)
+      .map((lib: any) => `  <link rel="stylesheet" href="${lib.cdnCssUrl}">`)
       .join('\n');
     
     return `
@@ -193,11 +200,8 @@ export class ComponentRunner {
 <head>
   <meta charset="utf-8">
   <title>React Component Test</title>
-  <script crossorigin src="${STANDARD_LIBRARY_URLS.REACT}"></script>
-  <script crossorigin src="${STANDARD_LIBRARY_URLS.REACT_DOM}"></script>
-  <script src="${STANDARD_LIBRARY_URLS.BABEL}"></script>
-${coreLibraryScripts}
-${uiLibraryScripts}
+${runtimeScripts}
+${componentScripts}
 ${cssLinks}
   <style>
     body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -240,18 +244,25 @@ ${cssLinks}
   <script type="text/babel">
     ${options.setupCode || ''}
     
-    // Create runtime context
+    // Create runtime context with dynamic libraries
+    const componentLibraries = ${JSON.stringify(
+      componentLibraries.map((lib: any) => ({ 
+        globalVariable: lib.globalVariable,
+        displayName: lib.displayName 
+      }))
+    )};
+    
+    const libraries = {};
+    componentLibraries.forEach(lib => {
+      if (window[lib.globalVariable]) {
+        libraries[lib.globalVariable] = window[lib.globalVariable];
+      }
+    });
+    
     const runtimeContext = {
       React: React,
       ReactDOM: ReactDOM,
-      libraries: {
-        _: window._,
-        d3: window.d3,
-        Chart: window.Chart,
-        dayjs: window.dayjs,
-        antd: window.antd,
-        ReactBootstrap: window.ReactBootstrap
-      }
+      libraries: libraries
     };
     
     // Create component compiler
@@ -261,8 +272,8 @@ ${cssLinks}
       }
       
       async compile(options) {
-        const componentName = options.componentName;
-        const componentCode = options.componentCode;
+        const componentName = options.name;
+        const componentCode = options.code;
         
         try {
           // Transform JSX to JS using Babel
@@ -272,17 +283,16 @@ ${cssLinks}
           });
           
           // Create component factory
+          const libraryDeclarations = componentLibraries
+            .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
+            .join('\\n            ');
+          
           const createComponent = new Function(
             'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
             'createStateUpdater', 'libraries', 'styles', 'console',
             \`
             // Make libraries available in the component scope
-            const _ = libraries._;
-            const d3 = libraries.d3;
-            const Chart = libraries.Chart;
-            const dayjs = libraries.dayjs;
-            const antd = libraries.antd;
-            const ReactBootstrap = libraries.ReactBootstrap;
+            \${libraryDeclarations}
             
             \${transformed.code}
             return {
@@ -398,25 +408,25 @@ ${cssLinks}
         // Register components recursively
         const registerSpec = async (spec) => {
           // Register children first
-          const children = spec.childComponents || spec.components || [];
+          const children = spec.dependencies || [];
           for (const child of children) {
             await registerSpec(child);
           }
           
           // Register this component
-          if (spec.componentCode) {
+          if (spec.code) {
             const result = await this.compiler.compile({
-              componentName: spec.componentName,
-              componentCode: spec.componentCode
+              name: spec.name,
+              code: spec.code
             });
             
             if (result.success) {
               const factory = result.component.component(this.runtimeContext, {});
-              this.registry.register(spec.componentName, factory.component);
-              registeredComponents.push(spec.componentName);
+              this.registry.register(spec.name, factory.component);
+              registeredComponents.push(spec.name);
             } else {
               errors.push({
-                componentName: spec.componentName,
+                componentName: spec.name,
                 error: result.error.message,
                 phase: 'compilation'
               });
@@ -574,10 +584,10 @@ ${cssLinks}
       const components = registry.getAll();
       
       // Get the root component
-      const RootComponent = registry.get(componentSpec.componentName);
+      const RootComponent = registry.get(componentSpec.name);
       
       if (!RootComponent) {
-        console.error('Root component not found:', componentSpec.componentName);
+        console.error('Root component not found:', componentSpec.name);
         return;
       }
       

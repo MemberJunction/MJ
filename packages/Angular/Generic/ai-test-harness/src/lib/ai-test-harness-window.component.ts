@@ -7,6 +7,7 @@ export interface AITestHarnessWindowData {
     agent?: AIAgentEntity;
     promptId?: string;
     prompt?: AIPromptEntity;
+    promptRunId?: string;
     title?: string;
     width?: string | number;
     height?: string | number;
@@ -38,6 +39,7 @@ export interface AITestHarnessWindowData {
                     [entity]="(agent || prompt) || null"
                     [mode]="mode"
                     [isVisible]="true"
+                    [originalPromptRunId]="data.promptRunId || null"
                     (minimizeRequested)="onMinimizeRequested()">
                 </mj-ai-test-harness>
             }
@@ -96,6 +98,9 @@ export class AITestHarnessWindowComponent implements OnInit {
     private metadata = new Metadata();
     
     ngOnInit() {
+        console.log('🪟 AITestHarnessWindowComponent.ngOnInit - data:', this.data);
+        console.log('📌 promptRunId:', this.data.promptRunId);
+        
         // Set window dimensions
         this.width = this.convertToNumber(this.data.width) || 1200;
         this.height = this.convertToNumber(this.data.height) || 800;

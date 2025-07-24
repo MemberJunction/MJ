@@ -1,7 +1,7 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult, ComponentSpec } from './component-runner';
+import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
 import { AssertionHelpers } from './assertion-helpers';
-import { ComponentRootSpec, ComponentChildSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
@@ -31,18 +31,17 @@ export class ReactTestHarness {
   }
 
   /**
-   * Test a root component with its full hierarchy of child components
+   * Test a component with its full hierarchy of child components
    */
-  async testRootComponent(
-    rootSpec: ComponentRootSpec,
-    props: Record<string, any>,
+  async testComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
-    // First, lint the root component code
-    if (rootSpec.componentCode) {
+    // First, lint the component code
+    const spec = options.componentSpec;
+    if (spec.code) {
       const lintResult = await this.componentRunner.lintComponent(
-        rootSpec.componentCode,
-        rootSpec.componentName,
+        spec.code,
+        spec.name,
         'root'
       );
 
@@ -62,22 +61,11 @@ export class ReactTestHarness {
       }
     }
 
-    // Convert ComponentRootSpec to ComponentSpec format
-    const spec: ComponentSpec = {
-      componentName: rootSpec.componentName,
-      componentCode: rootSpec.componentCode,
-      childComponents: this.convertSkipChildSpecs(rootSpec.childComponents)
-    };
-
-    const result = await this.componentRunner.executeComponent({
-      props,
-      ...options,
-      componentSpec: spec,
-    });
+    const result = await this.componentRunner.executeComponent(options);
 
     if (this.options.debug) {
       console.log('=== Test Execution Debug Info ===');
-      console.log('Component:', spec.componentName);
+      console.log('Component:', spec.name);
       console.log('Success:', result.success);
       console.log('Execution Time:', result.executionTime, 'ms');
       console.log('Errors:', result.errors);
@@ -96,61 +84,6 @@ export class ReactTestHarness {
     return result;
   }
 
-  /**
-   * Test a single child component
-   */
-  async testChildComponent(
-    childSpec: ComponentChildSpec,
-    props: Record<string, any>,
-    options: ComponentExecutionOptions
-  ): Promise<ComponentExecutionResult> {
-    // First, lint the component code
-    if (childSpec.componentCode) {
-      const lintResult = await this.componentRunner.lintComponent(
-        childSpec.componentCode,
-        childSpec.componentName,
-        'child'
-      );
-
-      if (lintResult.hasErrors) {
-        // Return early with lint errors
-        return {
-          success: false,
-          html: '',
-          errors: lintResult.violations,
-          warnings: [],
-          criticalWarnings: [],
-          console: [],
-          executionTime: 0,
-          lintViolations: lintResult.violations,
-          fixSuggestions: lintResult.suggestions
-        };
-      }
-    }
-
-    const spec: ComponentSpec = {
-      componentName: childSpec.componentName,
-      componentCode: childSpec.componentCode || '',
-      childComponents: childSpec.components ? this.convertSkipChildSpecs(childSpec.components) : []
-    };
-
-    return this.componentRunner.executeComponent({
-      props,
-      ...options,
-      componentSpec: spec,
-    });
-  }
-
-  /**
-   * Convert Skip child specs to test harness ComponentSpec format
-   */
-  private convertSkipChildSpecs(children: ComponentChildSpec[]): ComponentSpec[] {
-    return children.map(child => ({
-      componentName: child.componentName,
-      componentCode: child.componentCode,
-      childComponents: child.components ? this.convertSkipChildSpecs(child.components) : []
-    }));
-  }
 
   /**
    * Test a component from a file path
@@ -159,7 +92,7 @@ export class ReactTestHarness {
   async testComponentFromFile(
     filePath: string,
     props: Record<string, any>,
-    options: ComponentExecutionOptions
+    options: Omit<ComponentExecutionOptions, 'componentSpec'>
   ): Promise<ComponentExecutionResult> {
     const fs = await import('fs');
     const path = await import('path');
@@ -172,16 +105,23 @@ export class ReactTestHarness {
     const componentCode = fs.readFileSync(absolutePath, 'utf-8');
     const componentName = path.basename(absolutePath, path.extname(absolutePath));
     
-    // Create a minimal ComponentChildSpec for the file
-    const childSpec: ComponentChildSpec = {
-      componentName,
-      componentCode,
+    // Create a minimal ComponentSpec for the file
+    const spec: ComponentSpec = {
+      name: componentName,
+      code: componentCode,
       description: `Component loaded from ${filePath}`,
+      title: componentName,
+      type: 'component',
+      functionalRequirements: '',
+      technicalDesign: '',
       exampleUsage: `<${componentName} />`,
-      components: []
+      dependencies: []
     };
     
-    return this.testChildComponent(childSpec, props, options);
+    return this.testComponent({
+      ...options,
+      componentSpec: spec
+    });
   }
 
   async runTest(

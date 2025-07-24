@@ -87,11 +87,8 @@ export {
 } from './utilities/component-styles';
 
 export {
-  STANDARD_LIBRARY_URLS,
   StandardLibraries,
-  getCoreLibraryUrls,
-  getUILibraryUrls,
-  getCSSUrls,
+  StandardLibraryManager,
   createStandardLibraries
 } from './utilities/standard-libraries';
 
