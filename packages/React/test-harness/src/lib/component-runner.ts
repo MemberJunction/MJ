@@ -289,7 +289,7 @@ ${cssLinks}
           
           const createComponent = new Function(
             'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-            'createStateUpdater', 'libraries', 'styles', 'console',
+            'libraries', 'styles', 'console',
             \`
             // Make libraries available in the component scope
             \${libraryDeclarations}
@@ -305,17 +305,6 @@ ${cssLinks}
           
           const componentFactory = (context, styles = {}) => {
             const { React, ReactDOM, libraries = {} } = context;
-            const createStateUpdater = (statePath, parentStateUpdater) => {
-              return (componentStateUpdate) => {
-                if (!statePath) {
-                  parentStateUpdater(componentStateUpdate);
-                } else {
-                  const pathParts = statePath.split('.');
-                  const componentKey = pathParts[pathParts.length - 1];
-                  parentStateUpdater({ [componentKey]: componentStateUpdate });
-                }
-              };
-            };
             
             return createComponent(
               React,
@@ -323,7 +312,6 @@ ${cssLinks}
               React.useState,
               React.useEffect,
               React.useCallback,
-              createStateUpdater,
               libraries,
               styles,
               console
@@ -591,12 +579,17 @@ ${cssLinks}
         return;
       }
       
-      // Add components, utilities, and styles to props
+      // Add components, utilities, styles, and onStateChanged to props
       const enhancedProps = {
         ...props,
         components: components,
         utilities: BuildUtilities(),
-        styles: SetupStyles()
+        styles: SetupStyles(),
+        onStateChanged: (stateUpdate) => {
+          console.log('State changed:', stateUpdate);
+          // In test harness, we just log state changes
+          // Real applications would persist this state
+        }
       };
       
       // Render the root component

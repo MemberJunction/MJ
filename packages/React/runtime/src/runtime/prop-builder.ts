@@ -41,7 +41,8 @@ export function buildComponentProps(
   callbacks: ComponentCallbacks = {},
   components: Record<string, any> = {},
   styles?: ComponentStyles,
-  options: PropBuilderOptions = {}
+  options: PropBuilderOptions = {},
+  onStateChanged?: (stateUpdate: Record<string, any>) => void
 ): ComponentProps {
   const {
     validate = true,
@@ -61,7 +62,8 @@ export function buildComponentProps(
     utilities,
     callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
-    styles: normalizeStyles(styles)
+    styles: normalizeStyles(styles),
+    onStateChanged
   };
 
   // Validate if enabled
