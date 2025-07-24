@@ -203,9 +203,6 @@ export class ComponentCompiler {
       // Return a function that executes the factory with runtime context
       return (context: RuntimeContext, styles: any = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
-        
-        // Create state updater utility
-        const createStateUpdater = this.createStateUpdaterUtility();
 
         // Execute the factory creator to get the createComponent function
         const createComponentFn = factoryCreator(
@@ -214,7 +211,6 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
-          createStateUpdater,
           libraries,
           styles,
           console
@@ -227,7 +223,6 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
-          createStateUpdater,
           libraries,
           styles,
           console
@@ -238,28 +233,6 @@ export class ComponentCompiler {
     }
   }
 
-  /**
-   * Creates the state updater utility function for nested components
-   * @returns State updater function
-   */
-  private createStateUpdaterUtility(): Function {
-    return (statePath: string, parentStateUpdater: Function) => {
-      return (componentStateUpdate: any) => {
-        if (!statePath) {
-          // Root component - pass through directly
-          parentStateUpdater(componentStateUpdate);
-        } else {
-          // Sub-component - bubble up with path context
-          const pathParts = statePath.split('.');
-          const componentKey = pathParts[pathParts.length - 1];
-          
-          parentStateUpdater({
-            [componentKey]: componentStateUpdate
-          });
-        }
-      };
-    };
-  }
 
   /**
    * Validates compilation options

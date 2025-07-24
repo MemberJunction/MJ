@@ -114,6 +114,8 @@ export interface ComponentProps {
   components?: Record<string, any>;
   /** Component styles */
   styles?: ComponentStyles;
+  /** Standard state change handler for controlled components */
+  onStateChanged?: (stateUpdate: Record<string, any>) => void;
 }
 
 /**

@@ -321,7 +321,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.currentCallbacks,
       components,
       this.styles as any, // Skip components expect the full SkipComponentStyles structure
-      { debounceUpdateUserState: 3000 } // 3 second debounce by default
+      { debounceUpdateUserState: 3000 }, // 3 second debounce by default
+      this.handleStateChanged.bind(this) // Standard onStateChanged handler
     );
 
     // Create error boundary
@@ -464,6 +465,36 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         source: 'react'
       }
     });
+  }
+
+  /**
+   * Handle standard onStateChanged event from components
+   * This replaces the UpdateUserState callback pattern
+   */
+  private handleStateChanged(stateUpdate: Record<string, any>) {
+    // Check if there are actual changes
+    const hasChanges = Object.keys(stateUpdate).some(key => {
+      const currentValue = this.currentState[key];
+      const newValue = stateUpdate[key];
+      return !this.isEqual(currentValue, newValue);
+    });
+    
+    if (!hasChanges) {
+      // No actual changes, skip update to prevent infinite loop
+      return;
+    }
+    
+    // Update current state
+    this.currentState = {
+      ...this.currentState,
+      ...stateUpdate
+    };
+    
+    // Emit the entire state update as a single event
+    this.stateChange.emit({ path: '', value: stateUpdate });
+    
+    // Schedule re-render
+    this.renderComponent();
   }
 
   /**
