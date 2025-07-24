@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/cli
 
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [9ccd145]
+- Updated dependencies [4ee29f2]
+  - @memberjunction/codegen-lib@2.75.0
+  - @memberjunction/metadata-sync@2.75.0
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

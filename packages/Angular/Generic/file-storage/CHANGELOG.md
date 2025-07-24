@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [66640d6]
+- Updated dependencies [6a65fad]
+- Updated dependencies [b403003]
+  - @memberjunction/graphql-dataprovider@2.75.0
+  - @memberjunction/ng-container-directives@2.75.0
+  - @memberjunction/ng-shared@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

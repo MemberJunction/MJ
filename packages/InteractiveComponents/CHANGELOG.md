@@ -1,5 +1,13 @@
 # @memberjunction/interactive-component-types
 
+## 2.75.0
+
+### Patch Changes
+
+- b403003: Updates to interactive component types
+  - @memberjunction/core@2.75.0
+  - @memberjunction/data-context@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

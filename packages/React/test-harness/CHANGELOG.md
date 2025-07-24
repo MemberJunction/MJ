@@ -1,5 +1,20 @@
 # @memberjunction/react-test-harness
 
+## 2.75.0
+
+### Minor Changes
+
+- 9ccd145: migration
+
+### Patch Changes
+
+- 0da7b51: tweaks to types
+- Updated dependencies [9ccd145]
+- Updated dependencies [0da7b51]
+- Updated dependencies [b403003]
+  - @memberjunction/react-runtime@2.75.0
+  - @memberjunction/interactive-component-types@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

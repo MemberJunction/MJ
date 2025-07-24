@@ -20,13 +20,13 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/actions": "2.74.0",
-    "@memberjunction/global": "2.74.0",
-    "@memberjunction/core": "2.74.0",
-    "@memberjunction/core-entities": "2.74.0",
-    "@memberjunction/core-entities-server": "2.74.0",
-    "@memberjunction/ai": "2.74.0",
-    "@memberjunction/aiengine": "2.74.0",
+    "@memberjunction/actions": "2.75.0",
+    "@memberjunction/global": "2.75.0",
+    "@memberjunction/core": "2.75.0",
+    "@memberjunction/core-entities": "2.75.0",
+    "@memberjunction/core-entities-server": "2.75.0",
+    "@memberjunction/ai": "2.75.0",
+    "@memberjunction/aiengine": "2.75.0",
     "zod": "^3.23.8"
   }
 }

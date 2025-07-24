@@ -1,5 +1,22 @@
 # @memberjunction/ai-prompts
 
+## 2.75.0
+
+### Minor Changes
+
+- 9ccd145: migration
+
+### Patch Changes
+
+- @memberjunction/ai@2.75.0
+- @memberjunction/ai-core-plus@2.75.0
+- @memberjunction/aiengine@2.75.0
+- @memberjunction/core@2.75.0
+- @memberjunction/core-entities@2.75.0
+- @memberjunction/global@2.75.0
+- @memberjunction/templates-base-types@2.75.0
+- @memberjunction/templates@2.75.0
+
 ## 2.74.0
 
 ### Minor Changes

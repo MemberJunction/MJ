@@ -1,5 +1,73 @@
 # Change Log - @memberjunction/server
 
+## 2.75.0
+
+### Minor Changes
+
+- 66640d6: This update brings the GraphQLSystemUserClient to feature parity with the
+  standard GraphQLDataProvider by adding full Parameters support for
+  templated queries, pagination capabilities, and the missing
+  GetQueryDataByNameSystemUser resolver.
+
+  Key Features:
+
+  - Parameters support for templated queries (enabling AI cost calculations)
+  - MaxRows and StartRow pagination support
+  - Complete resolver coverage for system user operations
+  - Fixed TypeScript compilation errors with missing TotalRowCount fields
+  - Updated both GetQueryDataSystemUser and GetQueryDataByNameSystemUser
+    methods with full parameter support
+
+    - Added missing GetQueryDataByNameSystemUser resolver with proper
+      @RequireSystemUser decoration
+    - Fixed error handling cases to include required TotalRowCount field
+    - Updated GraphQL query strings to include TotalRowCount and
+      AppliedParameters fields
+
+    This enables system user clients to leverage MemberJunction v2.74's
+    templated query functionality, particularly important for AI cost tracking
+    and other parameterized operations.
+
+### Patch Changes
+
+- Updated dependencies [9ccd145]
+- Updated dependencies [0da7b51]
+- Updated dependencies [66640d6]
+- Updated dependencies [6a65fad]
+  - @memberjunction/ai-prompts@2.75.0
+  - @memberjunction/skip-types@2.75.0
+  - @memberjunction/graphql-dataprovider@2.75.0
+  - @memberjunction/ai-agents@2.75.0
+  - @memberjunction/actions@2.75.0
+  - @memberjunction/core-entities-server@2.75.0
+  - @memberjunction/ai-agent-manager-actions@2.75.0
+  - @memberjunction/actions-bizapps-accounting@2.75.0
+  - @memberjunction/actions-bizapps-crm@2.75.0
+  - @memberjunction/actions-bizapps-lms@2.75.0
+  - @memberjunction/actions-bizapps-social@2.75.0
+  - @memberjunction/core-actions@2.75.0
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+  - @memberjunction/external-change-detection@2.75.0
+  - @memberjunction/ai@2.75.0
+  - @memberjunction/ai-core-plus@2.75.0
+  - @memberjunction/aiengine@2.75.0
+  - @memberjunction/ai-anthropic@2.75.0
+  - @memberjunction/ai-cerebras@2.75.0
+  - @memberjunction/ai-groq@2.75.0
+  - @memberjunction/ai-mistral@2.75.0
+  - @memberjunction/ai-openai@2.75.0
+  - @memberjunction/ai-vectors-pinecone@2.75.0
+  - @memberjunction/entity-communications-server@2.75.0
+  - @memberjunction/doc-utils@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/data-context@2.75.0
+  - @memberjunction/data-context-server@2.75.0
+  - @memberjunction/global@2.75.0
+  - @memberjunction/queue@2.75.0
+  - @memberjunction/storage@2.75.0
+  - @memberjunction/templates@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes

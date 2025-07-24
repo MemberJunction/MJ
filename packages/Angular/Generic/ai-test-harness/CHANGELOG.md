@@ -1,5 +1,24 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.75.0
+
+### Minor Changes
+
+- 9ccd145: migration
+
+### Patch Changes
+
+- Updated dependencies [66640d6]
+- Updated dependencies [6a65fad]
+- Updated dependencies [b403003]
+  - @memberjunction/graphql-dataprovider@2.75.0
+  - @memberjunction/ng-container-directives@2.75.0
+  - @memberjunction/ng-shared@2.75.0
+  - @memberjunction/ng-notifications@2.75.0
+  - @memberjunction/ng-code-editor@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+
 ## 2.74.0
 
 ### Patch Changes
