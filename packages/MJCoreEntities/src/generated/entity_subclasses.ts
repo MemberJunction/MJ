@@ -17076,11 +17076,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.  
     * @public
     * @method
     * @override
@@ -17092,11 +17092,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
-        this.ValidateResultSelectorPromptIDNotEqualID(result);
-        this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
+        this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
 
         return result;
     }
@@ -17183,30 +17183,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheSimilarityThresholdRequiredForVectorCache(result: ValidationResult) {
-    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold === null) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be specified when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -17239,6 +17215,30 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdRequiredForVectorCache(result: ValidationResult) {
+    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold === null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be specified when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
     	}
     }
 
@@ -32586,30 +32586,18 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * StepNumber: This rule ensures that the step number must always be greater than zero.
-    * * FinalPayloadValidationResult: This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.  
+    * * FinalPayloadValidationResult: This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
+    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateStepNumberGreaterThanZero(result);
         this.ValidateFinalPayloadValidationResultAllowedValues(result);
+        this.ValidateStepNumberGreaterThanZero(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the step number must always be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.StepNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -32627,6 +32615,18 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     			this.FinalPayloadValidationResult,
     			ValidationErrorType.Failure
     		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the step number must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.StepNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
     	}
     }
 
@@ -35179,18 +35179,30 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.
-    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.  
+    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
         this.ValidateCompletedAtIsNullOrAfterRunAt(result);
+        this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -35207,18 +35219,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     		)
     	) {
     		result.Errors.push(new ValidationErrorInfo("TokensUsed", "TokensUsed must be equal to the sum of TokensPrompt and TokensCompletion, unless one or more of these values are NULL (except if TokensPrompt and TokensCompletion are both NULL).", this.TokensUsed, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
-    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
-    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
     	}
     }
 
