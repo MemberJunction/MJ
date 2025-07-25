@@ -2574,6 +2574,11 @@ export class BaseAgent {
             }
             
         } catch (error) {
+            // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
+            // that affects downstream things in the agent run
+            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload; 
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -2584,6 +2589,8 @@ export class BaseAgent {
                 errorMessage: `Prompt execution failed: ${errString}`,
                 step: 'Failed',
                 terminate: false,
+                previousPayload: payload,
+                newPayload: payload
             };
         }
     }
@@ -2898,6 +2905,11 @@ export class BaseAgent {
                 newPayload: mergedPayload
             };            
         } catch (error) {
+            // in this case, we have a failed sub-agent execution. In this situation, let's make sure our payload at end isn't adjusted as
+            // that affects downstream things in the agent run
+            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -2907,6 +2919,8 @@ export class BaseAgent {
                 errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
                 step: 'Failed',
                 terminate: false,
+                previousPayload: payload,
+                newPayload: payload
             };
         }
     }
@@ -3092,7 +3106,9 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 errorMessage: e && e.message ? e.message : e ? e : 'Unknown error executing actions',
-                retryReason: 'Error while processing actions, retry'
+                retryReason: 'Error while processing actions, retry',
+                newPayload: previousDecision?.newPayload || null, // pass along from last step, no change
+                previousPayload: previousDecision?.previousPayload || null, // pass along from last step, no change
             };
         }
     }
@@ -3117,7 +3133,7 @@ export class BaseAgent {
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
-            newPayload: previousDecision.previousPayload, // chat steps don't modify the payload
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
         };
     }
 
