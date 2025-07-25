@@ -74,6 +74,7 @@ import {
   DatasetItemResultType,
   DatabaseProviderBase,
   QueryInfo,
+  QueryCategoryInfo,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -675,6 +676,53 @@ export class SQLServerDataProvider
   // END ---- IRunReportProvider
   /**************************************************************************/
 
+  /**
+   * Resolves a hierarchical category path (e.g., "/MJ/AI/Agents/") to a CategoryID.
+   * The path is split by "/" and each segment is matched case-insensitively against
+   * category names, walking down the hierarchy from root to leaf.
+   * 
+   * @param categoryPath The hierarchical category path (e.g., "/MJ/AI/Agents/")
+   * @returns The CategoryID if the path exists, null otherwise
+   */
+  private resolveCategoryPath(categoryPath: string): string | null {
+    if (!categoryPath) return null;
+    
+    // Split path and clean segments - remove empty strings from leading/trailing slashes
+    const segments = categoryPath.split('/')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    
+    if (segments.length === 0) return null;
+    
+    // Walk down the hierarchy to find the target category
+    let currentCategory: QueryCategoryInfo | null = null;
+    
+    for (const segment of segments) {
+      const parentId = currentCategory?.ID || null;
+      currentCategory = this.QueryCategories.find(cat => 
+        cat.Name.trim().toLowerCase() === segment.toLowerCase() && 
+        cat.ParentID === parentId
+      );
+      
+      if (!currentCategory) {
+        return null; // Path not found
+      }
+    }
+    
+    return currentCategory.ID;
+  }
+
+  /**
+   * Finds a query by ID or by Name+Category combination.
+   * Supports both direct CategoryID lookup and hierarchical CategoryName path resolution.
+   * 
+   * @param QueryID Unique identifier for the query
+   * @param QueryName Name of the query to find
+   * @param CategoryID Direct category ID for the query
+   * @param CategoryName Hierarchical category path (e.g., "/MJ/AI/Agents/") or simple category name
+   * @param refreshMetadataIfNotFound Whether to refresh metadata if query is not found
+   * @returns The found QueryInfo or null if not found
+   */
   protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryName: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
       // First, get the query metadata
       const queries = this.Queries.filter(q => {
@@ -684,9 +732,16 @@ export class SQLServerDataProvider
           let matches = q.Name.trim().toLowerCase() === QueryName.trim().toLowerCase();
           if (CategoryID) {
             matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
-          }
-          if (CategoryName) {
-            matches = matches && q.Category.trim().toLowerCase() === CategoryName.trim().toLowerCase();
+          } else if (CategoryName) {
+            // New hierarchical path logic - try path resolution first, fall back to simple name match
+            const resolvedCategoryId = this.resolveCategoryPath(CategoryName);
+            if (resolvedCategoryId) {
+              // Hierarchical path matched - use the resolved CategoryID
+              matches = matches && q.CategoryID === resolvedCategoryId;
+            } else {
+              // Fall back to simple category name comparison for backward compatibility
+              matches = matches && q.Category.trim().toLowerCase() === CategoryName.trim().toLowerCase();
+            }
           }
           return matches;
         }
