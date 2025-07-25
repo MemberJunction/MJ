@@ -22,8 +22,6 @@ import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
   buildComponentProps,
-  cleanupPropBuilder,
-  ComponentError,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   HierarchyRegistrationResult
@@ -472,7 +470,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Clean up prop builder subscriptions
     if (this.currentCallbacks) {
-      cleanupPropBuilder(this.currentCallbacks);
       this.currentCallbacks = null;
     }
     
