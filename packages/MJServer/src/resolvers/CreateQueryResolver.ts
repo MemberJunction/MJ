@@ -1,8 +1,11 @@
-import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { QueryEntity, QueryCategoryEntity } from '@memberjunction/core-entities';
+import { QueryCategoryEntity } from '@memberjunction/core-entities';
+import { QueryResolver } from '../generated/generated.js';
+import { GetReadWriteDataSource } from '../util.js';
+import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 
 /**
  * Query status enumeration for GraphQL
@@ -20,7 +23,7 @@ registerEnumType(QueryStatus, {
 });
 
 @InputType()
-export class CreateQueryInputType {
+export class CreateQuerySystemUserInput {
     @Field(() => String)
     Name!: string;
 
@@ -73,88 +76,70 @@ export class CreateQueryResultType {
     QueryData?: string;
 }
 
-export class CreateQueryResolver {
+@ObjectType()
+export class DeleteQueryResultType {
+    @Field(() => Boolean)
+    Success!: boolean;
+
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => String, { nullable: true })
+    QueryData?: string;
+}
+
+@Resolver()
+export class QueryResolverExtended extends QueryResolver {
     /**
      * Creates a new query with the provided attributes. This mutation is restricted to system users only.
-     * @param input - CreateQueryInputType containing all the query attributes
+     * @param input - CreateQuerySystemUserInput containing all the query attributes
      * @param context - Application context containing user information
      * @returns CreateQueryResultType with success status and query data
      */
     @RequireSystemUser()
     @Mutation(() => CreateQueryResultType)
-    async CreateQuery(
-        @Arg('input', () => CreateQueryInputType) input: CreateQueryInputType,
-        @Ctx() context: AppContext
+    async CreateQuerySystemUser(
+        @Arg('input', () => CreateQuerySystemUserInput) input: CreateQuerySystemUserInput,
+        @Ctx() context: AppContext,
+        @PubSub() pubSub: PubSubEngine
     ): Promise<CreateQueryResultType> {
         try {
-            const md = new Metadata();
-            const newQuery = await md.GetEntityObject<QueryEntity>("Queries", context.userPayload.userRecord);
-
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
             if (input.CategoryPath) {
+                const md = new Metadata();
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
             }
 
-            // Populate the query fields from input
-            newQuery.Name = input.Name;
+            // Create input for the inherited CreateRecord method
+            const createInput = {
+                Name: input.Name,
+                CategoryID: finalCategoryID,
+                UserQuestion: input.UserQuestion,
+                Description: input.Description,
+                SQL: input.SQL,
+                TechnicalDescription: input.TechnicalDescription,
+                OriginalSQL: input.OriginalSQL,
+                Feedback: input.Feedback,
+                Status: input.Status || 'Approved',
+                QualityRank: input.QualityRank || 0,
+                ExecutionCostRank: input.ExecutionCostRank,
+                UsesTemplate: input.UsesTemplate || false
+            };
             
-            if (finalCategoryID != null) {
-                newQuery.CategoryID = finalCategoryID;
-            }
+            // Use inherited CreateRecord method which bypasses AI processing
+            const connPool = GetReadWriteDataSource(context.dataSources);
+            const createdQuery = await this.CreateRecord('Queries', createInput, connPool, context.userPayload, pubSub);
             
-            if (input.UserQuestion != null) {
-                newQuery.UserQuestion = input.UserQuestion;
-            }
-            
-            if (input.Description != null) {
-                newQuery.Description = input.Description;
-            }
-            
-            if (input.SQL != null) {
-                newQuery.SQL = input.SQL;
-            }
-            
-            if (input.TechnicalDescription != null) {
-                newQuery.TechnicalDescription = input.TechnicalDescription;
-            }
-            
-            if (input.OriginalSQL != null) {
-                newQuery.OriginalSQL = input.OriginalSQL;
-            }
-            
-            if (input.Feedback != null) {
-                newQuery.Feedback = input.Feedback;
-            }
-            
-            if (input.Status != null) {
-                newQuery.Status = input.Status;
-            }
-            
-            if (input.QualityRank != null) {
-                newQuery.QualityRank = input.QualityRank;
-            }
-            
-            if (input.ExecutionCostRank != null) {
-                newQuery.ExecutionCostRank = input.ExecutionCostRank;
-            }
-            
-            if (input.UsesTemplate != null) {
-                newQuery.UsesTemplate = input.UsesTemplate;
-            }
-
-            // Save the query
-            const saveResult = await newQuery.Save();
-            
-            if (saveResult) {
+            if (createdQuery) {
                 return {
                     Success: true,
-                    QueryData: JSON.stringify(newQuery.GetAll())
+                    QueryData: JSON.stringify(createdQuery)
                 };
             } else {
                 return {
                     Success: false,
-                    ErrorMessage: `Failed to save query: ${newQuery.LatestResult?.Message || 'Unknown error'}`
+                    ErrorMessage: 'Failed to create query using CreateRecord method'
                 };
             }
 
@@ -162,7 +147,56 @@ export class CreateQueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `CreateQueryResolver::CreateQuery --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `QueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
+    }
+
+    /**
+     * Deletes a query by ID. This mutation is restricted to system users only.
+     * @param ID - The ID of the query to delete
+     * @param options - Delete options controlling action execution
+     * @param context - Application context containing user information
+     * @returns DeleteQueryResultType with success status and deleted query data
+     */
+    @RequireSystemUser()
+    @Mutation(() => DeleteQueryResultType)
+    async DeleteQuerySystemResolver(
+        @Arg('ID', () => String) queryID: string,
+        @Arg('options', () => DeleteOptionsInput, { nullable: true }) options: DeleteOptionsInput | null,
+        @Ctx() context: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ): Promise<DeleteQueryResultType> {
+        try {
+            const connPool = GetReadWriteDataSource(context.dataSources);
+            const key = new CompositeKey([{FieldName: 'ID', Value: queryID}]);
+            
+            // Provide default options if none provided
+            const deleteOptions = options || {
+                SkipEntityAIActions: false,
+                SkipEntityActions: false
+            };
+            
+            // Use inherited DeleteRecord method from ResolverBase
+            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, connPool, context.userPayload, pubSub);
+            
+            if (deletedQuery) {
+                return {
+                    Success: true,
+                    QueryData: JSON.stringify(deletedQuery)
+                };
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to delete query using DeleteRecord method'
+                };
+            }
+
+        } catch (err) {
+            LogError(err);
+            return {
+                Success: false,
+                ErrorMessage: `QueryResolverExtended::DeleteQuerySystemResolver --- Error deleting query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
