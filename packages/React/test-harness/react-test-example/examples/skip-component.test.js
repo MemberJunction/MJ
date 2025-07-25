@@ -143,31 +143,7 @@ describe('SkipStyleComponent', () => {
         expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
       });
     });
-
-    test('calls UpdateUserState with new viewMode when toggle button is clicked', () => {
-      render(<SkipStyleComponent {...defaultProps} />);
-      
-      const toggleButton = screen.getByTestId('toggle-view');
-      fireEvent.click(toggleButton);
-      
-      expect(mockCallbacks.UpdateUserState).toHaveBeenCalledWith({
-        ...mockUserState,
-        viewMode: 'grid'
-      });
-    });
-
-    test('calls UpdateUserState with new filter when filter button is clicked', () => {
-      render(<SkipStyleComponent {...defaultProps} />);
-      
-      const filterButton = screen.getByTestId('filter-category1');
-      fireEvent.click(filterButton);
-      
-      expect(mockCallbacks.UpdateUserState).toHaveBeenCalledWith({
-        ...mockUserState,
-        activeFilter: 'category1'
-      });
-    });
-
+ 
     test('handles missing callbacks gracefully', () => {
       const propsWithoutCallbacks = {
         ...defaultProps,

@@ -192,27 +192,7 @@ const styles: SkipComponentStyles = {
   }
 };
 ```
-
-### State Management
-
-```typescript
-// In your Angular component
-onStateChange(event: StateChangeEvent) {
-  console.log(`State ${event.path} changed to:`, event.value);
-  // Update your Angular component state
-}
-
-// In your React component
-function MyComponent({ userState, callbacks }) {
-  const updateState = () => {
-    callbacks.UpdateUserState({
-      counter: userState.counter + 1
-    });
-  };
-  
-  return <button onClick={updateState}>Count: {userState.counter}</button>;
-}
-```
+ 
 
 ## Services
 

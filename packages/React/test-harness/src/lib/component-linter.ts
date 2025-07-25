@@ -280,7 +280,6 @@ export class ComponentLinter {
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         let hasOnStateChanged = false;
-        let usesOldCallbackPattern = false;
         
         traverse(ast, {
           // Check for onStateChanged in function parameters
@@ -296,31 +295,7 @@ export class ComponentLinter {
               }
             }
           },
-          
-          // Check for old callbacks?.UpdateUserState pattern
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
-              if (
-                t.isIdentifier(callee.object) && callee.object.name === 'callbacks' &&
-                t.isIdentifier(callee.property) && callee.property.name === 'UpdateUserState'
-              ) {
-                usesOldCallbackPattern = true;
-              }
-            }
-          }
         });
-        
-        if (usesOldCallbackPattern) {
-          violations.push({
-            rule: 'use-onStateChanged-pattern',
-            severity: 'error',
-            line: 1,
-            column: 0,
-            message: `Component "${componentName}" uses old callbacks?.UpdateUserState pattern. Use onStateChanged instead.`,
-          });
-        }
         
         return violations;
       }
