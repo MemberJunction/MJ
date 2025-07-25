@@ -30,10 +30,7 @@ Skip components in MemberJunction follow a standard props structure:
     viewMode: 'list' | 'grid',
     activeFilter: string
   },
-  callbacks: {      // Callback functions
-    RefreshData: async () => void,
-    UpdateUserState: (newState) => void
-  },
+  onStateChanged: (newState) => void,  // Single callback for all state updates
   utilities: {      // Utility functions
     logEvent: (event) => void,
     formatDate: (date) => string
@@ -77,9 +74,9 @@ npm test -- --coverage
    - Handles empty states
 
 2. **Callbacks**
-   - RefreshData callback invocation
-   - UpdateUserState for view mode changes
-   - Filter updates through callbacks
+   - onStateChanged callback invocation
+   - View mode changes through state updates
+   - Filter updates through onStateChanged
    - Error handling for failed operations
 
 3. **Styles**
@@ -114,7 +111,7 @@ render(<SkipStyleComponent {...propsWithFilter} />);
 ```javascript
 fireEvent.click(screen.getByTestId('refresh-button'));
 await waitFor(() => {
-  expect(mockCallbacks.RefreshData).toHaveBeenCalledTimes(1);
+  expect(mockOnStateChanged).toHaveBeenCalledWith({ refresh: expect.any(Number) });
 });
 ```
 
@@ -133,7 +130,7 @@ rerender(<SkipStyleComponent {...updatedProps} />);
 
 ## Best Practices
 
-1. **Mock All External Dependencies**: Create comprehensive mocks for data, callbacks, utilities, and styles
+1. **Mock All External Dependencies**: Create comprehensive mocks for data, onStateChanged, utilities, and styles
 2. **Test User Interactions**: Simulate clicks, filters, and state changes
 3. **Verify Visual States**: Test loading, error, and empty states
 4. **Check Edge Cases**: Test with missing or malformed data
@@ -143,7 +140,7 @@ rerender(<SkipStyleComponent {...updatedProps} />);
 
 This example demonstrates how to test components that will be used in the MemberJunction Skip system:
 - Components receive standardized props
-- Callbacks integrate with MJ's data layer
+- State updates through single onStateChanged callback
 - Styles allow for theme customization
 - State management follows MJ patterns
 
