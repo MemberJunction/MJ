@@ -194,6 +194,9 @@ export class ComponentRunner {
       .map((lib: any) => `  <link rel="stylesheet" href="${lib.cdnCssUrl}">`)
       .join('\n');
     
+    // Include the ComponentCompiler class definition
+    const componentCompilerCode = this.getComponentCompilerCode();
+    
     return `
 <!DOCTYPE html>
 <html>
@@ -265,87 +268,12 @@ ${cssLinks}
       libraries: libraries
     };
     
-    // Create component compiler
-    class SimpleCompiler {
-      constructor() {
-        this.cache = new Map();
-      }
-      
-      async compile(options) {
-        const componentName = options.name;
-        const componentCode = options.code;
-        
-        try {
-          // Transform JSX to JS using Babel
-          const transformed = Babel.transform(componentCode, {
-            presets: ['react'],
-            filename: componentName + '.jsx'
-          });
-          
-          // Create component factory
-          const libraryDeclarations = componentLibraries
-            .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
-            .join('\\n            ');
-          
-          const createComponent = new Function(
-            'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-            'libraries', 'styles', 'console',
-            \`
-            // Make libraries available in the component scope
-            \${libraryDeclarations}
-            
-            \${transformed.code}
-            return {
-              component: \${componentName},
-              print: function() { window.print(); },
-              refresh: function(data) { }
-            };
-            \`
-          );
-          
-          const componentFactory = (context, styles = {}) => {
-            const { React, ReactDOM, libraries = {} } = context;
-            
-            return createComponent(
-              React,
-              ReactDOM,
-              React.useState,
-              React.useEffect,
-              React.useCallback,
-              libraries,
-              styles,
-              console
-            );
-          };
-          
-          return {
-            success: true,
-            component: {
-              component: componentFactory,
-              id: componentName + '_' + Date.now(),
-              name: componentName,
-              compiledAt: new Date(),
-              warnings: []
-            },
-            duration: 0
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: {
-              message: error.message,
-              componentName: componentName,
-              phase: 'compilation'
-            },
-            duration: 0
-          };
-        }
-      }
-      
-      setBabelInstance(babel) {
-        // Already have access to Babel global
-      }
-    }
+    // Import the ComponentCompiler implementation
+    ${componentCompilerCode}
+    
+    // Create component compiler instance
+    const compiler = new ComponentCompiler();
+    compiler.setBabelInstance(Babel);
     
     // Create component registry
     class SimpleRegistry {
@@ -376,8 +304,7 @@ ${cssLinks}
       }
     }
     
-    // Create instances
-    const compiler = new SimpleCompiler();
+    // Create registry instance
     const registry = new SimpleRegistry();
     
     // Create hierarchy registrar
@@ -404,8 +331,8 @@ ${cssLinks}
           // Register this component
           if (spec.code) {
             const result = await this.compiler.compile({
-              name: spec.name,
-              code: spec.code
+              componentName: spec.name,
+              componentCode: spec.code
             });
             
             if (result.success) {
@@ -800,5 +727,125 @@ ${cssLinks}
    */
   static getDetailedErrorAnalysis(errors: string[]) {
     return ComponentErrorAnalyzer.analyzeComponentErrors(errors);
+  }
+  
+  /**
+   * Gets the ComponentCompiler code to inject into the browser
+   * This is a simplified version that works in the browser context
+   */
+  private getComponentCompilerCode(): string {
+    // Return a browser-compatible version of ComponentCompiler
+    return `
+    class ComponentCompiler {
+      constructor() {
+        this.cache = new Map();
+      }
+      
+      setBabelInstance(babel) {
+        this.babelInstance = babel;
+      }
+      
+      async compile(options) {
+        const { componentName, componentCode } = options;
+        
+        try {
+          // Validate inputs
+          if (!componentName || !componentCode) {
+            throw new Error('componentName and componentCode are required');
+          }
+          
+          // Wrap component code
+          const wrappedCode = this.wrapComponentCode(componentCode, componentName);
+          
+          // Transform using Babel
+          const result = this.babelInstance.transform(wrappedCode, {
+            presets: ['react'],
+            filename: componentName + '.jsx'
+          });
+          
+          // Create factory
+          const componentFactory = this.createComponentFactory(result.code, componentName);
+          
+          return {
+            success: true,
+            component: {
+              component: componentFactory,
+              id: componentName + '_' + Date.now(),
+              name: componentName,
+              compiledAt: new Date(),
+              warnings: []
+            },
+            duration: 0
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: {
+              message: error.message,
+              componentName: componentName,
+              phase: 'compilation'
+            },
+            duration: 0
+          };
+        }
+      }
+      
+      wrapComponentCode(componentCode, componentName) {
+        // Make component libraries available in scope
+        const libraryDeclarations = componentLibraries
+          .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
+          .join('\\n        ');
+          
+        return \`
+          function createComponent(
+            React, ReactDOM,
+            useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
+            libraries, styles, console
+          ) {
+            \${libraryDeclarations}
+            
+            \${componentCode}
+            
+            if (typeof \${componentName} === 'undefined') {
+              throw new Error('Component "\${componentName}" is not defined in the provided code');
+            }
+            
+            return {
+              component: \${componentName},
+              print: function() { window.print(); },
+              refresh: function(data) { }
+            };
+          }
+        \`;
+      }
+      
+      createComponentFactory(transpiledCode, componentName) {
+        const factoryCreator = new Function(
+          'React', 'ReactDOM',
+          'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
+          'libraries', 'styles', 'console',
+          transpiledCode + '; return createComponent;'
+        );
+        
+        return (context, styles = {}) => {
+          const { React, ReactDOM, libraries = {} } = context;
+          
+          const createComponentFn = factoryCreator(
+            React, ReactDOM,
+            React.useState, React.useEffect, React.useCallback, React.useMemo,
+            React.useRef, React.useContext, React.useReducer, React.useLayoutEffect,
+            libraries, styles, console
+          );
+          
+          return createComponentFn(
+            React, ReactDOM,
+            React.useState, React.useEffect, React.useCallback, React.useMemo,
+            React.useRef, React.useContext, React.useReducer, React.useLayoutEffect,
+            libraries, styles, console
+          );
+        };
+      }
+    }
+    `;
   }
 }

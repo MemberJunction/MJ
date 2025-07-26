@@ -29,62 +29,73 @@ interface Rule {
 }
 
 export class ComponentLinter {
-  // Universal rules that apply to all components in the new controlled pattern
+  // Universal rules that apply to all components with SavedUserSettings pattern
   private static universalComponentRules: Rule[] = [
     // State Management Rules
     {
-      name: 'hybrid-state-management',
+      name: 'full-state-ownership',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
+        let hasStateFromProps = false;
+        let hasSavedUserSettings = false;
         
+        // First pass: check if component expects state from props
         traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            // Check for React.useState or just useState
-            if (
-              (t.isIdentifier(callee) && callee.name === 'useState') ||
-              (t.isMemberExpression(callee) && 
-               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
-               t.isIdentifier(callee.property) && callee.property.name === 'useState')
-            ) {
-              // Check what's being stored in state
-              const parent = path.parent;
-              if (t.isVariableDeclarator(parent) && t.isArrayPattern(parent.id)) {
-                const stateName = parent.id.elements[0];
-                if (t.isIdentifier(stateName)) {
-                  const name = stateName.name.toLowerCase();
-                  
-                  // Check for likely application state
-                  const appStatePatterns = [
-                    'selected', 'filter', 'sort', 'page', 'active',
-                    'current', 'saved', 'submitted', 'confirmed'
-                  ];
-                  
-                  const isLikelyAppState = appStatePatterns.some(pattern => 
-                    name.includes(pattern) && 
-                    !name.includes('draft') && 
-                    !name.includes('temp') &&
-                    !name.includes('hover') &&
-                    !name.includes('dropdown') &&
-                    !name.includes('modal')
-                  );
-                  
-                  if (isLikelyAppState) {
-                    violations.push({
-                      rule: 'hybrid-state-management',
-                      severity: 'warning',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" may be using useState for application state "${stateName.name}". Application state should come from props and update via onStateChanged. Use useState only for ephemeral UI state like typing, hover, or dropdowns.`,
-                      code: path.toString()
-                    });
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+                    // Check for state-like props
+                    const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
+                    if (statePatterns.some(pattern => propName.includes(pattern))) {
+                      hasStateFromProps = true;
+                    }
+                    if (propName === 'savedUserSettings') {
+                      hasSavedUserSettings = true;
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check arrow functions
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+              const init = path.node.init;
+              if (t.isArrowFunctionExpression(init) && init.params[0]) {
+                const param = init.params[0];
+                if (t.isObjectPattern(param)) {
+                  for (const prop of param.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const propName = prop.key.name;
+                      const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
+                      if (statePatterns.some(pattern => propName.includes(pattern))) {
+                        hasStateFromProps = true;
+                      }
+                      if (propName === 'savedUserSettings') {
+                        hasSavedUserSettings = true;
+                      }
+                    }
                   }
                 }
               }
             }
           }
         });
+        
+        if (hasStateFromProps && hasSavedUserSettings) {
+          violations.push({
+            rule: 'full-state-ownership',
+            severity: 'error',
+            line: 1,
+            column: 0,
+            message: `Component "${componentName}" expects state from props. Components should manage ALL their state internally with useState, initialized from savedUserSettings.`
+          });
+        }
         
         return violations;
       }
@@ -110,7 +121,7 @@ export class ComponentLinter {
                 severity: 'error',
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
-                message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. All components must be purely controlled - use props and onStateChanged instead.`,
+                message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. Components should manage state with useState and persist important settings with onSaveUserSettings.`,
                 code: path.toString()
               });
             }
@@ -180,25 +191,43 @@ export class ComponentLinter {
     },
     
     {
-      name: 'use-onStateChanged-pattern',
+      name: 'saved-user-settings-pattern',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
-        let hasOnStateChanged = false;
         
+        // Check for improper onSaveUserSettings usage
         traverse(ast, {
-          // Check for onStateChanged in function parameters
-          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
-              const param = path.node.params[0];
-              if (t.isObjectPattern(param)) {
-                for (const prop of param.properties) {
-                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'onStateChanged') {
-                    hasOnStateChanged = true;
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for onSaveUserSettings calls
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.object) && callee.object.name === 'onSaveUserSettings') {
+              
+              // Check if saving ephemeral state
+              if (path.node.arguments.length > 0) {
+                const arg = path.node.arguments[0];
+                if (t.isObjectExpression(arg)) {
+                  for (const prop of arg.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const key = prop.key.name;
+                      const ephemeralPatterns = ['hover', 'dropdown', 'modal', 'loading', 'typing', 'draft'];
+                      
+                      if (ephemeralPatterns.some(pattern => key.toLowerCase().includes(pattern))) {
+                        violations.push({
+                          rule: 'saved-user-settings-pattern',
+                          severity: 'warning',
+                          line: prop.loc?.start.line || 0,
+                          column: prop.loc?.start.column || 0,
+                          message: `Saving ephemeral UI state "${key}" to savedUserSettings. Only save important user preferences.`
+                        });
+                      }
+                    }
                   }
                 }
               }
             }
-          },
+          }
         });
         
         return violations;
@@ -338,31 +367,34 @@ export class ComponentLinter {
     
     for (const violation of violations) {
       switch (violation.rule) {
-        case 'hybrid-state-management':
+        case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Use hybrid state management - useState for ephemeral UI state only, props + onStateChanged for application state',
-            example: `// ✅ CORRECT - Ephemeral UI state:
-const [searchDraft, setSearchDraft] = useState('');
-const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-const [hoveredId, setHoveredId] = useState(null);
-
-// ❌ WRONG - Application state should come from props:
-const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-const [activeFilters, setActiveFilters] = useState([]);
-
-// Instead use:
-function Component({ selectedCustomerId, activeFilters, onStateChanged }) {
-  // Local state for UI
-  const [searchDraft, setSearchDraft] = useState('');
+            suggestion: 'Components must own ALL their state - use useState and SavedUserSettings pattern',
+            example: `// ✅ CORRECT - Full state ownership:
+function Component({ data, savedUserSettings, onSaveUserSettings }) {
+  // Component owns ALL state
+  const [selectedId, setSelectedId] = useState(
+    savedUserSettings?.selectedId
+  );
+  const [filters, setFilters] = useState(
+    savedUserSettings?.filters || {}
+  );
+  const [searchDraft, setSearchDraft] = useState(''); // Ephemeral
   
-  // Application state updates
+  // Handle selection and save preference
   const handleSelect = (id) => {
-    onStateChanged?.({ selectedCustomerId: id });
+    setSelectedId(id);
+    onSaveUserSettings?.({
+      ...savedUserSettings,
+      selectedId: id
+    });
   };
   
-  const handleSearchSubmit = () => {
-    onStateChanged?.({ searchQuery: searchDraft });
+  // Don't save ephemeral state
+  const handleSearch = (text) => {
+    setSearchDraft(text);
+    // Only save on submit, not every keystroke
   };
 }`
           });
@@ -371,15 +403,27 @@ function Component({ selectedCustomerId, activeFilters, onStateChanged }) {
         case 'no-use-reducer':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must be purely controlled - remove useReducer',
+            suggestion: 'Use useState for state management, not useReducer',
             example: `// Instead of:
 const [state, dispatch] = useReducer(reducer, initialState);
 
-// Use:
-function Component({ state, onStateChanged }) {
+// Use useState:
+function Component({ savedUserSettings, onSaveUserSettings }) {
+  const [selectedId, setSelectedId] = useState(
+    savedUserSettings?.selectedId
+  );
+  const [filters, setFilters] = useState(
+    savedUserSettings?.filters || {}
+  );
+  
+  // Handle actions directly
   const handleAction = (action) => {
-    // Map action to state change
-    onStateChanged?.({ /* new state values */ });
+    switch(action.type) {
+      case 'SELECT':
+        setSelectedId(action.payload);
+        onSaveUserSettings?.({ ...savedUserSettings, selectedId: action.payload });
+        break;
+    }
   };
 }`
           });
@@ -390,12 +434,17 @@ function Component({ state, onStateChanged }) {
             violation: violation.rule,
             suggestion: 'Replace generic data prop with specific named props',
             example: `// Instead of:
-function Component({ data, utilities, styles, components, onStateChanged }) {
+function Component({ data, savedUserSettings, onSaveUserSettings }) {
   return <div>{data.items.map(...)}</div>;
 }
 
 // Use specific props:
-function Component({ items, customers, utilities, styles, components, onStateChanged }) {
+function Component({ items, customers, savedUserSettings, onSaveUserSettings }) {
+  // Component owns its state
+  const [selectedItemId, setSelectedItemId] = useState(
+    savedUserSettings?.selectedItemId
+  );
+  
   return <div>{items.map(...)}</div>;
 }
 
@@ -405,38 +454,54 @@ const result = await utilities.rv.RunView({ entityName: 'Items' });`
           break;
           
           
-        case 'use-onStateChanged-pattern':
+        case 'saved-user-settings-pattern':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Use onStateChanged callback pattern instead of callbacks?.UpdateUserState',
-            example: `// Instead of:
-callbacks?.UpdateUserState({ someValue });
+            suggestion: 'Only save important user preferences, not ephemeral UI state',
+            example: `// ✅ SAVE these (important preferences):
+- Selected items/tabs: selectedCustomerId, activeTab
+- Sort preferences: sortBy, sortDirection  
+- Filter selections: activeFilters
+- View preferences: viewMode, pageSize
 
-// Use:
-onStateChanged?.({ someValue });
+// ❌ DON'T SAVE these (ephemeral UI):
+- Hover states: hoveredItemId
+- Dropdown states: isDropdownOpen
+- Text being typed: searchDraft (save on submit)
+- Loading states: isLoading
 
-// Component should accept onStateChanged in props:
-function Component({ onStateChanged, styles, utilities, components }) {
-  // Handle state changes
-  const handleClick = () => {
-    onStateChanged?.({ selectedId: id });
-  };
-}`
+// Example:
+const handleHover = (id) => {
+  setHoveredId(id); // Just local state
+};
+
+const handleSelect = (id) => {
+  setSelectedId(id);
+  onSaveUserSettings?.({ // Save important preference
+    ...savedUserSettings,
+    selectedId: id
+  });
+};`
           });
           break;
           
         case 'pass-standard-props':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Always pass standard props (styles, utilities, components) to all components',
+            suggestion: 'Always pass standard props to all components',
             example: `// Always include these props when calling components:
 <ChildComponent
-  items={items}  // Specific props, not generic 'data'
-  selectedId={selectedId}
-  onStateChanged={onStateChanged}
+  items={items}  // Data props
+  
+  // Settings persistence
+  savedUserSettings={savedUserSettings?.childComponent}
+  onSaveUserSettings={handleChildSettings}
+  
+  // Standard props
   styles={styles}
   utilities={utilities}
   components={components}
+  callbacks={callbacks}
 />`
           });
           break;
