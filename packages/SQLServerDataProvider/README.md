@@ -275,9 +275,11 @@ console.log('User permissions:', spResult);
 
 // Using RunQuery for pre-defined queries
 const queryParams: RunQueryParams = {
-  QueryID: 'query-id-here', // or use QueryName
-  // CategoryID: 'optional-category-id',
-  // CategoryName: 'optional-category-name'
+  QueryID: 'query-id-here', // or use QueryName + Category identification
+  // Alternative: use QueryName with hierarchical CategoryName path
+  // QueryName: 'CalculateCost',
+  // CategoryName: '/MJ/AI/Agents/'  // Hierarchical path notation
+  // CategoryID: 'optional-direct-category-id',
 };
 
 const queryResult = await dataProvider.RunQuery(queryParams);
@@ -286,6 +288,19 @@ if (queryResult.Success) {
   console.log('Query results:', queryResult.Results);
   console.log('Execution time:', queryResult.ExecutionTime, 'ms');
 }
+
+// Query lookup supports hierarchical category paths
+// Example: Query with name "CalculateCost" in category hierarchy "MJ" -> "AI" -> "Agents"
+const hierarchicalQueryParams: RunQueryParams = {
+  QueryName: 'CalculateCost',
+  CategoryName: '/MJ/AI/Agents/'  // Full hierarchical path with leading/trailing slashes
+};
+
+// The CategoryName is parsed as a path where:
+// - "/" separates category levels
+// - Each segment is matched case-insensitively against category names
+// - The path walks from root to leaf through the ParentID relationships
+// - Falls back to simple category name matching for backward compatibility
 ```
 
 ### User Management and Caching
