@@ -42,7 +42,6 @@ export class ReactTestHarness {
       const lintResult = await this.componentRunner.lintComponent(
         spec.code,
         spec.name,
-        'root',
         spec
       );
 

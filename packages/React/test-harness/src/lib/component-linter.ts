@@ -23,8 +23,6 @@ export interface FixSuggestion {
   example?: string;
 }
 
-export type ComponentType = 'root' | 'child';
-
 interface Rule {
   name: string;
   test: (ast: t.File, componentName: string) => Violation[];
@@ -35,7 +33,7 @@ export class ComponentLinter {
   private static universalComponentRules: Rule[] = [
     // State Management Rules
     {
-      name: 'no-use-state',
+      name: 'hybrid-state-management',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -50,14 +48,40 @@ export class ComponentLinter {
                t.isIdentifier(callee.object) && callee.object.name === 'React' &&
                t.isIdentifier(callee.property) && callee.property.name === 'useState')
             ) {
-              violations.push({
-                rule: 'no-use-state',
-                severity: 'error',
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0,
-                message: `Child component "${componentName}" uses useState at line ${path.node.loc?.start.line}. Child components must be purely controlled - receive state via props instead.`,
-                code: path.toString()
-              });
+              // Check what's being stored in state
+              const parent = path.parent;
+              if (t.isVariableDeclarator(parent) && t.isArrayPattern(parent.id)) {
+                const stateName = parent.id.elements[0];
+                if (t.isIdentifier(stateName)) {
+                  const name = stateName.name.toLowerCase();
+                  
+                  // Check for likely application state
+                  const appStatePatterns = [
+                    'selected', 'filter', 'sort', 'page', 'active',
+                    'current', 'saved', 'submitted', 'confirmed'
+                  ];
+                  
+                  const isLikelyAppState = appStatePatterns.some(pattern => 
+                    name.includes(pattern) && 
+                    !name.includes('draft') && 
+                    !name.includes('temp') &&
+                    !name.includes('hover') &&
+                    !name.includes('dropdown') &&
+                    !name.includes('modal')
+                  );
+                  
+                  if (isLikelyAppState) {
+                    violations.push({
+                      rule: 'hybrid-state-management',
+                      severity: 'warning',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Component "${componentName}" may be using useState for application state "${stateName.name}". Application state should come from props and update via onStateChanged. Use useState only for ephemeral UI state like typing, hover, or dropdowns.`,
+                      code: path.toString()
+                    });
+                  }
+                }
+              }
             }
           }
         });
@@ -86,7 +110,7 @@ export class ComponentLinter {
                 severity: 'error',
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
-                message: `Child component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. Child components must be purely controlled.`,
+                message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. All components must be purely controlled - use props and onStateChanged instead.`,
                 code: path.toString()
               });
             }
@@ -97,126 +121,6 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'no-data-fetching',
-      test: (ast: t.File, componentName: string) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          MemberExpression(path: NodePath<t.MemberExpression>) {
-            const object = path.node.object;
-            const property = path.node.property;
-            
-            // Check for utilities.rv.RunView or utilities.rv.RunQuery
-            if (
-              t.isMemberExpression(object) &&
-              t.isIdentifier(object.object) && object.object.name === 'utilities' &&
-              t.isIdentifier(object.property) && object.property.name === 'rv' &&
-              t.isIdentifier(property) && 
-              (property.name === 'RunView' || property.name === 'RunQuery' || property.name === 'RunViews')
-            ) {
-              violations.push({
-                rule: 'no-data-fetching',
-                severity: 'error',
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0,
-                message: `Child component "${componentName}" fetches data at line ${path.node.loc?.start.line}. Only root components should load data.`,
-                code: path.toString()
-              });
-            }
-            
-            // Check for utilities.md operations
-            if (
-              t.isMemberExpression(object) &&
-              t.isIdentifier(object.object) && object.object.name === 'utilities' &&
-              t.isIdentifier(object.property) && object.property.name === 'md'
-            ) {
-              violations.push({
-                rule: 'no-data-fetching',
-                severity: 'error',
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0,
-                message: `Child component "${componentName}" accesses entity operations at line ${path.node.loc?.start.line}. Only root components should manage entities.`,
-                code: path.toString()
-              });
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
-    
-    {
-      name: 'no-async-effects',
-      test: (ast: t.File, componentName: string) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            // Check for useEffect
-            if (
-              (t.isIdentifier(callee) && callee.name === 'useEffect') ||
-              (t.isMemberExpression(callee) && 
-               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
-               t.isIdentifier(callee.property) && callee.property.name === 'useEffect')
-            ) {
-              // Check if the effect function contains async operations
-              const effectFn = path.node.arguments[0];
-              if (t.isArrowFunctionExpression(effectFn) || t.isFunctionExpression(effectFn)) {
-                let hasAsync = false;
-                
-                // Check if the effect function itself is async
-                if (effectFn.async) {
-                  hasAsync = true;
-                }
-                
-                // Traverse the effect function body to look for async patterns
-                traverse(effectFn, {
-                  CallExpression(innerPath: NodePath<t.CallExpression>) {
-                    const innerCallee = innerPath.node.callee;
-                    
-                    // Check for async patterns
-                    if (
-                      (t.isIdentifier(innerCallee) && innerCallee.name === 'fetch') ||
-                      (t.isMemberExpression(innerCallee) && 
-                       t.isIdentifier(innerCallee.property) && 
-                       (innerCallee.property.name === 'then' || innerCallee.property.name === 'catch'))
-                    ) {
-                      hasAsync = true;
-                    }
-                  },
-                  AwaitExpression() {
-                    hasAsync = true;
-                  },
-                  FunctionDeclaration(innerPath: NodePath<t.FunctionDeclaration>) {
-                    if (innerPath.node.async) hasAsync = true;
-                  },
-                  ArrowFunctionExpression(innerPath: NodePath<t.ArrowFunctionExpression>) {
-                    if (innerPath.node.async) hasAsync = true;
-                  }
-                }, path.scope, path.state, path.parentPath);
-                
-                if (hasAsync) {
-                  violations.push({
-                    rule: 'no-async-effects',
-                    severity: 'error',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Child component "${componentName}" has async operations in useEffect at line ${path.node.loc?.start.line}. Data should be loaded by the root component and passed as props.`,
-                    code: path.toString().substring(0, 100) + '...'
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
     
     // New rules for the controlled component pattern
     {
@@ -333,7 +237,7 @@ export class ComponentLinter {
                   severity: 'error',
                   line: openingElement.loc?.start.line || 0,
                   column: openingElement.loc?.start.column || 0,
-                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All child components must receive styles, utilities, and components props.`,
+                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All components must receive styles, utilities, and components props.`,
                   code: `<${componentBeingCalled} ... />`
                 });
               }
@@ -384,7 +288,6 @@ export class ComponentLinter {
   
   public static async lintComponent(
     code: string,
-    componentType: ComponentType,
     componentName: string,
     componentSpec?: any
   ): Promise<LintResult> {
@@ -402,17 +305,12 @@ export class ComponentLinter {
       
       // Run each rule
       for (const rule of rules) {
-        // Skip data fetching rule if component has dataRequirements in spec
-        if (rule.name === 'no-data-fetching' && componentSpec?.dataRequirements) {
-          continue;
-        }
-        
         const ruleViolations = rule.test(ast, componentName);
         violations.push(...ruleViolations);
       }
       
       // Generate fix suggestions
-      const suggestions = this.generateFixSuggestions(violations, componentType);
+      const suggestions = this.generateFixSuggestions(violations);
       
       return {
         success: violations.filter(v => v.severity === 'error').length === 0,
@@ -435,24 +333,37 @@ export class ComponentLinter {
     }
   }
   
-  private static generateFixSuggestions(violations: Violation[], componentType: ComponentType): FixSuggestion[] {
+  private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
     const suggestions: FixSuggestion[] = [];
     
     for (const violation of violations) {
       switch (violation.rule) {
-        case 'no-use-state':
+        case 'hybrid-state-management':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must be controlled - receive state via props and update via onStateChanged',
-            example: `// Instead of:
-const [value, setValue] = useState(initialValue);
+            suggestion: 'Use hybrid state management - useState for ephemeral UI state only, props + onStateChanged for application state',
+            example: `// ✅ CORRECT - Ephemeral UI state:
+const [searchDraft, setSearchDraft] = useState('');
+const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+const [hoveredId, setHoveredId] = useState(null);
 
-// Use:
-function Component({ value, onStateChanged }) {
-  const handleChange = (newValue) => {
-    onStateChanged?.({ value: newValue });
+// ❌ WRONG - Application state should come from props:
+const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+const [activeFilters, setActiveFilters] = useState([]);
+
+// Instead use:
+function Component({ selectedCustomerId, activeFilters, onStateChanged }) {
+  // Local state for UI
+  const [searchDraft, setSearchDraft] = useState('');
+  
+  // Application state updates
+  const handleSelect = (id) => {
+    onStateChanged?.({ selectedCustomerId: id });
   };
-  return <input value={value} onChange={e => handleChange(e.target.value)} />;
+  
+  const handleSearchSubmit = () => {
+    onStateChanged?.({ searchQuery: searchDraft });
+  };
 }`
           });
           break;
@@ -493,21 +404,6 @@ const result = await utilities.rv.RunView({ entityName: 'Items' });`
           });
           break;
           
-        case 'no-data-fetching':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Move data fetching to the root component and pass data as props',
-            example: 'Remove utilities.rv.RunView() calls and accept the data as props instead'
-          });
-          break;
-          
-        case 'no-async-effects':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove async operations from useEffect. Let the root component handle data loading',
-            example: 'Remove the useEffect with async operations and accept loading/error states as props'
-          });
-          break;
           
         case 'use-onStateChanged-pattern':
           suggestions.push({
@@ -532,8 +428,8 @@ function Component({ onStateChanged, styles, utilities, components }) {
         case 'pass-standard-props':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Always pass standard props (styles, utilities, components) to child components',
-            example: `// Always include these props when calling child components:
+            suggestion: 'Always pass standard props (styles, utilities, components) to all components',
+            example: `// Always include these props when calling components:
 <ChildComponent
   items={items}  // Specific props, not generic 'data'
   selectedId={selectedId}

@@ -9,7 +9,7 @@ import {
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
-import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
+import { ComponentLinter, FixSuggestion } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface ComponentExecutionOptions {
@@ -72,12 +72,10 @@ export class ComponentRunner {
   async lintComponent(
     componentCode: string, 
     componentName: string,
-    componentType: ComponentType,
     componentSpec?: any
   ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
-      componentType,
       componentName,
       componentSpec
     );
