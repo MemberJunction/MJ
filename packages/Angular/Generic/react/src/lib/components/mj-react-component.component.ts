@@ -45,6 +45,15 @@ export interface StateChangeEvent {
 }
 
 /**
+ * User settings changed event emitted when component saves user preferences
+ */
+export interface UserSettingsChangedEvent {
+  settings: Record<string, any>;
+  componentName?: string;
+  timestamp: Date;
+}
+
+/**
  * Angular component that hosts React components with proper memory management.
  * This component provides a bridge between Angular and React, allowing React components
  * to be used seamlessly within Angular applications.
@@ -147,10 +156,24 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() utilities: any = {};
   @Input() styles?: Partial<ComponentStyles>;
   
+  private _savedUserSettings: any = {};
+  @Input()
+  set savedUserSettings(value: any) {
+    this._savedUserSettings = value || {};
+    // Re-render if component is initialized
+    if (this.isInitialized) {
+      this.renderComponent();
+    }
+  }
+  get savedUserSettings(): any {
+    return this._savedUserSettings;
+  }
+  
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
+  @Output() userSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
@@ -311,17 +334,16 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.currentCallbacks = this.createCallbacks();
     }
     
-    // Build props - pass styles as-is for Skip components
-    const props = buildComponentProps(
-      this._data || {},
-      this.currentState,
-      this.utilities || {},
-      this.currentCallbacks,
+    // Build props with savedUserSettings pattern
+    const props = {
+      ...this._data, // Spread data properties directly
+      utilities: this.utilities || {},
+      callbacks: this.currentCallbacks,
       components,
-      this.styles as any, // Skip components expect the full SkipComponentStyles structure
-      { debounceUpdateUserState: 3000 }, // 3 second debounce by default
-      this.handleStateChanged.bind(this) // Standard onStateChanged handler
-    );
+      styles: this.styles as any,
+      savedUserSettings: this._savedUserSettings,
+      onSaveUserSettings: this.handleSaveUserSettings.bind(this)
+    };
 
     // Create error boundary
     const ErrorBoundary = createErrorBoundary(React, {
@@ -429,30 +451,27 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Handle standard onStateChanged event from components
-   * This replaces the UpdateUserState callback pattern
+   * Handle onSaveUserSettings from components
+   * This implements the SavedUserSettings pattern
    */
-  private handleStateChanged(stateUpdate: Record<string, any>) {
+  private handleSaveUserSettings(newSettings: Record<string, any>) {
     // Check if there are actual changes
-    const hasChanges = Object.keys(stateUpdate).some(key => {
-      const currentValue = this.currentState[key];
-      const newValue = stateUpdate[key];
-      return !this.isEqual(currentValue, newValue);
-    });
+    const hasChanges = !this.isEqual(this._savedUserSettings, newSettings);
     
     if (!hasChanges) {
       // No actual changes, skip update to prevent infinite loop
       return;
     }
     
-    // Update current state
-    this.currentState = {
-      ...this.currentState,
-      ...stateUpdate
-    };
+    // Update saved settings
+    this._savedUserSettings = { ...newSettings };
     
-    // Emit the entire state update as a single event
-    this.stateChange.emit({ path: '', value: stateUpdate });
+    // Emit user settings changed event
+    this.userSettingsChanged.emit({
+      settings: this._savedUserSettings,
+      componentName: this.component?.name,
+      timestamp: new Date()
+    });
     
     // Schedule re-render
     this.renderComponent();

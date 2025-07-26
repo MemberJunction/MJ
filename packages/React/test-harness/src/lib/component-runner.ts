@@ -506,22 +506,34 @@ ${cssLinks}
         return;
       }
       
-      // Add components, utilities, styles, and onStateChanged to props
-      const enhancedProps = {
-        ...props,
-        components: components,
-        utilities: BuildUtilities(),
-        styles: SetupStyles(),
-        onStateChanged: (stateUpdate) => {
-          console.log('State changed:', stateUpdate);
-          // In test harness, we just log state changes
-          // Real applications would persist this state
-        }
+      // Simple in-memory storage for user settings
+      let savedUserSettings = {};
+      
+      // Create root for rendering
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      
+      // Function to render with current settings
+      const renderWithSettings = () => {
+        const enhancedProps = {
+          ...props,
+          components: components,
+          utilities: BuildUtilities(),
+          styles: SetupStyles(),
+          savedUserSettings: savedUserSettings,
+          onSaveUserSettings: (newSettings) => {
+            console.log('User settings saved:', newSettings);
+            // Update in-memory storage
+            savedUserSettings = { ...newSettings };
+            // Re-render with new settings
+            renderWithSettings();
+          }
+        };
+        
+        root.render(React.createElement(RootComponent, enhancedProps));
       };
       
-      // Render the root component
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(RootComponent, enhancedProps));
+      // Initial render
+      renderWithSettings();
     })();
   </script>
 </body>
