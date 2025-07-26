@@ -312,6 +312,87 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+    
+    {
+      name: 'undefined-component-usage',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        const componentsFromProps = new Set<string>();
+        const componentsUsedInJSX = new Set<string>();
+        let hasComponentsProp = false;
+        
+        traverse(ast, {
+          // First, find what's destructured from the components prop
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              // Check if destructuring from 'components'
+              if (path.node.init.name === 'components') {
+                hasComponentsProp = true;
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    componentsFromProps.add(prop.key.name);
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check object destructuring in function parameters
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'components') {
+                    hasComponentsProp = true;
+                    // Look for nested destructuring like { components: { A, B } }
+                    if (t.isObjectPattern(prop.value)) {
+                      for (const innerProp of prop.value.properties) {
+                        if (t.isObjectProperty(innerProp) && t.isIdentifier(innerProp.key)) {
+                          componentsFromProps.add(innerProp.key.name);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Track JSX element usage
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            if (t.isJSXIdentifier(openingElement.name) && /^[A-Z]/.test(openingElement.name.name)) {
+              const componentName = openingElement.name.name;
+              // Only track if it's from our destructured components
+              if (componentsFromProps.has(componentName)) {
+                componentsUsedInJSX.add(componentName);
+              }
+            }
+          }
+        });
+        
+        // Only check if we found a components prop
+        if (hasComponentsProp && componentsFromProps.size > 0) {
+          // Find components that are destructured but never used
+          const unusedComponents = Array.from(componentsFromProps).filter(
+            comp => !componentsUsedInJSX.has(comp)
+          );
+          
+          if (unusedComponents.length > 0) {
+            violations.push({
+              rule: 'undefined-component-usage',
+              severity: 'warning',
+              line: 1,
+              column: 0,
+              message: `Component destructures ${unusedComponents.join(', ')} from components prop but never uses them. These may be missing from the component spec's dependencies array.`
+            });
+          }
+        }
+        
+        return violations;
+      }
     }
   ];
   
@@ -511,6 +592,37 @@ const handleSelect = (id) => {
             violation: violation.rule,
             suggestion: 'Remove child component implementations. Only the root component function should be in this file',
             example: 'Move child component functions to separate generation requests'
+          });
+          break;
+          
+        case 'undefined-component-usage':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
+            example: `// Component spec should include all referenced components:
+{
+  "name": "MyComponent",
+  "code": "...",
+  "dependencies": [
+    {
+      "name": "ModelTreeView",
+      "code": "function ModelTreeView({ ... }) { ... }"
+    },
+    {
+      "name": "PromptTable", 
+      "code": "function PromptTable({ ... }) { ... }"
+    },
+    {
+      "name": "FilterPanel",
+      "code": "function FilterPanel({ ... }) { ... }"
+    }
+    // Add ALL components referenced in the root component
+  ]
+}
+
+// Then in your component:
+const { ModelTreeView, PromptTable, FilterPanel } = components;
+// All these will be available`
           });
           break;
       }
