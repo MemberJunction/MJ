@@ -393,6 +393,93 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+    
+    {
+      name: 'unsafe-array-access',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check for array[index] patterns
+            if (t.isNumericLiteral(path.node.property) || 
+                (t.isIdentifier(path.node.property) && path.node.computed && /^\d+$/.test(path.node.property.name))) {
+              
+              // Look for patterns like: someArray[0].method()
+              const parent = path.parent;
+              if (t.isMemberExpression(parent) && parent.object === path.node) {
+                const code = path.toString();
+                
+                // Check if it's an array access followed by a method call
+                if (/\[\d+\]\.\w+/.test(code)) {
+                  violations.push({
+                    rule: 'unsafe-array-access',
+                    severity: 'error',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
+                    code: code
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'array-reduce-safety',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for .reduce() calls
+            if (t.isMemberExpression(path.node.callee) && 
+                t.isIdentifier(path.node.callee.property) && 
+                path.node.callee.property.name === 'reduce') {
+              
+              // Check if the array might be empty
+              const arrayExpression = path.node.callee.object;
+              const code = path.toString();
+              
+              // Look for patterns that suggest no safety check
+              const hasInitialValue = path.node.arguments.length > 1;
+              
+              if (!hasInitialValue) {
+                violations.push({
+                  rule: 'array-reduce-safety',
+                  severity: 'warning',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `reduce() without initial value may fail on empty arrays: ${code}`,
+                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+                });
+              }
+              
+              // Check for reduce on array access like arr[0].reduce()
+              if (t.isMemberExpression(arrayExpression) && 
+                  (t.isNumericLiteral(arrayExpression.property) || 
+                   (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
+                violations.push({
+                  rule: 'array-reduce-safety',
+                  severity: 'error',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `reduce() on array element access is unsafe: ${code}`,
+                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -623,6 +710,47 @@ const handleSelect = (id) => {
 // Then in your component:
 const { ModelTreeView, PromptTable, FilterPanel } = components;
 // All these will be available`
+          });
+          break;
+          
+        case 'unsafe-array-access':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Always check array bounds before accessing elements',
+            example: `// ❌ UNSAFE:
+const firstItem = items[0].name;
+const total = data[0].reduce((sum, item) => sum + item.value, 0);
+
+// ✅ SAFE:
+const firstItem = items.length > 0 ? items[0].name : 'No items';
+const total = data.length > 0 
+  ? data[0].reduce((sum, item) => sum + item.value, 0)
+  : 0;
+
+// ✅ BETTER - Use optional chaining:
+const firstItem = items[0]?.name || 'No items';
+const total = data[0]?.reduce((sum, item) => sum + item.value, 0) || 0;`
+          });
+          break;
+
+        case 'array-reduce-safety':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Always provide an initial value for reduce() or check array length',
+            example: `// ❌ UNSAFE:
+const sum = numbers.reduce((a, b) => a + b); // Fails on empty array
+const total = data[0].reduce((sum, item) => sum + item.value); // Multiple issues
+
+// ✅ SAFE:
+const sum = numbers.reduce((a, b) => a + b, 0); // Initial value
+const total = data.length > 0 && data[0]
+  ? data[0].reduce((sum, item) => sum + item.value, 0)
+  : 0;
+
+// ✅ ALSO SAFE:
+const sum = numbers.length > 0 
+  ? numbers.reduce((a, b) => a + b)
+  : 0;`
           });
           break;
       }

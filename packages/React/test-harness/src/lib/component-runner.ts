@@ -17,6 +17,7 @@ export interface ComponentExecutionOptions {
   props?: Record<string, any>;
   setupCode?: string;
   timeout?: number;
+  renderWaitTime?: number; // New option - default 1000ms
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
@@ -118,6 +119,14 @@ export class ComponentRunner {
       
       // Get render count
       renderCount = await this.getRenderCount(page);
+      
+      // Collect runtime errors
+      const runtimeErrors = await this.collectRuntimeErrors(page);
+      errors.push(...runtimeErrors);
+      
+      // Perform deep render validation
+      const deepRenderErrors = await this.validateDeepRender(page);
+      errors.push(...deepRenderErrors);
 
       // Get the rendered HTML
       const html = await this.browserManager.getContent();
@@ -211,6 +220,19 @@ ${cssLinks}
     #root { min-height: 100vh; }
   </style>
   <script>
+    // Initialize error tracking
+    window.__testHarnessRuntimeErrors = [];
+    
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      console.error('Runtime error:', event.error);
+      window.__testHarnessRuntimeErrors.push({
+        message: event.error.message,
+        stack: event.error.stack,
+        type: 'runtime'
+      });
+    });
+    
     // Render tracking injection
     (function() {
       let renderCounter = 0;
@@ -482,6 +504,38 @@ ${cssLinks}
       overflow: 'auto'
     });
     
+    // React Error Boundary component
+    const ErrorBoundary = class extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      
+      componentDidCatch(error, errorInfo) {
+        console.error('React Error Boundary caught:', error, errorInfo);
+        window.__testHarnessRuntimeErrors = window.__testHarnessRuntimeErrors || [];
+        window.__testHarnessRuntimeErrors.push({
+          message: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          type: 'react'
+        });
+      }
+      
+      render() {
+        if (this.state.hasError) {
+          return React.createElement('div', { style: { color: 'red', padding: '20px' } }, 
+            'Component Error: ' + this.state.error.message
+          );
+        }
+        return this.props.children;
+      }
+    };
+    
     // Load component spec and register hierarchy
     const componentSpec = ${specJson};
     const props = ${propsJson};
@@ -529,7 +583,11 @@ ${cssLinks}
           }
         };
         
-        root.render(React.createElement(RootComponent, enhancedProps));
+        root.render(
+          React.createElement(ErrorBoundary, null,
+            React.createElement(RootComponent, enhancedProps)
+          )
+        );
       };
       
       // Initial render
@@ -606,6 +664,7 @@ ${cssLinks}
     errors: string[]
   ): Promise<boolean> {
     const timeout = options.timeout || 10000; // 10 seconds default
+    const renderWaitTime = options.renderWaitTime || 1000; // Default 1000ms
     
     try {
       if (options.waitForSelector) {
@@ -615,8 +674,22 @@ ${cssLinks}
       if (options.waitForLoadState) {
         await this.browserManager.waitForLoadState(options.waitForLoadState);
       } else {
-        // Default wait for React to finish rendering
-        await page.waitForTimeout(100);
+        // Wait for React to finish rendering with configurable time
+        await page.waitForTimeout(renderWaitTime);
+        
+        // Force React to flush all updates
+        await page.evaluate(() => {
+          if ((window as any).React && (window as any).React.flushSync) {
+            try {
+              (window as any).React.flushSync(() => {});
+            } catch (e) {
+              console.error('flushSync error:', e);
+            }
+          }
+        });
+        
+        // Additional small wait after flush to ensure DOM updates
+        await page.waitForTimeout(50);
       }
       
       return true;
@@ -631,6 +704,79 @@ ${cssLinks}
    */
   private async getRenderCount(page: any): Promise<number> {
     return await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
+  }
+  
+  /**
+   * Collects runtime errors that were caught during component execution
+   */
+  private async collectRuntimeErrors(page: any): Promise<string[]> {
+    const runtimeErrors = await page.evaluate(() => {
+      return (window as any).__testHarnessRuntimeErrors || [];
+    });
+    
+    const errors: string[] = [];
+    runtimeErrors.forEach((error: any) => {
+      errors.push(`${error.type} error: ${error.message}`);
+      if (error.componentStack) {
+        errors.push(`Component stack: ${error.componentStack}`);
+      }
+    });
+    
+    return errors;
+  }
+  
+  /**
+   * Performs deep render validation to catch errors that might be in the DOM
+   */
+  private async validateDeepRender(page: any): Promise<string[]> {
+    const errors: string[] = [];
+    
+    try {
+      // Execute a full render cycle by forcing a state update
+      await page.evaluate(() => {
+        // Force React to complete all pending updates
+        if ((window as any).React && (window as any).React.flushSync) {
+          (window as any).React.flushSync(() => {});
+        }
+      });
+      
+      // Check for render errors in the component tree
+      const renderErrors = await page.evaluate(() => {
+        const errors: string[] = [];
+        
+        // Walk the DOM and check for error boundaries or error text
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+          const text = node.textContent || '';
+          // Look for common error patterns
+          if (text.includes('TypeError:') || 
+              text.includes('ReferenceError:') ||
+              text.includes('Cannot read properties of undefined') ||
+              text.includes('Cannot access property') ||
+              text.includes('is not a function') ||
+              text.includes('Component Error:')) {
+            // Only add if it's not already in our error list
+            const errorMsg = text.trim();
+            if (errorMsg.length < 500) { // Avoid huge text blocks
+              errors.push(`Potential error in rendered content: ${errorMsg}`);
+            }
+          }
+        }
+        
+        return errors;
+      });
+      
+      errors.push(...renderErrors);
+    } catch (e) {
+      errors.push(`Deep render validation failed: ${e}`);
+    }
+    
+    return errors;
   }
 
   /**
