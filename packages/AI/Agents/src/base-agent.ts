@@ -3002,6 +3002,22 @@ export class BaseAgent {
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
+            // Call agent type's pre-processing for actions
+            try {
+                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+                const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+                
+                // Pre-process actions - this may modify the actions array in place
+                await agentTypeInstance.PreProcessActionStep(
+                    actions,
+                    currentPayload,
+                    previousDecision
+                );
+            } catch (error) {
+                LogError(`Error in PreProcessActionStep: ${error.message}`);
+                // Continue with unmodified actions if pre-processing fails
+            }
+
             // Track step numbers for parallel actions
             let numActionsProcessed = 0;
             const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;

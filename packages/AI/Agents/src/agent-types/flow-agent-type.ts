@@ -14,9 +14,11 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction } from '@memberjunction/ai-core-plus';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
+import { AIEngine } from '@memberjunction/aiengine';
+import { ActionEngineServer } from '@memberjunction/actions';
 
 /**
  * Flow execution context that tracks the current state of the workflow
@@ -153,6 +155,12 @@ export class FlowAgentType extends BaseAgentType {
                     );
                     
                     if (nextStep) {
+                        // Check if the step is active
+                        if (nextStep.Status !== 'Active') {
+                            return this.createNextStep('Failed', {
+                                errorMessage: `Requested step '${nextStep.Name}' is not active. Status: ${nextStep.Status}`
+                            });
+                        }
                         return await this.createStepForFlowNode(nextStep, currentPayload);
                     }
                 }
@@ -174,6 +182,22 @@ export class FlowAgentType extends BaseAgentType {
             if (!nextStep) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
+                });
+            }
+            
+            // Check if the step is active
+            if (nextStep.Status !== 'Active') {
+                // Step is disabled or pending - find next valid path
+                for (let i = 1; i < paths.length; i++) {
+                    const alternateStep = await this.getStepById(paths[i].DestinationStepID);
+                    if (alternateStep && alternateStep.Status === 'Active') {
+                        return await this.createStepForFlowNode(alternateStep, currentPayload);
+                    }
+                }
+                
+                // No active steps found in any path
+                return this.createNextStep('Failed', {
+                    errorMessage: `No active steps found. Step '${nextStep.Name}' has status: ${nextStep.Status}`
                 });
             }
             
@@ -213,17 +237,11 @@ export class FlowAgentType extends BaseAgentType {
         if (!flowContext.agentId && prompt.data.agentName) {
             // We need to find the agent ID from the agent name
             // This is a temporary solution - ideally the agent ID should be passed through
-            const rv = new RunView();
             const agentName = prompt.data.agentName as string;
-            const result = await rv.RunView({
-                EntityName: 'AI Agents',
-                ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
-                MaxRows: 1,
-                ResultType: 'simple'
-            });
+            const agent = AIEngine.Instance.GetAgentByName(agentName);
             
-            if (result.Success && result.Results && result.Results.length > 0) {
-                flowContext.agentId = result.Results[0].ID;
+            if (agent) {
+                flowContext.agentId = agent.ID;
                 
                 // Initialize the flow context in the payload if it doesn't exist
                 const payloadObj = (payload || {}) as Record<string, unknown>;
@@ -272,20 +290,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStartingSteps(agentId: string): Promise<AIAgentStepEntity[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `AgentID='${agentId}' AND StartingStep=1`,
-            OrderBy: 'Name',
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success) {
-            LogError(`Failed to load starting steps: ${result.ErrorMessage}`);
-            return [];
-        }
-        
-        return result.Results || [];
+        const steps = AIEngine.Instance.GetAgentSteps(agentId, 'Active');
+        return steps.filter(step => step.StartingStep).sort((a, b) => a.Name.localeCompare(b.Name));
     }
     
     /**
@@ -294,19 +300,7 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStepById(stepId: string): Promise<AIAgentStepEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `ID='${stepId}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0];
+        return AIEngine.Instance.GetAgentStepById(stepId);
     }
     
     /**
@@ -315,19 +309,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStepByName(agentId: string, stepName: string): Promise<AIAgentStepEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `AgentID='${agentId}' AND Name='${stepName.replace(/'/g, "''")}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0];
+        const steps = AIEngine.Instance.GetAgentSteps(agentId);
+        return steps.find(step => step.Name === stepName) || null;
     }
     
     /**
@@ -337,20 +320,8 @@ export class FlowAgentType extends BaseAgentType {
      */
     private async getValidPaths(stepId: string, payload: unknown): Promise<AIAgentStepPathEntity[]> {
         // Load all paths from this step
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepPathEntity>({
-            EntityName: 'MJ: AI Agent Step Paths',
-            ExtraFilter: `OriginStepID='${stepId}'`,
-            OrderBy: 'Priority DESC',
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results) {
-            LogError(`Failed to load paths from step: ${result.ErrorMessage}`);
-            return [];
-        }
-        
-        const allPaths = result.Results;
+        const allPaths = AIEngine.Instance.GetPathsFromStep(stepId)
+            .sort((a, b) => b.Priority - a.Priority);
         const validPaths: AIAgentStepPathEntity[] = [];
         
         // Evaluate each path's condition
@@ -561,19 +532,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getActionName(actionId: string): Promise<string | null> {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Actions',
-            ExtraFilter: `ID='${actionId}'`,
-            MaxRows: 1,
-            ResultType: 'simple'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0].Name;
+        const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionId);
+        return action?.Name || null;
     }
     
     /**
@@ -582,19 +542,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getAgentName(agentId: string): Promise<string | null> {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'AI Agents',
-            ExtraFilter: `ID='${agentId}'`,
-            MaxRows: 1,
-            ResultType: 'simple'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0].Name;
+        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentId);
+        return agent?.Name || null;
     }
     
     /**
@@ -614,6 +563,119 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         return this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+    }
+    
+    /**
+     * Override of BaseAgentType's PreProcessActionStep to handle Flow-specific input mapping.
+     * 
+     * This method checks if the current step has action input mapping configured
+     * and applies it to map payload values or static values to action input parameters.
+     * 
+     * @override
+     * @param {AgentAction[]} actions - The actions that will be executed (modified in place)
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<void>} Actions are modified in place
+     * 
+     * @since 2.76.0
+     */
+    public async PreProcessActionStep<P>(
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<void> {
+        // Check if this step has action input mapping configured
+        const stepMetadata = currentStep as Record<string, unknown>;
+        const stepId = stepMetadata.stepId as string | undefined;
+        
+        if (!stepId || actions.length === 0) {
+            // No step ID or no actions to process
+            return;
+        }
+        
+        // Get the AIAgentStep from cached metadata
+        const stepEntity = AIEngine.Instance.GetAgentStepById(stepId);
+        
+        if (!stepEntity) {
+            LogError(`Failed to find AIAgentStep for input mapping: ${stepId}`);
+            return;
+        }
+        
+        if (!stepEntity.ActionInputMapping) {
+            // No input mapping configured
+            return;
+        }
+        
+        // For flow agents, we currently only support single action steps with input mapping
+        // Future enhancement: support mapping to multiple actions
+        if (actions.length > 1) {
+            LogError('Flow agent action input mapping currently only supports single action steps');
+            return;
+        }
+        
+        try {
+            // Parse the input mapping configuration
+            // Expected format: { "paramName": "payload.path.to.value" | "static:value" | 123 | true }
+            const inputMapping: Record<string, unknown> = JSON.parse(stepEntity.ActionInputMapping);
+            const action = actions[0];
+            
+            // Initialize params if not present
+            if (!action.params) {
+                action.params = {};
+            }
+            
+            // Apply each mapping
+            for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
+                let resolvedValue: unknown;
+                
+                if (typeof mappingValue === 'string') {
+                    if (mappingValue.startsWith('static:')) {
+                        // Static string value
+                        resolvedValue = mappingValue.substring(7);
+                    } else if (mappingValue.startsWith('payload.')) {
+                        // Payload path mapping
+                        const path = mappingValue.substring(8); // Remove "payload." prefix
+                        resolvedValue = this.getValueFromPath(currentPayload, path);
+                    } else {
+                        // Treat as literal string value
+                        resolvedValue = mappingValue;
+                    }
+                } else {
+                    // Direct value (number, boolean, object, etc.)
+                    resolvedValue = mappingValue;
+                }
+                
+                // Set the parameter value
+                action.params[paramName] = resolvedValue;
+            }
+            
+            if (IsVerboseLoggingEnabled()) {
+                console.log(`Applied action input mapping for step ${stepEntity.Name}:`, action.params);
+            }
+        } catch (error) {
+            LogError(`Failed to apply action input mapping: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Helper method to get a value from a nested object path
+     * 
+     * @private
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+            if (current && typeof current === 'object' && part in current) {
+                current = current[part];
+            } else {
+                return undefined;
+            }
+        }
+        
+        return current;
     }
     
     /**

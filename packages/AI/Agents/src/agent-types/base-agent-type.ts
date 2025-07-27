@@ -291,6 +291,30 @@ export abstract class BaseAgentType {
     }
     
     /**
+     * Pre-processes an action step before execution.
+     * 
+     * This method is called by BaseAgent before action(s) are executed.
+     * Agent types can override this method to perform custom pre-processing,
+     * such as mapping payload values to action input parameters or modifying action configurations.
+     * 
+     * @param {AgentAction[]} actions - The actions that will be executed (can be modified)
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<void>} Actions are modified in place
+     * 
+     * @since 2.76.0
+     */
+    public async PreProcessActionStep<P>(
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<void> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+    }
+    
+    /**
      * Post-processes the result of action execution.
      * 
      * This method is called by BaseAgent after action(s) have been executed.
