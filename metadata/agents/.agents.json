@@ -119,16 +119,7 @@
       "IconClass": "fa-solid fa-arrows-rotate"
     },
     "relatedEntities": {
-      "MJ: AI Agent Prompts": [
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Demo Flow Agent - Main Prompt",
-            "ExecutionOrder": 0,
-            "Status": "Active"
-          } 
-        }
-      ],
+      "MJ: AI Agent Prompts": [],
       "MJ: AI Agent Steps": [
         {
           "fields": {
@@ -146,6 +137,13 @@
               "conditions": "weatherConditions"
             },
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B5A74F8-33A6-48ED-A0AF-0E31CE3C4AD2"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.666Z",
+            "checksum": "978b4091dc177e65e6be85262c73efdc635c0a6fbb740a751c40e28ff2050c3b"
           }
         },
         {
@@ -163,6 +161,13 @@
               "results": "webSearchResults"
             },
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F28499A1-0B28-4AE5-B695-7F4B48C38C20"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.684Z",
+            "checksum": "42149834f1126c9157051163b957e4cd609fb70a51e984021c0dc9e95d7f5fd4"
           }
         },
         {
@@ -186,21 +191,42 @@
               {
                 "fields": {
                   "OriginStepID": "@parent:ID",
-                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(a): Get Weather&AgentID=@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(a): Get Weather&AgentID=@parent:AgentID",
                   "Condition": "stockPrice > 500",
                   "Description": "If NVIDIA stock price is above $500, proceed to get the weather step."
+                },
+                "primaryKey": {
+                  "ID": "519F2D7F-1876-48AB-BE0A-8589035C9597"
+                },
+                "sync": {
+                  "lastModified": "2025-07-27T19:05:25.742Z",
+                  "checksum": "4b51d05e8af787117611afd334bafe54199d10d9023758e91045e7d27daf9544"
                 }
               },
               {
                 "fields": {
                   "OriginStepID": "@parent:ID",
-                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(b): Web Search&AgentID=@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(b): Web Search&AgentID=@parent:AgentID",
                   "Condition": "stockPrice <= 500",
                   "Description": "If NVIDIA stock price is below $500, proceed to web search step."
+                },
+                "primaryKey": {
+                  "ID": "85886739-869D-48C5-BF76-1AF9A6F77AFA"
+                },
+                "sync": {
+                  "lastModified": "2025-07-27T19:05:25.761Z",
+                  "checksum": "2ba63a5971ea699a0f47b633f1f9c64edb1aa105b9adbf33392f9becdac13376"
                 }
               }
             ]
-          } 
+          },
+          "primaryKey": {
+            "ID": "54CA1C7E-28D4-4896-A9A2-85538D3CE301"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.701Z",
+            "checksum": "2d19354c3a7aaeabf95afee56590c10df02d90ae483369c69fca6572079ab2ed"
+          }
         }
       ],
       "AI Agent Actions": [
@@ -209,39 +235,81 @@
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Web Page Content",
             "Status": "Active"
-          } 
+          },
+          "primaryKey": {
+            "ID": "CCB4CF46-04DE-4D1B-9CAB-D61E830CA3A1"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.784Z",
+            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+          }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Get Weather",
             "Status": "Active"
-          } 
+          },
+          "primaryKey": {
+            "ID": "6BC4E10C-6838-40ED-A153-E82CC3D146B6"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.795Z",
+            "checksum": "bfd0856ee8119698eed7b76b888f9736680ca59d333a427685e8b16591a4df73"
+          }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Census Data Lookup",
             "Status": "Active"
-          } 
+          },
+          "primaryKey": {
+            "ID": "F9793050-9323-4B4F-A417-6C128AD4054D"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.808Z",
+            "checksum": "10a488464ba741046c73438156a73b41c8a661e00b3db662f6d222f292213664"
+          }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Get Stock Price",
             "Status": "Active"
-          } 
+          },
+          "primaryKey": {
+            "ID": "93E67F1F-EE94-475F-927D-93F56D400902"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.822Z",
+            "checksum": "99f0140095255853b769a5a31317c17afd16fda1ccc7c9f45eb15fe39c2545ed"
+          }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Web Search",
             "Status": "Active"
-          } 
+          },
+          "primaryKey": {
+            "ID": "1065BCF3-54F1-46B8-AFA8-4FA2E05D9371"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.834Z",
+            "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+          }
         }
       ]
-    } 
-  },  
+    },
+    "primaryKey": {
+      "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
+    },
+    "sync": {
+      "lastModified": "2025-07-27T19:05:25.646Z",
+      "checksum": "569b969a18e964da3119cd0f76e520e444607c03b78c72b33d6db48061477719"
+    }
+  },
   {
     "fields": {
       "Name": "Marketing Agent",
