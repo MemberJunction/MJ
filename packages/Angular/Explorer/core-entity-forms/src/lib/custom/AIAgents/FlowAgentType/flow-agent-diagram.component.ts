@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, Input, SimpleChang
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+import { DialogService } from '@progress/kendo-angular-dialog';
 
 @Component({
   selector: 'mj-flow-agent-diagram',
@@ -32,10 +33,12 @@ import { Metadata } from '@memberjunction/core';
                     <i class="fa-solid fa-plus"></i>
                     Add Step
                   </button>
-                  <button (click)="autoArrange()" title="Auto-arrange nodes">
-                    <i class="fa-solid fa-magic"></i>
-                    Auto Arrange
-                  </button>
+                  @if (false) {
+                    <button (click)="autoArrange()" title="Auto-arrange nodes">
+                      <i class="fa-solid fa-magic"></i>
+                      Auto Arrange
+                    </button>
+                  }
                   @if (connectionMode) {
                     <button (click)="cancelConnectionMode()" class="connection-mode-active">
                       <i class="fa-solid fa-times"></i>
@@ -638,6 +641,8 @@ import { Metadata } from '@memberjunction/core';
 export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   @ViewChild('reteContainer', { static: false }) reteContainer!: ElementRef<HTMLDivElement>;
   
+  constructor(private dialogService: DialogService) {}
+  
   @Input() agentId: string | null = null;
   @Input() steps: AIAgentStepEntity[] = [];
   @Input() paths: AIAgentStepPathEntity[] = [];
@@ -872,25 +877,24 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
     }
     if (currentLine) lines.push(currentLine.trim());
     
-    // Add icon for step type or starting step
+    // Add icon for step type or starting step using simple text symbols
     const iconText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     iconText.setAttribute('x', '15');
     iconText.setAttribute('y', (headerHeight / 2 + 5).toString());
     iconText.setAttribute('fill', 'white');
     iconText.setAttribute('font-size', '16');
-    iconText.setAttribute('font-family', 'Font Awesome 6 Free');
-    iconText.setAttribute('font-weight', '900');
+    iconText.setAttribute('font-weight', 'bold');
     
     if (step.StartingStep) {
-      iconText.textContent = '\uf135'; // fa-rocket
+      iconText.textContent = '▶'; // Play symbol for start
     } else if (step.StepType === 'Action') {
-      iconText.textContent = '\uf085'; // fa-cogs
+      iconText.textContent = '⚙'; // Gear symbol for action
     } else if (step.StepType === 'Sub-Agent') {
-      iconText.textContent = '\uf544'; // fa-robot
+      iconText.textContent = '🤖'; // Robot emoji for sub-agent
     } else if (step.StepType === 'Prompt') {
-      iconText.textContent = '\uf075'; // fa-comment
+      iconText.textContent = '💬'; // Speech bubble for prompt
     } else {
-      iconText.textContent = '\uf111'; // fa-circle (default)
+      iconText.textContent = '●'; // Circle (default)
     }
     g.appendChild(iconText);
     
@@ -1472,8 +1476,8 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
     if (!step) return;
     
     try {
-      step.PositionX = x;
-      step.PositionY = y;
+      step.PositionX = Math.round(x);
+      step.PositionY = Math.round(y);
       
       // Save the step
       const result = await step.Save();
@@ -1510,8 +1514,8 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
         y = avgY;
       }
       
-      newStep.PositionX = x;
-      newStep.PositionY = y;
+      newStep.PositionX = Math.round(x);
+      newStep.PositionY = Math.round(y);
       
       const result = await newStep.Save();
       if (result) {
@@ -1779,8 +1783,36 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
     }
   }
   
+  private async showConfirmDialog(title: string, content: string): Promise<boolean> {
+    const dialog = this.dialogService.open({
+      title: title,
+      content: content,
+      actions: [
+        { text: 'No', primary: false },
+        { text: 'Yes', primary: true, themeColor: 'primary' }
+      ],
+      width: 450,
+      height: 200
+    });
+    
+    try {
+      const result = await dialog.result;
+      return !!(result && (result as any).text === 'Yes');
+    } catch {
+      // Dialog was closed with X button or ESC
+      return false;
+    }
+  }
+  
   public async deleteSelectedStep() {
-    if (!this.selectedStep || !confirm('Are you sure you want to delete this step?')) return;
+    if (!this.selectedStep) return;
+    
+    const confirmed = await this.showConfirmDialog(
+      'Delete Step',
+      `Are you sure you want to delete the step "${this.selectedStep.Name}"? This will also delete all connected paths.`
+    );
+    
+    if (!confirmed) return;
     
     try {
       // Delete all paths connected to this step
@@ -1845,7 +1877,14 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
   }
   
   public async deleteSelectedPath() {
-    if (!this.selectedPath || !confirm('Are you sure you want to delete this connection?')) return;
+    if (!this.selectedPath) return;
+    
+    const confirmed = await this.showConfirmDialog(
+      'Delete Connection',
+      'Are you sure you want to delete this connection?'
+    );
+    
+    if (!confirmed) return;
     
     try {
       const result = await this.selectedPath.Delete();

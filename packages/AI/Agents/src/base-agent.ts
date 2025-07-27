@@ -715,15 +715,12 @@ export class BaseAgent {
             };
         }
 
-        // Find the system prompt
+        // Find the system prompt (optional)
         const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
-        if (!systemPrompt && !metadataOptional) {
-            return {
-                success: false,
-                errorMessage: `System prompt not found for agent type: ${agentType.Name}`
-            };
-        }
 
+        if (!systemPrompt)
+            metadataOptional = true; // If no system prompt, we can skip some validations
+        
         // Find the first active agent prompt
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
@@ -786,11 +783,20 @@ export class BaseAgent {
 
         // Set up the hierarchical prompt execution
         const promptParams = new AIPromptParams();
-        promptParams.prompt = systemPrompt;
+        
+        // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
+        if (systemPrompt) {
+            promptParams.prompt = systemPrompt;
+            promptParams.templateMessageRole = 'system';
+        } else {
+            // For agents without system prompts, use the child prompt directly
+            promptParams.prompt = childPrompt;
+            promptParams.templateMessageRole = 'user';
+        }
+        
         promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
-        promptParams.templateMessageRole = 'system';
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
         // before we execute the prompt, we ask our Agent Type to inject the
@@ -801,33 +807,44 @@ export class BaseAgent {
         const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
         await atInstance.InjectPayload<P>(payload, promptParams);
 
-        // Setup child prompt parameters
-        const childPromptParams: AIPromptParams = {
-            prompt: childPrompt,
-            data: promptTemplateData,
-            contextUser: params.contextUser,
-            conversationMessages: params.conversationMessages,
-            templateMessageRole: 'user',
-            verbose: params.verbose
-        };
-        
-        // Pass through API keys to child prompt if provided
-        if (params.apiKeys && params.apiKeys.length > 0) {
-            childPromptParams.apiKeys = params.apiKeys;
+        // Only set up child prompts if we have a system prompt
+        if (systemPrompt) {
+            // Setup child prompt parameters
+            const childPromptParams: AIPromptParams = {
+                prompt: childPrompt,
+                data: promptTemplateData,
+                contextUser: params.contextUser,
+                conversationMessages: params.conversationMessages,
+                templateMessageRole: 'user',
+                verbose: params.verbose
+            };
+            
+            // Pass through API keys to child prompt if provided
+            if (params.apiKeys && params.apiKeys.length > 0) {
+                childPromptParams.apiKeys = params.apiKeys;
+            }
+            
+            // Pass through configurationId to both parent and child prompts if provided
+            if (params.configurationId) {
+                promptParams.configurationId = params.configurationId;
+                childPromptParams.configurationId = params.configurationId;
+            }
+            
+            promptParams.childPrompts = [
+                new ChildPromptParam(
+                    childPromptParams,
+                    agentType.AgentPromptPlaceholder
+                )
+            ];
+        } else {
+            // Pass through API keys and configuration ID for direct prompt execution
+            if (params.apiKeys && params.apiKeys.length > 0) {
+                promptParams.apiKeys = params.apiKeys;
+            }
+            if (params.configurationId) {
+                promptParams.configurationId = params.configurationId;
+            }
         }
-        
-        // Pass through configurationId to both parent and child prompts if provided
-        if (params.configurationId) {
-            promptParams.configurationId = params.configurationId;
-            childPromptParams.configurationId = params.configurationId;
-        }
-        
-        promptParams.childPrompts = [
-            new ChildPromptParam(
-                childPromptParams,
-                agentType.AgentPromptPlaceholder
-            )
-        ];
 
         // Handle model selection mode
         if (params.agent.ModelSelectionMode === 'Agent') {
