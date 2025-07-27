@@ -36,7 +36,6 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent impl
     }
 
     async ngOnInit() {
-        console.log('FlowAgentFormSection ngOnInit called');
         await this.loadFlowData();
         if (this.steps.length > 0 || this.EditMode) {
             await this.initializeFlowVisualization();
@@ -46,7 +45,6 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent impl
     }
 
     ngOnDestroy() {
-        console.log('FlowAgentFormSection ngOnDestroy called');
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -90,23 +88,16 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent impl
             }
         } catch (error) {
             this.error = `Error loading flow data: ${error}`;
-            console.error('Error loading flow data:', error);
         }
     }
 
     private async initializeFlowVisualization(): Promise<void> {
-        // For now, we'll use a simpler visualization approach
-        // The full rete.js implementation has version compatibility issues with Angular 18
-        console.log('Flow visualization would be initialized here');
-        console.log('Steps:', this.steps);
-        console.log('Paths:', this.paths);
-        
-        // TODO: Implement a custom flow visualization or wait for rete.js Angular 18 support
+        // Flow visualization is now handled by the flow-agent-diagram component
     }
 
     private async addNewStep(): Promise<void> {
         // This would open a dialog or form to create a new step
-        console.log('Add new step - implementation needed');
+        // Implementation handled by flow-agent-diagram component
     }
 
     public async refreshFlow(): Promise<void> {

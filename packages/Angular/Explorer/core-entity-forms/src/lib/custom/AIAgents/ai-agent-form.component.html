@@ -69,7 +69,7 @@
         <div class="form-content">
             <kendo-panelbar [keepItemContent]="true">
                 <!-- Custom Agent Type Section (if defined) -->
-                @if (record.ID && agentType) {
+                @if (record.ID && agentType && agentType.UIFormSectionKey) {
                     <kendo-panelbar-item 
                         [expanded]="agentType.UIFormSectionExpandedByDefault" 
                         (stateChange)="onCustomSectionStateChange($event)">

@@ -4,8 +4,8 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule, ComboBoxModule, DropDownTreesModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
+import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
+import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -104,6 +104,7 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         ExpansionPanelModule,
         TabStripModule,
         SplitterModule,
+        PanelBarModule,
         DialogsModule,
         WindowModule,
         GridModule,
@@ -115,6 +116,7 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         DropDownsModule,
         ComboBoxModule,
         DropDownTreesModule,
+        DropDownListModule,
         ButtonsModule,
         ButtonModule,
         SplitButtonModule,

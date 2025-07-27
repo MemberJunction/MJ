@@ -61,7 +61,10 @@
                     <mj-flow-agent-diagram
                         [agentId]="agentId"
                         [steps]="steps"
-                        [paths]="paths">
+                        [paths]="paths"
+                        [EditMode]="EditMode"
+                        (stepsChanged)="refreshFlow()"
+                        (pathsChanged)="refreshFlow()">
                     </mj-flow-agent-diagram>
                 } @else {
                     <div class="flow-steps-list">

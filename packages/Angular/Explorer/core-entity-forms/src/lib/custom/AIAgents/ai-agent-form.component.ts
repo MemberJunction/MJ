@@ -476,16 +476,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * @private
      */
     private loadCustomFormSection(): void {
-        console.log('loadCustomFormSection called', 'AgentType:', this.agentType, 'Container:', this.customSectionContainer, 'Already loaded:', this.customSectionLoaded);
-        
         if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
-            console.log('Early return - missing requirements');
             return;
         }
         
         // Check if component still exists in container
         if (this.customSectionLoaded && this.customSectionContainer.length > 0) {
-            console.log('Component already loaded and still in container');
             return;
         }
         
@@ -514,10 +510,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 
                 // Trigger change detection
                 this.cdr.detectChanges();
-                
-                console.log(`Loaded custom form section: ${sectionKey}`, 'Component:', this.customSectionComponent);
-            } else {
-                console.warn(`No custom form section registered for key: ${sectionKey}`);
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
