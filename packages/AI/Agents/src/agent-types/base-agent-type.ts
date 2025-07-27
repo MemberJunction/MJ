@@ -11,10 +11,11 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest} from '@memberjunction/ai-core-plus';
 import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { ActionResult } from '@memberjunction/actions-base';
 
 /**
  * Abstract base class for agent type implementations.
@@ -287,5 +288,59 @@ export abstract class BaseAgentType {
             terminate: true,
             ...options
         });
+    }
+    
+    /**
+     * Post-processes the result of action execution.
+     * 
+     * This method is called by BaseAgent after action(s) have been executed.
+     * Agent types can override this method to perform custom processing of action results,
+     * such as mapping output parameters to the payload or storing results in agent-specific context.
+     * 
+     * @param {ActionResult[]} actionResults - The results from action execution
+     * @param {AgentAction[]} actions - The actions that were executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessActionStep<P>(
+        actionResults: ActionResult[],
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
+    }
+    
+    /**
+     * Post-processes the result of sub-agent execution.
+     * 
+     * This method is called by BaseAgent after a sub-agent has been executed.
+     * Agent types can override this method to perform custom processing of sub-agent results,
+     * such as extracting specific data from the sub-agent's payload or updating context.
+     * 
+     * @param {any} subAgentResult - The result from sub-agent execution
+     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request that was executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessSubAgentStep<P>(
+        subAgentResult: any,
+        subAgentRequest: AgentSubAgentRequest,
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
     }
 }

@@ -2325,7 +2325,7 @@ export class BaseAgent {
             case 'Sub-Agent':
                 return await this.executeSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision);
+                return await this.executeActionsStep(params, config, previousDecision);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -2932,6 +2932,7 @@ export class BaseAgent {
      */
     private async executeActionsStep(
         params: ExecuteAgentParams,
+        config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         try {
@@ -3087,6 +3088,51 @@ export class BaseAgent {
                 content: resultsMessage
             });
             
+            // Call agent type's post-processing for actions
+            let currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+            let finalPayload = currentPayload;
+            
+            try {
+                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+                const actionResultsOnly = actionResults.map(r => r.result).filter(r => r !== undefined) as ActionResult[];
+                
+                const payloadChangeRequest = await agentTypeInstance.PostProcessActionStep(
+                    actionResultsOnly,
+                    actions,
+                    currentPayload,
+                    previousDecision
+                );
+                
+                // If we got a payload change request, apply it
+                if (payloadChangeRequest) {
+                    const allowedPaths = params.agent.PayloadSelfWritePaths 
+                        ? JSON.parse(params.agent.PayloadSelfWritePaths) 
+                        : undefined;
+                    
+                    const changeResult = this._payloadManager.applyAgentChangeRequest(
+                        currentPayload,
+                        payloadChangeRequest,
+                        {
+                            validateChanges: true,
+                            logChanges: true,
+                            agentName: params.agent.Name,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            allowedPaths: allowedPaths,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+                    
+                    finalPayload = changeResult.result;
+                    
+                    if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Action post-processing payload warnings: ${changeResult.warnings.join('; ')}`);
+                    }
+                }
+            } catch (error) {
+                LogError(`Error in PostProcessActionStep: ${error.message}`);
+            }
+            
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
@@ -3094,7 +3140,7 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 previousPayload: previousDecision?.previousPayload || null,
-                newPayload: previousDecision?.newPayload || null, // action steps don't modify the payload so we pass it through
+                newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0 
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`

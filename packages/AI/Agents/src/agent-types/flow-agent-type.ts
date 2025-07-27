@@ -13,9 +13,10 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction } from '@memberjunction/ai-core-plus';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { ActionResult } from '@memberjunction/actions-base';
 
 /**
  * Flow execution context that tracks the current state of the workflow
@@ -93,7 +94,6 @@ interface FlowAgentPromptResponse {
 @RegisterClass(BaseAgentType, "FlowAgentType")
 export class FlowAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
-    private _metadata = new Metadata();
     
     /**
      * Determines the next step based on the flow graph structure.
@@ -207,6 +207,38 @@ export class FlowAgentType extends BaseAgentType {
         
         // Add flow-specific context
         const flowContext = this.getFlowContext(payload);
+        
+        // If flowContext doesn't have agentId, try to get it from prompt data
+        // This happens on first execution when flow context hasn't been initialized yet
+        if (!flowContext.agentId && prompt.data.agentName) {
+            // We need to find the agent ID from the agent name
+            // This is a temporary solution - ideally the agent ID should be passed through
+            const rv = new RunView();
+            const agentName = prompt.data.agentName as string;
+            const result = await rv.RunView({
+                EntityName: 'AI Agents',
+                ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
+                MaxRows: 1,
+                ResultType: 'simple'
+            });
+            
+            if (result.Success && result.Results && result.Results.length > 0) {
+                flowContext.agentId = result.Results[0].ID;
+                
+                // Initialize the flow context in the payload if it doesn't exist
+                const payloadObj = (payload || {}) as Record<string, unknown>;
+                if (!payloadObj.__flowContext) {
+                    payloadObj.__flowContext = {
+                        agentId: flowContext.agentId,
+                        currentStepId: undefined,
+                        completedStepIds: [],
+                        stepResults: {},
+                        executionPath: []
+                    };
+                }
+            }
+        }
+        
         prompt.data.flowContext = {
             currentStepId: flowContext.currentStepId,
             completedSteps: Array.from(flowContext.completedStepIds),
@@ -376,7 +408,7 @@ export class FlowAgentType extends BaseAgentType {
      */
     private applyActionOutputMapping<P>(
         actionResult: Record<string, unknown>,
-        payload: P,
+        _payload: P,
         mappingConfig: string
     ): AgentPayloadChangeRequest<P> | null {
         try {
@@ -573,7 +605,7 @@ export class FlowAgentType extends BaseAgentType {
      */
     public processActionResult<P>(
         actionResult: Record<string, unknown>,
-        stepId: string,
+        _stepId: string,
         outputMapping?: string,
         currentPayload?: P
     ): AgentPayloadChangeRequest<P> | null {
@@ -582,6 +614,96 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         return this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+    }
+    
+    /**
+     * Override of BaseAgentType's PostProcessActionStep to handle Flow-specific logic.
+     * 
+     * This method checks if the current step has action output mapping configured
+     * and applies it to update the payload accordingly.
+     * 
+     * @override
+     * @param {ActionResult[]} actionResults - The results from action execution
+     * @param {AgentAction[]} _actions - The actions that were executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Payload changes from output mapping
+     */
+    public async PostProcessActionStep<P>(
+        actionResults: ActionResult[],
+        _actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Check if this step has action output mapping configured
+        const stepMetadata = currentStep as Record<string, unknown>;
+        const outputMapping = stepMetadata.actionOutputMapping as string | undefined;
+        const stepId = stepMetadata.stepId as string | undefined;
+        
+        if (!outputMapping || !stepId || actionResults.length === 0) {
+            // No mapping configured or no results to process
+            return null;
+        }
+        
+        // For flow agents, we currently only support single action steps with output mapping
+        // Future enhancement: support mapping from multiple actions
+        if (actionResults.length > 1) {
+            LogError('Flow agent action output mapping currently only supports single action steps');
+            return null;
+        }
+        
+        // Extract output parameters from the action result
+        const actionResult = actionResults[0];
+        const outputParams: Record<string, unknown> = {};
+        
+        // Filter for output parameters (Type === 'Output' or 'Both')
+        if (actionResult.Params) {
+            for (const param of actionResult.Params) {
+                if (param.Type === 'Output' || param.Type === 'Both') {
+                    outputParams[param.Name] = param.Value;
+                }
+            }
+        }
+        
+        // Apply the mapping using our existing method
+        const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
+        
+        // Also update flow context to mark step as completed and store result
+        if (payloadChange) {
+            const flowContext = this.getFlowContext(currentPayload);
+            flowContext.completedStepIds.add(stepId);
+            flowContext.stepResults.set(stepId, outputParams);
+            flowContext.executionPath.push(stepId);
+            
+            // Merge flow context update with action output mapping changes
+            const contextUpdate: Partial<P & { __flowContext: FlowExecutionContext }> = {
+                __flowContext: {
+                    agentId: flowContext.agentId,
+                    currentStepId: flowContext.currentStepId,
+                    completedStepIds: Array.from(flowContext.completedStepIds),
+                    stepResults: Object.fromEntries(flowContext.stepResults),
+                    executionPath: flowContext.executionPath
+                }
+            } as Partial<P & { __flowContext: FlowExecutionContext }>;
+            
+            // Combine the updates
+            if (payloadChange.updateElements) {
+                payloadChange.updateElements = {
+                    ...payloadChange.updateElements,
+                    ...contextUpdate
+                };
+            } else if (payloadChange.replaceElements) {
+                payloadChange.replaceElements = {
+                    ...payloadChange.replaceElements,
+                    ...contextUpdate
+                };
+            } else {
+                payloadChange.updateElements = contextUpdate as Partial<P>;
+            }
+        }
+        
+        return payloadChange;
     }
 }
 

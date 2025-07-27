@@ -35,6 +35,14 @@ Concrete implementation of BaseAgentType that:
 - Parses structured JSON responses from prompts
 - Supports actions, sub-agents, and conditional termination
 
+### FlowAgentType
+Deterministic workflow agent type that:
+- Executes predefined workflows using directed graphs
+- Evaluates boolean conditions to determine paths
+- Supports parallel starting steps (Sequence=0)
+- Provides action output mapping to payload
+- Enables hybrid AI/deterministic workflows
+
 ### AgentRunner
 Simple orchestrator that:
 - Loads agent metadata from database
@@ -108,6 +116,16 @@ Agents are configured through MemberJunction entities:
 4. **AIAgentPrompt**: Associates prompts with agents
    - `ExecutionOrder`: Determines prompt execution sequence
    - Links agents to their specific prompts
+
+5. **AIAgentStep**: Defines workflow steps for Flow agents
+   - `StepType`: Action, Sub-Agent, or Prompt
+   - `StartingStep`: Boolean flag for initial steps
+   - `TimeoutSeconds`: Step execution timeout
+   - `ActionOutputMapping`: JSON mapping for action results
+
+6. **AIAgentStepPath**: Connects workflow steps
+   - `Condition`: Boolean expression for path evaluation
+   - `Priority`: Determines path selection order
 
 ## Creating Custom Agent Types
 
@@ -628,6 +646,134 @@ export class DecisionTreeAgent extends BaseAgentType {
                 return { type: 'continue' };
         }
     }
+}
+```
+
+### Flow Agent Configuration
+
+Flow agents enable deterministic workflow execution through graph-based step definitions:
+
+```typescript
+// Database configuration for a Flow agent workflow
+// AIAgentStep records define the workflow nodes
+const approvalWorkflowSteps = [
+    {
+        Name: 'CheckAmount',
+        StepType: 'Action',
+        ActionID: checkAmountActionId,
+        StartingStep: true,
+        Sequence: 0
+    },
+    {
+        Name: 'AutoApprove',
+        StepType: 'Action',
+        ActionID: approveActionId,
+        ActionOutputMapping: JSON.stringify({
+            'approvalId': 'payload.approval.id',
+            'timestamp': 'payload.approval.approvedAt'
+        })
+    },
+    {
+        Name: 'ManagerReview',
+        StepType: 'Prompt',
+        PromptID: managerReviewPromptId,
+        Description: 'Get manager approval decision'
+    },
+    {
+        Name: 'NotifyRejection',
+        StepType: 'Action',
+        ActionID: sendNotificationActionId
+    }
+];
+
+// AIAgentStepPath records define the workflow edges
+const approvalWorkflowPaths = [
+    {
+        OriginStepID: checkAmountStep.ID,
+        DestinationStepID: autoApproveStep.ID,
+        Condition: 'payload.amount <= 1000',
+        Priority: 10
+    },
+    {
+        OriginStepID: checkAmountStep.ID,
+        DestinationStepID: managerReviewStep.ID,
+        Condition: 'payload.amount > 1000',
+        Priority: 10
+    },
+    {
+        OriginStepID: managerReviewStep.ID,
+        DestinationStepID: autoApproveStep.ID,
+        Condition: 'stepResult.approved === true',
+        Priority: 10
+    },
+    {
+        OriginStepID: managerReviewStep.ID,
+        DestinationStepID: notifyRejectionStep.ID,
+        Condition: 'stepResult.approved === false',
+        Priority: 10
+    }
+];
+```
+
+### Flow Agent Features
+
+#### Safe Expression Evaluation
+Flow agents use the SafeExpressionEvaluator to securely evaluate path conditions without arbitrary code execution:
+
+```typescript
+// Supported operations in conditions:
+// - Comparisons: ==, ===, !=, !==, <, >, <=, >=
+// - Logical: &&, ||, !
+// - Property access: payload.user.role, stepResult.score
+// - Safe methods: .includes(), .length, .some(), .every()
+// - Type checking: typeof
+
+// Example conditions:
+"payload.status == 'approved' && payload.priority > 5"
+"stepResult.items.some(item => item.price > 100)"
+"payload.user.roles.includes('admin') || payload.override === true"
+```
+
+#### Action Output Mapping
+Automatically map action results to the payload:
+
+```typescript
+// In AIAgentStep.ActionOutputMapping
+{
+    "userId": "payload.customer.id",           // Map specific output
+    "orderTotal": "payload.order.total",       // Nested path mapping
+    "*": "payload.actionResults.lastResult"    // Wildcard for entire result
+}
+```
+
+#### Flow Context Tracking
+The framework maintains flow execution state in `__flowContext`:
+
+```typescript
+// Automatically tracked in payload.__flowContext
+{
+    agentId: "flow-agent-id",
+    currentStepId: "current-step-id",
+    completedStepIds: ["step1", "step2"],
+    stepResults: {
+        "step1": { success: true, data: {...} },
+        "step2": { approved: false }
+    },
+    executionPath: ["step1", "step2", "step3"]
+}
+```
+
+#### Prompt Steps for AI Decisions
+Flow agents can incorporate AI decision points:
+
+```typescript
+// Prompt step expects response format:
+{
+    "nextStepName?": "StepToExecute",
+    "reasoning?": "Why this decision was made",
+    "confidence?": 0.95,
+    "terminate?": false,
+    "message?": "Decision explanation"
 }
 ```
 
