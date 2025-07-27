@@ -53,10 +53,28 @@ export class LibraryLoader {
   /**
    * Load all standard libraries (core + UI + CSS)
    * This is the main method that should be used by test harness and Angular wrapper
+   * @param config Optional full library configuration to replace the default
+   * @param additionalLibraries Optional additional libraries to merge with the configuration
    */
-  static async loadAllLibraries(config?: LibraryConfiguration): Promise<LibraryLoadResult> {
+  static async loadAllLibraries(
+    config?: LibraryConfiguration, 
+    additionalLibraries?: ExternalLibraryConfig[]
+  ): Promise<LibraryLoadResult> {
     if (config) {
       StandardLibraryManager.setConfiguration(config);
+    }
+    
+    // If additional libraries are provided, merge them with the current configuration
+    if (additionalLibraries && additionalLibraries.length > 0) {
+      const currentConfig = StandardLibraryManager.getConfiguration();
+      const mergedConfig: LibraryConfiguration = {
+        libraries: [...currentConfig.libraries, ...additionalLibraries],
+        metadata: {
+          ...currentConfig.metadata,
+          lastUpdated: new Date().toISOString()
+        }
+      };
+      StandardLibraryManager.setConfiguration(mergedConfig);
     }
     
     return this.loadLibrariesFromConfig();

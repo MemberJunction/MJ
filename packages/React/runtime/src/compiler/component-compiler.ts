@@ -161,7 +161,11 @@ export class ComponentCompiler {
    */
   private wrapComponentCode(componentCode: string, componentName: string): string {
     return `
-      function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, libraries, styles, console) {
+      function createComponent(
+        React, ReactDOM, 
+        useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
+        libraries, styles, console
+      ) {
         ${componentCode}
         
         // Ensure the component exists
@@ -193,10 +197,11 @@ export class ComponentCompiler {
    */
   private createComponentFactory(transpiledCode: string, componentName: string): Function {
     try {
-      // Create the factory function
+      // Create the factory function with all React hooks
       const factoryCreator = new Function(
-        'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-        'createStateUpdater', 'libraries', 'styles', 'console',
+        'React', 'ReactDOM',
+        'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
+        'libraries', 'styles', 'console',
         `${transpiledCode}; return createComponent;`
       );
 
@@ -211,6 +216,11 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
+          React.useMemo,
+          React.useRef,
+          React.useContext,
+          React.useReducer,
+          React.useLayoutEffect,
           libraries,
           styles,
           console
@@ -223,6 +233,11 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
+          React.useMemo,
+          React.useRef,
+          React.useContext,
+          React.useReducer,
+          React.useLayoutEffect,
           libraries,
           styles,
           console

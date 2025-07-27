@@ -11,10 +11,11 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest} from '@memberjunction/ai-core-plus';
 import { AIAgentTypeEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { MJGlobal, JSONValidator } from '@memberjunction/global';
+import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { ActionResult } from '@memberjunction/actions-base';
 
 /**
  * Abstract base class for agent type implementations.
@@ -51,6 +52,18 @@ import { LogError } from '@memberjunction/core';
  * ```
  */
 export abstract class BaseAgentType {
+    /**
+     * JSON validator instance for cleaning and validating responses
+     * @protected
+     */
+    protected _jsonValidator: JSONValidator = new JSONValidator();
+
+    /**
+     * Common placeholder for current payload injection
+     * @static
+     */
+    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+
     /**
      * Analyzes the output from prompt execution to determine the next step.
      * 
@@ -175,5 +188,159 @@ export abstract class BaseAgentType {
         }
         
         return instance;
+    }
+
+    /**
+     * Parses JSON response from prompt execution with automatic validation syntax cleaning
+     * 
+     * @template T The expected response type
+     * @param {AIPromptRunResult} promptResult - The prompt execution result
+     * 
+     * @returns {T | null} Parsed response or null if parsing fails
+     * 
+     * @protected
+     */
+    protected parseJSONResponse<T>(promptResult: AIPromptRunResult): T | null {
+        if (!promptResult.success || !promptResult.result) {
+            return null;
+        }
+        
+        try {
+            let response: T;
+            if (typeof promptResult.result === 'string') {
+                response = JSON.parse(promptResult.result);
+            } else {
+                response = promptResult.result as T;
+            }
+            
+            // Clean validation syntax from the response
+            response = this._jsonValidator.cleanValidationSyntax<T>(response);
+            
+            if (IsVerboseLoggingEnabled()) {
+                console.log(`${this.constructor.name}: Cleaned response from validation syntax`, response);
+            }
+            
+            return response;
+        } catch (error) {
+            LogError(`Failed to parse JSON response in ${this.constructor.name}: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Creates a standardized next step object with common defaults
+     * 
+     * @template P The payload type
+     * @param {BaseAgentNextStep['step']} step - The step type
+     * @param {Partial<BaseAgentNextStep<P>>} options - Additional options to merge
+     * 
+     * @returns {BaseAgentNextStep<P>} The next step object
+     * 
+     * @protected
+     */
+    protected createNextStep<P>(
+        step: BaseAgentNextStep['step'],
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return {
+            step,
+            terminate: false,
+            ...options
+        } as BaseAgentNextStep<P>;
+    }
+
+    /**
+     * Creates a retry step with a standardized error message
+     * 
+     * @template P The payload type
+     * @param {string} errorMessage - The error message
+     * @param {Partial<BaseAgentNextStep<P>>} options - Additional options
+     * 
+     * @returns {BaseAgentNextStep<P>} Retry step
+     * 
+     * @protected
+     */
+    protected createRetryStep<P>(
+        errorMessage: string,
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Retry', {
+            errorMessage,
+            terminate: false,
+            ...options
+        });
+    }
+
+    /**
+     * Creates a success step with optional payload changes
+     * 
+     * @template P The payload type
+     * @param {Partial<BaseAgentNextStep<P>>} options - Success options
+     * 
+     * @returns {BaseAgentNextStep<P>} Success step
+     * 
+     * @protected
+     */
+    protected createSuccessStep<P>(
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Success', {
+            terminate: true,
+            ...options
+        });
+    }
+    
+    /**
+     * Post-processes the result of action execution.
+     * 
+     * This method is called by BaseAgent after action(s) have been executed.
+     * Agent types can override this method to perform custom processing of action results,
+     * such as mapping output parameters to the payload or storing results in agent-specific context.
+     * 
+     * @param {ActionResult[]} actionResults - The results from action execution
+     * @param {AgentAction[]} actions - The actions that were executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessActionStep<P>(
+        actionResults: ActionResult[],
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
+    }
+    
+    /**
+     * Post-processes the result of sub-agent execution.
+     * 
+     * This method is called by BaseAgent after a sub-agent has been executed.
+     * Agent types can override this method to perform custom processing of sub-agent results,
+     * such as extracting specific data from the sub-agent's payload or updating context.
+     * 
+     * @param {any} subAgentResult - The result from sub-agent execution
+     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request that was executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessSubAgentStep<P>(
+        subAgentResult: any,
+        subAgentRequest: AgentSubAgentRequest,
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
     }
 }
