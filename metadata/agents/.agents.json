@@ -110,6 +110,140 @@
   },
   {
     "fields": {
+      "Name": "Demo Flow Agent",
+      "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a flow agent, which follows a deterministic pathway",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-arrows-rotate"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Demo Flow Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          } 
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 2(a): Get Weather",
+            "Description": "Fetch the current weather conditions as the next step in the flow.",
+            "StartingStep": 0,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "ActionInputMapping": {
+              "location": "San Francisco"
+            },
+            "ActionOutputMapping": {
+              "temperature": "weatherTemperature",
+              "conditions": "weatherConditions"
+            },
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 2(b): Web Search",
+            "Description": "Perform a web search as an alternative step in the flow. See why NVIDIA stock price is lower than $500.",
+            "StartingStep": 0,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "ActionInputMapping": {
+              "query": "NVIDIA stock decline reasons"
+            },
+            "ActionOutputMapping": {
+              "results": "webSearchResults"
+            },
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 1: Get NVIDIA Stock Price",
+            "Description": "Fetch the current stock price of NVIDIA as the first step in the flow.",
+            "StartingStep": 1,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "ActionInputMapping": {
+              "symbol": "NVDA"
+            },
+            "ActionOutputMapping": {
+              "price": "stockPrice"
+            },
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(a): Get Weather&AgentID=@parent:ID",
+                  "Condition": "stockPrice > 500",
+                  "Description": "If NVIDIA stock price is above $500, proceed to get the weather step."
+                }
+              },
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(b): Web Search&AgentID=@parent:ID",
+                  "Condition": "stockPrice <= 500",
+                  "Description": "If NVIDIA stock price is below $500, proceed to web search step."
+                }
+              }
+            ]
+          } 
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Census Data Lookup",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Status": "Active"
+          } 
+        }
+      ]
+    } 
+  },  
+  {
+    "fields": {
       "Name": "Marketing Agent",
       "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
