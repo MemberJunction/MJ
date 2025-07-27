@@ -18,6 +18,24 @@ ADD UIFormSectionKey NVARCHAR(500) NULL,
 -- Extended Properties for the new columns
 -- =====================================================
 
+-- Update Flow Agent Type to use custom form section
+UPDATE ${flyway:defaultSchema}.AIAgentType
+SET UIFormSectionKey = 'FlowAgentSection',
+    UIFormSectionExpandedByDefault = 1 
+WHERE ID='4F6A189B-C068-4736-9F23-3FF540B40FDD' -- Name = 'Flow';
+
+
+-- Clean up some legacy data from before we had Agent Type concept fully baked
+-- legacy "Conductor" agent that was never used
+DECLARE @PromptID UNIQUEIDENTIFIER;
+SELECT @PromptID=PromptID FROM ${flyway:defaultSchema}.AIAgentPrompt WHERE AgentID='DE973866-7B67-40D5-B665-A994E611421F' -- Save Prompt ID
+DELETE FROM ${flyway:defaultSchema}.AIAgentPrompt WHERE AgentID='DE973866-7B67-40D5-B665-A994E611421F' -- Get Rid of AgentPromptRecord
+DELETE FROM ${flyway:defaultSchema}.AIPrompt WHERE ID = @PromptID -- get rid of prompt record
+DELETE FROM ${flyway:defaultSchema}.AIAgent WHERE ID='DE973866-7B67-40D5-B665-A994E611421F' -- get rid of agent record itself
+-- now get rid of teh agent type that was associated with it
+DELETE FROM ${flyway:defaultSchema}.AIAgentType WHERE ID='A7B8C9D0-E1F2-3456-7890-123456789ABC' -- legacy "Base Agent" that was never used
+
+
 -- UIFormSectionKey extended property
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
