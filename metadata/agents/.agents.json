@@ -116,7 +116,7 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-arrows-rotate"
+      "IconClass": "fa-solid fa-chart-diagram"
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [],
@@ -306,8 +306,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2025-07-27T19:05:25.646Z",
-      "checksum": "569b969a18e964da3119cd0f76e520e444607c03b78c72b33d6db48061477719"
+      "lastModified": "2025-07-27T19:12:36.541Z",
+      "checksum": "59e5c770f4d1f62283cd68ea16b3281c26a95aa3ea9f68124ba0535d7a2f1e7a"
     }
   },
   {
