@@ -8048,6 +8048,22 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+        * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`),
+    ActionInputMapping: z.string().nullable().describe(`
+        * * Field Name: ActionInputMapping
+        * * Display Name: Action Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -34112,6 +34128,38 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+    * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute
+    */
+    get Status(): 'Active' | 'Pending' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ActionInputMapping
+    * * Display Name: Action Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}
+    */
+    get ActionInputMapping(): string | null {
+        return this.Get('ActionInputMapping');
+    }
+    set ActionInputMapping(value: string | null) {
+        this.Set('ActionInputMapping', value);
     }
 
     /**

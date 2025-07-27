@@ -2807,6 +2807,13 @@ export class AIAgentStep_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`}) 
+    ActionInputMapping?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -2886,6 +2893,12 @@ export class CreateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActionInputMapping: string | null;
 }
     
 
@@ -2944,6 +2957,12 @@ export class UpdateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActionInputMapping?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
