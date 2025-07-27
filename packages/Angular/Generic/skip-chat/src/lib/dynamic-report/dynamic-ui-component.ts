@@ -5,8 +5,9 @@ import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOptio
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
-import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
+import { MJReactComponent, StateChangeEvent, ReactComponentEvent, AngularAdapterService } from '@memberjunction/ng-react';
 import { createRuntimeUtilities, SetupStyles } from '@memberjunction/react-runtime';
+import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -758,10 +759,13 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     
     // Event handlers from React components
 
+    private static librariesInitialized = false;
+
     constructor(
         private sanitizer: DomSanitizer,
         private cdr: ChangeDetectorRef,
-        private ngZone: NgZone
+        private ngZone: NgZone,
+        private adapter: AngularAdapterService
     ) { }
 
     /**
@@ -1110,7 +1114,17 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
     }
 
-    ngAfterViewInit() {
+    async ngAfterViewInit() {
+        // Initialize libraries once per application if not already done
+        if (!SkipDynamicUIComponentComponent.librariesInitialized) {
+            try {
+                await this.adapter.initialize(undefined, SKIP_CHAT_ADDITIONAL_LIBRARIES);
+                SkipDynamicUIComponentComponent.librariesInitialized = true;
+            } catch (error) {
+                LogError('Failed to initialize Skip Chat libraries', error as any);
+            }
+        }
+        
         if (this.SkipData) {
             this.setupReportOptions(this.SkipData);
         }
