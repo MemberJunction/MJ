@@ -38,8 +38,10 @@ export class ComponentLinter {
         const violations: Violation[] = [];
         let hasStateFromProps = false;
         let hasSavedUserSettings = false;
+        let usesUseState = false;
+        const stateProps: string[] = [];
         
-        // First pass: check if component expects state from props
+        // First pass: check if component expects state from props and uses useState
         traverse(ast, {
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
             if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
@@ -52,6 +54,7 @@ export class ComponentLinter {
                     const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
                     if (statePatterns.some(pattern => propName.includes(pattern))) {
                       hasStateFromProps = true;
+                      stateProps.push(propName);
                     }
                     if (propName === 'savedUserSettings') {
                       hasSavedUserSettings = true;
@@ -75,6 +78,7 @@ export class ComponentLinter {
                       const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
                       if (statePatterns.some(pattern => propName.includes(pattern))) {
                         hasStateFromProps = true;
+                        stateProps.push(propName);
                       }
                       if (propName === 'savedUserSettings') {
                         hasSavedUserSettings = true;
@@ -84,16 +88,45 @@ export class ComponentLinter {
                 }
               }
             }
+          },
+          
+          // Check for useState usage
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            if (
+              (t.isIdentifier(callee) && callee.name === 'useState') ||
+              (t.isMemberExpression(callee) && 
+               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
+               t.isIdentifier(callee.property) && callee.property.name === 'useState')
+            ) {
+              usesUseState = true;
+            }
           }
         });
         
-        if (hasStateFromProps && hasSavedUserSettings) {
+        // Updated logic: It's OK to have state props if:
+        // 1. Component also has savedUserSettings (for persistence)
+        // 2. Component uses useState (manages state internally)
+        // The pattern is: useState(savedUserSettings?.value ?? propValue ?? defaultValue)
+        
+        if (hasStateFromProps && !hasSavedUserSettings) {
           violations.push({
             rule: 'full-state-ownership',
             severity: 'error',
             line: 1,
             column: 0,
-            message: `Component "${componentName}" expects state from props. Components should manage ALL their state internally with useState, initialized from savedUserSettings.`
+            message: `Component "${componentName}" receives state props (${stateProps.join(', ')}) but no savedUserSettings. Add savedUserSettings prop to enable state persistence.`
+          });
+        }
+        
+        if (hasStateFromProps && hasSavedUserSettings && !usesUseState) {
+          violations.push({
+            rule: 'full-state-ownership',
+            severity: 'error',
+            line: 1,
+            column: 0,
+            message: `Component "${componentName}" receives state props but doesn't use useState. Components must manage state internally with useState, using savedUserSettings for persistence and props as fallback defaults.`
           });
         }
         
@@ -704,17 +737,24 @@ export class ComponentLinter {
         case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must own ALL their state - use useState and SavedUserSettings pattern',
-            example: `// ✅ CORRECT - Full state ownership:
-function Component({ data, savedUserSettings, onSaveUserSettings }) {
-  // Component owns ALL state
+            suggestion: 'Components must own ALL their state - use useState with SavedUserSettings override pattern',
+            example: `// ✅ CORRECT - Full state ownership with fallback pattern:
+function Component({ 
+  items, 
+  customers,
+  selectedId: selectedIdProp,        // Props can provide defaults
+  filters: filtersProp,
+  savedUserSettings,                  // Saved settings override props
+  onSaveUserSettings 
+}) {
+  // Component owns ALL state - savedUserSettings overrides props
   const [selectedId, setSelectedId] = useState(
-    savedUserSettings?.selectedId
+    savedUserSettings?.selectedId ?? selectedIdProp ?? null
   );
   const [filters, setFilters] = useState(
-    savedUserSettings?.filters || {}
+    savedUserSettings?.filters ?? filtersProp ?? {}
   );
-  const [searchDraft, setSearchDraft] = useState(''); // Ephemeral
+  const [searchDraft, setSearchDraft] = useState(''); // Ephemeral - no prop/save
   
   // Handle selection and save preference
   const handleSelect = (id) => {
@@ -725,11 +765,10 @@ function Component({ data, savedUserSettings, onSaveUserSettings }) {
     });
   };
   
-  // Don't save ephemeral state
-  const handleSearch = (text) => {
-    setSearchDraft(text);
-    // Only save on submit, not every keystroke
-  };
+  // Priority order:
+  // 1. savedUserSettings (user's saved preference)
+  // 2. props (parent's suggestion/default)
+  // 3. component default
 }`
           });
           break;
