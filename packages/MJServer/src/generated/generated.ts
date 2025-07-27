@@ -3603,6 +3603,17 @@ export class AIAgentType_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`}) 
+    @MaxLength(1000)
+    UIFormSectionKey?: string;
+        
+    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`}) 
+    @MaxLength(1000)
+    UIFormKey?: string;
+        
+    @Field(() => Boolean, {description: `Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`}) 
+    UIFormSectionExpandedByDefault: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -3637,6 +3648,15 @@ export class CreateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    UIFormSectionKey: string | null;
+
+    @Field({ nullable: true })
+    UIFormKey: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UIFormSectionExpandedByDefault?: boolean;
 }
     
 
@@ -3665,6 +3685,15 @@ export class UpdateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    UIFormSectionKey?: string | null;
+
+    @Field({ nullable: true })
+    UIFormKey?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UIFormSectionExpandedByDefault?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
