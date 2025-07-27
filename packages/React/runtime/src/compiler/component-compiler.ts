@@ -161,7 +161,11 @@ export class ComponentCompiler {
    */
   private wrapComponentCode(componentCode: string, componentName: string): string {
     return `
-      function createComponent(React, ReactDOM, useState, useEffect, useCallback, createStateUpdater, libraries, styles, console) {
+      function createComponent(
+        React, ReactDOM, 
+        useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
+        libraries, styles, console
+      ) {
         ${componentCode}
         
         // Ensure the component exists
@@ -193,10 +197,11 @@ export class ComponentCompiler {
    */
   private createComponentFactory(transpiledCode: string, componentName: string): Function {
     try {
-      // Create the factory function
+      // Create the factory function with all React hooks
       const factoryCreator = new Function(
-        'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-        'createStateUpdater', 'libraries', 'styles', 'console',
+        'React', 'ReactDOM',
+        'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
+        'libraries', 'styles', 'console',
         `${transpiledCode}; return createComponent;`
       );
 
@@ -211,6 +216,11 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
+          React.useMemo,
+          React.useRef,
+          React.useContext,
+          React.useReducer,
+          React.useLayoutEffect,
           libraries,
           styles,
           console
@@ -223,6 +233,11 @@ export class ComponentCompiler {
           React.useState,
           React.useEffect,
           React.useCallback,
+          React.useMemo,
+          React.useRef,
+          React.useContext,
+          React.useReducer,
+          React.useLayoutEffect,
           libraries,
           styles,
           console
@@ -240,21 +255,62 @@ export class ComponentCompiler {
    * @throws Error if validation fails
    */
   private validateCompileOptions(options: CompileOptions): void {
+    // Check if options object exists
+    if (!options) {
+      throw new Error(
+        'Component compilation failed: No options provided.\n' +
+        'Expected an object with componentName and componentCode properties.\n' +
+        'Example: { componentName: "MyComponent", componentCode: "function MyComponent() { ... }" }'
+      );
+    }
+
+    // Check component name
     if (!options.componentName) {
-      throw new Error('Component name is required');
+      const providedKeys = Object.keys(options).join(', ');
+      throw new Error(
+        'Component compilation failed: Component name is required.\n' +
+        `Received options with keys: [${providedKeys}]\n` +
+        'Please ensure your component spec includes a "name" property.\n' +
+        'Example: { name: "MyComponent", code: "..." }'
+      );
     }
 
+    // Check component code
     if (!options.componentCode) {
-      throw new Error('Component code is required');
+      throw new Error(
+        `Component compilation failed: Component code is required for "${options.componentName}".\n` +
+        'Please ensure your component spec includes a "code" property with the component source code.\n' +
+        'Example: { name: "MyComponent", code: "function MyComponent() { return <div>Hello</div>; }" }'
+      );
     }
 
+    // Check code type
     if (typeof options.componentCode !== 'string') {
-      throw new Error('Component code must be a string');
+      const actualType = typeof options.componentCode;
+      throw new Error(
+        `Component compilation failed: Component code must be a string for "${options.componentName}".\n` +
+        `Received type: ${actualType}\n` +
+        `Received value: ${JSON.stringify(options.componentCode).substring(0, 100)}...\n` +
+        'Please ensure the code property contains a string of JavaScript/JSX code.'
+      );
+    }
+
+    // Check if code is empty or whitespace only
+    if (options.componentCode.trim().length === 0) {
+      throw new Error(
+        `Component compilation failed: Component code is empty for "${options.componentName}".\n` +
+        'The code property must contain valid JavaScript/JSX code defining a React component.'
+      );
     }
 
     // Basic syntax check
     if (!options.componentCode.includes(options.componentName)) {
-      throw new Error(`Component code must define a component named "${options.componentName}"`);
+      throw new Error(
+        `Component compilation failed: Component code must define a component named "${options.componentName}".\n` +
+        'The function/component name in the code must match the componentName property.\n' +
+        `Expected to find: function ${options.componentName}(...) or const ${options.componentName} = ...\n` +
+        'Code preview: ' + options.componentCode.substring(0, 200) + '...'
+      );
     }
   }
 

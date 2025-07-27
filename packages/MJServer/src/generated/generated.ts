@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2289,6 +2289,12 @@ if this limit is exceeded.`})
     @Field(() => [AIAgentAction_])
     AIAgentActions_AgentIDArray: AIAgentAction_[]; // Link to AIAgentActions
     
+    @Field(() => [AIAgentStep_])
+    MJ_AIAgentSteps_AgentIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
+    
+    @Field(() => [AIAgentStep_])
+    MJ_AIAgentSteps_SubAgentIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
+    
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_AgentIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
@@ -2620,6 +2626,26 @@ export class AIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIAgentStep_])
+    async MJ_AIAgentSteps_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Steps', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentStep_])
+    async MJ_AIAgentSteps_SubAgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [SubAgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Steps', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [AIAgentPrompt_])
     async MJ_AIAgentPrompts_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
@@ -2705,6 +2731,326 @@ export class AIAgentResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agents', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Steps
+//****************************************************************************
+@ObjectType({ description: `Defines individual steps (nodes) in a flow-based AI agent execution graph` })
+export class AIAgentStep_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    AgentID: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({description: `Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`}) 
+    @MaxLength(40)
+    StepType: string;
+        
+    @Field(() => Boolean, {description: `If true, this step is executed when the agent starts`}) 
+    StartingStep: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    TimeoutSeconds?: number;
+        
+    @Field(() => Int) 
+    RetryCount: number;
+        
+    @Field() 
+    @MaxLength(40)
+    OnErrorBehavior: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    ActionID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    SubAgentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    PromptID?: string;
+        
+    @Field({nullable: true, description: `JSON configuration for mapping action output parameters to payload paths. Example: {"outputParam1": "payload.customer.status", "*": "payload.lastResult"}`}) 
+    ActionOutputMapping?: string;
+        
+    @Field(() => Int) 
+    PositionX: number;
+        
+    @Field(() => Int) 
+    PositionY: number;
+        
+    @Field(() => Int) 
+    Width: number;
+        
+    @Field(() => Int) 
+    Height: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(850)
+    Action?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SubAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Prompt?: string;
+        
+    @Field(() => [AIAgentStepPath_])
+    MJ_AIAgentStepPaths_DestinationStepIDArray: AIAgentStepPath_[]; // Link to MJ_AIAgentStepPaths
+    
+    @Field(() => [AIAgentStepPath_])
+    MJ_AIAgentStepPaths_OriginStepIDArray: AIAgentStepPath_[]; // Link to MJ_AIAgentStepPaths
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Steps
+//****************************************************************************
+@InputType()
+export class CreateAIAgentStepInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    StepType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    StartingStep?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    TimeoutSeconds?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    OnErrorBehavior?: string;
+
+    @Field({ nullable: true })
+    ActionID: string | null;
+
+    @Field({ nullable: true })
+    SubAgentID: string | null;
+
+    @Field({ nullable: true })
+    PromptID: string | null;
+
+    @Field({ nullable: true })
+    ActionOutputMapping: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PositionX?: number;
+
+    @Field(() => Int, { nullable: true })
+    PositionY?: number;
+
+    @Field(() => Int, { nullable: true })
+    Width?: number;
+
+    @Field(() => Int, { nullable: true })
+    Height?: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Steps
+//****************************************************************************
+@InputType()
+export class UpdateAIAgentStepInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    StepType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    StartingStep?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    TimeoutSeconds?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    OnErrorBehavior?: string;
+
+    @Field({ nullable: true })
+    ActionID?: string | null;
+
+    @Field({ nullable: true })
+    SubAgentID?: string | null;
+
+    @Field({ nullable: true })
+    PromptID?: string | null;
+
+    @Field({ nullable: true })
+    ActionOutputMapping?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PositionX?: number;
+
+    @Field(() => Int, { nullable: true })
+    PositionY?: number;
+
+    @Field(() => Int, { nullable: true })
+    Width?: number;
+
+    @Field(() => Int, { nullable: true })
+    Height?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Steps
+//****************************************************************************
+@ObjectType()
+export class RunAIAgentStepViewResult {
+    @Field(() => [AIAgentStep_])
+    Results: AIAgentStep_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIAgentStep_)
+export class AIAgentStepResolver extends ResolverBase {
+    @Query(() => RunAIAgentStepViewResult)
+    async RunAIAgentStepViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentStepViewResult)
+    async RunAIAgentStepViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentStepViewResult)
+    async RunAIAgentStepDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Steps';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => AIAgentStep_, { nullable: true })
+    async AIAgentStep(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentStep_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Steps', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [AIAgentStepPath_])
+    async MJ_AIAgentStepPaths_DestinationStepIDArray(@Root() aiagentstep_: AIAgentStep_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Step Paths', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentStepPaths] WHERE [DestinationStepID]='${aiagentstep_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Step Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Step Paths', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentStepPath_])
+    async MJ_AIAgentStepPaths_OriginStepIDArray(@Root() aiagentstep_: AIAgentStep_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Step Paths', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentStepPaths] WHERE [OriginStepID]='${aiagentstep_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Step Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Step Paths', rows);
+        return result;
+    }
+        
+    @Mutation(() => AIAgentStep_)
+    async CreateAIAgentStep(
+        @Arg('input', () => CreateAIAgentStepInput) input: CreateAIAgentStepInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: AI Agent Steps', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAgentStep_)
+    async UpdateAIAgentStep(
+        @Arg('input', () => UpdateAIAgentStepInput) input: UpdateAIAgentStepInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: AI Agent Steps', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIAgentStep_)
+    async DeleteAIAgentStep(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Steps', key, options, connPool, userPayload, pubSub);
     }
     
 }
@@ -4168,6 +4514,9 @@ export class AIPrompt_ {
     @Field(() => [AIPromptModel_])
     MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
+    @Field(() => [AIAgentStep_])
+    MJ_AIAgentSteps_PromptIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
+    
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
@@ -4597,6 +4946,16 @@ export class AIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentStep_])
+    async MJ_AIAgentSteps_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Steps', rows);
         return result;
     }
         
@@ -28519,6 +28878,9 @@ export class Action_ {
     @Field(() => [EntityAction_])
     EntityActions_ActionIDArray: EntityAction_[]; // Link to EntityActions
     
+    @Field(() => [AIAgentStep_])
+    MJ_AIAgentSteps_ActionIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
+    
     @Field(() => [ActionExecutionLog_])
     ActionExecutionLogs_ActionIDArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
@@ -28790,6 +29152,16 @@ export class ActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentStep_])
+    async MJ_AIAgentSteps_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Steps', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Steps', rows);
         return result;
     }
         
@@ -41146,6 +41518,198 @@ export class AIModelPriceUnitTypeResolver extends ResolverBase {
         const connPool = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Model Price Unit Types', key, options, connPool, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Step Paths
+//****************************************************************************
+@ObjectType({ description: `Defines paths (edges) between steps in a flow-based AI agent execution graph` })
+export class AIAgentStepPath_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    OriginStepID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    DestinationStepID: string;
+        
+    @Field({nullable: true, description: `Boolean expression to evaluate. If null, path is always taken. Evaluated against payload and step results.`}) 
+    Condition?: string;
+        
+    @Field(() => Int, {description: `Path evaluation priority. Higher values are evaluated first. Use 0 or negative values for default/fallback paths that execute when no other conditions match.`}) 
+    Priority: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Description?: string;
+        
+    @Field({nullable: true}) 
+    PathPoints?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    OriginStep: string;
+        
+    @Field() 
+    @MaxLength(510)
+    DestinationStep: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Step Paths
+//****************************************************************************
+@InputType()
+export class CreateAIAgentStepPathInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    OriginStepID?: string;
+
+    @Field({ nullable: true })
+    DestinationStepID?: string;
+
+    @Field({ nullable: true })
+    Condition: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    PathPoints: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Step Paths
+//****************************************************************************
+@InputType()
+export class UpdateAIAgentStepPathInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    OriginStepID?: string;
+
+    @Field({ nullable: true })
+    DestinationStepID?: string;
+
+    @Field({ nullable: true })
+    Condition?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    PathPoints?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Step Paths
+//****************************************************************************
+@ObjectType()
+export class RunAIAgentStepPathViewResult {
+    @Field(() => [AIAgentStepPath_])
+    Results: AIAgentStepPath_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIAgentStepPath_)
+export class AIAgentStepPathResolver extends ResolverBase {
+    @Query(() => RunAIAgentStepPathViewResult)
+    async RunAIAgentStepPathViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentStepPathViewResult)
+    async RunAIAgentStepPathViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentStepPathViewResult)
+    async RunAIAgentStepPathDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Step Paths';
+        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+    }
+    @Query(() => AIAgentStepPath_, { nullable: true })
+    async AIAgentStepPath(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentStepPath_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Step Paths', userPayload);
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentStepPaths] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Agent Step Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Step Paths', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => AIAgentStepPath_)
+    async CreateAIAgentStepPath(
+        @Arg('input', () => CreateAIAgentStepPathInput) input: CreateAIAgentStepPathInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: AI Agent Step Paths', input, connPool, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAgentStepPath_)
+    async UpdateAIAgentStepPath(
+        @Arg('input', () => UpdateAIAgentStepPathInput) input: UpdateAIAgentStepPathInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: AI Agent Step Paths', input, connPool, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIAgentStepPath_)
+    async DeleteAIAgentStepPath(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const connPool = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Step Paths', key, options, connPool, userPayload, pubSub);
     }
     
 }

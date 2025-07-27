@@ -12,7 +12,9 @@ import {
   createReactRuntime,
   CompileOptions,
   RuntimeContext,
-  ComponentStyles
+  ComponentStyles,
+  ExternalLibraryConfig,
+  LibraryConfiguration
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
 import { DEFAULT_STYLES } from '../default-styles';
@@ -35,15 +37,20 @@ export class AngularAdapterService {
 
   /**
    * Initialize the React runtime with Angular-specific configuration
+   * @param config Optional library configuration
+   * @param additionalLibraries Optional additional libraries to merge
    * @returns Promise resolving when runtime is ready
    */
-  async initialize(): Promise<void> {
+  async initialize(
+    config?: LibraryConfiguration,
+    additionalLibraries?: ExternalLibraryConfig[]
+  ): Promise<void> {
     if (this.runtime) {
       return; // Already initialized
     }
 
-    // Load React ecosystem
-    const ecosystem = await this.scriptLoader.loadReactEcosystem();
+    // Load React ecosystem with optional additional libraries
+    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries);
     
     // Create runtime context
     this.runtimeContext = {
@@ -136,6 +143,33 @@ export class AngularAdapterService {
    * @returns Promise resolving to compilation result
    */
   async compileComponent(options: CompileOptions & { styles?: any }) {
+    // Validate options before initialization
+    if (!options) {
+      throw new Error(
+        'Angular adapter error: No compilation options provided.\n' +
+        'This usually means the component spec is null or undefined.\n' +
+        'Please check that:\n' +
+        '1. Your component data is loaded properly\n' +
+        '2. The component spec has "name" and "code" properties\n' +
+        '3. The component input is not undefined'
+      );
+    }
+
+    if (!options.componentName || options.componentName.trim() === '') {
+      throw new Error(
+        'Angular adapter error: Component name is missing or empty.\n' +
+        `Received options: ${JSON.stringify(options, null, 2)}\n` +
+        'Make sure your component spec includes a "name" property.'
+      );
+    }
+
+    if (!options.componentCode || options.componentCode.trim() === '') {
+      throw new Error(
+        `Angular adapter error: Component code is missing or empty for component "${options.componentName}".\n` +
+        'Make sure your component spec includes a "code" property with the React component source.'
+      );
+    }
+
     await this.initialize();
     
     // Apply default styles if not provided

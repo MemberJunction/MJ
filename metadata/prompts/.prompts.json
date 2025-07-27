@@ -137,6 +137,84 @@
   },
   {
     "fields": {
+      "Name": "Flow Agent Type: System Prompt",
+      "Description": "Used for Flow Agents when they have Step Types == Prompt",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/flow-agent-type-system-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Any",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/loop-agent-type-system-prompt-output.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "921350BB-9B51-48BB-A619-1947E431F4A6"
+          },
+          "sync": {
+            "lastModified": "2025-07-26T23:53:42.485Z",
+            "checksum": "ecdad19b40bca5b606817fe687485c62686aaeacbd8438734fd6fd17267b8f46"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 15
+          },
+          "primaryKey": {
+            "ID": "12AC6BCC-9695-4185-942D-CFE68C7E6360"
+          },
+          "sync": {
+            "lastModified": "2025-07-26T23:53:42.503Z",
+            "checksum": "b5298397eeb48bdda183509e3f68eb9a93a75d26a29283d44bf11d2aeea5bf81"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "B056959A-F6F5-42E6-8330-8390DEFA6478"
+          },
+          "sync": {
+            "lastModified": "2025-07-26T23:53:42.519Z",
+            "checksum": "a8295a33acb060ce0eb462d940a57a3ba9b06fb6f47bd6e809c89d59fe3f4a7d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "43A6D122-4A76-453F-97D6-82CACC619227"
+    },
+    "sync": {
+      "lastModified": "2025-07-26T23:53:42.457Z",
+      "checksum": "1471611bbf70d63b8ea7080abc5489d96a837ba90d3d326bf1f11abdd7c5306b"
+    }
+  },
+  {
+    "fields": {
       "Name": "Demo Loop Agent - Main Prompt",
       "Description": "Demo for the main prompt for the agent.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",

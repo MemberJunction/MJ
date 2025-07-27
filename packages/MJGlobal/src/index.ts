@@ -9,6 +9,7 @@ export * from './ClassUtils'
 export * from './util/PatternUtils';
 export * from './ValidationTypes'
 export * from './JSONValidator'
+export * from './SafeExpressionEvaluator'
 
 // Export the main classes
 export * from './Global'

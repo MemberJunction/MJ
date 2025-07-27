@@ -7881,6 +7881,194 @@ each time the agent processes a prompt step.`),
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Step Paths
+ */
+export const AIAgentStepPathSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    OriginStepID: z.string().describe(`
+        * * Field Name: OriginStepID
+        * * Display Name: Origin Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Steps (vwAIAgentSteps.ID)`),
+    DestinationStepID: z.string().describe(`
+        * * Field Name: DestinationStepID
+        * * Display Name: Destination Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Steps (vwAIAgentSteps.ID)`),
+    Condition: z.string().nullable().describe(`
+        * * Field Name: Condition
+        * * Display Name: Condition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Boolean expression to evaluate. If null, path is always taken. Evaluated against payload and step results.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Path evaluation priority. Higher values are evaluated first. Use 0 or negative values for default/fallback paths that execute when no other conditions match.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(255)`),
+    PathPoints: z.string().nullable().describe(`
+        * * Field Name: PathPoints
+        * * Display Name: Path Points
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    OriginStep: z.string().describe(`
+        * * Field Name: OriginStep
+        * * Display Name: Origin Step
+        * * SQL Data Type: nvarchar(255)`),
+    DestinationStep: z.string().describe(`
+        * * Field Name: DestinationStep
+        * * Display Name: Destination Step
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentStepPathEntityType = z.infer<typeof AIAgentStepPathSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Steps
+ */
+export const AIAgentStepSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    StepType: z.union([z.literal('Action'), z.literal('Sub-Agent'), z.literal('Prompt')]).describe(`
+        * * Field Name: StepType
+        * * Display Name: Step Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Sub-Agent
+    *   * Prompt
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
+    StartingStep: z.boolean().describe(`
+        * * Field Name: StartingStep
+        * * Display Name: Starting Step
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, this step is executed when the agent starts`),
+    TimeoutSeconds: z.number().nullable().describe(`
+        * * Field Name: TimeoutSeconds
+        * * Display Name: Timeout Seconds
+        * * SQL Data Type: int
+        * * Default Value: 600`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    OnErrorBehavior: z.union([z.literal('fail'), z.literal('continue'), z.literal('retry')]).describe(`
+        * * Field Name: OnErrorBehavior
+        * * Display Name: On Error Behavior
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: fail
+    * * Value List Type: List
+    * * Possible Values 
+    *   * fail
+    *   * continue
+    *   * retry`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)`),
+    SubAgentID: z.string().nullable().describe(`
+        * * Field Name: SubAgentID
+        * * Display Name: Sub Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)`),
+    ActionOutputMapping: z.string().nullable().describe(`
+        * * Field Name: ActionOutputMapping
+        * * Display Name: Action Output Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for mapping action output parameters to payload paths. Example: {"outputParam1": "payload.customer.status", "*": "payload.lastResult"}`),
+    PositionX: z.number().describe(`
+        * * Field Name: PositionX
+        * * Display Name: Position X
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    PositionY: z.number().describe(`
+        * * Field Name: PositionY
+        * * Display Name: Position Y
+        * * SQL Data Type: int
+        * * Default Value: 0`),
+    Width: z.number().describe(`
+        * * Field Name: Width
+        * * Display Name: Width
+        * * SQL Data Type: int
+        * * Default Value: 200`),
+    Height: z.number().describe(`
+        * * Field Name: Height
+        * * Display Name: Height
+        * * SQL Data Type: int
+        * * Default Value: 80`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)`),
+    SubAgent: z.string().nullable().describe(`
+        * * Field Name: SubAgent
+        * * Display Name: Sub Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentStepEntityType = z.infer<typeof AIAgentStepSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Types
  */
 export const AIAgentTypeSchema = z.object({
@@ -33400,6 +33588,550 @@ each time the agent processes a prompt step.
     */
     get User(): string | null {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Step Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentStepPath
+ * * Base View: vwAIAgentStepPaths
+ * * @description Defines paths (edges) between steps in a flow-based AI agent execution graph
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Step Paths')
+export class AIAgentStepPathEntity extends BaseEntity<AIAgentStepPathEntityType> {
+    /**
+    * Loads the MJ: AI Agent Step Paths record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Step Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentStepPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that the origin step and destination step must be different. In other words, a step cannot connect to itself.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateOriginStepIDIsNotEqualToDestinationStepID(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the origin step and destination step must be different. In other words, a step cannot connect to itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOriginStepIDIsNotEqualToDestinationStepID(result: ValidationResult) {
+    	if (this.OriginStepID === this.DestinationStepID) {
+    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "Origin step and destination step must be different. A step cannot connect to itself.", this.OriginStepID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: OriginStepID
+    * * Display Name: Origin Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Steps (vwAIAgentSteps.ID)
+    */
+    get OriginStepID(): string {
+        return this.Get('OriginStepID');
+    }
+    set OriginStepID(value: string) {
+        this.Set('OriginStepID', value);
+    }
+
+    /**
+    * * Field Name: DestinationStepID
+    * * Display Name: Destination Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Steps (vwAIAgentSteps.ID)
+    */
+    get DestinationStepID(): string {
+        return this.Get('DestinationStepID');
+    }
+    set DestinationStepID(value: string) {
+        this.Set('DestinationStepID', value);
+    }
+
+    /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Boolean expression to evaluate. If null, path is always taken. Evaluated against payload and step results.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Path evaluation priority. Higher values are evaluated first. Use 0 or negative values for default/fallback paths that execute when no other conditions match.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PathPoints
+    * * Display Name: Path Points
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get PathPoints(): string | null {
+        return this.Get('PathPoints');
+    }
+    set PathPoints(value: string | null) {
+        this.Set('PathPoints', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: OriginStep
+    * * Display Name: Origin Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginStep(): string {
+        return this.Get('OriginStep');
+    }
+
+    /**
+    * * Field Name: DestinationStep
+    * * Display Name: Destination Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DestinationStep(): string {
+        return this.Get('DestinationStep');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentStep
+ * * Base View: vwAIAgentSteps
+ * * @description Defines individual steps (nodes) in a flow-based AI agent execution graph
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Steps')
+export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
+    /**
+    * Loads the MJ: AI Agent Steps record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * RetryCount: This rule ensures that the RetryCount value cannot be negative. It must be zero or higher.
+    * * TimeoutSeconds: This rule makes sure that the value for TimeoutSeconds must be greater than zero. Negative values or zero are not allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetryCountIsNonNegative(result);
+        this.ValidateTimeoutSecondsGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the RetryCount value cannot be negative. It must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryCountIsNonNegative(result: ValidationResult) {
+    	if (this.RetryCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo("RetryCount", "Retry count cannot be negative.", this.RetryCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that the value for TimeoutSeconds must be greater than zero. Negative values or zero are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTimeoutSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.TimeoutSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero.", this.TimeoutSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Sub-Agent
+    *   * Prompt
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
+    */
+    get StepType(): 'Action' | 'Sub-Agent' | 'Prompt' {
+        return this.Get('StepType');
+    }
+    set StepType(value: 'Action' | 'Sub-Agent' | 'Prompt') {
+        this.Set('StepType', value);
+    }
+
+    /**
+    * * Field Name: StartingStep
+    * * Display Name: Starting Step
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, this step is executed when the agent starts
+    */
+    get StartingStep(): boolean {
+        return this.Get('StartingStep');
+    }
+    set StartingStep(value: boolean) {
+        this.Set('StartingStep', value);
+    }
+
+    /**
+    * * Field Name: TimeoutSeconds
+    * * Display Name: Timeout Seconds
+    * * SQL Data Type: int
+    * * Default Value: 600
+    */
+    get TimeoutSeconds(): number | null {
+        return this.Get('TimeoutSeconds');
+    }
+    set TimeoutSeconds(value: number | null) {
+        this.Set('TimeoutSeconds', value);
+    }
+
+    /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: OnErrorBehavior
+    * * Display Name: On Error Behavior
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: fail
+    * * Value List Type: List
+    * * Possible Values 
+    *   * fail
+    *   * continue
+    *   * retry
+    */
+    get OnErrorBehavior(): 'fail' | 'continue' | 'retry' {
+        return this.Get('OnErrorBehavior');
+    }
+    set OnErrorBehavior(value: 'fail' | 'continue' | 'retry') {
+        this.Set('OnErrorBehavior', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: SubAgentID
+    * * Display Name: Sub Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get SubAgentID(): string | null {
+        return this.Get('SubAgentID');
+    }
+    set SubAgentID(value: string | null) {
+        this.Set('SubAgentID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: ActionOutputMapping
+    * * Display Name: Action Output Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for mapping action output parameters to payload paths. Example: {"outputParam1": "payload.customer.status", "*": "payload.lastResult"}
+    */
+    get ActionOutputMapping(): string | null {
+        return this.Get('ActionOutputMapping');
+    }
+    set ActionOutputMapping(value: string | null) {
+        this.Set('ActionOutputMapping', value);
+    }
+
+    /**
+    * * Field Name: PositionX
+    * * Display Name: Position X
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get PositionX(): number {
+        return this.Get('PositionX');
+    }
+    set PositionX(value: number) {
+        this.Set('PositionX', value);
+    }
+
+    /**
+    * * Field Name: PositionY
+    * * Display Name: Position Y
+    * * SQL Data Type: int
+    * * Default Value: 0
+    */
+    get PositionY(): number {
+        return this.Get('PositionY');
+    }
+    set PositionY(value: number) {
+        this.Set('PositionY', value);
+    }
+
+    /**
+    * * Field Name: Width
+    * * Display Name: Width
+    * * SQL Data Type: int
+    * * Default Value: 200
+    */
+    get Width(): number {
+        return this.Get('Width');
+    }
+    set Width(value: number) {
+        this.Set('Width', value);
+    }
+
+    /**
+    * * Field Name: Height
+    * * Display Name: Height
+    * * SQL Data Type: int
+    * * Default Value: 80
+    */
+    get Height(): number {
+        return this.Get('Height');
+    }
+    set Height(value: number) {
+        this.Set('Height', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: SubAgent
+    * * Display Name: Sub Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SubAgent(): string | null {
+        return this.Get('SubAgent');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
     }
 }
 

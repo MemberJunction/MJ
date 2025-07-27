@@ -2325,7 +2325,7 @@ export class BaseAgent {
             case 'Sub-Agent':
                 return await this.executeSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision);
+                return await this.executeActionsStep(params, config, previousDecision);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -2574,6 +2574,11 @@ export class BaseAgent {
             }
             
         } catch (error) {
+            // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
+            // that affects downstream things in the agent run
+            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload; 
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -2584,6 +2589,8 @@ export class BaseAgent {
                 errorMessage: `Prompt execution failed: ${errString}`,
                 step: 'Failed',
                 terminate: false,
+                previousPayload: payload,
+                newPayload: payload
             };
         }
     }
@@ -2898,6 +2905,11 @@ export class BaseAgent {
                 newPayload: mergedPayload
             };            
         } catch (error) {
+            // in this case, we have a failed sub-agent execution. In this situation, let's make sure our payload at end isn't adjusted as
+            // that affects downstream things in the agent run
+            // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -2907,6 +2919,8 @@ export class BaseAgent {
                 errorMessage: `Sub-agent execution failed: ${(error as Error).message}`,
                 step: 'Failed',
                 terminate: false,
+                previousPayload: payload,
+                newPayload: payload
             };
         }
     }
@@ -2918,6 +2932,7 @@ export class BaseAgent {
      */
     private async executeActionsStep(
         params: ExecuteAgentParams,
+        config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         try {
@@ -3073,6 +3088,51 @@ export class BaseAgent {
                 content: resultsMessage
             });
             
+            // Call agent type's post-processing for actions
+            let currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+            let finalPayload = currentPayload;
+            
+            try {
+                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+                const actionResultsOnly = actionResults.map(r => r.result).filter(r => r !== undefined) as ActionResult[];
+                
+                const payloadChangeRequest = await agentTypeInstance.PostProcessActionStep(
+                    actionResultsOnly,
+                    actions,
+                    currentPayload,
+                    previousDecision
+                );
+                
+                // If we got a payload change request, apply it
+                if (payloadChangeRequest) {
+                    const allowedPaths = params.agent.PayloadSelfWritePaths 
+                        ? JSON.parse(params.agent.PayloadSelfWritePaths) 
+                        : undefined;
+                    
+                    const changeResult = this._payloadManager.applyAgentChangeRequest(
+                        currentPayload,
+                        payloadChangeRequest,
+                        {
+                            validateChanges: true,
+                            logChanges: true,
+                            agentName: params.agent.Name,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            allowedPaths: allowedPaths,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+                    
+                    finalPayload = changeResult.result;
+                    
+                    if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Action post-processing payload warnings: ${changeResult.warnings.join('; ')}`);
+                    }
+                }
+            } catch (error) {
+                LogError(`Error in PostProcessActionStep: ${error.message}`);
+            }
+            
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
@@ -3080,7 +3140,7 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 previousPayload: previousDecision?.previousPayload || null,
-                newPayload: previousDecision?.newPayload || null, // action steps don't modify the payload so we pass it through
+                newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0 
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
@@ -3092,7 +3152,9 @@ export class BaseAgent {
                 terminate: false,
                 step: 'Retry',
                 errorMessage: e && e.message ? e.message : e ? e : 'Unknown error executing actions',
-                retryReason: 'Error while processing actions, retry'
+                retryReason: 'Error while processing actions, retry',
+                newPayload: previousDecision?.newPayload || null, // pass along from last step, no change
+                previousPayload: previousDecision?.previousPayload || null, // pass along from last step, no change
             };
         }
     }
@@ -3117,7 +3179,7 @@ export class BaseAgent {
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
-            newPayload: previousDecision.previousPayload, // chat steps don't modify the payload
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
         };
     }
 

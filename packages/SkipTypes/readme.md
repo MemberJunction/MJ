@@ -208,18 +208,10 @@ const initComponent: SkipComponentInitFunction = (
   // Initialize the component with the data
   renderChart(data.data_item_1);
   
-  // Set up event handlers that use callbacks
-  document.getElementById('refresh').addEventListener('click', () => {
-    callbacks?.RefreshData();
-  });
   
   document.getElementById('open-record').addEventListener('click', () => {
     callbacks?.OpenEntityRecord('Customer', { ID: 123 });
   });
-  
-  // Update user state when something changes
-  const newState = { selectedRegion: 'North' };
-  callbacks?.UpdateUserState(newState);
 };
 
 // Register the init function globally so it can be called from the container

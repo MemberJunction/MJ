@@ -3,7 +3,7 @@
  * Demonstrates the standard props structure used in Skip components
  */
 const Component = (props) => {
-  const { data, userState, callbacks, utilities, styles } = props;
+  const { data, userState, onStateChanged, utilities, styles } = props;
   
   // Handle null or undefined data
   if (!data) {
@@ -28,16 +28,16 @@ const Component = (props) => {
 
   // Handle item selection
   const handleItemClick = (itemId) => {
-    if (callbacks?.UpdateUserState) {
-      callbacks.UpdateUserState({ selectedItemId: itemId });
+    if (onStateChanged) {
+      onStateChanged({ selectedItemId: itemId });
     }
   };
 
   // Handle refresh
   const handleRefresh = () => {
     console.log('Refresh button clicked');
-    if (callbacks?.RefreshData) {
-      callbacks.RefreshData();
+    if (onStateChanged) {
+      onStateChanged({ refresh: Date.now() });
     }
   };
 
@@ -93,7 +93,7 @@ const Component = (props) => {
         
         {/* Filter buttons */}
         <button 
-          onClick={() => callbacks?.UpdateUserState?.({ activeFilter: 'all' })}
+          onClick={() => onStateChanged?.({ activeFilter: 'all' })}
           style={{
             ...buttonStyle,
             backgroundColor: activeFilter === 'all' ? '#28a745' : '#6c757d'
@@ -102,7 +102,7 @@ const Component = (props) => {
           All ({items.length})
         </button>
         <button 
-          onClick={() => callbacks?.UpdateUserState?.({ activeFilter: 'active' })}
+          onClick={() => onStateChanged?.({ activeFilter: 'active' })}
           style={{
             ...buttonStyle,
             backgroundColor: activeFilter === 'active' ? '#28a745' : '#6c757d'
@@ -111,7 +111,7 @@ const Component = (props) => {
           Active
         </button>
         <button 
-          onClick={() => callbacks?.UpdateUserState?.({ activeFilter: 'inactive' })}
+          onClick={() => onStateChanged?.({ activeFilter: 'inactive' })}
           style={{
             ...buttonStyle,
             backgroundColor: activeFilter === 'inactive' ? '#28a745' : '#6c757d'

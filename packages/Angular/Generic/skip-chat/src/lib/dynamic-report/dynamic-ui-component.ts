@@ -5,8 +5,9 @@ import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOptio
 import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
-import { MJReactComponent, StateChangeEvent, ReactComponentEvent } from '@memberjunction/ng-react';
+import { MJReactComponent, StateChangeEvent, ReactComponentEvent, AngularAdapterService } from '@memberjunction/ng-react';
 import { createRuntimeUtilities, SetupStyles } from '@memberjunction/react-runtime';
+import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -758,10 +759,13 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     
     // Event handlers from React components
 
+    private static librariesInitialized = false;
+
     constructor(
         private sanitizer: DomSanitizer,
         private cdr: ChangeDetectorRef,
-        private ngZone: NgZone
+        private ngZone: NgZone,
+        private adapter: AngularAdapterService
     ) { }
 
     /**
@@ -1110,7 +1114,17 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
     }
 
-    ngAfterViewInit() {
+    async ngAfterViewInit() {
+        // Initialize libraries once per application if not already done
+        if (!SkipDynamicUIComponentComponent.librariesInitialized) {
+            try {
+                await this.adapter.initialize(undefined, SKIP_CHAT_ADDITIONAL_LIBRARIES);
+                SkipDynamicUIComponentComponent.librariesInitialized = true;
+            } catch (error) {
+                LogError('Failed to initialize Skip Chat libraries', error as any);
+            }
+        }
+        
         if (this.SkipData) {
             this.setupReportOptions(this.SkipData);
         }
@@ -1346,55 +1360,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         }
         // TODO: Handle other custom events as needed
     }
-
-    // SetupUtilities method removed - now using React runtime's RuntimeUtilities
-
-    // CreateSimpleMetadata method removed - now using React runtime's RuntimeUtilities
-
-    // SetupStyles method removed - now using React runtime's SetupStyles function
-    
-    // CreateSimpleRunQuery method removed - now using React runtime's RuntimeUtilities
-    // CreateSimpleRunView method removed - now using React runtime's RuntimeUtilities
-
-    private SetupCallbacks(): ComponentCallbacks {
-        const cb: ComponentCallbacks = {
-            RefreshData: () => {
-                // this is a callback function that can be called from the component to refresh data
-                console.log('Component requested data refresh');
-                // need to implement this
-            },
-            OpenEntityRecord: (entityName: string, key: CompositeKey) => {
-                // this is a callback function that can be called from the component to open an entity record
-                if (entityName) {
-                    // bubble this up to our parent component as we don't directly open records in this component
-                    const md = new Metadata();
-                    const entityMatch = md.EntityByName(entityName);
-                    if (!entityMatch) {
-                        // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
-                        const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                e.BaseView.toLowerCase() === entityName.toLowerCase() || 
-                                                                e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
-                        if (altMatch && altMatch.length === 1) { 
-                            entityName = altMatch[0].Name;
-                        }
-                    }
-                    const cKey = new CompositeKey(key as any as KeyValuePair[])
-                    this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
-                }
-            },
-            UpdateUserState: (userState: any) => {
-                // this is a callback function that can be called from the component to update user state
-                console.log('Component updated user state:', userState);
-                // need to implement this
-            },
-            NotifyEvent: (eventName: string, eventData: any) => {
-                // this is a callback function that can be called from the component to notify an event
-                console.log(`Component raised event: ${eventName} notified with data:`, eventData);
-            }
-        };
-        return cb;
-    }
+ 
 
     public async refreshReport(data?: any): Promise<void> {
         const currentComponent = this.getCurrentReactComponent();
