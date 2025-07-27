@@ -32,10 +32,9 @@
                                     {{ record.Status }}
                                 </span>
                             }
-                            @if (record.ExecutionMode) {
+                            @if (record.Type) {
                                 <span class="execution-mode">
-                                    <i [class]="getExecutionModeIcon(record.ExecutionMode)"></i>
-                                    {{ record.ExecutionMode }}
+                                    Agent Type: {{ record.Type }}
                                 </span>
                             }
                             @if (record.Parent) {
@@ -68,7 +67,22 @@
 
         <!-- Single Pane Layout with Expander Panels -->
         <div class="form-content">
-            <kendo-panelbar>
+            <kendo-panelbar [keepItemContent]="true">
+                <!-- Custom Agent Type Section (if defined) -->
+                @if (record.ID && agentType) {
+                    <kendo-panelbar-item 
+                        [expanded]="agentType.UIFormSectionExpandedByDefault" 
+                        (stateChange)="onCustomSectionStateChange($event)">
+                        <ng-template kendoPanelBarItemTitle>
+                            <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content custom-agent-type-section" [style.display]="'block'">
+                                <ng-container #customSectionContainer></ng-container>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
 
                 <!-- Requests & History -->
                 @if (record.ID) {

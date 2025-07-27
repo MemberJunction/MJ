@@ -54,6 +54,9 @@ import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analyt
 import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
+import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
+import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
+import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
 
 @NgModule({
     declarations: [
@@ -89,6 +92,9 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         QueryFormExtendedComponent,
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
+        FlowAgentFormSectionComponent,
+        StepInfoControlComponent,
+        FlowAgentDiagramComponent,
     ],
     imports: [
         CommonModule,
@@ -146,6 +152,9 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
         QueryFormExtendedComponent,
+        FlowAgentFormSectionComponent,
+        StepInfoControlComponent,
+        FlowAgentDiagramComponent,
     ],
     providers: [
         NewAgentDialogService,

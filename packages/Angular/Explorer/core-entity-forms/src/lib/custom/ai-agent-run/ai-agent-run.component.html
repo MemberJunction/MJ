@@ -202,7 +202,7 @@
 
       <!-- Details Tab -->
       <div class="tab-content" *ngIf="activeTab === 'details'">
-        <kendo-panelbar>
+        <kendo-panelbar [keepItemContent]="true">
           <kendo-panelbar-item title="General Information" [expanded]="true">
             <ng-template kendoPanelBarContent>
               <div class="details-grid">

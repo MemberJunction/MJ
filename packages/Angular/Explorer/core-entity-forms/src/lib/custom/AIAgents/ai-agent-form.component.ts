@@ -1,8 +1,8 @@
-import { Component, OnInit, ViewContainerRef, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
@@ -49,9 +49,42 @@ import { firstValueFrom } from 'rxjs';
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnInit {
+export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntity;
+    
+    /** ViewChild for dynamic custom section container */
+    private _customSectionContainer!: ViewContainerRef;
+    @ViewChild('customSectionContainer', { read: ViewContainerRef }) 
+    set customSectionContainer(container: ViewContainerRef) {
+        this._customSectionContainer = container;
+        // When the container becomes available, load the custom section if needed
+        if (container && this.agentType?.UIFormSectionKey && !this.customSectionLoaded) {
+            setTimeout(() => this.loadCustomFormSection(), 0);
+        }
+    }
+    get customSectionContainer(): ViewContainerRef {
+        return this._customSectionContainer;
+    }
+    
+    /** The agent type entity for this agent */
+    public agentType: AIAgentTypeEntity | null = null;
+    
+    /** Reference to the dynamically loaded custom section component */
+    private customSectionComponent: BaseFormSectionComponent | null = null;
+    
+    /** Track if custom section has been loaded to avoid reloading */
+    private customSectionLoaded = false;
+    
+    /** Track the component reference to check if it still exists */
+    private customSectionComponentRef: any = null;
+    
+    /** Update custom section when EditMode changes */
+    ngDoCheck() {
+        if (this.customSectionComponent && this.customSectionComponent.EditMode !== this.EditMode) {
+            this.customSectionComponent.EditMode = this.EditMode;
+        }
+    }
     
     
     
@@ -285,15 +318,23 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
-
+    
     /**
-     * Component initialization. Calls parent initialization and loads related entity data
-     * if an agent record is already available.
+     * After view initialization, load any custom form section if defined
      */
-    async ngOnInit() {
-        await super.ngOnInit();
+    async ngAfterViewInit() {
+        // Use Promise to defer loading to avoid change detection issues
         if (this.record?.ID) {
             await this.loadRelatedCounts();
+            await this.loadAgentType();
+            
+            // Force change detection to render the panel bar item
+            this.cdr.detectChanges();
+            
+            // Defer custom section loading to next tick after DOM updates
+            setTimeout(() => {
+                this.loadCustomFormSection();
+            }, 0);
         }
     }
 
@@ -407,6 +448,96 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             noteCount: this.noteCount,
             executionHistoryCount: this.executionHistoryCount
         };
+    }
+    
+    /**
+     * Loads the agent type entity for this agent
+     * @private
+     */
+    private async loadAgentType(): Promise<void> {
+        if (!this.record?.TypeID) {
+            return;
+        }
+        
+        try {
+            const md = new Metadata();
+            this.agentType = await md.GetEntityObject<AIAgentTypeEntity>('MJ: AI Agent Types');
+            if (this.agentType) {
+                await this.agentType.Load(this.record.TypeID);
+            }
+        } catch (error) {
+            console.error('Error loading agent type:', error);
+            this.agentType = null;
+        }
+    }
+    
+    /**
+     * Dynamically loads a custom form section if the agent type defines one
+     * @private
+     */
+    private loadCustomFormSection(): void {
+        console.log('loadCustomFormSection called', 'AgentType:', this.agentType, 'Container:', this.customSectionContainer, 'Already loaded:', this.customSectionLoaded);
+        
+        if (!this.agentType?.UIFormSectionKey || !this.customSectionContainer) {
+            console.log('Early return - missing requirements');
+            return;
+        }
+        
+        // Check if component still exists in container
+        if (this.customSectionLoaded && this.customSectionContainer.length > 0) {
+            console.log('Component already loaded and still in container');
+            return;
+        }
+        
+        try {
+            // Build the full registration key (Entity.Section pattern)
+            const sectionKey = `AI Agents.${this.agentType.UIFormSectionKey}`;
+            
+            // Get the component registration from the class factory
+            const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, sectionKey);
+            
+            if (registration && registration.SubClass) {
+                // Clear any existing custom section
+                this.customSectionContainer.clear();
+                
+                // Create the component
+                const componentRef = this.customSectionContainer.createComponent(registration.SubClass);
+                this.customSectionComponent = componentRef.instance as BaseFormSectionComponent;
+                this.customSectionComponentRef = componentRef;
+                
+                // Pass the record and edit mode to the custom section
+                this.customSectionComponent.record = this.record;
+                this.customSectionComponent.EditMode = this.EditMode;
+                
+                // Mark as loaded
+                this.customSectionLoaded = true;
+                
+                // Trigger change detection
+                this.cdr.detectChanges();
+                
+                console.log(`Loaded custom form section: ${sectionKey}`, 'Component:', this.customSectionComponent);
+            } else {
+                console.warn(`No custom form section registered for key: ${sectionKey}`);
+            }
+        } catch (error) {
+            console.error('Error loading custom form section:', error);
+        }
+    }
+
+    /**
+     * Handles state change events for the custom section panel
+     * @param event The panel bar state change event
+     */
+    public onCustomSectionStateChange(event: any): void {
+        console.log('Panel state change:', event.expanded, 'Container:', this.customSectionContainer, 'Loaded:', this.customSectionLoaded);
+        
+        // When panel is expanded, check if we need to load or reload the custom section
+        if (event.expanded && this.agentType?.UIFormSectionKey) {
+            // Always try to load on expand to handle cases where container might have been recreated
+            setTimeout(() => {
+                this.loadCustomFormSection();
+            }, 0);
+        }
     }
 
     /**
