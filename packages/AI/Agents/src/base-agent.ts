@@ -2331,7 +2331,16 @@ export class BaseAgent {
         
         // Determine what to execute
         if (!previousDecision) {
-            // First execution - run the initial prompt
+            // First execution - ask the agent type what to do
+            const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+            const initialStep = await agentTypeInstance.DetermineInitialStep<P>(params);
+            
+            if (initialStep) {
+                // Agent type provided an initial step
+                return initialStep;
+            }
+            
+            // Default behavior - run the initial prompt
             return await this.executePromptStep(params, config);
         }
         

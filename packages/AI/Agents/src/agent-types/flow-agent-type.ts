@@ -13,7 +13,7 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -766,6 +766,51 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         return payloadChange;
+    }
+
+    /**
+     * Determines the initial step for flow agent types.
+     * 
+     * Flow agents look up their configured starting step instead of executing a prompt.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step to execute, or null if flow context not ready
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null> {
+        const payload = params.payload || {} as P;
+        const flowContext = this.getFlowContext(payload);
+        
+        // Initialize flow context with agent ID if not present
+        if (!flowContext.agentId) {
+            flowContext.agentId = params.agent.ID;
+            
+            // Initialize the flow context in the payload if it doesn't exist
+            const payloadObj = payload as Record<string, unknown>;
+            if (!payloadObj.__flowContext) {
+                payloadObj.__flowContext = {
+                    agentId: flowContext.agentId,
+                    currentStepId: undefined,
+                    completedStepIds: [],
+                    stepResults: {},
+                    executionPath: []
+                };
+            }
+        }
+        
+        const startingSteps = await this.getStartingSteps(flowContext.agentId);
+        
+        if (startingSteps.length === 0) {
+            return this.createNextStep('Failed', {
+                errorMessage: 'No starting steps defined for flow agent'
+            });
+        }
+        
+        // Execute the first starting step
+        // Future enhancement: support parallel starting steps
+        return await this.createStepForFlowNode(startingSteps[0], payload);
     }
 }
 

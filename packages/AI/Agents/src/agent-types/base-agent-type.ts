@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest} from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams} from '@memberjunction/ai-core-plus';
 import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -92,6 +92,23 @@ export abstract class BaseAgentType {
      * ```
      */
     public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult, currentPayload: P): Promise<BaseAgentNextStep<P>>;
+
+    /**
+     * Determines the initial step when no previous decision exists.
+     * 
+     * This method allows agent types to customize how they begin execution.
+     * For example:
+     * - Loop agents might execute a prompt to determine initial actions
+     * - Flow agents might look up their starting step from configuration
+     * - Pipeline agents might execute the first step in their sequence
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent, payload, and context
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step, or null to use default behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null>;
 
     // /**
     //  * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
