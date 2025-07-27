@@ -188,7 +188,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
 /* SQL generated to add new permission for entity MJ: AI Agent Steps for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('416d6e4c-31ef-4bbc-ac27-277a192aa1d9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('416d6e4c-31ef-4bbc-ac27-277a192aa1d9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: AI Agent Steps for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
@@ -250,7 +250,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
 /* SQL generated to add new permission for entity MJ: AI Agent Step Paths for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('78e61a4b-022e-4573-b728-dc1354446e11', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('78e61a4b-022e-4573-b728-dc1354446e11', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: AI Agent Step Paths for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
