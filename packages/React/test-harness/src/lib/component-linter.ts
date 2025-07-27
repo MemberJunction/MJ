@@ -506,6 +506,12 @@ export class ComponentLinter {
         violations.push(...ruleViolations);
       }
       
+      // Add data requirements validation if componentSpec is provided
+      if (componentSpec?.dataRequirements?.entities) {
+        const dataViolations = this.validateDataRequirements(ast, componentSpec);
+        violations.push(...dataViolations);
+      }
+      
       // Generate fix suggestions
       const suggestions = this.generateFixSuggestions(violations);
       
@@ -528,6 +534,166 @@ export class ComponentLinter {
         suggestions: []
       };
     }
+  }
+  
+  private static validateDataRequirements(ast: t.File, componentSpec: any): Violation[] {
+    const violations: Violation[] = [];
+    
+    // Extract entity names from dataRequirements
+    const requiredEntities = new Set<string>();
+    const requiredQueries = new Set<string>();
+    
+    if (componentSpec.dataRequirements?.entities) {
+      for (const entity of componentSpec.dataRequirements.entities) {
+        if (entity.name) {
+          requiredEntities.add(entity.name);
+        }
+      }
+    }
+    
+    if (componentSpec.dataRequirements?.queries) {
+      for (const query of componentSpec.dataRequirements.queries) {
+        if (query.name) {
+          requiredQueries.add(query.name);
+        }
+      }
+    }
+    
+    // Also check child components' dataRequirements
+    if (componentSpec.dependencies) {
+      for (const dep of componentSpec.dependencies) {
+        if (dep.dataRequirements?.entities) {
+          for (const entity of dep.dataRequirements.entities) {
+            if (entity.name) {
+              requiredEntities.add(entity.name);
+            }
+          }
+        }
+        if (dep.dataRequirements?.queries) {
+          for (const query of dep.dataRequirements.queries) {
+            if (query.name) {
+              requiredQueries.add(query.name);
+            }
+          }
+        }
+      }
+    }
+    
+    // Find all RunView, RunViews, and RunQuery calls in the code
+    traverse(ast, {
+      CallExpression(path: NodePath<t.CallExpression>) {
+        // Check for utilities.rv.RunView or utilities.rv.RunViews pattern
+        if (t.isMemberExpression(path.node.callee) && 
+            t.isMemberExpression(path.node.callee.object) &&
+            t.isIdentifier(path.node.callee.object.object) && 
+            path.node.callee.object.object.name === 'utilities' &&
+            t.isIdentifier(path.node.callee.object.property) && 
+            path.node.callee.object.property.name === 'rv' &&
+            t.isIdentifier(path.node.callee.property) && 
+            (path.node.callee.property.name === 'RunView' || path.node.callee.property.name === 'RunViews')) {
+          
+          // For RunViews, it might be an array of configs
+          const configs = path.node.callee.property.name === 'RunViews' && 
+                          path.node.arguments.length > 0 && 
+                          t.isArrayExpression(path.node.arguments[0])
+            ? path.node.arguments[0].elements.filter(e => t.isObjectExpression(e))
+            : path.node.arguments.length > 0 && t.isObjectExpression(path.node.arguments[0])
+            ? [path.node.arguments[0]]
+            : [];
+          
+          // Check each config object
+          for (const configObj of configs) {
+            if (t.isObjectExpression(configObj)) {
+              // Find EntityName property
+              for (const prop of configObj.properties) {
+                if (t.isObjectProperty(prop) && 
+                    t.isIdentifier(prop.key) && 
+                    prop.key.name === 'EntityName' &&
+                    t.isStringLiteral(prop.value)) {
+                  
+                  const usedEntity = prop.value.value;
+                  
+                  // Check if this entity is in the required entities
+                  if (requiredEntities.size > 0 && !requiredEntities.has(usedEntity)) {
+                    // Try to find the closest match
+                    const possibleMatches = Array.from(requiredEntities).filter(e => 
+                      e.toLowerCase().includes(usedEntity.toLowerCase()) || 
+                      usedEntity.toLowerCase().includes(e.toLowerCase())
+                    );
+                    
+                    violations.push({
+                      rule: 'entity-name-mismatch',
+                      severity: 'error',
+                      line: prop.value.loc?.start.line || 0,
+                      column: prop.value.loc?.start.column || 0,
+                      message: `Entity "${usedEntity}" not found in dataRequirements. ${
+                        possibleMatches.length > 0 
+                          ? `Did you mean "${possibleMatches[0]}"?` 
+                          : `Available entities: ${Array.from(requiredEntities).join(', ')}`
+                      }`,
+                      code: `EntityName: "${usedEntity}"`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // Check for utilities.rv.RunQuery pattern
+        if (t.isMemberExpression(path.node.callee) && 
+            t.isMemberExpression(path.node.callee.object) &&
+            t.isIdentifier(path.node.callee.object.object) && 
+            path.node.callee.object.object.name === 'utilities' &&
+            t.isIdentifier(path.node.callee.object.property) && 
+            path.node.callee.object.property.name === 'rv' &&
+            t.isIdentifier(path.node.callee.property) && 
+            path.node.callee.property.name === 'RunQuery') {
+          
+          // Check the first argument (should be an object with QueryName)
+          if (path.node.arguments.length > 0 && t.isObjectExpression(path.node.arguments[0])) {
+            const configObj = path.node.arguments[0];
+            
+            // Find QueryName property
+            for (const prop of configObj.properties) {
+              if (t.isObjectProperty(prop) && 
+                  t.isIdentifier(prop.key) && 
+                  prop.key.name === 'QueryName' &&
+                  t.isStringLiteral(prop.value)) {
+                
+                const usedQuery = prop.value.value;
+                
+                // Check if this query is in the required queries
+                if (requiredQueries.size > 0 && !requiredQueries.has(usedQuery)) {
+                  // Try to find the closest match
+                  const possibleMatches = Array.from(requiredQueries).filter(q => 
+                    q.toLowerCase().includes(usedQuery.toLowerCase()) || 
+                    usedQuery.toLowerCase().includes(q.toLowerCase())
+                  );
+                  
+                  violations.push({
+                    rule: 'query-name-mismatch',
+                    severity: 'error',
+                    line: prop.value.loc?.start.line || 0,
+                    column: prop.value.loc?.start.column || 0,
+                    message: `Query "${usedQuery}" not found in dataRequirements. ${
+                      possibleMatches.length > 0 
+                        ? `Did you mean "${possibleMatches[0]}"?` 
+                        : requiredQueries.size > 0 
+                          ? `Available queries: ${Array.from(requiredQueries).join(', ')}`
+                          : `No queries defined in dataRequirements`
+                    }`,
+                    code: `QueryName: "${usedQuery}"`
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return violations;
   }
   
   private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
@@ -751,6 +917,68 @@ const total = data.length > 0 && data[0]
 const sum = numbers.length > 0 
   ? numbers.reduce((a, b) => a + b)
   : 0;`
+          });
+          break;
+          
+        case 'entity-name-mismatch':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use the exact entity name from dataRequirements in RunView calls',
+            example: `// The component spec defines the entities to use:
+// dataRequirements: {
+//   entities: [
+//     { name: "MJ: AI Prompt Runs", ... }
+//   ]
+// }
+
+// ❌ WRONG - Missing prefix or incorrect name:
+await utilities.rv.RunView({
+  EntityName: "AI Prompt Runs",  // Missing "MJ:" prefix
+  Fields: ["RunAt", "Success"]
+});
+
+// ✅ CORRECT - Use exact name from dataRequirements:
+await utilities.rv.RunView({
+  EntityName: "MJ: AI Prompt Runs",  // Matches dataRequirements
+  Fields: ["RunAt", "Success"]
+});
+
+// Also works with RunViews (parallel execution):
+await utilities.rv.RunViews([
+  { EntityName: "MJ: AI Prompt Runs", Fields: ["RunAt"] },
+  { EntityName: "MJ: Users", Fields: ["Name", "Email"] }
+]);
+
+// The linter validates that all entity names in RunView/RunViews calls
+// match those declared in the component spec's dataRequirements`
+          });
+          break;
+          
+        case 'query-name-mismatch':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use the exact query name from dataRequirements in RunQuery calls',
+            example: `// The component spec defines the queries to use:
+// dataRequirements: {
+//   queries: [
+//     { name: "User Activity Summary", ... }
+//   ]
+// }
+
+// ❌ WRONG - Incorrect query name:
+await utilities.rv.RunQuery({
+  QueryName: "UserActivitySummary",  // Wrong name format
+  Parameters: { startDate, endDate }
+});
+
+// ✅ CORRECT - Use exact name from dataRequirements:
+await utilities.rv.RunQuery({
+  QueryName: "User Activity Summary",  // Matches dataRequirements
+  Parameters: { startDate, endDate }
+});
+
+// The linter validates that all query names in RunQuery calls
+// match those declared in the component spec's dataRequirements.queries`
           });
           break;
       }
