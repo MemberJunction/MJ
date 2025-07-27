@@ -243,3 +243,31 @@ EXEC [${flyway:defaultSchema}].spUpdateAIAgent @Name = N'Demo Flow Agent',
 -- Completed: 2025-07-27T19:12:37.032Z
 -- Duration: 12310ms
 -- Total Statements: 1
+
+
+
+
+
+EXEC [${flyway:defaultSchema}].spUpdateAIAgentStep @AgentID = '9B89A9E8-2BBB-46DE-A51A-A548FA9796C3',
+@Name = N'Step 1: Get NVIDIA Stock Price',
+@Description = N'Fetch the current stock price of NVIDIA as the first step in the flow.',
+@StepType = N'Action',
+@StartingStep = 1,
+@TimeoutSeconds = 600,
+@RetryCount = 0,
+@OnErrorBehavior = N'fail',
+@ActionID = '296E03AE-6EDC-4C5E-9506-BC98ACCDA2E1',
+@SubAgentID = NULL,
+@PromptID = NULL,
+@ActionOutputMapping = N'{
+  "price": "stockPrice"
+}',
+@PositionX = -526,
+@PositionY = 156,
+@Width = 200,
+@Height = 80,
+@Status = N'Active',
+@ActionInputMapping = N'{
+  "ticker": "NVDA"
+}',
+@ID = '54CA1C7E-28D4-4896-A9A2-85538D3CE301';

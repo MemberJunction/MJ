@@ -179,7 +179,7 @@
             "StepType": "Action",
             "ActionID": "@lookup:Actions.Name=Get Stock Price",
             "ActionInputMapping": {
-              "symbol": "NVDA"
+              "ticker": "NVDA"
             },
             "ActionOutputMapping": {
               "price": "stockPrice"
@@ -224,8 +224,8 @@
             "ID": "54CA1C7E-28D4-4896-A9A2-85538D3CE301"
           },
           "sync": {
-            "lastModified": "2025-07-27T19:05:25.701Z",
-            "checksum": "2d19354c3a7aaeabf95afee56590c10df02d90ae483369c69fca6572079ab2ed"
+            "lastModified": "2025-07-27T22:53:19.297Z",
+            "checksum": "9d36656ec63d61b45bc419b6e6af2d7ae3633b0a0e6ec1a2eadbb2966e58c9b7"
           }
         }
       ],
