@@ -133,8 +133,8 @@
               "location": "San Francisco"
             },
             "ActionOutputMapping": {
-              "temperature": "weatherTemperature",
-              "conditions": "weatherConditions"
+              "currentTemp": "currentTemperature",
+              "currentConditions": "weatherConditions"
             },
             "Status": "Active"
           },
@@ -142,8 +142,8 @@
             "ID": "5B5A74F8-33A6-48ED-A0AF-0E31CE3C4AD2"
           },
           "sync": {
-            "lastModified": "2025-07-27T19:05:25.666Z",
-            "checksum": "978b4091dc177e65e6be85262c73efdc635c0a6fbb740a751c40e28ff2050c3b"
+            "lastModified": "2025-07-27T23:20:37.444Z",
+            "checksum": "82d92f3478ba1f4a101a75184860b556d57023e1f7ae57ed7f97f2a4b39db280"
           }
         },
         {

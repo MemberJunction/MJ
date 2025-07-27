@@ -476,6 +476,40 @@
             "lastModified": "2025-07-19T17:04:37.937Z",
             "checksum": "923cb00ced6fa92e0d8ad35005e902768a042cb940580d1c6cb3d41c6add7366"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentTemp",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current temperature for the specified location"
+          },
+          "primaryKey": {
+            "ID": "5D3FDDE0-085D-4495-9606-1BF972DF7320"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.915Z",
+            "checksum": "68bde985a8f39e6c149dfc2e008f3fb0630a940d06cd4985fe4096c83172a336"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentConditions",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current weather conditions for the specified location"
+          },
+          "primaryKey": {
+            "ID": "1866AF04-25D0-4D98-914B-03380F3080D5"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.930Z",
+            "checksum": "bf182e9ceb864c3c1c4518b78dc7bd09155c485cbe59ca63dfa38548707323e5"
+          }
         }
       ],
       "Action Result Codes": [
@@ -577,6 +611,40 @@
           "sync": {
             "lastModified": "2025-07-19T17:04:37.981Z",
             "checksum": "0022b1fafbede28a7ca1323c1f88e787a19ca19ed596b8578cb2fe10965df58d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StockData",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Detailed stock information retrieved from the API"
+          },
+          "primaryKey": {
+            "ID": "CD2A8121-CCE6-4046-93B7-4D9F7BE28DA5"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.969Z",
+            "checksum": "425c9a176f6c449871dff886bc2e392cc08c11665b239bc830ed552f168f93c1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentPrice",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current stock price retrieved from the API"
+          },
+          "primaryKey": {
+            "ID": "73B51353-894F-4BD6-A400-3C57E8CEE9FF"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.984Z",
+            "checksum": "f3ac0cdc4a8daf91c92fcd85c41e3d015191b51be1998b73a59bb397a340d5c5"
           }
         }
       ],
