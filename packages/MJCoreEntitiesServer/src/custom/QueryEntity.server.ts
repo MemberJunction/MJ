@@ -41,7 +41,7 @@ export class QueryEntityExtended extends QueryEntity {
         const provider = Metadata.Provider as SQLServerDataProvider;
         
         // Start a database transaction
-        await provider.BeginTransaction();
+        // await provider.BeginTransaction();
         
         try {
             // Check if this is a new record or if SQL has changed
@@ -70,16 +70,16 @@ export class QueryEntityExtended extends QueryEntity {
             // This will also save the UsesTemplate flag and any other changes
             const saveResult = await super.Save(options);
             if (!saveResult) {
-                await provider.RollbackTransaction();
+                // await provider.RollbackTransaction();
                 return false
             }
             else {
-                await provider.CommitTransaction();
+                //await provider.CommitTransaction();
                 return true;
             }
         } catch (e) {
             // Rollback on any error
-            await provider.RollbackTransaction();
+            // await provider.RollbackTransaction();
             LogError('Failed to save query and extract parameters:', e);
             this.LatestResult?.Errors.push(e);
             return false;
