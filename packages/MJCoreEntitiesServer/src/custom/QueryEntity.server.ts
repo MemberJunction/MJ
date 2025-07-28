@@ -38,51 +38,88 @@ interface ParameterExtractionResult {
 @RegisterClass(BaseEntity, 'Queries')
 export class QueryEntityExtended extends QueryEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const provider = Metadata.Provider as SQLServerDataProvider;
-        
-        // Start a database transaction
-        await provider.BeginTransaction();
-        
         try {
             // Check if this is a new record or if SQL has changed
             const sqlField = this.GetFieldByName('SQL');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
-                        
-            if (!this.IsSaved) {
-                await super.Save(options); // save new queries right away to get an ID
-            }
-
-            // Extract and sync parameters if needed
-            if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncData();
-            } else if (!this.SQL || this.SQL.trim().length === 0) {
-                // If SQL is empty, ensure UsesTemplate is false and remove all related data
-                this.UsesTemplate = false;
-                await Promise.all([
-                    this.removeAllQueryParameters(),
-                    this.removeAllQueryFields(),
-                    this.removeAllQueryEntities()
-                ]);
-            }
             
-            // Commit the transaction
-            // Save the query now to save any changes made by parameter extraction
-            // This will also save the UsesTemplate flag and any other changes
+            // Save the query first without AI processing (no transaction needed for basic save)
             const saveResult = await super.Save(options);
             if (!saveResult) {
-                await provider.RollbackTransaction();
-                return false
+                return false;
             }
-            else {
-                await provider.CommitTransaction();
-                return true;
+
+            // Extract and sync parameters AFTER saving, outside of any transaction
+            // This prevents connection pool exhaustion from long-running AI operations
+            if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
+                // AI processing happens asynchronously after the main save operation
+                // This ensures the connection is released quickly for the primary operation
+                setImmediate(() => {
+                    this.extractAndSyncDataAsync().catch(e => {
+                        LogError('Background AI processing failed for query:', e);
+                    });
+                });
+            } else if (!this.SQL || this.SQL.trim().length === 0) {
+                // If SQL is empty, ensure UsesTemplate is false and remove all related data
+                // This can also happen asynchronously since it's cleanup work
+                this.UsesTemplate = false;
+                setImmediate(() => {
+                    this.cleanupEmptyQueryAsync().catch(e => {
+                        LogError('Background cleanup failed for query:', e);
+                    });
+                });
             }
+            
+            return true;
         } catch (e) {
-            // Rollback on any error
-            await provider.RollbackTransaction();
-            LogError('Failed to save query and extract parameters:', e);
+            LogError('Failed to save query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
+        }
+    }
+    
+    /**
+     * Asynchronous version of extractAndSyncData that runs outside the main save operation
+     * to prevent connection pool exhaustion
+     */
+    private async extractAndSyncDataAsync(): Promise<void> {
+        try {
+            await this.extractAndSyncData();
+            
+            // Save the query again to update the UsesTemplate flag and any changes from AI processing
+            // This is a separate, fast operation that doesn't involve AI
+            const updateResult = await super.Save();
+            if (!updateResult) {
+                LogError('Failed to save query after AI processing completed');
+            }
+        } catch (e) {
+            LogError('Error in async AI processing:', e);
+            // Set UsesTemplate to false on error and save
+            this.UsesTemplate = false;
+            await super.Save().catch(saveError => {
+                LogError('Failed to save query after AI processing error:', saveError);
+            });
+        }
+    }
+    
+    /**
+     * Asynchronous cleanup for empty queries
+     */
+    private async cleanupEmptyQueryAsync(): Promise<void> {
+        try {
+            await Promise.all([
+                this.removeAllQueryParameters(),
+                this.removeAllQueryFields(),
+                this.removeAllQueryEntities()
+            ]);
+            
+            // Save the updated UsesTemplate flag
+            const updateResult = await super.Save();
+            if (!updateResult) {
+                LogError('Failed to save query after cleanup');
+            }
+        } catch (e) {
+            LogError('Error in async cleanup:', e);
         }
     }
     
