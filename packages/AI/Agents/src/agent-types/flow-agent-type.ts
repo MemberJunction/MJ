@@ -129,12 +129,6 @@ export class FlowAgentType extends BaseAgentType {
         return state;
     }
     
-    /**
-     * Cleans up flow state when execution completes
-     */
-    public static cleanupFlowState(agentRunId: string): void {
-        FlowAgentType._flowStates.delete(agentRunId);
-    }
     
     /**
      * Determines the next step based on the flow graph structure.
