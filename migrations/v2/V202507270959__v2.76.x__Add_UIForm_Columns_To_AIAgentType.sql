@@ -8,11 +8,17 @@
 -- Date: 2025-07-27
 -- =====================================================
 
+/* SQL text to update existingg entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+GO
+
 -- Add the new columns to the AIAgentType table
 ALTER TABLE ${flyway:defaultSchema}.AIAgentType
 ADD UIFormSectionKey NVARCHAR(500) NULL,
     UIFormKey NVARCHAR(500) NULL,
     UIFormSectionExpandedByDefault BIT NOT NULL DEFAULT 1;
+
+GO
 
 -- Update Flow Agent Type to use custom form section
 UPDATE ${flyway:defaultSchema}.AIAgentType
