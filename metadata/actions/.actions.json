@@ -1812,6 +1812,87 @@
             "lastModified": "2025-07-19T17:04:38.541Z",
             "checksum": "e25d2eef2961c21889ed7d98dd1e5224d2e8264deef4e38168e07f5a9d4f0844"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Comprehensive JSON object with search result details"
+          },
+          "primaryKey": {
+            "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.917Z",
+            "checksum": "0366d5c6518eed38ce63600bb7e1c03b4c35de43673398469d675a82f3601130"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "URL of the search results page"
+          },
+          "primaryKey": {
+            "ID": "AE5C7C67-4C0C-44E5-97AE-AA7DDB1311E2"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.935Z",
+            "checksum": "54e4d2d81d87d38afd5932f5aaac3003780eaadd0b6ae1f419cba33addda4b5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result objects containing title, URL, and snippet"
+          },
+          "primaryKey": {
+            "ID": "BFA9FC38-FC0D-4826-88F4-5FD2C69C8AA7"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.949Z",
+            "checksum": "695400792d99543ec5af7d55d43398659d0b3892f58759abda610850a4e6d236"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "Total number of search results found"
+          },
+          "primaryKey": {
+            "ID": "263F09BE-9F27-49C3-BC7D-75F4FB31B091"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.962Z",
+            "checksum": "0ae51bd6b2e12e3dfde257af7d4ddd1c164a42da9920e929ab61bd341159255a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstSearchResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Details of the first search result"
+          },
+          "primaryKey": {
+            "ID": "B2576969-FC51-4A03-80B1-7A17FA8B9815"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.975Z",
+            "checksum": "adbb4c00df27e0ee13f540b1f2f78be26ae2166454c8b1c15273845de62263fd"
+          }
         }
       ],
       "Action Result Codes": [

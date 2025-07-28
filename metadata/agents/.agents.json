@@ -155,10 +155,10 @@
             "StepType": "Action",
             "ActionID": "@lookup:Actions.Name=Web Search",
             "ActionInputMapping": {
-              "query": "NVIDIA stock decline reasons"
+              "SearchTerms": "NVIDIA stock decline reasons"
             },
             "ActionOutputMapping": {
-              "results": "webSearchResults"
+              "SearchResults": "webSearchResults"
             },
             "Status": "Active"
           },
@@ -166,8 +166,8 @@
             "ID": "F28499A1-0B28-4AE5-B695-7F4B48C38C20"
           },
           "sync": {
-            "lastModified": "2025-07-27T19:05:25.684Z",
-            "checksum": "42149834f1126c9157051163b957e4cd609fb70a51e984021c0dc9e95d7f5fd4"
+            "lastModified": "2025-07-28T00:01:43.326Z",
+            "checksum": "36595f3410ea07714cd13cfb80943e1faf2ce61af6770d1930e235074988942d"
           }
         },
         {
@@ -182,7 +182,7 @@
               "ticker": "NVDA"
             },
             "ActionOutputMapping": {
-              "price": "stockPrice"
+              "CurrentPrice": "stockPrice"
             },
             "Status": "Active"
           },
@@ -192,30 +192,30 @@
                 "fields": {
                   "OriginStepID": "@parent:ID",
                   "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(a): Get Weather&AgentID=@parent:AgentID",
-                  "Condition": "stockPrice > 500",
+                  "Condition": "payload.stockPrice > 500",
                   "Description": "If NVIDIA stock price is above $500, proceed to get the weather step."
                 },
                 "primaryKey": {
                   "ID": "519F2D7F-1876-48AB-BE0A-8589035C9597"
                 },
                 "sync": {
-                  "lastModified": "2025-07-27T19:05:25.742Z",
-                  "checksum": "4b51d05e8af787117611afd334bafe54199d10d9023758e91045e7d27daf9544"
+                  "lastModified": "2025-07-27T23:53:02.751Z",
+                  "checksum": "fed472b507fefa0dc4e8a6a908000a1fa032bbdcd09a7400af8dda8505868146"
                 }
               },
               {
                 "fields": {
                   "OriginStepID": "@parent:ID",
                   "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(b): Web Search&AgentID=@parent:AgentID",
-                  "Condition": "stockPrice <= 500",
+                  "Condition": "payload.stockPrice <= 500",
                   "Description": "If NVIDIA stock price is below $500, proceed to web search step."
                 },
                 "primaryKey": {
                   "ID": "85886739-869D-48C5-BF76-1AF9A6F77AFA"
                 },
                 "sync": {
-                  "lastModified": "2025-07-27T19:05:25.761Z",
-                  "checksum": "2ba63a5971ea699a0f47b633f1f9c64edb1aa105b9adbf33392f9becdac13376"
+                  "lastModified": "2025-07-27T23:53:02.768Z",
+                  "checksum": "dc9c70a7c1d814e8ea67c5763de5f94a32f12e94caa5f13ebc676d5daf66f863"
                 }
               }
             ]
@@ -224,8 +224,8 @@
             "ID": "54CA1C7E-28D4-4896-A9A2-85538D3CE301"
           },
           "sync": {
-            "lastModified": "2025-07-27T22:53:19.297Z",
-            "checksum": "9d36656ec63d61b45bc419b6e6af2d7ae3633b0a0e6ec1a2eadbb2966e58c9b7"
+            "lastModified": "2025-07-27T23:48:14.351Z",
+            "checksum": "b0db792796cc21534e45208ed2e077d687d7bcfb861eb6d50f56523423bf1aec"
           }
         }
       ],
