@@ -105,7 +105,7 @@
 
             <!-- Main Content with Expansion Panels -->
             <div class="form-content">
-                <kendo-panelbar>
+                <kendo-panelbar [keepItemContent]="true">
                     
                     <!-- Input Panel with nested sub-panels -->
                     <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle()">

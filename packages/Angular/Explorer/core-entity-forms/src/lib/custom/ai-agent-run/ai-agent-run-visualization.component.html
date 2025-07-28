@@ -1,0 +1,52 @@
+<div class="visualization-container">
+  @if (error) {
+    <div class="error-state">
+      <i class="fa-solid fa-exclamation-triangle"></i>
+      <span>{{ error }}</span>
+    </div>
+  } @else {
+    <kendo-splitter orientation="horizontal" style="height: 100%;">
+      <!-- Diagram Pane -->
+      <kendo-splitter-pane [collapsible]="false">
+        <div class="diagram-container" #svgContainer>
+          <div class="diagram-toolbar">
+            <div class="toolbar-title">
+              <i class="fa-solid fa-diagram-project"></i>
+              Agent Execution Flow
+            </div>
+            <div class="zoom-controls">
+              <button (click)="zoomIn()" title="Zoom in">
+                <i class="fa-solid fa-search-plus"></i>
+              </button>
+              <button (click)="zoomOut()" title="Zoom out">
+                <i class="fa-solid fa-search-minus"></i>
+              </button>
+              <button (click)="resetZoom()" title="Reset zoom">
+                <i class="fa-solid fa-compress"></i>
+              </button>
+              <span class="zoom-level">{{ (panZoom.scale * 100).toFixed(0) }}%</span>
+            </div>
+          </div>
+          @if (loading) {
+            <div class="loading-overlay">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span>Loading visualization...</span>
+            </div>
+          }
+        </div>
+      </kendo-splitter-pane>
+      
+      <!-- Detail Pane -->
+      @if (selectedItem) {
+        <kendo-splitter-pane [size]="'400px'" [min]="'300px'" [max]="'600px'" [collapsible]="true">
+          <mj-ai-agent-run-step-detail
+            [selectedTimelineItem]="selectedItem"
+            (closePanel)="closeDetailPane()"
+            (navigateToActionLog)="navigateToActionLog($event)"
+            (copyToClipboard)="copyToClipboard($event)">
+          </mj-ai-agent-run-step-detail>
+        </kendo-splitter-pane>
+      }
+    </kendo-splitter>
+  }
+</div>

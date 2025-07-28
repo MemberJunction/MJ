@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest} from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams} from '@memberjunction/ai-core-plus';
 import { AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -73,6 +73,8 @@ export abstract class BaseAgentType {
      * and the format of output expected from its system prompt.
      * 
      * @abstract
+     * @param {AIPromptRunResult | null} promptResult - Result from prompt execution (null for non-prompt steps)
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent and context
      * @returns {Promise<BaseAgentNextStep>} The determined next step and optional return value
      * 
      * @example
@@ -91,7 +93,49 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult, currentPayload: P): Promise<BaseAgentNextStep<P>>;
+    public abstract DetermineNextStep<P = any>(
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
+    ): Promise<BaseAgentNextStep<P>>;
+
+    /**
+     * Determines the initial step when no previous decision exists.
+     * 
+     * This method allows agent types to customize how they begin execution.
+     * For example:
+     * - Loop agents might execute a prompt to determine initial actions
+     * - Flow agents might look up their starting step from configuration
+     * - Pipeline agents might execute the first step in their sequence
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent, payload, and context
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step, or null to use default behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null>;
+
+    /**
+     * Pre-processes a retry step to allow agent types to customize retry behavior.
+     * 
+     * This method is called when the previous step returned 'Retry' as the next step.
+     * Agent types can override this to provide custom behavior instead of the default
+     * prompt execution. This is particularly useful for:
+     * - Flow agents that need to evaluate paths after action execution
+     * - State machine agents that need to transition based on results
+     * - Pipeline agents that need to move to the next stage
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep | null>} Custom next step, or null to use default retry behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null>;
 
     // /**
     //  * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
@@ -102,10 +146,15 @@ export abstract class BaseAgentType {
     /**
      * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
      * system prompt by replacing a special non-Nunjucks placeholder, or by adding extra messages to the prompt.
-     * @param payload 
-     * @param prompt 
+     * @param payload - The payload to inject
+     * @param prompt - The prompt parameters to update
+     * @param agentInfo - Agent identification info including agent ID and run ID
      */
-    public abstract InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void>;
+    public abstract InjectPayload<P = any>(
+        payload: P, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.
@@ -288,6 +337,30 @@ export abstract class BaseAgentType {
             terminate: true,
             ...options
         });
+    }
+    
+    /**
+     * Pre-processes an action step before execution.
+     * 
+     * This method is called by BaseAgent before action(s) are executed.
+     * Agent types can override this method to perform custom pre-processing,
+     * such as mapping payload values to action input parameters or modifying action configurations.
+     * 
+     * @param {AgentAction[]} actions - The actions that will be executed (can be modified)
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<void>} Actions are modified in place
+     * 
+     * @since 2.76.0
+     */
+    public async PreProcessActionStep<P>(
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<void> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
     }
     
     /**

@@ -43,7 +43,11 @@
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "d3": "^7.9.0",
     "@types/d3": "^7.4.3",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "rete": "^2.0.6",
+    "rete-area-plugin": "^2.0.3",
+    "rete-connection-plugin": "^2.0.1",
+    "rete-render-utils": "^2.0.2"
   },
   "sideEffects": false
 }

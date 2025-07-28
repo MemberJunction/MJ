@@ -1,0 +1,206 @@
+.visualization-container {
+  width: 100%;
+  height: 600px;
+  min-height: 400px;
+  position: relative;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.loading-state, .error-state, .empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0.5rem;
+  color: #666;
+}
+
+.error-state {
+  color: #c00;
+}
+
+.empty-state {
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.empty-state i {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 1rem 2rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.diagram-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.diagram-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+
+.toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.zoom-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.zoom-controls button {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.zoom-controls button:hover {
+  background: #f0f0f0;
+  border-color: #4a90e2;
+}
+
+.zoom-level {
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
+  font-family: monospace;
+}
+
+.visualization-svg {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.visualization-svg:active {
+  cursor: grabbing;
+}
+
+/* SVG Styles */
+:host ::ng-deep .step-node {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+:host ::ng-deep .step-node:hover {
+  transform: scale(1.02);
+}
+
+:host ::ng-deep .step-node.dragging {
+  opacity: 0.8;
+  cursor: move;
+}
+
+:host ::ng-deep .step-node rect {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+:host ::ng-deep .step-node:hover rect {
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+}
+
+:host ::ng-deep .scope-container {
+  cursor: pointer;
+}
+
+:host ::ng-deep .scope-container rect {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+:host ::ng-deep .expand-button:hover circle {
+  fill: #e3f2fd;
+}
+
+:host ::ng-deep .connections-group path {
+  transition: stroke-width 0.2s;
+}
+
+:host ::ng-deep .connections-group path:hover {
+  stroke-width: 3;
+}
+
+/* Splitter customization */
+:host ::ng-deep .k-splitter {
+  border: none;
+}
+
+:host ::ng-deep .k-splitter-pane {
+  overflow: visible;
+}
+
+:host ::ng-deep .k-splitbar {
+  background: #e0e6ed;
+  width: 4px;
+}
+
+:host ::ng-deep .k-splitbar:hover {
+  background: #c1c9d2;
+}
+
+:host ::ng-deep .k-splitbar-draggable-horizontal {
+  cursor: col-resize;
+}
+
+/* Node type colors */
+:host ::ng-deep .step-node[data-type="prompt"] rect {
+  fill: #e3f2fd;
+}
+
+:host ::ng-deep .step-node[data-type="action"] rect {
+  fill: #e8f5e9;
+}
+
+:host ::ng-deep .step-node[data-type="subagent"] rect {
+  fill: #fff3e0;
+}
+
+:host ::ng-deep .step-node[data-type="tool"] rect {
+  fill: #f3e5f5;
+}
+
+:host ::ng-deep .step-node[data-type="decision"] rect {
+  fill: #ffebee;
+}

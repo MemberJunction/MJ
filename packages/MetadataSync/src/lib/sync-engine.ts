@@ -105,7 +105,12 @@ export class SyncEngine {
    * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
-  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0): Promise<any> {
+    // Check recursion depth limit
+    const MAX_RECURSION_DEPTH = 50;
+    if (depth > MAX_RECURSION_DEPTH) {
+      throw new Error(`Maximum recursion depth (${MAX_RECURSION_DEPTH}) exceeded while processing field value: ${value}`);
+    }
     // Handle arrays and objects by converting them to JSON strings
     if (value !== null && typeof value === 'object') {
       // Check if it's an array or a plain object (not a Date, etc.)
@@ -193,7 +198,17 @@ export class SyncEngine {
           throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
         }
         const [, fieldName, fieldValue] = fieldMatch;
-        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: fieldValue.trim() });
+        
+        // Recursively process the field value to resolve any nested @ commands
+        const processedValue = await this.processFieldValue(
+          fieldValue.trim(), 
+          baseDir, 
+          parentRecord, 
+          rootRecord,
+          depth + 1
+        );
+        
+        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
       }
       
       if (lookupFields.length === 0) {
@@ -208,7 +223,15 @@ export class SyncEngine {
         for (const pair of pairs) {
           const [key, val] = pair.split('=');
           if (key && val) {
-            createFields[key] = decodeURIComponent(val);
+            const decodedVal = decodeURIComponent(val);
+            // Recursively process the field value to resolve any nested @ commands
+            createFields[key] = await this.processFieldValue(
+              decodedVal, 
+              baseDir, 
+              parentRecord, 
+              rootRecord,
+              depth + 1
+            );
           }
         }
       }
@@ -392,7 +415,7 @@ export class SyncEngine {
     
     for (const [field, value] of Object.entries(defaults)) {
       try {
-        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null);
+        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null, 0);
       } catch (error) {
         throw new Error(`Failed to process default for field '${field}': ${error}`);
       }

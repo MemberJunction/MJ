@@ -110,6 +110,208 @@
   },
   {
     "fields": {
+      "Name": "Demo Flow Agent",
+      "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a flow agent, which follows a deterministic pathway",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-chart-diagram"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 2(a): Get Weather",
+            "Description": "Fetch the current weather conditions as the next step in the flow.",
+            "StartingStep": 0,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "ActionInputMapping": {
+              "location": "San Francisco"
+            },
+            "ActionOutputMapping": {
+              "currentTemp": "currentTemperature",
+              "currentConditions": "weatherConditions"
+            },
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B5A74F8-33A6-48ED-A0AF-0E31CE3C4AD2"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:37.444Z",
+            "checksum": "82d92f3478ba1f4a101a75184860b556d57023e1f7ae57ed7f97f2a4b39db280"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 2(b): Web Search",
+            "Description": "Perform a web search as an alternative step in the flow. See why NVIDIA stock price is lower than $500.",
+            "StartingStep": 0,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "ActionInputMapping": {
+              "SearchTerms": "NVIDIA stock decline reasons"
+            },
+            "ActionOutputMapping": {
+              "SearchResults": "webSearchResults"
+            },
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F28499A1-0B28-4AE5-B695-7F4B48C38C20"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:01:43.326Z",
+            "checksum": "36595f3410ea07714cd13cfb80943e1faf2ce61af6770d1930e235074988942d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Step 1: Get NVIDIA Stock Price",
+            "Description": "Fetch the current stock price of NVIDIA as the first step in the flow.",
+            "StartingStep": 1,
+            "StepType": "Action",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "ActionInputMapping": {
+              "ticker": "NVDA"
+            },
+            "ActionOutputMapping": {
+              "CurrentPrice": "stockPrice"
+            },
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(a): Get Weather&AgentID=@parent:AgentID",
+                  "Condition": "payload.stockPrice > 500",
+                  "Description": "If NVIDIA stock price is above $500, proceed to get the weather step."
+                },
+                "primaryKey": {
+                  "ID": "519F2D7F-1876-48AB-BE0A-8589035C9597"
+                },
+                "sync": {
+                  "lastModified": "2025-07-27T23:53:02.751Z",
+                  "checksum": "fed472b507fefa0dc4e8a6a908000a1fa032bbdcd09a7400af8dda8505868146"
+                }
+              },
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Step 2(b): Web Search&AgentID=@parent:AgentID",
+                  "Condition": "payload.stockPrice <= 500",
+                  "Description": "If NVIDIA stock price is below $500, proceed to web search step."
+                },
+                "primaryKey": {
+                  "ID": "85886739-869D-48C5-BF76-1AF9A6F77AFA"
+                },
+                "sync": {
+                  "lastModified": "2025-07-27T23:53:02.768Z",
+                  "checksum": "dc9c70a7c1d814e8ea67c5763de5f94a32f12e94caa5f13ebc676d5daf66f863"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "54CA1C7E-28D4-4896-A9A2-85538D3CE301"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:48:14.351Z",
+            "checksum": "b0db792796cc21534e45208ed2e077d687d7bcfb861eb6d50f56523423bf1aec"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CCB4CF46-04DE-4D1B-9CAB-D61E830CA3A1"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.784Z",
+            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6BC4E10C-6838-40ED-A153-E82CC3D146B6"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.795Z",
+            "checksum": "bfd0856ee8119698eed7b76b888f9736680ca59d333a427685e8b16591a4df73"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Census Data Lookup",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F9793050-9323-4B4F-A417-6C128AD4054D"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.808Z",
+            "checksum": "10a488464ba741046c73438156a73b41c8a661e00b3db662f6d222f292213664"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Stock Price",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "93E67F1F-EE94-475F-927D-93F56D400902"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.822Z",
+            "checksum": "99f0140095255853b769a5a31317c17afd16fda1ccc7c9f45eb15fe39c2545ed"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1065BCF3-54F1-46B8-AFA8-4FA2E05D9371"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T19:05:25.834Z",
+            "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
+    },
+    "sync": {
+      "lastModified": "2025-07-27T19:12:36.541Z",
+      "checksum": "59e5c770f4d1f62283cd68ea16b3281c26a95aa3ea9f68124ba0535d7a2f1e7a"
+    }
+  },
+  {
+    "fields": {
       "Name": "Marketing Agent",
       "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
