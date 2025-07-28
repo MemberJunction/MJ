@@ -13,20 +13,36 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction } from '@memberjunction/ai-core-plus';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
+import { AIEngine } from '@memberjunction/aiengine';
+import { ActionEngineServer } from '@memberjunction/actions';
 
 /**
- * Flow execution context that tracks the current state of the workflow
+ * Flow execution state that tracks the progress through the workflow.
+ * This is maintained by the Flow Agent Type during execution.
  */
-interface FlowExecutionContext {
+export class FlowExecutionState {
+    /** The agent ID for this flow execution */
     agentId: string;
+    
+    /** The current step being executed */
     currentStepId?: string;
-    completedStepIds: Set<string>;
-    stepResults: Map<string, unknown>;
-    executionPath: string[];
+    
+    /** Set of completed step IDs */
+    completedStepIds: Set<string> = new Set();
+    
+    /** Map of step results by step ID */
+    stepResults: Map<string, unknown> = new Map();
+    
+    /** Ordered list of step IDs in execution order */
+    executionPath: string[] = [];
+    
+    constructor(agentId: string) {
+        this.agentId = agentId;
+    }
 }
 
 /**
@@ -96,6 +112,25 @@ export class FlowAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
     
     /**
+     * Static map to store flow execution state by agent run ID.
+     * This allows us to maintain state across multiple step executions.
+     */
+    private static _flowStates = new Map<string, FlowExecutionState>();
+    
+    /**
+     * Gets or creates flow execution state for an agent run
+     */
+    private getOrCreateFlowState(agentRunId: string, agentId: string): FlowExecutionState {
+        let state = FlowAgentType._flowStates.get(agentRunId);
+        if (!state) {
+            state = new FlowExecutionState(agentId);
+            FlowAgentType._flowStates.set(agentRunId, state);
+        }
+        return state;
+    }
+    
+    
+    /**
      * Determines the next step based on the flow graph structure.
      * 
      * For Flow agents, the next step is determined by:
@@ -104,21 +139,24 @@ export class FlowAgentType extends BaseAgentType {
      * 3. Following the highest priority valid path
      * 4. Using prompt results only when current step type is 'Prompt'
      * 
-     * @param {AIPromptRunResult} promptResult - Result from prompt execution (used for Prompt steps)
-     * @param {P} currentPayload - The current payload state
+     * @param {AIPromptRunResult | null} promptResult - Result from prompt execution (null for non-prompt steps)
+     * @param {ExecuteAgentParams} params - The full execution parameters
      * 
      * @returns {Promise<BaseAgentNextStep<P>>} The next step to execute
      */
     public async DetermineNextStep<P>(
-        promptResult: AIPromptRunResult, 
-        currentPayload: P
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
     ): Promise<BaseAgentNextStep<P>> {
         try {
-            const flowContext = this.getFlowContext(currentPayload);
+            // Get agent run ID from parent run or generate a temporary one
+            const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
+            const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
+            const currentPayload = params.payload || {} as P;
             
-            // If no current step, find starting steps
-            if (!flowContext.currentStepId) {
-                const startingSteps = await this.getStartingSteps(flowContext.agentId);
+            // If no current step, this should have been handled by DetermineInitialStep
+            if (!flowState.currentStepId) {
+                const startingSteps = await this.getStartingSteps(flowState.agentId);
                 
                 if (startingSteps.length === 0) {
                     return this.createNextStep('Failed', {
@@ -128,11 +166,11 @@ export class FlowAgentType extends BaseAgentType {
                 
                 // For now, execute the first starting step
                 // Future enhancement: support parallel starting steps
-                return await this.createStepForFlowNode(startingSteps[0], currentPayload);
+                return await this.createStepForFlowNode(startingSteps[0], currentPayload, flowState);
             }
             
             // Get current step to check if it was a Prompt step
-            const currentStep = await this.getStepById(flowContext.currentStepId);
+            const currentStep = await this.getStepById(flowState.currentStepId);
             
             // If current step was a Prompt, use the prompt result to determine next step
             if (currentStep?.StepType === 'Prompt' && promptResult) {
@@ -148,18 +186,24 @@ export class FlowAgentType extends BaseAgentType {
                 // If prompt specified a next step, try to find it
                 if (promptResponse?.nextStepName) {
                     const nextStep = await this.getStepByName(
-                        flowContext.agentId, 
+                        flowState.agentId, 
                         promptResponse.nextStepName
                     );
                     
                     if (nextStep) {
-                        return await this.createStepForFlowNode(nextStep, currentPayload);
+                        // Check if the step is active
+                        if (nextStep.Status !== 'Active') {
+                            return this.createNextStep('Failed', {
+                                errorMessage: `Requested step '${nextStep.Name}' is not active. Status: ${nextStep.Status}`
+                            });
+                        }
+                        return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
                     }
                 }
             }
             
             // Find valid paths from current step
-            const paths = await this.getValidPaths(flowContext.currentStepId, currentPayload);
+            const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
             
             if (paths.length === 0) {
                 // No valid paths - flow is complete
@@ -177,7 +221,23 @@ export class FlowAgentType extends BaseAgentType {
                 });
             }
             
-            return await this.createStepForFlowNode(nextStep, currentPayload);
+            // Check if the step is active
+            if (nextStep.Status !== 'Active') {
+                // Step is disabled or pending - find next valid path
+                for (let i = 1; i < paths.length; i++) {
+                    const alternateStep = await this.getStepById(paths[i].DestinationStepID);
+                    if (alternateStep && alternateStep.Status === 'Active') {
+                        return await this.createStepForFlowNode(alternateStep, currentPayload, flowState);
+                    }
+                }
+                
+                // No active steps found in any path
+                return this.createNextStep('Failed', {
+                    errorMessage: `No active steps found. Step '${nextStep.Name}' has status: ${nextStep.Status}`
+                });
+            }
+            
+            return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
             
         } catch (error) {
             LogError(`Error in FlowAgentType.DetermineNextStep: ${error.message}`);
@@ -192,8 +252,13 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @param {P} payload - The payload to inject
      * @param {AIPromptParams} prompt - The prompt parameters to update
+     * @param {object} agentInfo - Agent identification info
      */
-    public async InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void> {
+    public async InjectPayload<P = any>(
+        payload: P, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void> {
         if (!prompt) {
             throw new Error('Prompt parameters are required for payload injection');
         }
@@ -205,65 +270,18 @@ export class FlowAgentType extends BaseAgentType {
         // Inject standard payload
         prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
         
-        // Add flow-specific context
-        const flowContext = this.getFlowContext(payload);
-        
-        // If flowContext doesn't have agentId, try to get it from prompt data
-        // This happens on first execution when flow context hasn't been initialized yet
-        if (!flowContext.agentId && prompt.data.agentName) {
-            // We need to find the agent ID from the agent name
-            // This is a temporary solution - ideally the agent ID should be passed through
-            const rv = new RunView();
-            const agentName = prompt.data.agentName as string;
-            const result = await rv.RunView({
-                EntityName: 'AI Agents',
-                ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
-                MaxRows: 1,
-                ResultType: 'simple'
-            });
-            
-            if (result.Success && result.Results && result.Results.length > 0) {
-                flowContext.agentId = result.Results[0].ID;
-                
-                // Initialize the flow context in the payload if it doesn't exist
-                const payloadObj = (payload || {}) as Record<string, unknown>;
-                if (!payloadObj.__flowContext) {
-                    payloadObj.__flowContext = {
-                        agentId: flowContext.agentId,
-                        currentStepId: undefined,
-                        completedStepIds: [],
-                        stepResults: {},
-                        executionPath: []
-                    };
-                }
+        // Add flow-specific context from our state tracking
+        if (agentInfo.agentRunId) {
+            const flowState = FlowAgentType._flowStates.get(agentInfo.agentRunId);
+            if (flowState) {
+                prompt.data.flowContext = {
+                    currentStepId: flowState.currentStepId,
+                    completedSteps: Array.from(flowState.completedStepIds),
+                    executionPath: flowState.executionPath,
+                    stepCount: flowState.completedStepIds.size
+                };
             }
         }
-        
-        prompt.data.flowContext = {
-            currentStepId: flowContext.currentStepId,
-            completedSteps: Array.from(flowContext.completedStepIds),
-            executionPath: flowContext.executionPath,
-            stepCount: flowContext.completedStepIds.size
-        };
-    }
-    
-    /**
-     * Extracts flow execution context from the payload
-     * 
-     * @private
-     */
-    private getFlowContext(payload: unknown): FlowExecutionContext {
-        // Flow context should be stored in a special property of the payload
-        const payloadObj = payload as Record<string, unknown>;
-        const context = payloadObj?.__flowContext as Record<string, unknown> || {};
-        
-        return {
-            agentId: (context.agentId as string) || '',
-            currentStepId: context.currentStepId as string | undefined,
-            completedStepIds: new Set((context.completedStepIds as string[]) || []),
-            stepResults: new Map(Object.entries((context.stepResults as Record<string, unknown>) || {})),
-            executionPath: (context.executionPath as string[]) || []
-        };
     }
     
     /**
@@ -272,20 +290,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStartingSteps(agentId: string): Promise<AIAgentStepEntity[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `AgentID='${agentId}' AND StartingStep=1`,
-            OrderBy: 'Name',
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success) {
-            LogError(`Failed to load starting steps: ${result.ErrorMessage}`);
-            return [];
-        }
-        
-        return result.Results || [];
+        const steps = AIEngine.Instance.GetAgentSteps(agentId, 'Active');
+        return steps.filter(step => step.StartingStep).sort((a, b) => a.Name.localeCompare(b.Name));
     }
     
     /**
@@ -294,19 +300,7 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStepById(stepId: string): Promise<AIAgentStepEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `ID='${stepId}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0];
+        return AIEngine.Instance.GetAgentStepById(stepId);
     }
     
     /**
@@ -315,19 +309,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStepByName(agentId: string, stepName: string): Promise<AIAgentStepEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepEntity>({
-            EntityName: 'MJ: AI Agent Steps',
-            ExtraFilter: `AgentID='${agentId}' AND Name='${stepName.replace(/'/g, "''")}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0];
+        const steps = AIEngine.Instance.GetAgentSteps(agentId);
+        return steps.find(step => step.Name === stepName) || null;
     }
     
     /**
@@ -335,22 +318,14 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private async getValidPaths(stepId: string, payload: unknown): Promise<AIAgentStepPathEntity[]> {
+    private async getValidPaths(
+        stepId: string, 
+        payload: unknown,
+        flowState: FlowExecutionState
+    ): Promise<AIAgentStepPathEntity[]> {
         // Load all paths from this step
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentStepPathEntity>({
-            EntityName: 'MJ: AI Agent Step Paths',
-            ExtraFilter: `OriginStepID='${stepId}'`,
-            OrderBy: 'Priority DESC',
-            ResultType: 'entity_object'
-        });
-        
-        if (!result.Success || !result.Results) {
-            LogError(`Failed to load paths from step: ${result.ErrorMessage}`);
-            return [];
-        }
-        
-        const allPaths = result.Results;
+        const allPaths = AIEngine.Instance.GetPathsFromStep(stepId)
+            .sort((a, b) => b.Priority - a.Priority);
         const validPaths: AIAgentStepPathEntity[] = [];
         
         // Evaluate each path's condition
@@ -365,8 +340,13 @@ export class FlowAgentType extends BaseAgentType {
                 // Create evaluation context
                 const context = {
                     payload,
-                    stepResult: this.getLastStepResult(payload),
-                    flowContext: this.getFlowContext(payload)
+                    stepResult: this.getLastStepResult(flowState),
+                    flowContext: {
+                        currentStepId: flowState.currentStepId,
+                        completedSteps: Array.from(flowState.completedStepIds),
+                        executionPath: flowState.executionPath,
+                        stepCount: flowState.completedStepIds.size
+                    }
                 };
                 
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
@@ -393,12 +373,11 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private getLastStepResult(payload: unknown): unknown {
-        const context = this.getFlowContext(payload);
-        if (context.executionPath.length === 0) return null;
+    private getLastStepResult(flowState: FlowExecutionState): unknown {
+        if (flowState.executionPath.length === 0) return null;
         
-        const lastStepId = context.executionPath[context.executionPath.length - 1];
-        return context.stepResults.get(lastStepId) || null;
+        const lastStepId = flowState.executionPath[flowState.executionPath.length - 1];
+        return flowState.stepResults.get(lastStepId) || null;
     }
     
     /**
@@ -416,7 +395,17 @@ export class FlowAgentType extends BaseAgentType {
             const updateObj: Record<string, unknown> = {};
             
             for (const [outputParam, payloadPath] of Object.entries(mapping)) {
-                const value = outputParam === '*' ? actionResult : actionResult[outputParam];
+                let value: unknown;
+                
+                if (outputParam === '*') {
+                    value = actionResult;
+                } else {
+                    // Case-insensitive lookup for the output parameter
+                    const actualKey = Object.keys(actionResult).find(
+                        key => key.toLowerCase() === outputParam.toLowerCase()
+                    );
+                    value = actualKey ? actionResult[actualKey] : undefined;
+                }
                 
                 if (value !== undefined) {
                     // Parse the path and build nested object
@@ -455,28 +444,19 @@ export class FlowAgentType extends BaseAgentType {
      */
     private async createStepForFlowNode<P>(
         node: AIAgentStepEntity,
-        payload: P
+        payload: P,
+        flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
-        // Update flow context to mark this as current step
-        const flowContext = this.getFlowContext(payload);
-        const updatedContext = {
-            ...flowContext,
-            currentStepId: node.ID
-        };
-        
-        // Request payload update to track flow state
-        // Use replaceElements for complete replacement of flow context
-        const payloadChangeRequest: AgentPayloadChangeRequest<P> = {
-            replaceElements: {
-                __flowContext: updatedContext
-            } as Partial<P & { __flowContext: FlowExecutionContext }>
-        };
+        // Update flow state to mark this as current step
+        flowState.currentStepId = node.ID;
         
         switch (node.StepType) {
             case 'Action':
                 if (!node.ActionID) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Action step '${node.Name}' has no ActionID`
+                        errorMessage: `Action step '${node.Name}' has no ActionID`,
+                        newPayload: payload,
+                        previousPayload: payload
                     });
                 }
                 
@@ -484,18 +464,21 @@ export class FlowAgentType extends BaseAgentType {
                 const actionName = await this.getActionName(node.ActionID);
                 if (!actionName) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Action not found for step '${node.Name}'`
+                        errorMessage: `Action not found for step '${node.Name}'`,
+                        newPayload: payload,
+                        previousPayload: payload
                     });
                 }
                 
                 // Check if we have output mapping configured
-                const baseStep = this.createNextStep('Actions', {
+                const baseStep = this.createNextStep<P>('Actions', {
                     actions: [{
                         name: actionName,
                         params: {} // Future: support parameter mapping
                     }],
-                    payloadChangeRequest,
-                    terminate: false
+                    terminate: false,
+                    newPayload: payload,
+                    previousPayload: payload
                 });
                 
                 // Store the mapping config in a special property for later use
@@ -509,7 +492,9 @@ export class FlowAgentType extends BaseAgentType {
             case 'Sub-Agent':
                 if (!node.SubAgentID) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Sub-Agent step '${node.Name}' has no SubAgentID`
+                        errorMessage: `Sub-Agent step '${node.Name}' has no SubAgentID`,
+                        newPayload: payload,
+                        previousPayload: payload
                     });
                 }
                 
@@ -517,7 +502,9 @@ export class FlowAgentType extends BaseAgentType {
                 const subAgentName = await this.getAgentName(node.SubAgentID);
                 if (!subAgentName) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Sub-Agent not found for step '${node.Name}'`
+                        errorMessage: `Sub-Agent not found for step '${node.Name}'`,
+                        newPayload: payload,
+                        previousPayload: payload
                     });
                 }
                 
@@ -527,8 +514,9 @@ export class FlowAgentType extends BaseAgentType {
                         message: node.Description || `Execute sub-agent: ${subAgentName}`,
                         terminateAfter: false
                     },
-                    payloadChangeRequest,
-                    terminate: false
+                    terminate: false,
+                    newPayload: payload,
+                    previousPayload: payload
                 });
                 
             case 'Prompt':
@@ -536,21 +524,26 @@ export class FlowAgentType extends BaseAgentType {
                 // The base agent will need to handle this case
                 if (!node.PromptID) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Prompt step '${node.Name}' has no PromptID`
+                        errorMessage: `Prompt step '${node.Name}' has no PromptID`,
+                        newPayload: payload,
+                        previousPayload: payload
                     });
                 }
                 
                 return this.createNextStep('Retry', {
                     message: node.Description || 'Executing prompt step for flow decision',
-                    payloadChangeRequest,
                     terminate: false,
                     // Special marker for flow prompt steps
-                    flowPromptStepId: node.PromptID
+                    flowPromptStepId: node.PromptID,
+                    newPayload: payload,
+                    previousPayload: payload
                 } as any);
                 
             default:
                 return this.createNextStep('Failed', {
-                    errorMessage: `Unknown step type: ${node.StepType}`
+                    errorMessage: `Unknown step type: ${node.StepType}`,
+                    newPayload: payload,
+                    previousPayload: payload
                 });
         }
     }
@@ -561,19 +554,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getActionName(actionId: string): Promise<string | null> {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Actions',
-            ExtraFilter: `ID='${actionId}'`,
-            MaxRows: 1,
-            ResultType: 'simple'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0].Name;
+        const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionId);
+        return action?.Name || null;
     }
     
     /**
@@ -582,19 +564,8 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getAgentName(agentId: string): Promise<string | null> {
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'AI Agents',
-            ExtraFilter: `ID='${agentId}'`,
-            MaxRows: 1,
-            ResultType: 'simple'
-        });
-        
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return null;
-        }
-        
-        return result.Results[0].Name;
+        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentId);
+        return agent?.Name || null;
     }
     
     /**
@@ -614,6 +585,119 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         return this.applyActionOutputMapping(actionResult, currentPayload || {} as P, outputMapping);
+    }
+    
+    /**
+     * Override of BaseAgentType's PreProcessActionStep to handle Flow-specific input mapping.
+     * 
+     * This method checks if the current step has action input mapping configured
+     * and applies it to map payload values or static values to action input parameters.
+     * 
+     * @override
+     * @param {AgentAction[]} actions - The actions that will be executed (modified in place)
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<void>} Actions are modified in place
+     * 
+     * @since 2.76.0
+     */
+    public async PreProcessActionStep<P>(
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<void> {
+        // Check if this step has action input mapping configured
+        const stepMetadata = currentStep as Record<string, unknown>;
+        const stepId = stepMetadata.stepId as string | undefined;
+        
+        if (!stepId || actions.length === 0) {
+            // No step ID or no actions to process
+            return;
+        }
+        
+        // Get the AIAgentStep from cached metadata
+        const stepEntity = AIEngine.Instance.GetAgentStepById(stepId);
+        
+        if (!stepEntity) {
+            LogError(`Failed to find AIAgentStep for input mapping: ${stepId}`);
+            return;
+        }
+        
+        if (!stepEntity.ActionInputMapping) {
+            // No input mapping configured
+            return;
+        }
+        
+        // For flow agents, we currently only support single action steps with input mapping
+        // Future enhancement: support mapping to multiple actions
+        if (actions.length > 1) {
+            LogError('Flow agent action input mapping currently only supports single action steps');
+            return;
+        }
+        
+        try {
+            // Parse the input mapping configuration
+            // Expected format: { "paramName": "payload.path.to.value" | "static:value" | 123 | true }
+            const inputMapping: Record<string, unknown> = JSON.parse(stepEntity.ActionInputMapping);
+            const action = actions[0];
+            
+            // Initialize params if not present
+            if (!action.params) {
+                action.params = {};
+            }
+            
+            // Apply each mapping
+            for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
+                let resolvedValue: unknown;
+                
+                if (typeof mappingValue === 'string') {
+                    if (mappingValue.startsWith('static:')) {
+                        // Static string value
+                        resolvedValue = mappingValue.substring(7);
+                    } else if (mappingValue.startsWith('payload.')) {
+                        // Payload path mapping
+                        const path = mappingValue.substring(8); // Remove "payload." prefix
+                        resolvedValue = this.getValueFromPath(currentPayload, path);
+                    } else {
+                        // Treat as literal string value
+                        resolvedValue = mappingValue;
+                    }
+                } else {
+                    // Direct value (number, boolean, object, etc.)
+                    resolvedValue = mappingValue;
+                }
+                
+                // Set the parameter value
+                action.params[paramName] = resolvedValue;
+            }
+            
+            if (IsVerboseLoggingEnabled()) {
+                console.log(`Applied action input mapping for step ${stepEntity.Name}:`, action.params);
+            }
+        } catch (error) {
+            LogError(`Failed to apply action input mapping: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Helper method to get a value from a nested object path
+     * 
+     * @private
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+            if (current && typeof current === 'object' && part in current) {
+                current = current[part];
+            } else {
+                return undefined;
+            }
+        }
+        
+        return current;
     }
     
     /**
@@ -669,41 +753,121 @@ export class FlowAgentType extends BaseAgentType {
         // Apply the mapping using our existing method
         const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
         
-        // Also update flow context to mark step as completed and store result
-        if (payloadChange) {
-            const flowContext = this.getFlowContext(currentPayload);
-            flowContext.completedStepIds.add(stepId);
-            flowContext.stepResults.set(stepId, outputParams);
-            flowContext.executionPath.push(stepId);
-            
-            // Merge flow context update with action output mapping changes
-            const contextUpdate: Partial<P & { __flowContext: FlowExecutionContext }> = {
-                __flowContext: {
-                    agentId: flowContext.agentId,
-                    currentStepId: flowContext.currentStepId,
-                    completedStepIds: Array.from(flowContext.completedStepIds),
-                    stepResults: Object.fromEntries(flowContext.stepResults),
-                    executionPath: flowContext.executionPath
-                }
-            } as Partial<P & { __flowContext: FlowExecutionContext }>;
-            
-            // Combine the updates
-            if (payloadChange.updateElements) {
-                payloadChange.updateElements = {
-                    ...payloadChange.updateElements,
-                    ...contextUpdate
-                };
-            } else if (payloadChange.replaceElements) {
-                payloadChange.replaceElements = {
-                    ...payloadChange.replaceElements,
-                    ...contextUpdate
-                };
-            } else {
-                payloadChange.updateElements = contextUpdate as Partial<P>;
-            }
-        }
+        // Note: Flow state is now tracked separately from payload
+        // The action output mapping is still applied to the payload
+        // but flow execution state is maintained in FlowExecutionState
         
         return payloadChange;
+    }
+
+    /**
+     * Determines the initial step for flow agent types.
+     * 
+     * Flow agents look up their configured starting step instead of executing a prompt.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step to execute, or null if flow context not ready
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null> {
+        const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
+        const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
+        const payload = params.payload || {} as P;
+        
+        const startingSteps = await this.getStartingSteps(flowState.agentId);
+        
+        if (startingSteps.length === 0) {
+            return this.createNextStep('Failed', {
+                errorMessage: 'No starting steps defined for flow agent'
+            });
+        }
+        
+        // Execute the first starting step
+        // Future enhancement: support parallel starting steps
+        return await this.createStepForFlowNode(startingSteps[0], payload, flowState);
+    }
+
+    /**
+     * Pre-processes retry steps for flow agent types.
+     * 
+     * For Flow agents, 'Retry' after actions means evaluate paths from the current step
+     * and continue the flow based on the updated payload. The only exception is when
+     * executing a Prompt step within the flow, which should execute normally.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The next flow step, or null for prompt execution
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Check if this is a special flow prompt step marker
+        const stepMetadata = retryStep as any;
+        if (stepMetadata.flowPromptStepId) {
+            // This is a prompt step in the flow, let it execute normally
+            return null;
+        }
+        
+        // Get the updated payload (after action execution)
+        const currentPayload = retryStep.newPayload || params.payload || {} as P;
+        const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
+        const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
+        
+        // We should have a current step ID from the flow state
+        if (!flowState.currentStepId) {
+            return this.createNextStep('Failed', {
+                errorMessage: 'No current step in flow state after action execution',
+                newPayload: currentPayload,
+                previousPayload: currentPayload
+            });
+        }
+        
+        // Find valid paths from current step using updated payload
+        const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
+        
+        if (paths.length === 0) {
+            // No valid paths - flow is complete
+            return this.createSuccessStep({
+                message: 'Flow completed - no more paths to follow',
+                newPayload: currentPayload,
+                previousPayload: currentPayload
+            });
+        }
+        
+        // Get the destination step for the highest priority path
+        const nextStep = await this.getStepById(paths[0].DestinationStepID);
+        
+        if (!nextStep) {
+            return this.createNextStep('Failed', {
+                errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
+            });
+        }
+        
+        // Check if the step is active
+        if (nextStep.Status !== 'Active') {
+            // Try alternate paths
+            for (let i = 1; i < paths.length; i++) {
+                const alternateStep = await this.getStepById(paths[i].DestinationStepID);
+                if (alternateStep && alternateStep.Status === 'Active') {
+                    return await this.createStepForFlowNode(alternateStep, currentPayload, flowState);
+                }
+            }
+            
+            return this.createNextStep('Failed', {
+                errorMessage: `No active steps found. Step '${nextStep.Name}' has status: ${nextStep.Status}`,
+                newPayload: currentPayload,
+                previousPayload: currentPayload
+            });
+        }
+        
+        // Create the next step based on the flow node
+        return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
     }
 }
 

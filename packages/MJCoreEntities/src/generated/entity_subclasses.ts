@@ -8048,6 +8048,22 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+        * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`),
+    ActionInputMapping: z.string().nullable().describe(`
+        * * Field Name: ActionInputMapping
+        * * Display Name: Action Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8120,6 +8136,22 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`),
+    UIFormSectionKey: z.string().nullable().describe(`
+        * * Field Name: UIFormSectionKey
+        * * Display Name: UI Form Section Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`),
+    UIFormKey: z.string().nullable().describe(`
+        * * Field Name: UIFormKey
+        * * Display Name: UI Form Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`),
+    UIFormSectionExpandedByDefault: z.boolean().describe(`
+        * * Field Name: UIFormSectionExpandedByDefault
+        * * Display Name: UI Form Section Expanded By Default
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -34099,6 +34131,38 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
 
     /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+    * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute
+    */
+    get Status(): 'Active' | 'Pending' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ActionInputMapping
+    * * Display Name: Action Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}
+    */
+    get ActionInputMapping(): string | null {
+        return this.Get('ActionInputMapping');
+    }
+    set ActionInputMapping(value: string | null) {
+        this.Set('ActionInputMapping', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -34278,6 +34342,46 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: UIFormSectionKey
+    * * Display Name: UI Form Section Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass
+    */
+    get UIFormSectionKey(): string | null {
+        return this.Get('UIFormSectionKey');
+    }
+    set UIFormSectionKey(value: string | null) {
+        this.Set('UIFormSectionKey', value);
+    }
+
+    /**
+    * * Field Name: UIFormKey
+    * * Display Name: UI Form Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.
+    */
+    get UIFormKey(): string | null {
+        return this.Get('UIFormKey');
+    }
+    set UIFormKey(value: string | null) {
+        this.Set('UIFormKey', value);
+    }
+
+    /**
+    * * Field Name: UIFormSectionExpandedByDefault
+    * * Display Name: UI Form Section Expanded By Default
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).
+    */
+    get UIFormSectionExpandedByDefault(): boolean {
+        return this.Get('UIFormSectionExpandedByDefault');
+    }
+    set UIFormSectionExpandedByDefault(value: boolean) {
+        this.Set('UIFormSectionExpandedByDefault', value);
     }
 
     /**

@@ -191,6 +191,36 @@ export class WebSearchAction extends BaseAction {
                 method: 'html-scraping'
             };
 
+            // add output props as well to make it easier to use in flows
+            params.Params.push({
+                Name: 'SearchResultsDetails',
+                Value: resultData,
+                Type: "Output"
+            })
+            params.Params.push({
+                Name: 'SearchUrl',
+                Value: resultData.searchUrl,
+                Type: "Output"
+            });
+            params.Params.push({
+                Name: 'SearchResults',
+                Value: results,
+                Type: "Output"
+            });
+            params.Params.push({
+                Name: 'SearchResultsCount',
+                Value: results.length,
+                Type: "Output"
+            });
+            // and finally share the first result as well
+            if (results.length > 0) {
+                params.Params.push({
+                    Name: 'FirstSearchResult',
+                    Value: results[0],
+                    Type: "Output"
+                });
+            }
+
             return {
                 Success: true,
                 ResultCode: "SUCCESS",

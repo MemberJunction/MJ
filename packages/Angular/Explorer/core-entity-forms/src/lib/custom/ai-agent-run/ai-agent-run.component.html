@@ -68,6 +68,9 @@
       <button class="tab" [class.active]="activeTab === 'timeline'" (click)="changeTab('timeline')">
         <i class="fas fa-stream"></i> Timeline
       </button>
+      <button class="tab" [class.active]="activeTab === 'visualization'" (click)="changeTab('visualization')">
+        <i class="fas fa-diagram-project"></i> Visualization
+      </button>
       <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
         <i class="fas fa-chart-line"></i> Analytics
       </button>
@@ -94,101 +97,23 @@
           
           <!-- JSON Detail Pane -->
           <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
-            <div class="json-detail-pane" *ngIf="selectedTimelineItem">
-              <div class="json-pane-header">
-                <h3>
-                  <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
-                  {{ selectedTimelineItem.title }}
-                </h3>
-                <button class="btn-icon" (click)="closeJsonPanel()" title="Close">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-              <div class="json-pane-content">
-                <div class="json-meta">
-                  <div class="meta-item">
-                    <label>Type</label>
-                    <span>{{ selectedTimelineItem.type }}</span>
-                  </div>
-                  <div class="meta-item">
-                    <label>Status</label>
-                    <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
-                      {{ selectedTimelineItem.status }}
-                    </span>
-                  </div>
-                  <div class="meta-item">
-                    <label>Duration</label>
-                    <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
-                  </div>
-                </div>
-                
-                <!-- Action-specific link -->
-                <div class="action-link" *ngIf="selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID">
-                  <button class="btn-link" (click)="navigateToActionLog(selectedTimelineItem.data.ID)">
-                    <i class="fas fa-external-link-alt"></i> View Action Execution Log
-                  </button>
-                </div>
-                
-                <!-- Tab Navigation - Only show when we have both options -->
-                @if (showStepPayloadDiff) {
-                  <div class="detail-pane-tabs">
-                    <button 
-                      class="detail-tab" 
-                      [class.active]="detailPaneTab === 'diff'"
-                      (click)="detailPaneTab = 'diff'">
-                      <i class="fa-solid fa-code-branch"></i>
-                      Payload Changes
-                    </button>
-                    <button 
-                      class="detail-tab" 
-                      [class.active]="detailPaneTab === 'json'"
-                      (click)="detailPaneTab = 'json'">
-                      <i class="fa-solid fa-code"></i>
-                      Full JSON
-                    </button>
-                  </div>
-                }
-                
-                <!-- Tab Content -->
-                <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
-                  <!-- Payload Diff Tab -->
-                  @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
-                    <div class="step-payload-diff">
-                      <mj-deep-diff
-                        [oldValue]="stepPayloadAtStartObject"
-                        [newValue]="stepPayloadAtEndObject"
-                        [title]="''"
-                        [showSummary]="true"
-                        [showUnchanged]="false"
-                        [expandAll]="false"
-                        [maxDepth]="8"
-                        [maxStringLength]="150"
-                        [treatNullAsUndefined]="true">
-                      </mj-deep-diff>
-                    </div>
-                  }
-                  
-                  <!-- Full JSON Tab -->
-                  @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
-                    <div class="json-viewer">
-                      <div class="json-toolbar">
-                        <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
-                          <i class="fas fa-copy"></i>
-                        </button>
-                      </div>
-                      <mj-code-editor
-                        [(ngModel)]="selectedItemJsonString"
-                        [language]="'json'"
-                        [readonly]="true"
-                        style="height: calc(100% - 40px); width: 100%;">
-                      </mj-code-editor>
-                    </div>
-                  }
-                </div>
-              </div>
-            </div>
+            <mj-ai-agent-run-step-detail
+              [selectedTimelineItem]="selectedTimelineItem"
+              (closePanel)="closeJsonPanel()"
+              (navigateToActionLog)="navigateToActionLog($event)"
+              (copyToClipboard)="copyToClipboard($event)">
+            </mj-ai-agent-run-step-detail>
           </kendo-splitter-pane>
         </kendo-splitter>
+      </div>
+
+      <!-- Visualization Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'visualization'" style="height: 100%;">
+        <mj-ai-agent-run-visualization
+          #visualizationComponent
+          [aiAgentRunId]="record.ID"
+          *ngIf="visualizationLoaded">
+        </mj-ai-agent-run-visualization>
       </div>
 
       <!-- Analytics Tab -->
@@ -202,7 +127,7 @@
 
       <!-- Details Tab -->
       <div class="tab-content" *ngIf="activeTab === 'details'">
-        <kendo-panelbar>
+        <kendo-panelbar [keepItemContent]="true">
           <kendo-panelbar-item title="General Information" [expanded]="true">
             <ng-template kendoPanelBarContent>
               <div class="details-grid">

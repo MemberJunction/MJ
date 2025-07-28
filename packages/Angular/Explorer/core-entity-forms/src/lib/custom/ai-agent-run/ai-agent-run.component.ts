@@ -10,7 +10,9 @@ import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeli
 import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
+import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
+import { AIAgentRunDataService } from './ai-agent-run-data.service';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -29,9 +31,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   jsonPanelExpanded = false;
   loading = false;
   error: string | null = null;
-  selectedItemJsonString = '{}';
-  detailPaneTab: 'json' | 'diff' = 'diff';
   analyticsLoaded = false;
+  visualizationLoaded = false;
   
   agent: AIAgentEntity | null = null;
   
@@ -40,6 +41,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
+  @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
   constructor(
     elementRef: ElementRef,
@@ -47,7 +49,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     protected router: Router,
     route: ActivatedRoute,
     cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService
+    private costService: AIAgentRunCostService,
+    private dataService: AIAgentRunDataService
   ) {
     super(elementRef, sharedService, router, route, cdr);
   }
@@ -55,7 +58,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   async ngOnInit() {
     await super.ngOnInit();
     
-    if (this.record) {
+    if (this.record && this.record.ID) {
+      // Load all data through the service
+      await this.dataService.loadAgentRunData(this.record.ID);
       await this.loadAgent();
       await this.loadCostMetrics();
     }
@@ -64,6 +69,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    // Clear data when component is destroyed
+    this.dataService.clearData();
   }
   
   private async loadAgent() {
@@ -102,6 +109,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   changeTab(tab: string) {
     this.activeTab = tab;
     
+    // Lazy load visualization when the tab is first accessed
+    if (tab === 'visualization' && !this.visualizationLoaded) {
+      this.visualizationLoaded = true;
+      this.cdr.detectChanges();
+    }
+    
     // Lazy load analytics when the tab is first accessed
     if (tab === 'analytics' && !this.analyticsLoaded) {
       this.analyticsLoaded = true;
@@ -123,16 +136,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   selectTimelineItem(item: TimelineItem) {
     this.selectedTimelineItem = item;
-    this.selectedItemJsonString = this.getSelectedItemJson();
     this.jsonPanelExpanded = true;
-    // Default to diff tab if step has payload diff, otherwise json tab
-    this.detailPaneTab = this.showStepPayloadDiff ? 'diff' : 'json';
     this.cdr.detectChanges();
   }
   
   closeJsonPanel() {
     this.selectedTimelineItem = null;
-    this.selectedItemJsonString = '{}';
     this.cdr.detectChanges();
   }
   
@@ -168,10 +177,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         this.costService.clearCache(this.record.ID);
         this.loadCostMetrics();
         
-        // Trigger timeline refresh
-        if (this.timelineComponent) {
-          this.timelineComponent.loadData();
-        }
+        // Reload data through service - this will update all components
+        this.dataService.loadAgentRunData(this.record.ID);
+        
         // Trigger analytics refresh
         if (this.analyticsComponent) {
           this.analyticsComponent.loadData();
@@ -180,32 +188,6 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     }
   }
   
-  getSelectedItemJson(): string {
-    if (!this.selectedTimelineItem) return '{}';
-    
-    // Get all the data from the entity
-    // first check to see if the item is an AIAgentRunStepEntity
-    let data;
-    if (this.selectedTimelineItem.data instanceof AIAgentRunStepEntity) {
-      // If it's a step entity, we need to get the full run data
-      data = this.selectedTimelineItem.data.GetAll();
-    }
-    else {
-      data = this.selectedTimelineItem.data;
-    }
-    
-    // Apply recursive JSON parsing to the entire data object with inline extraction
-    // This will handle any JSON strings regardless of property names
-    // and extract embedded JSON from text strings
-    const parseOptions: ParseJSONOptions = {
-      extractInlineJson: true,
-      maxDepth: 100,
-      debug: false // Disable debug logging - regex issue fixed
-    };
-    const parsedData = ParseJSONRecursive(data, parseOptions);
-    
-    return JSON.stringify(parsedData, null, 2);
-  }
   
   getStatusIcon(status: string): string {
     const iconMap: Record<string, string> = {

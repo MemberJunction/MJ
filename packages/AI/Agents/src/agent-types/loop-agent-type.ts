@@ -12,7 +12,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
@@ -64,7 +64,10 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep<P>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>> {
+    public async DetermineNextStep<P>(
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
+    ): Promise<BaseAgentNextStep<P>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
@@ -290,14 +293,55 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @param {T} payload - The payload to inject
      * @param {AIPromptParams} prompt - The prompt parameters to update
+     * @param {object} agentInfo - Agent identification info (unused by LoopAgentType)
      */
-    public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
+    public async InjectPayload<T = any>(
+        payload: T, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void> {
         if (!prompt)
             throw new Error('Prompt parameters are required for payload injection');
         if (!prompt.data )
             prompt.data = {};
 
         prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
+    }
+
+    /**
+     * Determines the initial step for loop agent types.
+     * 
+     * Loop agents always start with a prompt execution to determine the initial actions.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null> {
+        // Loop agents always start with a prompt execution
+        return null;
+    }
+
+    /**
+     * Pre-processes retry steps for loop agent types.
+     * 
+     * Loop agents use the default retry behavior which executes the prompt again.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Loop agents use default retry behavior (execute prompt)
+        return null;
     }
 }
 

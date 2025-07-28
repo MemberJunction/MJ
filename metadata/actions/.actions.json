@@ -476,6 +476,40 @@
             "lastModified": "2025-07-19T17:04:37.937Z",
             "checksum": "923cb00ced6fa92e0d8ad35005e902768a042cb940580d1c6cb3d41c6add7366"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentTemp",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current temperature for the specified location"
+          },
+          "primaryKey": {
+            "ID": "5D3FDDE0-085D-4495-9606-1BF972DF7320"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.915Z",
+            "checksum": "68bde985a8f39e6c149dfc2e008f3fb0630a940d06cd4985fe4096c83172a336"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentConditions",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current weather conditions for the specified location"
+          },
+          "primaryKey": {
+            "ID": "1866AF04-25D0-4D98-914B-03380F3080D5"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.930Z",
+            "checksum": "bf182e9ceb864c3c1c4518b78dc7bd09155c485cbe59ca63dfa38548707323e5"
+          }
         }
       ],
       "Action Result Codes": [
@@ -577,6 +611,40 @@
           "sync": {
             "lastModified": "2025-07-19T17:04:37.981Z",
             "checksum": "0022b1fafbede28a7ca1323c1f88e787a19ca19ed596b8578cb2fe10965df58d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StockData",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Detailed stock information retrieved from the API"
+          },
+          "primaryKey": {
+            "ID": "CD2A8121-CCE6-4046-93B7-4D9F7BE28DA5"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.969Z",
+            "checksum": "425c9a176f6c449871dff886bc2e392cc08c11665b239bc830ed552f168f93c1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CurrentPrice",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Current stock price retrieved from the API"
+          },
+          "primaryKey": {
+            "ID": "73B51353-894F-4BD6-A400-3C57E8CEE9FF"
+          },
+          "sync": {
+            "lastModified": "2025-07-27T23:20:25.984Z",
+            "checksum": "f3ac0cdc4a8daf91c92fcd85c41e3d015191b51be1998b73a59bb397a340d5c5"
           }
         }
       ],
@@ -1743,6 +1811,87 @@
           "sync": {
             "lastModified": "2025-07-19T17:04:38.541Z",
             "checksum": "e25d2eef2961c21889ed7d98dd1e5224d2e8264deef4e38168e07f5a9d4f0844"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Comprehensive JSON object with search result details"
+          },
+          "primaryKey": {
+            "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.917Z",
+            "checksum": "0366d5c6518eed38ce63600bb7e1c03b4c35de43673398469d675a82f3601130"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "URL of the search results page"
+          },
+          "primaryKey": {
+            "ID": "AE5C7C67-4C0C-44E5-97AE-AA7DDB1311E2"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.935Z",
+            "checksum": "54e4d2d81d87d38afd5932f5aaac3003780eaadd0b6ae1f419cba33addda4b5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result objects containing title, URL, and snippet"
+          },
+          "primaryKey": {
+            "ID": "BFA9FC38-FC0D-4826-88F4-5FD2C69C8AA7"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.949Z",
+            "checksum": "695400792d99543ec5af7d55d43398659d0b3892f58759abda610850a4e6d236"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "Total number of search results found"
+          },
+          "primaryKey": {
+            "ID": "263F09BE-9F27-49C3-BC7D-75F4FB31B091"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.962Z",
+            "checksum": "0ae51bd6b2e12e3dfde257af7d4ddd1c164a42da9920e929ab61bd341159255a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstSearchResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Details of the first search result"
+          },
+          "primaryKey": {
+            "ID": "B2576969-FC51-4A03-80B1-7A17FA8B9815"
+          },
+          "sync": {
+            "lastModified": "2025-07-28T00:00:57.975Z",
+            "checksum": "adbb4c00df27e0ee13f540b1f2f78be26ae2166454c8b1c15273845de62263fd"
           }
         }
       ],
