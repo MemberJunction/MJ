@@ -51,6 +51,8 @@ import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
+import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
+import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
 import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
@@ -89,6 +91,8 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
+        AIAgentRunVisualizationComponent,
+        AIAgentRunStepDetailComponent,
         QueryFormExtendedComponent,
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
