@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.76.0
+
+### Minor Changes
+
+- 4b27b3c: migration file so minor bump
+- ffda243: migration
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Patch Changes

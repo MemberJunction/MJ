@@ -1,5 +1,19 @@
 # @memberjunction/react-test-harness
 
+## 2.76.0
+
+### Minor Changes
+
+- ffda243: migration
+
+### Patch Changes
+
+- 1745e86: liunt fix
+- 2e4ed28: new linter
+- Updated dependencies [ffda243]
+  - @memberjunction/react-runtime@2.76.0
+  - @memberjunction/interactive-component-types@2.76.0
+
 ## 2.75.0
 
 ### Minor Changes

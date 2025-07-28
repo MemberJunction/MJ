@@ -1,5 +1,28 @@
 # @memberjunction/ai-agents
 
+## 2.76.0
+
+### Minor Changes
+
+- 4b27b3c: migration file so minor bump
+- ffda243: migration
+
+### Patch Changes
+
+- b9a94a9: Bug fix
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/ai-core-plus@2.76.0
+  - @memberjunction/aiengine@2.76.0
+  - @memberjunction/ai-prompts@2.76.0
+  - @memberjunction/actions-base@2.76.0
+  - @memberjunction/actions@2.76.0
+  - @memberjunction/ai@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Patch Changes

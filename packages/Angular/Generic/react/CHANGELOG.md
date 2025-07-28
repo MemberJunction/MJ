@@ -1,5 +1,19 @@
 # @memberjunction/ng-react
 
+## 2.76.0
+
+### Minor Changes
+
+- ffda243: migration
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/react-runtime@2.76.0
+  - @memberjunction/interactive-component-types@2.76.0
+
 ## 2.75.0
 
 ### Minor Changes

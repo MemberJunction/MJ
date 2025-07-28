@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.76.0
+
+### Minor Changes
+
+- 4b27b3c: migration file so minor bump
+
+### Patch Changes
+
+- 7dabb22: feat: add hierarchical CategoryName support for query lookup
+
+  Adds support for hierarchical category paths in query lookup operations.
+  The CategoryName parameter now accepts filesystem-like paths (e.g.,
+  "/MJ/AI/Agents/") that walk through the QueryCategory parent-child
+  relationships.
+
+  ### New Features
+
+  - **Hierarchical Path Resolution**: CategoryName now supports paths like
+    "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
+    category hierarchy using ParentID relationships
+  - **CategoryPath Property**: Added CategoryPath getter to QueryInfo class
+    that returns the full hierarchical path for any query
+  - **Backward Compatibility**: Existing simple CategoryName usage (e.g.,
+    "Agents") continues to work unchanged
+
+- 2da81b3: Fix to Action Test Harness empty optional parameters
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/ng-ai-test-harness@2.76.0
+  - @memberjunction/ai-engine-base@2.76.0
+  - @memberjunction/ai-core-plus@2.76.0
+  - @memberjunction/ng-action-gallery@2.76.0
+  - @memberjunction/ng-code-editor@2.76.0
+  - @memberjunction/ng-join-grid@2.76.0
+  - @memberjunction/ng-timeline@2.76.0
+  - @memberjunction/ng-base-forms@2.76.0
+  - @memberjunction/ng-form-toolbar@2.76.0
+  - @memberjunction/ng-container-directives@2.76.0
+  - @memberjunction/ng-deep-diff@2.76.0
+  - @memberjunction/ng-tabstrip@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Patch Changes
