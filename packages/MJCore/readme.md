@@ -320,10 +320,10 @@ const params: RunQueryParams = {
 
 const results = await rq.RunQuery(params);
 
-// Execute by Query Name and Category
+// Execute by Query Name and Category Path
 const namedParams: RunQueryParams = {
     QueryName: 'Monthly Sales Report',
-    CategoryName: 'Sales',
+    CategoryPath: '/Sales/',  // Hierarchical path notation
     Parameters: {
         Month: 12,
         Year: 2024,
@@ -569,10 +569,10 @@ if (!result.Success) {
 Organize queries using categories for better management:
 
 ```typescript
-// Query by category
+// Query by category path
 const categoryParams: RunQueryParams = {
     QueryName: 'Top Customers',
-    CategoryName: 'Sales Reports',
+    CategoryPath: '/Sales Reports/',  // Hierarchical path notation
     Parameters: { limit: 10 }
 };
 
@@ -626,7 +626,7 @@ SELECT
     AVG(o.TotalAmount) AS AvgOrderValue,
     COUNT(DISTINCT o.CustomerID) AS UniqueCustomers
     {% if includeProductBreakdown %}
-    , p.CategoryName
+    , p.CategoryPath
     , SUM(od.Quantity) AS TotalQuantity
     {% endif %}
 FROM Orders o
@@ -648,7 +648,7 @@ GROUP BY
     DATEPART(month, o.OrderDate),
     DATEPART(year, o.OrderDate)
     {% if includeProductBreakdown %}
-    , p.CategoryName
+    , p.CategoryPath
     {% endif %}
 ORDER BY {{ orderExpression | sqlNoKeywordsExpression }}
 ```
@@ -657,7 +657,7 @@ ORDER BY {{ orderExpression | sqlNoKeywordsExpression }}
 // Execute the dashboard query
 const dashboardResult = await rq.RunQuery({
     QueryName: 'Sales Dashboard Data',
-    CategoryName: 'Analytics',
+    CategoryPath: '/Analytics/',  // Hierarchical path notation
     Parameters: {
         startDate: '2024-01-01',
         endDate: '2024-12-31',

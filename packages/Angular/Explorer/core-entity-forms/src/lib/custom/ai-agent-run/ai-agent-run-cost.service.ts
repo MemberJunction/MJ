@@ -55,7 +55,7 @@ export class AIAgentRunCostService {
       const rq = new RunQuery();
       const queryResult = await rq.RunQuery({
         QueryName: 'CalculateRunCost',
-        CategoryName: 'MJ/AI/Agents',
+        CategoryPath: '/MJ/AI/Agents/',
         Parameters: {
           AIAgentRunID: agentRunId,
           MJCoreSchemaName: mjCoreSchemaName

@@ -427,8 +427,8 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
@@ -443,7 +443,7 @@ export class GraphQLSystemUserClient {
 
             const variables: any = { QueryID: input.QueryID };
             if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
-            if (input.CategoryName !== undefined) variables.CategoryName = input.CategoryName;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
@@ -491,8 +491,8 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
@@ -507,7 +507,7 @@ export class GraphQLSystemUserClient {
 
             const variables: any = { QueryName: input.QueryName };
             if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
-            if (input.CategoryName !== undefined) variables.CategoryName = input.CategoryName;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
@@ -1098,9 +1098,9 @@ export interface GetQueryDataSystemUserInput {
      */
     CategoryID?: string;
     /**
-     * Optional category name filter
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
      */
-    CategoryName?: string;
+    CategoryPath?: string;
     /**
      * Optional parameters for templated queries
      */
@@ -1128,9 +1128,9 @@ export interface GetQueryDataByNameSystemUserInput {
      */
     CategoryID?: string;
     /**
-     * Optional category name filter
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
      */
-    CategoryName?: string;
+    CategoryPath?: string;
     /**
      * Optional parameters for templated queries
      */

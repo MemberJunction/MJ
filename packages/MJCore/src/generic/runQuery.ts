@@ -3,7 +3,9 @@ import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
 /**
- * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored
+ * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored.
+ * QueryName and CategoryPath together uniquely identify a Query, just as QueryID does.
+ * CategoryPath supports hierarchical paths (e.g., "/MJ/AI/Agents/") for navigation through nested categories.
  */
 export type RunQueryParams = {
     /**
@@ -15,9 +17,10 @@ export type RunQueryParams = {
      */
     QueryName?: string
     /**
-     * Optional, if provided, the query to be run will be selected to match the specified Category by name
+     * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
+     * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */
-    CategoryName?: string
+    CategoryPath?: string
     /**
      * Optional, if provided, the query to be run will be selected to match the specified CategoryID 
      */
@@ -65,7 +68,9 @@ export class RunQuery  {
     /**
      * Executes a saved query and returns the results.
      * The query must exist in the system and the user must have permission to execute it.
-     * @param params - Parameters including query ID or name
+     * Queries can be identified by QueryID or by QueryName + CategoryPath combination.
+     * CategoryPath supports hierarchical navigation (e.g., "/MJ/AI/Agents/") and falls back to simple name matching.
+     * @param params - Parameters including query ID or name with optional CategoryPath for disambiguation
      * @param contextUser - Optional user context for permissions (mainly used server-side)
      * @returns Query results including data rows and execution metadata
      */
