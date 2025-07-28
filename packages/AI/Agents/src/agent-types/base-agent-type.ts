@@ -73,6 +73,8 @@ export abstract class BaseAgentType {
      * and the format of output expected from its system prompt.
      * 
      * @abstract
+     * @param {AIPromptRunResult | null} promptResult - Result from prompt execution (null for non-prompt steps)
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent and context
      * @returns {Promise<BaseAgentNextStep>} The determined next step and optional return value
      * 
      * @example
@@ -91,7 +93,10 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult, currentPayload: P): Promise<BaseAgentNextStep<P>>;
+    public abstract DetermineNextStep<P = any>(
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
+    ): Promise<BaseAgentNextStep<P>>;
 
     /**
      * Determines the initial step when no previous decision exists.
@@ -110,6 +115,28 @@ export abstract class BaseAgentType {
      */
     public abstract DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null>;
 
+    /**
+     * Pre-processes a retry step to allow agent types to customize retry behavior.
+     * 
+     * This method is called when the previous step returned 'Retry' as the next step.
+     * Agent types can override this to provide custom behavior instead of the default
+     * prompt execution. This is particularly useful for:
+     * - Flow agents that need to evaluate paths after action execution
+     * - State machine agents that need to transition based on results
+     * - Pipeline agents that need to move to the next stage
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep | null>} Custom next step, or null to use default retry behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null>;
+
     // /**
     //  * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
     //  * agent-type specific logic.
@@ -119,10 +146,15 @@ export abstract class BaseAgentType {
     /**
      * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
      * system prompt by replacing a special non-Nunjucks placeholder, or by adding extra messages to the prompt.
-     * @param payload 
-     * @param prompt 
+     * @param payload - The payload to inject
+     * @param prompt - The prompt parameters to update
+     * @param agentInfo - Agent identification info including agent ID and run ID
      */
-    public abstract InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void>;
+    public abstract InjectPayload<P = any>(
+        payload: P, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.

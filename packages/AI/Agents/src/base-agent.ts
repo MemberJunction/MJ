@@ -805,7 +805,10 @@ export class BaseAgent {
         // NOTE: We do this even if payload is empty, each agent type can have its own
         //       logic for handling empty payloads.
         const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-        await atInstance.InjectPayload<P>(payload, promptParams);
+        await atInstance.InjectPayload<P>(payload, promptParams, {
+            agentId: params.agent.ID,
+            agentRunId: this._agentRun?.ID
+        });
 
         // Only set up child prompts if we have a system prompt
         if (systemPrompt) {
@@ -904,7 +907,7 @@ export class BaseAgent {
 
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult, currentPayload);
+        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult, params);
         return nextStep;
     }
 
@@ -2153,7 +2156,7 @@ export class BaseAgent {
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string): Promise<AIAgentRunStepEntityExtended> {
+    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -2173,6 +2176,7 @@ export class BaseAgent {
         stepEntity.TargetLogID = targetLogId || null;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
+        stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
         
         // Populate InputData if provided
         if (inputData) {
@@ -2347,6 +2351,16 @@ export class BaseAgent {
         // Execute based on the previous decision
         switch (previousDecision.step) {
             case 'Retry':
+                // Ask agent type if it wants to handle retry differently
+                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+                const customRetryStep = await agentTypeInstance.PreProcessRetryStep(params, previousDecision);
+                
+                if (customRetryStep) {
+                    // Agent type provided custom handling
+                    return customRetryStep;
+                }
+                
+                // Default behavior - execute prompt step
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
                 return await this.executeSubAgentStep<P, P>(params, previousDecision!);
@@ -2414,7 +2428,9 @@ export class BaseAgent {
             conversationMessages: params.conversationMessages,
         };
         
-        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData);
+        // Prepare prompt parameters
+        const payload = previousDecision?.newPayload || params.payload;
+        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData, undefined, payload);
         
         try {
             // Report prompt execution progress with context
@@ -2434,9 +2450,6 @@ export class BaseAgent {
                 },
                 displayMode: 'live' // Only show in live mode
             });
-
-            // Prepare prompt parameters
-            const payload = previousDecision?.newPayload || params.payload;
             
             // Set PayloadAtStart
             if (stepEntity && payload) {
@@ -2673,7 +2686,7 @@ export class BaseAgent {
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData);
+        const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData, undefined, previousDecision.newPayload);
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -2962,6 +2975,7 @@ export class BaseAgent {
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         try {
+            const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
             const actions: AgentAction[] = previousDecision.actions || [];
             // Check for cancellation before starting
             if (params.cancellationToken?.aborted) {
@@ -3049,6 +3063,7 @@ export class BaseAgent {
             const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
 
             // Execute all actions in parallel
+            let lastStep: AIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
                 // get all agent actions first for this agent
                 const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(aa => aa.ActionID === a.ID));
@@ -3056,8 +3071,8 @@ export class BaseAgent {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID);
-                
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload);
+                lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
                 
@@ -3131,7 +3146,6 @@ export class BaseAgent {
             });
             
             // Call agent type's post-processing for actions
-            let currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
             let finalPayload = currentPayload;
             
             try {
@@ -3166,6 +3180,10 @@ export class BaseAgent {
                     );
                     
                     finalPayload = changeResult.result;
+                    if (lastStep) {
+                        lastStep.PayloadAtEnd = JSON.stringify(finalPayload);
+                        await lastStep.Save();
+                    }
                     
                     if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
                         LogStatus(`Action post-processing payload warnings: ${changeResult.warnings.join('; ')}`);
