@@ -4,25 +4,134 @@ import * as Config from './config';
 import { BaseEntity, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, CompositeKey } from "@memberjunction/core";
 import axios, { AxiosResponse } from "axios";
 import { ApolloBulkPeopleRequest, ApolloBulkPeopleResponse, ProcessPersonRecordGroupParams, SearchPeopleResponsePerson } from "./generic/apollo.types";
-import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
-// ApolloEnrichContact this Action would use the www.apollo.io enrichment service and enrich a "contact" type of record. The parameters to this Action would be:
-// EntityName - entity in question that contacts "contact" types of records
-// EmailField - string - field name in the target entity that contains the email to be used for lookups
-// FirstNameField - string 
-// LastNameField - string
-// AccountNameField - string
-// EnrichmentFieldMapping - JSON - this JSON string would contain mappings for the wide array of enrichment outputs. The idea is that the outputs could include a wide array of things and this would map any of the scalar values that Apollo.io provides back to entity field names in the target entity
-// EducationHistoryEntityName - string - optional - this would contain the name of the entity that will be used to stored the retrieved education history for each contact
-// EmploymentHistoryEntityName - string - optional - would contain the name of the entity that will be used to store the retrieved employment history for each contact
-// ApolloEnrichAccount - same idea and pattern as above, but would be for Account style entities
-// Would appreciate feedback on (a) the approach to how we package this stuff and (b) the approach to params noted above.
+/**
+ * Configuration parameters for contact enrichment action
+ * Defines the entity and field mappings for contact enrichment
+ */
+interface ContactEnrichmentParams {
+    EntityName: string;
+    EmailField: string;
+    FirstNameField: string;
+    LastNameField: string;
+    TitleField: string;
+    EnrichedAtField: string;
+    Filter: string;
+    ProfilePictureURLField?: string;
+    AccountNameField?: string;
+    DomainField?: string;
+    LinkedInField?: string;
+    TwitterField?: string;
+    FacebookField?: string;
+}
 
-@RegisterClass(BaseAction, "Apollo Enrichment - Contacts")
-export class ApolloContactsEnrichmentAction extends BaseAction {
+/**
+ * Mappings for employment and education history entity fields
+ * Used to create related history records for enriched contacts
+ */
+interface HistoryMappings {
+    education: Record<string, string>;
+    employment: Record<string, string>;
+}
 
+/**
+ * Parameters for paginated record retrieval
+ * Used to process large datasets in manageable chunks
+ */
+type PageRecordsParams = {
+    EntityName: string;
+    PageNumber: number;
+    PageSize: number;
+    Filter?: string;
+};
+
+/**
+ * Action that enriches contact records using Apollo.io's people matching and search APIs
+ * 
+ * This action performs contact enrichment by:
+ * 1. Bulk matching existing contacts against Apollo's database
+ * 2. Updating contact records with enriched social profiles and company data
+ * 3. Creating employment and education history records
+ * 4. Processing contacts in configurable batch sizes for optimal performance
+ * 
+ * @example
+ * ```typescript
+ * // Basic contact enrichment
+ * await runAction({
+ *   ActionName: 'ApolloEnrichmentContactsAction',
+ *   Params: [{
+ *     Name: 'EntityName',
+ *     Value: 'Contacts'
+ *   }, {
+ *     Name: 'EmailField',
+ *     Value: 'Email'
+ *   }, {
+ *     Name: 'FirstNameField',
+ *     Value: 'FirstName'
+ *   }, {
+ *     Name: 'LastNameField',
+ *     Value: 'LastName'
+ *   }, {
+ *     Name: 'TitleField',
+ *     Value: 'Title'
+ *   }, {
+ *     Name: 'EnrichedAtField',
+ *     Value: 'EnrichedAt'
+ *   }, {
+ *     Name: 'Filter',
+ *     Value: 'Email IS NOT NULL AND EnrichedAt IS NULL'
+ *   }]
+ * });
+ * 
+ * // Full enrichment with history tracking
+ * await runAction({
+ *   ActionName: 'ApolloEnrichmentContactsAction',
+ *   Params: [
+ *     // ... basic params ...
+ *     {
+ *       Name: 'EmploymentHistoryFieldMappings',
+ *       Value: JSON.stringify({
+ *         EmploymentHistoryEntityName: 'Contact Employment Histories',
+ *         EmploymentHistoryContactIDFieldName: 'ContactID',
+ *         EmploymentHistoryOrganizationFieldName: 'Organization',
+ *         EmploymentHistoryTitleFieldName: 'Title'
+ *       })
+ *     }
+ *   ]
+ * });
+ * ```
+ */
+@RegisterClass(BaseAction, "ApolloEnrichmentContactsAction")
+export class ApolloEnrichmentContactsAction extends BaseAction {
+    /**
+     * Job titles to exclude when processing contacts
+     * These are typically not business decision-makers
+     */
     private readonly ExcludeTitles: string[] = ['member', 'student member', 'student','volunteer'];
 
+    /**
+     * Main entry point for the Apollo contact enrichment action
+     * 
+     * @param params - The action parameters containing:
+     *   - EntityName: Required - Name of the contact entity to enrich
+     *   - EmailField: Required - Field name containing email addresses
+     *   - FirstNameField: Required - Field name containing first names
+     *   - LastNameField: Required - Field name containing last names
+     *   - TitleField: Required - Field name containing job titles
+     *   - EnrichedAtField: Required - Field to track enrichment timestamp
+     *   - Filter: Required - SQL filter to select contacts for enrichment
+     *   - ProfilePictureURLField: Optional - Field for profile picture URLs
+     *   - AccountNameField: Optional - Field for company/account names
+     *   - DomainField: Optional - Field for email domains
+     *   - LinkedInField: Optional - Field for LinkedIn profile URLs
+     *   - TwitterField: Optional - Field for Twitter profile URLs
+     *   - FacebookField: Optional - Field for Facebook profile URLs
+     *   - EmploymentHistoryFieldMappings: Optional - JSON mapping for employment history entity
+     *   - EducationHistoryFieldMappings: Optional - JSON mapping for education history entity
+     * 
+     * @returns Promise<ActionResultSimple> indicating success/failure and any error messages
+     */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Validate API configuration
@@ -51,6 +160,10 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         }
     }
 
+    /**
+     * Validates that the Apollo.io API key is configured properly
+     * @returns Validation result with success flag and potential error details
+     */
     private validateConfiguration(): { success: boolean; error?: ActionResultSimple } {
         if (!Config.ApolloAPIKey) {
             return {
@@ -65,59 +178,74 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return { success: true };
     }
 
+    /**
+     * Extracts and validates all action parameters from the request
+     * Processes both required and optional parameters for contact enrichment
+     * 
+     * @param params - The action parameters containing entity and field configurations
+     * @returns Object with success flag, validated parameters, or error details
+     */
     private extractAndValidateParameters(params: RunActionParams): { 
         success: boolean; 
         data?: { actionParams: ContactEnrichmentParams; historyMappings: HistoryMappings }; 
         error?: ActionResultSimple 
     } {
         // Extract required parameters
-        const entityNameParam = this.getRequiredParam(params, 'EntityName');
-        const emailFieldParam = this.getRequiredParam(params, 'EmailField');
-        const firstNameFieldParam = this.getRequiredParam(params, 'FirstNameField');
-        const lastNameFieldParam = this.getRequiredParam(params, 'LastNameField');
-        const accountNameFieldParam = this.getRequiredParam(params, 'AccountNameField');
-        const enrichedAtFieldParam = this.getRequiredParam(params, 'EnrichedAtField');
-        const filterParam = this.getRequiredParam(params, 'FilterParam');
+        const entityName = this.getParamValue(params, 'EntityName');
+        const emailField = this.getParamValue(params, 'EmailField');
+        const firstNameField = this.getParamValue(params, 'FirstNameField');
+        const lastNameField = this.getParamValue(params, 'LastNameField');
+        const titleField = this.getParamValue(params, 'TitleField');
+        const enrichedAtField = this.getParamValue(params, 'EnrichedAtField');
+        const filter = this.getParamValue(params, 'Filter');
 
         // Check for any missing required parameters
         const missingParams = [];
-        if (!entityNameParam) missingParams.push('EntityName');
-        if (!emailFieldParam) missingParams.push('EmailField');
-        if (!firstNameFieldParam) missingParams.push('FirstNameField');
-        if (!lastNameFieldParam) missingParams.push('LastNameField');
-        if (!accountNameFieldParam) missingParams.push('AccountNameField');
-        if (!enrichedAtFieldParam) missingParams.push('EnrichedAtField');
-        if (!filterParam) missingParams.push('FilterParam');
+        if (!entityName) missingParams.push('EntityName');
+        if (!emailField) missingParams.push('EmailField');
+        if (!firstNameField) missingParams.push('FirstNameField');
+        if (!lastNameField) missingParams.push('LastNameField');
+        if (!titleField) missingParams.push('TitleField');
+        if (!enrichedAtField) missingParams.push('EnrichedAtField');
+        if (!filter) missingParams.push('Filter');
 
         if (missingParams.length > 0) {
-            return {
+                return {
                 success: false,
                 error: {
                     Success: false,
                     Message: `Missing required parameters: ${missingParams.join(', ')}`,
                     ResultCode: "VALIDATION_ERROR"
                 }
-            };
-        }
+                };
+            }
 
         // Extract optional parameters
-        const domainParam = this.getOptionalParam(params, 'domainParam');
-        const linkedinParam = this.getOptionalParam(params, 'linkedinParam');
+        const profilePictureURLField = this.getParamValue(params, 'ProfilePictureURLField');
+        const accountNameField = this.getParamValue(params, 'AccountNameField');
+        const domainField = this.getParamValue(params, 'DomainField');
+        const linkedInField = this.getParamValue(params, 'LinkedInField');
+        const twitterField = this.getParamValue(params, 'TwitterField');
+        const facebookField = this.getParamValue(params, 'FacebookField');
 
         // Extract history mappings
         const educationHistoryMappings = this.parseHistoryMappings(params, 'EducationHistoryFieldMappings');
         const employmentHistoryMappings = this.parseHistoryMappings(params, 'EmploymentHistoryFieldMappings');
 
         const actionParams: ContactEnrichmentParams = {
-            entityName: entityNameParam.Value,
-            emailField: emailFieldParam.Value,
-            firstNameField: firstNameFieldParam.Value,
-            lastNameField: lastNameFieldParam.Value,
-            accountNameField: accountNameFieldParam.Value,
-            enrichedAtField: enrichedAtFieldParam.Value,
-            filter: filterParam.Value,
-            domainField: domainParam?.Value,
-            linkedInField: linkedinParam?.Value
+            EntityName: entityName,
+            EmailField: emailField,
+            FirstNameField: firstNameField,
+            LastNameField: lastNameField,
+            TitleField: titleField,
+            EnrichedAtField: enrichedAtField,
+            Filter: filter,
+            ProfilePictureURLField: profilePictureURLField,
+            AccountNameField: accountNameField,
+            DomainField: domainField,
+            LinkedInField: linkedInField,
+            TwitterField: twitterField,
+            FacebookField: facebookField
         };
 
         const historyMappings: HistoryMappings = {
@@ -128,6 +256,65 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return { success: true, data: { actionParams, historyMappings } };
     }
 
+    /**
+     * Extract parameter value by name (case-insensitive)
+     * Handles special case where 'null' string should be treated as null value
+     * 
+     * @param params - The action parameters
+     * @param paramName - Name of the parameter to extract
+     * @returns Parameter value or null if not found or explicitly 'null'
+     */
+    protected getParamValue(params: RunActionParams, paramName: string): any {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
+        if (param && param.Value && param.Value === 'null') {
+            return null;
+        }
+        else {
+            return param?.Value;
+        }
+    }
+
+    /**
+     * Parses JSON field mappings for employment/education history entities
+     * Used to configure how history records should be created and updated
+     * 
+     * @param params - The action parameters
+     * @param paramName - Name of the history mapping parameter
+     * @returns Parsed field mappings or empty object if invalid/missing
+     */
+    private parseHistoryMappings(params: RunActionParams, paramName: string): Record<string, string> {
+        const param = params.Params.find(p => p.Name === paramName);
+        if (!param || !param.Value) {
+            return {};
+        }
+        
+        // If it's already an object, use it directly
+        if (typeof param.Value === 'object' && param.Value !== null) {
+            return param.Value as Record<string, string>;
+        }
+        
+        // If it's a string, try to parse it as JSON
+        if (typeof param.Value === 'string') {
+            try {
+                return JSON.parse(param.Value) || {};
+            } catch (error) {
+                LogError(`Error parsing ${paramName}`, undefined, error);
+                return {};
+            }
+        }
+        
+        return {};
+    }
+
+    /**
+     * Processes all contact records using paginated queries
+     * Continues processing until all matching records have been enriched
+     * 
+     * @param actionParams - Configuration parameters for contact enrichment
+     * @param historyMappings - Field mappings for employment/education history
+     * @param contextUser - User context for data access and security
+     * @returns Promise indicating overall success/failure of the enrichment
+     */
     private async processAllContactRecords(
         actionParams: ContactEnrichmentParams, 
         historyMappings: HistoryMappings, 
@@ -163,6 +350,17 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         };
     }
 
+    /**
+     * Processes a single page of contact records for enrichment
+     * Retrieves records using pagination and processes them in concurrent groups
+     * 
+     * @param actionParams - Configuration parameters for contact enrichment
+     * @param historyMappings - Field mappings for employment/education history
+     * @param pageNumber - Current page number (zero-based)
+     * @param md - Metadata instance for entity operations
+     * @param contextUser - User context for data access
+     * @returns Object indicating success, whether more pages exist, and any errors
+     */
     private async processContactRecordsPage(
         actionParams: ContactEnrichmentParams,
         historyMappings: HistoryMappings,
@@ -171,10 +369,10 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         contextUser: UserInfo
     ): Promise<{ success: boolean; hasMore: boolean; error?: ActionResultSimple }> {
         const pageConfig = {
-            EntityName: actionParams.entityName,
+            EntityName: actionParams.EntityName,
             PageNumber: pageNumber,
             PageSize: 500,
-            Filter: actionParams.filter
+            Filter: actionParams.Filter
         };
 
         const results = await this.PageRecordsByEntityName<Record<string, any>>(pageConfig, contextUser);
@@ -199,6 +397,16 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return { success: true, hasMore };
     }
 
+    /**
+     * Processes contact records in concurrent groups for optimal performance
+     * Respects configured group size and concurrency limits
+     * 
+     * @param results - Array of contact records to process
+     * @param actionParams - Configuration parameters for enrichment
+     * @param historyMappings - Field mappings for history entities
+     * @param md - Metadata instance for entity operations
+     * @param contextUser - User context for data access
+     */
     private async processRecordGroups(
         results: Record<string, any>[],
         actionParams: ContactEnrichmentParams,
@@ -215,24 +423,26 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                 GroupLength: Config.GroupSize,
                 Md: md,
                 CurrentUser: contextUser,
-                EmailField: actionParams.emailField,
-                FirstNameField: actionParams.firstNameField,
-                LastNameField: actionParams.lastNameField,
-                AccountNameField: actionParams.accountNameField,
-                EntityName: actionParams.entityName,
-                EnrichedAtField: actionParams.enrichedAtField,
-                DomainField: actionParams.domainField,
-                LinkedInField: actionParams.linkedInField,
-
-                EmploymentHistoryEntityName: historyMappings.employment.EmploymentHistoryEntityName,
-                EmploymentHistoryContactIDFieldName: historyMappings.employment.EmploymentHistoryContactIDFieldName,
-                EmploymentHistoryOrganizationFieldName: historyMappings.employment.EmploymentHistoryOrganizationFieldName,
-                EmploymentHistoryTitleFieldName: historyMappings.employment.EmploymentHistoryTitleFieldName,
-                
-                EducationHistoryEntityName: historyMappings.education.EducationHistoryEntityName,
-                EducationHistoryContactIDFieldName: historyMappings.education.EducationtHistoryContactIDFieldName,
-                EducationHistoryInstitutionFieldName: historyMappings.education.EducationtHistoryInstitutionFieldName,
-                EducationHistoryDegreeFieldName: historyMappings.education.EducationtHistoryDegreeFieldName
+                EmailField: actionParams.EmailField,
+                FirstNameField: actionParams.FirstNameField,
+                LastNameField: actionParams.LastNameField,
+                TitleField: actionParams.TitleField,
+                EntityName: actionParams.EntityName,
+                EnrichedAtField: actionParams.EnrichedAtField,
+                ProfilePictureURLField: actionParams.ProfilePictureURLField,
+                AccountNameField: actionParams.AccountNameField,
+                DomainField: actionParams.DomainField,
+                LinkedInField: actionParams.LinkedInField,
+                TwitterField: actionParams.TwitterField,
+                FacebookField: actionParams.FacebookField,
+                EmploymentHistoryEntityName: historyMappings.employment.EntityName,
+                EmploymentHistoryContactIDFieldName: historyMappings.employment.ContactIDFieldName,
+                EmploymentHistoryOrganizationFieldName: historyMappings.employment.OrganizationFieldName,
+                EmploymentHistoryTitleFieldName: historyMappings.employment.TitleFieldName,
+                EducationHistoryEntityName: historyMappings.education.EntityName,
+                EducationHistoryContactIDFieldName: historyMappings.education.ContactIDFieldName,
+                EducationHistoryInstitutionFieldName: historyMappings.education.InstitutionFieldName,
+                EducationHistoryDegreeFieldName: historyMappings.education.DegreeFieldName
             };
 
             const task = this.ProcessPersonRecordGroup(processParams);
@@ -244,8 +454,15 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
             }
         }
     }
-    }
 
+    /**
+     * Retrieves a page of records from a specified entity using RunView
+     * Supports pagination with configurable page size and filtering
+     * 
+     * @param params - Parameters defining entity, page, and filter criteria
+     * @param currentUser - User context for data access
+     * @returns Array of records or null if query failed
+     */
     protected async PageRecordsByEntityName<T>(params: PageRecordsParams, currentUser: UserInfo): Promise<T[] | null> {
 
         const rv: RunView = new RunView();
@@ -264,6 +481,13 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return rvResult.Results;
     }
 
+    /**
+     * Processes a group of contact records using Apollo's bulk people matching API
+     * Enriches contacts with social profiles, company data, and employment history
+     * 
+     * @param params - Group processing parameters with contact data and entity mappings
+     * @returns Promise<boolean> indicating success/failure of the group processing
+     */
     protected async ProcessPersonRecordGroup(params: ProcessPersonRecordGroupParams): Promise<boolean> {
         try {
             const md: Metadata = params.Md;
@@ -316,33 +540,38 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                                 
                                 const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromID(entityRecord.ID), params.CurrentUser);
 
-                                contactEntity.SetMany(entityRecord, true);
                                 contactEntity.Set(params.EmailField, match.email);
                                 contactEntity.Set(params.EnrichedAtField, new Date());
-                                
-                                if(params.LinkedInField){
+
+                                if (params.TitleField && match.title) {
+                                    contactEntity.Set(params.TitleField, match.title);
+                                }
+  
+                                if (params.AccountNameField && match.organization && match.organization.name) {    
+                                    contactEntity.Set(params.AccountNameField, match.organization.name);
+                                }
+                            
+                                if (params.ProfilePictureURLField && match.photo_url) {
+                                    contactEntity.Set(params.ProfilePictureURLField, match.photo_url);
+                                }
+
+                                if(params.LinkedInField && match.linkedin_url){
                                     contactEntity.Set(params.LinkedInField, match.linkedin_url);
                                 }
 
-                                if(match.organization && match.organization.name){
-                                    contactEntity.Set(params.AccountNameField, match.organization.name);
-                                }
+                                if (params.TwitterField && match.twitter_url) {  
+                                    contactEntity.Set(params.TwitterField, match.twitter_url);
+                                }                                    
+                                    
+                                if (params.FacebookField && match.facebook_url) {  
+                                    contactEntity.Set(params.FacebookField, match.facebook_url);
+                                }     
 
                                 bSuccess = bSuccess && (await contactEntity.Save());
 
                                 if(!bSuccess){
                                     LogError('Error updating contact record with enriched data', undefined, contactEntity.LatestResult);
                                 }
-
-                                /*
-                                if(match.organization_id){
-                                    LogStatus(`Found organization: ${match.organization?.name}`);
-                                    await this.UpsertContactEmploymentAndEducationHistoryByOrganizationID(match.organization_id, params);
-                                }
-                                else {
-                                    LogStatus('No organization ID found in match');
-                                }
-                                */
 
                                 if(match.employment_history && params.EmploymentHistoryEntityName){
                                     LogStatus('Upserting contact employment and education history...');
@@ -382,6 +611,13 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         }
     }
 
+    /**
+     * Enriches contacts by searching for people at a specific organization domain
+     * Uses Apollo's people search to find contacts and update their employment/education history
+     * 
+     * @param domain - Organization domain to search for people
+     * @param params - Processing parameters with entity configurations
+     */
     protected async UpsertContactEmploymentAndEducationHistoryByOrganizationID(domain: string, params: ProcessPersonRecordGroupParams): Promise<void> {
         try{
             const api_params = {
@@ -458,7 +694,6 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                         }
 
                         const contactEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EntityName, params.CurrentUser);
-                        contactEntity.SetMany(rvContactResults.Results[0]);
                         await this.UpsertContactEmploymentAndEducationHistory(p, contactEntity, params);
                     }
 
@@ -475,6 +710,14 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         }
     }
 
+    /**
+     * Creates or updates employment and education history records for a contact
+     * Processes Apollo employment history data to create both employment and education records
+     * 
+     * @param contact - Apollo person data containing employment history
+     * @param contactEntity - Contact entity to create history for
+     * @param params - Processing parameters with history entity configurations
+     */
     protected async UpsertContactEmploymentAndEducationHistory(contact: SearchPeopleResponsePerson, contactEntity: BaseEntity, params: ProcessPersonRecordGroupParams): Promise<void> {
         try{
             // loop through the person.employment_history array and create/update the employment history records
@@ -501,12 +744,14 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                 }
 
                 const results: Record<string, any>[] = rvResults.Results;
-                const historyEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, params.CurrentUser);
-                if(results.length > 0){
+                let historyEntity: BaseEntity | null = null;
+                
+                if(results.length > 0) {
                     // update the existing record
-                    historyEntity.SetMany(results[0]);
+                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromID(results[0].ID), params.CurrentUser);
                 }
                 else {
+                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, params.CurrentUser);
                     historyEntity.NewRecord();
                     historyEntity.Set(params.EmploymentHistoryContactIDFieldName, contactID);
                     historyEntity.Set("CreatedAt", new Date());
@@ -550,12 +795,14 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                     }
 
                     const educationResults: Record<string, any>[] = rvEducationResults.Results;
-                    const educationEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, params.CurrentUser);
+                    let educationEntity: BaseEntity | null = null;
+                    
                     if(educationResults.length > 0){
                         // update the existing record
-                        educationEntity.SetMany(educationResults[0]);
+                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromID(educationResults[0].ID), params.CurrentUser);
                     }
                     else {
+                        educationEntity= await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, params.CurrentUser);
                         educationEntity.NewRecord();
                         educationEntity.Set(params.EducationHistoryContactIDFieldName, contactID);
                         educationEntity.Set("CreatedAt", new Date());
@@ -589,6 +836,13 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         }
     }
 
+    /**
+     * Escapes single quotes in strings for SQL query safety
+     * Prevents SQL injection in dynamic filter construction
+     * 
+     * @param str - String to escape
+     * @returns Escaped string with doubled single quotes
+     */
     protected EscapeSingleQuotes(str: string) {
         if (str){
             return str.replace(/'/g, "''");
@@ -597,6 +851,13 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return '';
     }
 
+    /**
+     * Validates if a date string represents a valid date
+     * Used for employment/education history date validation
+     * 
+     * @param dateString - Date string to validate
+     * @returns boolean - true if valid date
+     */
     protected IsValidDate(dateString: string): boolean {
         if (dateString && dateString.length > 0) {
             const date = new Date(dateString);
@@ -606,6 +867,18 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         return false;
     }
     
+    /**
+     * Wraps Apollo.io API calls with intelligent retry logic for rate limiting
+     * Handles both per-minute and hourly rate limits with appropriate backoff
+     * 
+     * @param method - HTTP method ('get' or 'post')
+     * @param endpoint - Apollo API endpoint path
+     * @param data - Request payload for POST requests
+     * @param config - Axios configuration object
+     * @param retryAttempts - Number of retry attempts remaining (default: 1)
+     * @returns Promise<AxiosResponse> - Apollo API response
+     * @throws Error if rate limit exceeded or other API errors
+     */
     protected async WrapApolloCall(method: 'get' | 'post', endpoint: string, data: any, config: any, retryAttempts: number = 1): Promise<AxiosResponse> {
         try {
             const url = `${Config.ApolloAPIEndpoint}/${endpoint}`;  
@@ -654,10 +927,24 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
         }
     }
     
+    /**
+     * Utility method for creating delays in async operations
+     * Used for rate limit backoff and API throttling
+     * 
+     * @param ms - Number of milliseconds to wait
+     * @returns Promise that resolves after the specified delay
+     */
     private async Timeout(ms: number) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    /**
+     * Checks if a job title should be excluded from contact processing
+     * Filters out non-business contacts like students and volunteers
+     * 
+     * @param title - Job title to check
+     * @returns boolean - true if title should be excluded
+     */
     protected IsExcludedTitle(title: string): boolean {
         if(!title){
             return false;
@@ -667,12 +954,10 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
     }
 }
 
+/**
+ * Loader function to ensure the ApolloEnrichmentContactsAction class is included in the bundle
+ * Prevents tree shaking from removing this action class
+ */
 export function LoadApolloContactsEnrichmentAction() {
+    // Stub function to prevent tree shaking
 }
-
-type PageRecordsParams = {
-    EntityName: string;
-    PageNumber: number;
-    PageSize: number;
-    Filter?: string;
-};
