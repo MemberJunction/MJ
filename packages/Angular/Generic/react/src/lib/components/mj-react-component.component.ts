@@ -22,8 +22,6 @@ import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
   buildComponentProps,
-  cleanupPropBuilder,
-  ComponentError,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   HierarchyRegistrationResult
@@ -44,6 +42,15 @@ export interface ReactComponentEvent {
 export interface StateChangeEvent {
   path: string;
   value: any;
+}
+
+/**
+ * User settings changed event emitted when component saves user preferences
+ */
+export interface UserSettingsChangedEvent {
+  settings: Record<string, any>;
+  componentName?: string;
+  timestamp: Date;
 }
 
 /**
@@ -149,10 +156,24 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() utilities: any = {};
   @Input() styles?: Partial<ComponentStyles>;
   
+  private _savedUserSettings: any = {};
+  @Input()
+  set savedUserSettings(value: any) {
+    this._savedUserSettings = value || {};
+    // Re-render if component is initialized
+    if (this.isInitialized) {
+      this.renderComponent();
+    }
+  }
+  get savedUserSettings(): any {
+    return this._savedUserSettings;
+  }
+  
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
+  @Output() userSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
@@ -313,16 +334,16 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.currentCallbacks = this.createCallbacks();
     }
     
-    // Build props - pass styles as-is for Skip components
-    const props = buildComponentProps(
-      this._data || {},
-      this.currentState,
-      this.utilities || {},
-      this.currentCallbacks,
+    // Build props with savedUserSettings pattern
+    const props = {
+      ...this._data, // Spread data properties directly
+      utilities: this.utilities || {},
+      callbacks: this.currentCallbacks,
       components,
-      this.styles as any, // Skip components expect the full SkipComponentStyles structure
-      { debounceUpdateUserState: 3000 } // 3 second debounce by default
-    );
+      styles: this.styles as any,
+      savedUserSettings: this._savedUserSettings,
+      onSaveUserSettings: this.handleSaveUserSettings.bind(this)
+    };
 
     // Create error boundary
     const ErrorBoundary = createErrorBoundary(React, {
@@ -390,9 +411,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private createCallbacks(): ComponentCallbacks {
     return {
-      RefreshData: () => {
-        this.refreshData.emit();
-      },
       OpenEntityRecord: (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
@@ -413,41 +431,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         if (keyToUse) {
           this.openEntityRecord.emit({ entityName, key: keyToUse });
         }  
-      },
-      UpdateUserState: (userState: any) => {
-        // Prevent updates during rendering or destruction
-        if (this.isRendering || this.isDestroying) {
-          return;
-        }
-        
-        // Deep comparison to detect actual changes
-        const hasChanges = Object.keys(userState).some(key => {
-          const currentValue = this.currentState[key];
-          const newValue = userState[key];
-          return !this.isEqual(currentValue, newValue);
-        });
-        
-        if (!hasChanges) {
-          // No actual changes, skip update to prevent infinite loop
-          return;
-        }
-        
-        this.currentState = {
-          ...this.currentState,
-          ...userState
-        };
-        
-        // Emit change for each key in the state update
-        Object.keys(userState).forEach(path => {
-          this.stateChange.emit({ path, value: userState[path] });
-        });
-        
-        // Schedule re-render
-        this.renderComponent();
-      },
-      NotifyEvent: (event: string, data: any) => {
-        this.componentEvent.emit({ type: event, payload: data });
-      }
+      } 
     };
   }
 
@@ -467,6 +451,33 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
+   * Handle onSaveUserSettings from components
+   * This implements the SavedUserSettings pattern
+   */
+  private handleSaveUserSettings(newSettings: Record<string, any>) {
+    // Check if there are actual changes
+    const hasChanges = !this.isEqual(this._savedUserSettings, newSettings);
+    
+    if (!hasChanges) {
+      // No actual changes, skip update to prevent infinite loop
+      return;
+    }
+    
+    // Update saved settings
+    this._savedUserSettings = { ...newSettings };
+    
+    // Emit user settings changed event
+    this.userSettingsChanged.emit({
+      settings: this._savedUserSettings,
+      componentName: this.component?.name,
+      timestamp: new Date()
+    });
+    
+    // Schedule re-render
+    this.renderComponent();
+  }
+
+  /**
    * Clean up resources
    */
   private cleanup() {
@@ -478,7 +489,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Clean up prop builder subscriptions
     if (this.currentCallbacks) {
-      cleanupPropBuilder(this.currentCallbacks);
       this.currentCallbacks = null;
     }
     

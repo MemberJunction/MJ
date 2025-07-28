@@ -14,7 +14,7 @@
 
   <!-- Analytics Content -->
   <div class="analytics-content" *ngIf="!isLoading && !error">
-    <kendo-panelbar>
+    <kendo-panelbar [keepItemContent]="true">
       <!-- Summary Cards -->
       <kendo-panelbar-item [expanded]="true">
         <ng-template kendoPanelBarItemTitle>

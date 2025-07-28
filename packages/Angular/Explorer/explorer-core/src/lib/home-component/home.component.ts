@@ -93,7 +93,7 @@ export class HomeComponent extends BaseNavigationComponent {
       const rq: RunQuery = new RunQuery();
       const rqResult = await rq.RunQuery({
         QueryName: 'Server Installed Version History',
-        CategoryName: 'Admin'
+        CategoryPath: '/Admin/'
       });
       
       if (!rqResult.Success) {

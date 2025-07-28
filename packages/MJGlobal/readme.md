@@ -650,6 +650,165 @@ const html = ConvertMarkdownStringToHtmlList('Unordered', '- Item 1\n- Item 2\n-
 // Returns: <ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>
 ```
 
+### Safe Expression Evaluator
+
+Secure boolean expression evaluation for conditional logic without allowing arbitrary code execution:
+
+```typescript
+import { SafeExpressionEvaluator } from '@memberjunction/global';
+
+// Create evaluator instance
+const evaluator = new SafeExpressionEvaluator();
+
+// Simple comparisons
+const result1 = evaluator.evaluate(
+  "status == 'active' && score > 80",
+  { status: 'active', score: 95 }
+);
+console.log(result1.success); // true
+console.log(result1.value);   // true
+
+// Nested property access with dot notation
+const result2 = evaluator.evaluate(
+  "user.role == 'admin' && user.permissions.includes('write')",
+  { 
+    user: { 
+      role: 'admin', 
+      permissions: ['read', 'write', 'delete'] 
+    } 
+  }
+);
+console.log(result2.value); // true
+
+// Array methods and complex conditions
+const result3 = evaluator.evaluate(
+  "items.some(item => item.price > 100) && items.length >= 2",
+  { 
+    items: [
+      { name: 'Item 1', price: 50 },
+      { name: 'Item 2', price: 150 }
+    ] 
+  }
+);
+console.log(result3.value); // true
+
+// Error handling for invalid expressions
+const result4 = evaluator.evaluate(
+  "eval('malicious code')", // Dangerous patterns are blocked
+  { data: 'test' }
+);
+console.log(result4.success); // false
+console.log(result4.error);   // "Expression contains forbidden construct: /\beval\s*\(/i"
+
+// With diagnostics enabled
+const result5 = evaluator.evaluate(
+  "payload.status == 'complete'",
+  { payload: { status: 'complete' } },
+  true // Enable diagnostics
+);
+console.log(result5.diagnostics);
+// {
+//   expression: "payload.status == 'complete'",
+//   context: { payload: { status: 'complete' } },
+//   evaluationTime: 2
+// }
+```
+
+#### Supported Operations
+
+**Comparison Operators:**
+- `==`, `===`, `!=`, `!==`
+- `<`, `>`, `<=`, `>=`
+
+**Logical Operators:**
+- `&&`, `||`, `!`
+
+**Property Access:**
+- Dot notation: `object.property.nested`
+- Array access: `array[0]`, `array[index]`
+
+**Safe Methods:**
+- String: `.length`, `.includes()`, `.startsWith()`, `.endsWith()`, `.toLowerCase()`, `.toUpperCase()`, `.trim()`
+- Array: `.length`, `.includes()`, `.some()`, `.every()`, `.find()`, `.filter()`, `.map()`
+- Type checking: `typeof`, limited `instanceof`
+
+**Type Coercion:**
+- `Boolean(value)`
+- String concatenation with `+`
+
+#### Security Features
+
+The evaluator blocks dangerous patterns including:
+- `eval()`, `Function()`, `new Function()`
+- `require()`, `import` statements
+- Access to `global`, `window`, `document`, `process`
+- Template literals and string interpolation
+- Code blocks with `{}` and `;`
+- `this` keyword usage
+- `constructor`, `prototype`, `__proto__` access
+
+#### Use Cases
+
+1. **Workflow Conditions:**
+```typescript
+// Evaluate workflow paths
+const canProceed = evaluator.evaluate(
+  "order.status == 'approved' && order.total < budget",
+  { order: { status: 'approved', total: 500 }, budget: 1000 }
+).value;
+```
+
+2. **Feature Flags:**
+```typescript
+// Check feature availability
+const featureEnabled = evaluator.evaluate(
+  "user.tier == 'premium' || user.roles.includes('beta')",
+  { user: { tier: 'standard', roles: ['beta', 'tester'] } }
+).value;
+```
+
+3. **Validation Rules:**
+```typescript
+// Dynamic validation
+const isValid = evaluator.evaluate(
+  "form.password.length >= 8 && form.password != form.username",
+  { form: { username: 'john', password: 'secretpass123' } }
+).value;
+```
+
+4. **Agent Decision Logic:**
+```typescript
+// AI agent path selection
+const shouldDelegate = evaluator.evaluate(
+  "confidence < 0.7 || taskComplexity > 8",
+  { confidence: 0.6, taskComplexity: 5 }
+).value;
+```
+
+#### Batch Evaluation
+
+Evaluate multiple expressions at once:
+
+```typescript
+const results = evaluator.evaluateMultiple([
+  { expression: "status == 'active'", name: 'isActive' },
+  { expression: "score > threshold", name: 'passedThreshold' },
+  { expression: "tags.includes('priority')", name: 'isPriority' }
+], {
+  status: 'active',
+  score: 85,
+  threshold: 80,
+  tags: ['urgent', 'priority']
+});
+
+// Results:
+// {
+//   isActive: { success: true, value: true },
+//   passedThreshold: { success: true, value: true },
+//   isPriority: { success: true, value: true }
+// }
+```
+
 ### Pattern Matching Utilities
 
 Convert string patterns to RegExp objects with support for simple wildcards and full regex syntax:

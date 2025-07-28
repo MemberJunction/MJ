@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
  * Skip-style component that follows the standard MemberJunction Skip component pattern
  * with data, userState, callbacks, utilities, and styles props
  */
-export function SkipStyleComponent({ data, userState, callbacks, utilities, styles }) {
+export function SkipStyleComponent({ data, userState, onStateChanged, utilities, styles }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -14,8 +14,8 @@ export function SkipStyleComponent({ data, userState, callbacks, utilities, styl
     setError(null);
     
     try {
-      if (callbacks?.RefreshData) {
-        await callbacks.RefreshData();
+      if (onStateChanged) {
+        onStateChanged({ refresh: Date.now() });
       }
     } catch (err) {
       setError(err.message || 'Failed to refresh data');
@@ -26,18 +26,16 @@ export function SkipStyleComponent({ data, userState, callbacks, utilities, styl
 
   // Handle user state updates
   const handleToggleView = () => {
-    if (callbacks?.UpdateUserState) {
-      callbacks.UpdateUserState({
-        ...userState,
+    if (onStateChanged) {
+      onStateChanged({
         viewMode: userState?.viewMode === 'grid' ? 'list' : 'grid'
       });
     }
   };
 
   const handleFilterChange = (filter) => {
-    if (callbacks?.UpdateUserState) {
-      callbacks.UpdateUserState({
-        ...userState,
+    if (onStateChanged) {
+      onStateChanged({
         activeFilter: filter
       });
     }

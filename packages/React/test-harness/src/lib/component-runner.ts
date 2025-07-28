@@ -9,7 +9,7 @@ import {
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
-import { ComponentLinter, ComponentType, FixSuggestion } from './component-linter';
+import { ComponentLinter, FixSuggestion } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface ComponentExecutionOptions {
@@ -17,6 +17,7 @@ export interface ComponentExecutionOptions {
   props?: Record<string, any>;
   setupCode?: string;
   timeout?: number;
+  renderWaitTime?: number; // New option - default 1000ms
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
@@ -72,12 +73,12 @@ export class ComponentRunner {
   async lintComponent(
     componentCode: string, 
     componentName: string,
-    componentType: ComponentType
+    componentSpec?: any
   ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
-      componentType,
-      componentName
+      componentName,
+      componentSpec
     );
 
     const violations = lintResult.violations.map(v => v.message);
@@ -118,6 +119,14 @@ export class ComponentRunner {
       
       // Get render count
       renderCount = await this.getRenderCount(page);
+      
+      // Collect runtime errors
+      const runtimeErrors = await this.collectRuntimeErrors(page);
+      errors.push(...runtimeErrors);
+      
+      // Perform deep render validation
+      const deepRenderErrors = await this.validateDeepRender(page);
+      errors.push(...deepRenderErrors);
 
       // Get the rendered HTML
       const html = await this.browserManager.getContent();
@@ -194,6 +203,9 @@ export class ComponentRunner {
       .map((lib: any) => `  <link rel="stylesheet" href="${lib.cdnCssUrl}">`)
       .join('\n');
     
+    // Include the ComponentCompiler class definition
+    const componentCompilerCode = this.getComponentCompilerCode();
+    
     return `
 <!DOCTYPE html>
 <html>
@@ -208,6 +220,19 @@ ${cssLinks}
     #root { min-height: 100vh; }
   </style>
   <script>
+    // Initialize error tracking
+    window.__testHarnessRuntimeErrors = [];
+    
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      console.error('Runtime error:', event.error);
+      window.__testHarnessRuntimeErrors.push({
+        message: event.error.message,
+        stack: event.error.stack,
+        type: 'runtime'
+      });
+    });
+    
     // Render tracking injection
     (function() {
       let renderCounter = 0;
@@ -265,99 +290,12 @@ ${cssLinks}
       libraries: libraries
     };
     
-    // Create component compiler
-    class SimpleCompiler {
-      constructor() {
-        this.cache = new Map();
-      }
-      
-      async compile(options) {
-        const componentName = options.name;
-        const componentCode = options.code;
-        
-        try {
-          // Transform JSX to JS using Babel
-          const transformed = Babel.transform(componentCode, {
-            presets: ['react'],
-            filename: componentName + '.jsx'
-          });
-          
-          // Create component factory
-          const libraryDeclarations = componentLibraries
-            .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
-            .join('\\n            ');
-          
-          const createComponent = new Function(
-            'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-            'createStateUpdater', 'libraries', 'styles', 'console',
-            \`
-            // Make libraries available in the component scope
-            \${libraryDeclarations}
-            
-            \${transformed.code}
-            return {
-              component: \${componentName},
-              print: function() { window.print(); },
-              refresh: function(data) { }
-            };
-            \`
-          );
-          
-          const componentFactory = (context, styles = {}) => {
-            const { React, ReactDOM, libraries = {} } = context;
-            const createStateUpdater = (statePath, parentStateUpdater) => {
-              return (componentStateUpdate) => {
-                if (!statePath) {
-                  parentStateUpdater(componentStateUpdate);
-                } else {
-                  const pathParts = statePath.split('.');
-                  const componentKey = pathParts[pathParts.length - 1];
-                  parentStateUpdater({ [componentKey]: componentStateUpdate });
-                }
-              };
-            };
-            
-            return createComponent(
-              React,
-              ReactDOM,
-              React.useState,
-              React.useEffect,
-              React.useCallback,
-              createStateUpdater,
-              libraries,
-              styles,
-              console
-            );
-          };
-          
-          return {
-            success: true,
-            component: {
-              component: componentFactory,
-              id: componentName + '_' + Date.now(),
-              name: componentName,
-              compiledAt: new Date(),
-              warnings: []
-            },
-            duration: 0
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: {
-              message: error.message,
-              componentName: componentName,
-              phase: 'compilation'
-            },
-            duration: 0
-          };
-        }
-      }
-      
-      setBabelInstance(babel) {
-        // Already have access to Babel global
-      }
-    }
+    // Import the ComponentCompiler implementation
+    ${componentCompilerCode}
+    
+    // Create component compiler instance
+    const compiler = new ComponentCompiler();
+    compiler.setBabelInstance(Babel);
     
     // Create component registry
     class SimpleRegistry {
@@ -388,8 +326,7 @@ ${cssLinks}
       }
     }
     
-    // Create instances
-    const compiler = new SimpleCompiler();
+    // Create registry instance
     const registry = new SimpleRegistry();
     
     // Create hierarchy registrar
@@ -416,8 +353,8 @@ ${cssLinks}
           // Register this component
           if (spec.code) {
             const result = await this.compiler.compile({
-              name: spec.name,
-              code: spec.code
+              componentName: spec.name,
+              componentCode: spec.code
             });
             
             if (result.success) {
@@ -567,6 +504,38 @@ ${cssLinks}
       overflow: 'auto'
     });
     
+    // React Error Boundary component
+    const ErrorBoundary = class extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      
+      componentDidCatch(error, errorInfo) {
+        console.error('React Error Boundary caught:', error, errorInfo);
+        window.__testHarnessRuntimeErrors = window.__testHarnessRuntimeErrors || [];
+        window.__testHarnessRuntimeErrors.push({
+          message: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          type: 'react'
+        });
+      }
+      
+      render() {
+        if (this.state.hasError) {
+          return React.createElement('div', { style: { color: 'red', padding: '20px' } }, 
+            'Component Error: ' + this.state.error.message
+          );
+        }
+        return this.props.children;
+      }
+    };
+    
     // Load component spec and register hierarchy
     const componentSpec = ${specJson};
     const props = ${propsJson};
@@ -591,17 +560,38 @@ ${cssLinks}
         return;
       }
       
-      // Add components, utilities, and styles to props
-      const enhancedProps = {
-        ...props,
-        components: components,
-        utilities: BuildUtilities(),
-        styles: SetupStyles()
+      // Simple in-memory storage for user settings
+      let savedUserSettings = {};
+      
+      // Create root for rendering
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      
+      // Function to render with current settings
+      const renderWithSettings = () => {
+        const enhancedProps = {
+          ...props,
+          components: components,
+          utilities: BuildUtilities(),
+          styles: SetupStyles(),
+          savedUserSettings: savedUserSettings,
+          onSaveUserSettings: (newSettings) => {
+            console.log('User settings saved:', newSettings);
+            // Update in-memory storage
+            savedUserSettings = { ...newSettings };
+            // Re-render with new settings
+            renderWithSettings();
+          }
+        };
+        
+        root.render(
+          React.createElement(ErrorBoundary, null,
+            React.createElement(RootComponent, enhancedProps)
+          )
+        );
       };
       
-      // Render the root component
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(RootComponent, enhancedProps));
+      // Initial render
+      renderWithSettings();
     })();
   </script>
 </body>
@@ -674,6 +664,7 @@ ${cssLinks}
     errors: string[]
   ): Promise<boolean> {
     const timeout = options.timeout || 10000; // 10 seconds default
+    const renderWaitTime = options.renderWaitTime || 1000; // Default 1000ms
     
     try {
       if (options.waitForSelector) {
@@ -683,8 +674,22 @@ ${cssLinks}
       if (options.waitForLoadState) {
         await this.browserManager.waitForLoadState(options.waitForLoadState);
       } else {
-        // Default wait for React to finish rendering
-        await page.waitForTimeout(100);
+        // Wait for React to finish rendering with configurable time
+        await page.waitForTimeout(renderWaitTime);
+        
+        // Force React to flush all updates
+        await page.evaluate(() => {
+          if ((window as any).React && (window as any).React.flushSync) {
+            try {
+              (window as any).React.flushSync(() => {});
+            } catch (e) {
+              console.error('flushSync error:', e);
+            }
+          }
+        });
+        
+        // Additional small wait after flush to ensure DOM updates
+        await page.waitForTimeout(50);
       }
       
       return true;
@@ -699,6 +704,79 @@ ${cssLinks}
    */
   private async getRenderCount(page: any): Promise<number> {
     return await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
+  }
+  
+  /**
+   * Collects runtime errors that were caught during component execution
+   */
+  private async collectRuntimeErrors(page: any): Promise<string[]> {
+    const runtimeErrors = await page.evaluate(() => {
+      return (window as any).__testHarnessRuntimeErrors || [];
+    });
+    
+    const errors: string[] = [];
+    runtimeErrors.forEach((error: any) => {
+      errors.push(`${error.type} error: ${error.message}`);
+      if (error.componentStack) {
+        errors.push(`Component stack: ${error.componentStack}`);
+      }
+    });
+    
+    return errors;
+  }
+  
+  /**
+   * Performs deep render validation to catch errors that might be in the DOM
+   */
+  private async validateDeepRender(page: any): Promise<string[]> {
+    const errors: string[] = [];
+    
+    try {
+      // Execute a full render cycle by forcing a state update
+      await page.evaluate(() => {
+        // Force React to complete all pending updates
+        if ((window as any).React && (window as any).React.flushSync) {
+          (window as any).React.flushSync(() => {});
+        }
+      });
+      
+      // Check for render errors in the component tree
+      const renderErrors = await page.evaluate(() => {
+        const errors: string[] = [];
+        
+        // Walk the DOM and check for error boundaries or error text
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+          const text = node.textContent || '';
+          // Look for common error patterns
+          if (text.includes('TypeError:') || 
+              text.includes('ReferenceError:') ||
+              text.includes('Cannot read properties of undefined') ||
+              text.includes('Cannot access property') ||
+              text.includes('is not a function') ||
+              text.includes('Component Error:')) {
+            // Only add if it's not already in our error list
+            const errorMsg = text.trim();
+            if (errorMsg.length < 500) { // Avoid huge text blocks
+              errors.push(`Potential error in rendered content: ${errorMsg}`);
+            }
+          }
+        }
+        
+        return errors;
+      });
+      
+      errors.push(...renderErrors);
+    } catch (e) {
+      errors.push(`Deep render validation failed: ${e}`);
+    }
+    
+    return errors;
   }
 
   /**
@@ -807,5 +885,125 @@ ${cssLinks}
    */
   static getDetailedErrorAnalysis(errors: string[]) {
     return ComponentErrorAnalyzer.analyzeComponentErrors(errors);
+  }
+  
+  /**
+   * Gets the ComponentCompiler code to inject into the browser
+   * This is a simplified version that works in the browser context
+   */
+  private getComponentCompilerCode(): string {
+    // Return a browser-compatible version of ComponentCompiler
+    return `
+    class ComponentCompiler {
+      constructor() {
+        this.cache = new Map();
+      }
+      
+      setBabelInstance(babel) {
+        this.babelInstance = babel;
+      }
+      
+      async compile(options) {
+        const { componentName, componentCode } = options;
+        
+        try {
+          // Validate inputs
+          if (!componentName || !componentCode) {
+            throw new Error('componentName and componentCode are required');
+          }
+          
+          // Wrap component code
+          const wrappedCode = this.wrapComponentCode(componentCode, componentName);
+          
+          // Transform using Babel
+          const result = this.babelInstance.transform(wrappedCode, {
+            presets: ['react'],
+            filename: componentName + '.jsx'
+          });
+          
+          // Create factory
+          const componentFactory = this.createComponentFactory(result.code, componentName);
+          
+          return {
+            success: true,
+            component: {
+              component: componentFactory,
+              id: componentName + '_' + Date.now(),
+              name: componentName,
+              compiledAt: new Date(),
+              warnings: []
+            },
+            duration: 0
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: {
+              message: error.message,
+              componentName: componentName,
+              phase: 'compilation'
+            },
+            duration: 0
+          };
+        }
+      }
+      
+      wrapComponentCode(componentCode, componentName) {
+        // Make component libraries available in scope
+        const libraryDeclarations = componentLibraries
+          .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
+          .join('\\n        ');
+          
+        return \`
+          function createComponent(
+            React, ReactDOM,
+            useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
+            libraries, styles, console
+          ) {
+            \${libraryDeclarations}
+            
+            \${componentCode}
+            
+            if (typeof \${componentName} === 'undefined') {
+              throw new Error('Component "\${componentName}" is not defined in the provided code');
+            }
+            
+            return {
+              component: \${componentName},
+              print: function() { window.print(); },
+              refresh: function(data) { }
+            };
+          }
+        \`;
+      }
+      
+      createComponentFactory(transpiledCode, componentName) {
+        const factoryCreator = new Function(
+          'React', 'ReactDOM',
+          'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
+          'libraries', 'styles', 'console',
+          transpiledCode + '; return createComponent;'
+        );
+        
+        return (context, styles = {}) => {
+          const { React, ReactDOM, libraries = {} } = context;
+          
+          const createComponentFn = factoryCreator(
+            React, ReactDOM,
+            React.useState, React.useEffect, React.useCallback, React.useMemo,
+            React.useRef, React.useContext, React.useReducer, React.useLayoutEffect,
+            libraries, styles, console
+          );
+          
+          return createComponentFn(
+            React, ReactDOM,
+            React.useState, React.useEffect, React.useCallback, React.useMemo,
+            React.useRef, React.useContext, React.useReducer, React.useLayoutEffect,
+            libraries, styles, console
+          );
+        };
+      }
+    }
+    `;
   }
 }

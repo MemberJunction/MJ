@@ -4,8 +4,8 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule, ComboBoxModule, DropDownTreesModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
+import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
+import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -51,9 +51,14 @@ import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
+import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
+import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
 import { QueryFormExtendedComponent, LoadQueryFormExtendedComponent } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
+import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
+import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
+import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
 
 @NgModule({
     declarations: [
@@ -86,9 +91,14 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
+        AIAgentRunVisualizationComponent,
+        AIAgentRunStepDetailComponent,
         QueryFormExtendedComponent,
         QueryRunDialogComponent,
         QueryCategoryDialogComponent,
+        FlowAgentFormSectionComponent,
+        StepInfoControlComponent,
+        FlowAgentDiagramComponent,
     ],
     imports: [
         CommonModule,
@@ -98,6 +108,7 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         ExpansionPanelModule,
         TabStripModule,
         SplitterModule,
+        PanelBarModule,
         DialogsModule,
         WindowModule,
         GridModule,
@@ -109,6 +120,7 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         DropDownsModule,
         ComboBoxModule,
         DropDownTreesModule,
+        DropDownListModule,
         ButtonsModule,
         ButtonModule,
         SplitButtonModule,
@@ -146,6 +158,9 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
         QueryFormExtendedComponent,
+        FlowAgentFormSectionComponent,
+        StepInfoControlComponent,
+        FlowAgentDiagramComponent,
     ],
     providers: [
         NewAgentDialogService,

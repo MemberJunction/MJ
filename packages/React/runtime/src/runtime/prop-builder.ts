@@ -41,7 +41,8 @@ export function buildComponentProps(
   callbacks: ComponentCallbacks = {},
   components: Record<string, any> = {},
   styles?: ComponentStyles,
-  options: PropBuilderOptions = {}
+  options: PropBuilderOptions = {},
+  onStateChanged?: (stateUpdate: Record<string, any>) => void
 ): ComponentProps {
   const {
     validate = true,
@@ -61,7 +62,8 @@ export function buildComponentProps(
     utilities,
     callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
-    styles: normalizeStyles(styles)
+    styles: normalizeStyles(styles),
+    onStateChanged
   };
 
   // Validate if enabled
@@ -122,74 +124,6 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
 
   if (callbacks.OpenEntityRecord && typeof callbacks.OpenEntityRecord === 'function') {
     normalized.OpenEntityRecord = callbacks.OpenEntityRecord;
-  }
-
-  if (callbacks.UpdateUserState && typeof callbacks.UpdateUserState === 'function') {
-    // Create a debounced version of UpdateUserState with loop detection
-    const originalCallback = callbacks.UpdateUserState;
-    
-    // Get or create a subject for this callback
-    let subject = updateUserStateSubjects.get(originalCallback);
-    if (!subject) {
-      subject = new Subject<any>();
-      updateUserStateSubjects.set(originalCallback, subject);
-      
-      // Subscribe to the subject with debounce
-      const subscription = subject.pipe(
-        debounceTime(debounceMs)
-      ).subscribe(state => {
-        console.log(`[Skip Component] UpdateUserState called after ${debounceMs}ms debounce`);
-        originalCallback(state);
-      });
-      
-      // Store the subscription for cleanup
-      updateUserStateSubscriptions.set(originalCallback, subscription);
-    }
-    
-    // Get or create loop detection state
-    let loopState = loopDetectionStates.get(originalCallback);
-    if (!loopState) {
-      loopState = { count: 0, lastUpdate: 0, lastState: null };
-      loopDetectionStates.set(originalCallback, loopState);
-    }
-    
-    // Return a function that prevents redundant updates
-    normalized.UpdateUserState = (state: any) => {
-      // Check if this is a redundant update
-      if (loopState!.lastState && deepEqual(state, loopState!.lastState)) {
-        console.log('[Skip Component] Skipping redundant state update');
-        return; // Don't process identical state updates
-      }
-      
-      const now = Date.now();
-      const timeSinceLastUpdate = now - loopState!.lastUpdate;
-      
-      // Check for rapid updates
-      if (timeSinceLastUpdate < 100) {
-        loopState!.count++;
-        
-        if (loopState!.count > 5) {
-          console.error('[Skip Component] Rapid state updates detected - possible infinite loop');
-          console.error('Updates in last 100ms:', loopState!.count);
-          // Still process the update but warn
-        }
-      } else {
-        // Reset counter if more than 100ms has passed
-        loopState!.count = 0;
-      }
-      
-      loopState!.lastUpdate = now;
-      loopState!.lastState = JSON.parse(JSON.stringify(state)); // Deep clone to preserve state
-      
-      console.log('[Skip Component] Processing state update');
-      
-      // Push to debounce subject (which already has 3 second debounce)
-      subject!.next(state);
-    };
-  }
-
-  if (callbacks.NotifyEvent && typeof callbacks.NotifyEvent === 'function') {
-    normalized.NotifyEvent = callbacks.NotifyEvent;
   }
 
   return normalized;
@@ -284,34 +218,7 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
 
   return merged;
 }
-
-/**
- * Cleanup function for prop builder resources
- * @param callbacks - The callbacks object that was used to build props
- */
-export function cleanupPropBuilder(callbacks: ComponentCallbacks): void {
-  if (callbacks.UpdateUserState && typeof callbacks.UpdateUserState === 'function') {
-    const originalCallback = callbacks.UpdateUserState;
-    
-    // Unsubscribe from the subject
-    const subscription = updateUserStateSubscriptions.get(originalCallback);
-    if (subscription) {
-      subscription.unsubscribe();
-      updateUserStateSubscriptions.delete(originalCallback);
-    }
-    
-    // Complete and remove the subject
-    const subject = updateUserStateSubjects.get(originalCallback);
-    if (subject) {
-      subject.complete();
-      updateUserStateSubjects.delete(originalCallback);
-    }
-    
-    // Clear loop detection state
-    loopDetectionStates.delete(originalCallback);
-  }
-}
-
+ 
 /**
  * Creates a props transformer function
  * @param transformations - Map of prop paths to transformer functions
@@ -369,20 +276,6 @@ export function wrapCallbacksWithLogging(
     wrapped.OpenEntityRecord = (entityName: string, key: any) => {
       console.log(`[${componentName}] OpenEntityRecord called:`, { entityName, key });
       callbacks.OpenEntityRecord!(entityName, key);
-    };
-  }
-
-  if (callbacks.UpdateUserState) {
-    wrapped.UpdateUserState = (state: any) => {
-      console.log(`[${componentName}] UpdateUserState called:`, state);
-      callbacks.UpdateUserState!(state);
-    };
-  }
-
-  if (callbacks.NotifyEvent) {
-    wrapped.NotifyEvent = (event: string, data: any) => {
-      console.log(`[${componentName}] NotifyEvent called:`, { event, data });
-      callbacks.NotifyEvent!(event, data);
     };
   }
 

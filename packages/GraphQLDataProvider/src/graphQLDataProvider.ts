@@ -307,32 +307,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
-        if (CategoryName !== undefined) {
-            variables.CategoryName = CategoryName;
+        if (CategoryPath !== undefined) {
+            variables.CategoryPath = CategoryPath;
         }
         if (Parameters !== undefined) {
             variables.Parameters = Parameters;
@@ -350,22 +350,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryName?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
-        if (CategoryName !== undefined) {
-            variables.CategoryName = CategoryName;
+        if (CategoryPath !== undefined) {
+            variables.CategoryPath = CategoryPath;
         }
         if (Parameters !== undefined) {
             variables.Parameters = Parameters;

@@ -10,10 +10,10 @@
  * @since 2.49.0
  */
 
-import { RegisterClass, JSONValidator } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams } from '@memberjunction/ai-core-plus';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { LogError, LogStatusEx } from '@memberjunction/core';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
@@ -52,8 +52,6 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
-    private _jsonValidator: JSONValidator = new JSONValidator();
-    
     /**
      * Determines the next step based on the structured response from the AI model.
      * 
@@ -66,51 +64,28 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep<P>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>> {
+    public async DetermineNextStep<P>(
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
+    ): Promise<BaseAgentNextStep<P>> {
         try {
             // Ensure we have a successful result
             if (!promptResult.success || !promptResult.result) {
-                return {
-                    terminate: false,
-                    step: 'Failed',
+                return this.createNextStep('Failed', {
                     errorMessage: promptResult.errorMessage || 'Prompt execution failed'
-                };
+                });
             }
 
-            // Try to parse the result as JSON if it's a string
-            let response: LoopAgentResponse;
-            try {
-                if (typeof promptResult.result === 'string') {
-                    response = JSON.parse(promptResult.result);
-                } else {
-                    response = promptResult.result as LoopAgentResponse;
-                }
-                
-                // Clean validation syntax from the response
-                // Note: AIPromptRunner will also automatically clean validation syntax when
-                // the prompt has validation enabled (strict or warn mode), but we still
-                // clean here to ensure proper parsing of the LoopAgentResponse structure
-                response = this._jsonValidator.cleanValidationSyntax<LoopAgentResponse>(response);
-                
-                if (IsVerboseLoggingEnabled()) {
-                    console.log('LoopAgentType: Cleaned response from validation syntax', response);
-                }
-            } catch (parseError) {
-                return {
-                    terminate: false,
-                    step: 'Retry',
-                    errorMessage: `Failed to parse JSON response: ${parseError.message}`
-                };
+            // Parse the response using the base class utility
+            const response = this.parseJSONResponse<LoopAgentResponse>(promptResult);
+            if (!response) {
+                return this.createRetryStep('Failed to parse JSON response');
             }
             
             // Validate the response structure
             const validationResult = this.isValidLoopResponse(response);
             if (!validationResult.success) {
-                return {
-                    terminate: false,
-                    step: 'Retry',
-                    errorMessage: validationResult.message
-                };
+                return this.createRetryStep(validationResult.message);
             }
 
             // Check if task is complete
@@ -119,23 +94,17 @@ export class LoopAgentType extends BaseAgentType {
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
                 });
-                return {
-                    terminate: response.taskComplete,
+                return this.createSuccessStep({
                     message: response.message,
                     reasoning: response.reasoning,
                     confidence: response.confidence,
-                    step: 'Success',
-                    payloadChangeRequest: response.payloadChangeRequest,                    
-                };
+                    payloadChangeRequest: response.payloadChangeRequest
+                });
             }
 
             // Handle when nextStep is not provided but task is not complete
             if (!response.nextStep) {
-                return {
-                    terminate: false,
-                    step: 'Retry',
-                    errorMessage: 'Task not complete but no next step provided'
-                };
+                return this.createRetryStep('Task not complete but no next step provided');
             }
 
             // Determine next step based on type
@@ -193,11 +162,7 @@ export class LoopAgentType extends BaseAgentType {
             return retVal as BaseAgentNextStep<P>;
         } catch (error) {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
-            return {
-                terminate: false,
-                step: 'Retry',
-                errorMessage: `Failed to parse loop agent response: ${error.message}`
-            };
+            return this.createRetryStep(`Failed to parse loop agent response: ${error.message}`);
         }
     }
 
@@ -322,22 +287,61 @@ export class LoopAgentType extends BaseAgentType {
 
         return {success: true};
     }
- 
-    public static CURRENT_PAYLOAD_PLACHOLDER = '_CURRENT_PAYLOAD';
     /**
      * Injects a payload into the prompt parameters.
      * For LoopAgentType, this could be used to inject previous loop results or context.
      * 
      * @param {T} payload - The payload to inject
      * @param {AIPromptParams} prompt - The prompt parameters to update
+     * @param {object} agentInfo - Agent identification info (unused by LoopAgentType)
      */
-    public async InjectPayload<T = any>(payload: T, prompt: AIPromptParams): Promise<void> {
+    public async InjectPayload<T = any>(
+        payload: T, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void> {
         if (!prompt)
             throw new Error('Prompt parameters are required for payload injection');
         if (!prompt.data )
             prompt.data = {};
 
-        prompt.data[LoopAgentType.CURRENT_PAYLOAD_PLACHOLDER] = payload || {};
+        prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
+    }
+
+    /**
+     * Determines the initial step for loop agent types.
+     * 
+     * Loop agents always start with a prompt execution to determine the initial actions.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null> {
+        // Loop agents always start with a prompt execution
+        return null;
+    }
+
+    /**
+     * Pre-processes retry steps for loop agent types.
+     * 
+     * Loop agents use the default retry behavior which executes the prompt again.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Loop agents use default retry behavior (execute prompt)
+        return null;
     }
 }
 

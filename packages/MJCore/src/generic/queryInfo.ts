@@ -64,6 +64,20 @@ export class QueryInfo extends BaseInfo {
      */
     Category: string = null
 
+    private _categoryPath: string | null = null;
+    /**
+     * Gets the full hierarchical path of this query's category (e.g., "/MJ/AI/Agents/").
+     * This provides a unique filepath-like identifier for the category hierarchy.
+     * Returns empty string if the query is not categorized.
+     * @returns {string} The category path with leading and trailing slashes
+     */
+    get CategoryPath(): string {
+        if (this._categoryPath === null) {
+            this._categoryPath = this.buildCategoryPath();
+        }
+        return this._categoryPath;
+    }
+
     private _fields: QueryFieldInfo[] = null
     /**
      * Gets the field metadata for this query, including display names, data types, and formatting rules.
@@ -132,6 +146,25 @@ export class QueryInfo extends BaseInfo {
      */
     get CategoryInfo(): QueryCategoryInfo {
         return Metadata.Provider.QueryCategories.find(c => c.ID === this.CategoryID);
+    }
+
+    /**
+     * Builds the hierarchical category path by walking up the parent chain.
+     * @returns {string} The category path (e.g., "/MJ/AI/Agents/") or empty string if uncategorized
+     */
+    private buildCategoryPath(): string {
+        if (!this.CategoryID) return '';
+        
+        const pathSegments: string[] = [];
+        let currentCategory = this.CategoryInfo;
+        
+        // Walk up the hierarchy to build the path
+        while (currentCategory) {
+            pathSegments.unshift(currentCategory.Name);
+            currentCategory = currentCategory.ParentCategoryInfo;
+        }
+        
+        return pathSegments.length > 0 ? `/${pathSegments.join('/')}/` : '';
     }
 
     /**

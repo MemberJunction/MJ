@@ -1,0 +1,7 @@
+{
+  "nextStepName?": "[STRING: The exact name of the next step to execute, if known]",
+  "reasoning?": "[STRING: Clear explanation of why this decision was made, including key factors considered]",
+  "confidence?": "[NUMBER: 0.0 to 1.0 indicating confidence in the decision]",
+  "terminate?": "[BOOLEAN: true to end the workflow, false to continue]",
+  "message?": "[STRING: Human-readable message about the decision, useful for logging or user communication]"
+}

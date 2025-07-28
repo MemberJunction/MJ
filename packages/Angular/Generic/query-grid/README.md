@@ -184,11 +184,11 @@ export class CustomerOrdersComponent implements OnInit {
   private createQueryParams(): RunQueryParams {
     return {
       QueryID: 'CustomerOrdersWithDetails',
-      Parameters: [
-        { Name: 'StartDate', Value: this.startDate },
-        { Name: 'EndDate', Value: this.endDate },
-        { Name: 'Status', Value: 'Active' }
-      ],
+      Parameters: {
+        StartDate: this.startDate,
+        EndDate: this.endDate,
+        Status: 'Active'
+      },
       MaxRows: 1000
     };
   }
@@ -274,14 +274,13 @@ export type GridRowClickedEvent = {
 #### RunQueryParams (from @memberjunction/core)
 ```typescript
 interface RunQueryParams {
-  QueryID: string;              // ID of the query to execute
-  Parameters?: QueryParam[];    // Optional query parameters
-  MaxRows?: number;            // Maximum rows to return
-}
-
-interface QueryParam {
-  Name: string;
-  Value: any;
+  QueryID?: string;                    // ID of the query to execute
+  QueryName?: string;                  // Name of the query (alternative to QueryID)
+  CategoryPath?: string;               // Hierarchical category path (e.g., "/MJ/AI/Agents/")
+  CategoryID?: string;                 // Direct category ID
+  Parameters?: Record<string, any>;    // Optional templated query parameters
+  MaxRows?: number;                   // Maximum rows to return
+  StartRow?: number;                  // Row offset for pagination
 }
 ```
 
