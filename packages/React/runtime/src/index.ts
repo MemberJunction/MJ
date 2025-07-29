@@ -74,6 +74,12 @@ export {
   HierarchyRegistrationOptions
 } from './runtime';
 
+export {
+  ReactRootManager,
+  reactRootManager,
+  ManagedReactRoot
+} from './runtime';
+
 // Export utilities
 export { 
   RuntimeUtilities, 
@@ -101,6 +107,18 @@ export {
   ComponentErrorAnalyzer,
   FailedComponentInfo
 } from './utilities/component-error-analyzer';
+
+export {
+  ResourceManager,
+  resourceManager,
+  ManagedResource
+} from './utilities/resource-manager';
+
+export {
+  CacheManager,
+  CacheEntry,
+  CacheOptions
+} from './utilities/cache-manager';
 
 // Version information
 export const VERSION = '2.69.1';
