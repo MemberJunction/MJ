@@ -12,6 +12,9 @@ import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as Conf
 import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
 import { resourceManager } from './resource-manager';
 
+// Unique component ID for resource tracking
+const LIBRARY_LOADER_COMPONENT_ID = 'mj-react-runtime-library-loader-singleton';
+
 /**
  * Represents a loaded script or CSS resource
  */
@@ -228,7 +231,7 @@ export class LibraryLoader {
         } else {
           // Some libraries may take a moment to initialize
           const timeoutId = resourceManager.setTimeout(
-            'library-loader',
+            LIBRARY_LOADER_COMPONENT_ID,
             () => {
               const delayedGlobal = (window as any)[globalName];
               if (delayedGlobal) {
@@ -254,7 +257,7 @@ export class LibraryLoader {
       document.head.appendChild(script);
       
       // Register the script element for cleanup
-      resourceManager.registerDOMElement('library-loader', script);
+      resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, script);
     });
 
     this.loadedResources.set(url, { 
@@ -284,7 +287,7 @@ export class LibraryLoader {
     document.head.appendChild(link);
     
     // Register the link element for cleanup
-    resourceManager.registerDOMElement('library-loader', link);
+    resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, link);
 
     this.loadedResources.set(url, {
       element: link,
@@ -308,7 +311,7 @@ export class LibraryLoader {
       } else {
         // Retry after a short delay
         resourceManager.setTimeout(
-          'library-loader',
+          LIBRARY_LOADER_COMPONENT_ID,
           () => {
             const delayedGlobal = (window as any)[globalName];
             if (delayedGlobal) {
@@ -334,7 +337,7 @@ export class LibraryLoader {
       checkGlobal();
     };
     resourceManager.addEventListener(
-      'library-loader',
+      LIBRARY_LOADER_COMPONENT_ID,
       script,
       'load',
       loadHandler,
@@ -364,6 +367,6 @@ export class LibraryLoader {
     this.loadedResources.clear();
     
     // Clean up any resources managed by resource manager
-    resourceManager.cleanupComponent('library-loader');
+    resourceManager.cleanupComponent(LIBRARY_LOADER_COMPONENT_ID);
   }
 }
