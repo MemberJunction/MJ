@@ -163,7 +163,7 @@ export class RecordMergeResolver {
   ) {
     try {
       const md = new Metadata();
-      const options = { TransactionScopeId: userPayload.transactionScopeId };
+      const options = {};
       const result = await md.MergeRecords(request, userPayload.userRecord, options);
       return result;
     } catch (e) {

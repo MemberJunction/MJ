@@ -121,10 +121,7 @@ export class ReportResolverExtended {
       report.SharingScope = 'None';
       report.UserID = u.ID;
 
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-
-      if (await report.Save(saveOptions)) {
+      if (await report.Save()) {
         return {
           ReportID: report.ID,
           ReportName: report.Name,

@@ -391,10 +391,7 @@ export class AskSkipResolver {
       ck.KeyValuePairs = compositeKey.KeyValuePairs;
       dci.RecordID = ck.Values();
 
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-      let dciSaveResult: boolean = await dci.Save(saveOptions);
+      let dciSaveResult: boolean = await dci.Save();
       if (!dciSaveResult) {
         LogError(`Error saving DataContextItemEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, dci.LatestResult);
       }
@@ -406,7 +403,7 @@ export class AskSkipResolver {
       convoEntity.LinkedEntityID = dci.EntityID;
       convoEntity.LinkedRecordID = ck.Values();
       convoEntity.DataContextID = dataContext.ID;
-      const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
+      const convoEntitySaveResult: boolean = await convoEntity.Save();
       if (!convoEntitySaveResult) {
         LogError(`Error saving ConversationEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, convoEntity.LatestResult);
       }
@@ -505,10 +502,7 @@ export class AskSkipResolver {
       learningCycleEntity.Status = 'In-Progress';
       learningCycleEntity.StartedAt = startTime;
 
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-      if (!(await learningCycleEntity.Save(saveOptions))) {
+      if (!(await learningCycleEntity.Save())) {
         throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
       }
 
@@ -528,7 +522,7 @@ export class AskSkipResolver {
           learningCycleEntity.Status = 'Complete';
           learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
           learningCycleEntity.EndedAt = new Date();
-          if (!(await learningCycleEntity.Save(saveOptions))) {
+          if (!(await learningCycleEntity.Save())) {
             LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
           }
           const result: SkipAPILearningCycleResponse = {
@@ -554,7 +548,7 @@ export class AskSkipResolver {
           learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
           learningCycleEntity.EndedAt = endTime;
 
-          if (!(await learningCycleEntity.Save(saveOptions))) {
+          if (!(await learningCycleEntity.Save())) {
             LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
           }
           
@@ -567,7 +561,7 @@ export class AskSkipResolver {
         learningCycleEntity.EndedAt = new Date();
         
         try {
-          await learningCycleEntity.Save(saveOptions);
+          await learningCycleEntity.Save();
         } 
         catch (saveError) {
           LogError(`Failed to update learning cycle record after error: ${saveError}`);
@@ -795,10 +789,7 @@ export class AskSkipResolver {
       }
 
       // Save the note
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-      if (!(await noteEntity.Save(saveOptions))) {
+      if (!(await noteEntity.Save())) {
         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
         return false;
       }
@@ -839,9 +830,7 @@ cycle.`);
     }
 
     // Proceed with deletion
-    const options = new EntityDeleteOptions();
-    options.TransactionScopeId = userPayload?.transactionScopeId;
-    if (!(await noteEntity.Delete(options))) {
+    if (!(await noteEntity.Delete())) {
       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
       return false;
     }
@@ -869,10 +858,7 @@ cycle.`);
     convoDetailEntityAI.Message = lastSystemMessage?.content;
     convoDetailEntityAI.Role = 'AI';
 
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-    if (await convoDetailEntityAI.Save(saveOptions)) {
+    if (await convoDetailEntityAI.Save()) {
       return convoDetailEntityAI.ID;
     } else {
       LogError(
@@ -1916,9 +1902,6 @@ cycle.`);
     const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
     let dataContextEntity: DataContextEntity;
 
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
     if (!ConversationId || ConversationId.length === 0) {
       // create a new conversation id
       convoEntity.NewRecord();
@@ -1933,7 +1916,7 @@ cycle.`);
           dataContextEntity.NewRecord();
           dataContextEntity.UserID = user.ID;
           dataContextEntity.Name = 'Data Context for Skip Conversation ';
-          if (!(await dataContextEntity.Save(saveOptions))) {
+          if (!(await dataContextEntity.Save())) {
             LogError(`Creating a new data context failed`, undefined, dataContextEntity.LatestResult);
             throw new Error(`Creating a new data context failed`);
           }
@@ -1945,12 +1928,12 @@ cycle.`);
           }
         }
         convoEntity.DataContextID = dataContextEntity.ID;
-        if (await convoEntity.Save(saveOptions)) {
+        if (await convoEntity.Save()) {
           ConversationId = convoEntity.ID;
           if (!DataContextId || dataContextEntity.ID.length === 0) {
             // only do this if we created a new data context for this conversation
             dataContextEntity.Name += ` ${ConversationId}`;
-            const dciSaveResult: boolean = await dataContextEntity.Save(saveOptions);
+            const dciSaveResult: boolean = await dataContextEntity.Save();
             if (!dciSaveResult) {
               LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
             }
@@ -1974,7 +1957,7 @@ cycle.`);
         if (convoEntity.DataContextID === null) {
           // use the DataContextId passed in if the conversation doesn't have a DataContextID
           convoEntity.DataContextID = DataContextId;
-          const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
+          const convoEntitySaveResult: boolean = await convoEntity.Save();
           if (!convoEntitySaveResult) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
@@ -1996,10 +1979,10 @@ cycle.`);
         dataContextEntity.NewRecord();
         dataContextEntity.UserID = user.ID;
         dataContextEntity.Name = 'Data Context for Skip Conversation ' + ConversationId;
-        if (await dataContextEntity.Save(saveOptions)) {
+        if (await dataContextEntity.Save()) {
           DataContextId = convoEntity.DataContextID;
           convoEntity.DataContextID = dataContextEntity.ID;
-          if (!await convoEntity.Save(saveOptions)) {
+          if (!await convoEntity.Save()) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
         } 
@@ -2021,7 +2004,7 @@ cycle.`);
     convoDetailEntity.Role = 'User';
     convoDetailEntity.HiddenToUser = false;
 
-    let convoDetailSaveResult: boolean = await convoDetailEntity.Save(saveOptions);
+    let convoDetailSaveResult: boolean = await convoDetailEntity.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
     }
@@ -2514,10 +2497,7 @@ cycle.`);
     // Set conversation status back to Available since we need user input for the clarifying question
     await this.setConversationStatus(convoEntity, 'Available', userPayload);
     
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-    if (await convoDetailEntityAI.Save(saveOptions)) {
+    if (await convoDetailEntityAI.Save()) {
       return {
         Success: true,
         Status: 'OK',
@@ -2768,10 +2748,7 @@ cycle.`);
         artifactEntity.ArtifactTypeID = AIEngine.Instance.ArtifactTypes.find((t) => t.Name === 'Report')?.ID;
         artifactEntity.SharingScope = 'None';
 
-        const saveOptions = new EntitySaveOptions();
-        saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-        if (await artifactEntity.Save(saveOptions)) {
+        if (await artifactEntity.Save()) {
           // saved, grab the new ID
           artifactId = artifactEntity.ID;
         }
@@ -2807,10 +2784,7 @@ cycle.`);
         artifactVersionEntity.Version = newVersion;
         artifactVersionEntity.Configuration = sResult; // store the full response here
 
-        const saveOptions = new EntitySaveOptions();
-        saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-        if (await artifactVersionEntity.Save(saveOptions)) {
+        if (await artifactVersionEntity.Save()) {
           // success saving the new version, set the artifactVersionId
           artifactVersionId = artifactVersionEntity.ID;
         }
@@ -2838,10 +2812,7 @@ cycle.`);
       }
     }    
 
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-    const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save(saveOptions);
+    const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
     }
@@ -2863,7 +2834,7 @@ cycle.`);
     
     // Save if any changes were made
     if (needToSaveConvo) {
-      const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
+      const convoEntitySaveResult: boolean = await convoEntity.Save();
       if (!convoEntitySaveResult) {
         LogError(`Error saving conversation entity for AI message: ${sResult}`, undefined, convoEntity.LatestResult);
       }
@@ -2881,7 +2852,7 @@ cycle.`);
       conversationId: convoEntity.ID,
     });
 
-    const userNotificationSaveResult: boolean = await userNotification.Save(saveOptions);
+    const userNotificationSaveResult: boolean = await userNotification.Save();
     if (!userNotificationSaveResult) {
       LogError(`Error saving user notification entity for AI message: ${sResult}`, undefined, userNotification.LatestResult);
     }
@@ -2925,10 +2896,7 @@ cycle.`);
     if (convoEntity.Status !== status) {
     convoEntity.Status = status;
 
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-
-    const convoSaveResult = await convoEntity.Save(saveOptions);
+    const convoSaveResult = await convoEntity.Save();
     if (!convoSaveResult) {
       LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
     }

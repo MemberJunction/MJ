@@ -1,10 +1,11 @@
 import { LogStatus, LogError } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { GetReadWriteDataSource } from '../util.js';
 import { AskSkipResolver } from '../resolvers/AskSkipResolver.js';
-import { DataSourceInfo } from '../types.js';
+import { AppContext, DataSourceInfo } from '../types.js';
 import { getSystemUser } from '../auth/index.js';
 import { BaseSingleton } from '@memberjunction/global';
+import { mj_core_schema } from '../config.js';
 
 /**
  * A simple scheduler for the Skip AI learning cycle
@@ -89,7 +90,11 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
       }
       
       // Create context for the resolver
-      const context = {
+      const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+      const p = new SQLServerDataProvider();
+      await p.Config(config);
+
+      const context: AppContext = {
         dataSource: dataSource,
         dataSources: this.dataSources,
         userPayload: {
@@ -97,7 +102,8 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
           sessionId: `scheduler_${Date.now()}`,
           userRecord: systemUser,
           isSystemUser: true
-        }
+        },
+        providers: [{provider: p, type: 'Read-Write'}]
       };
       
       // Execute the learning cycle

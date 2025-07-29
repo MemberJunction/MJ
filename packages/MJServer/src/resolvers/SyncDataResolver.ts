@@ -216,8 +216,6 @@ export class SyncDataResolver {
             // here we will iterate through the result of a RunView on the entityname/filter and delete each matching record
             let overallSuccess: boolean = true;
             let combinedErrorMessage: string = "";
-            const options = new EntityDeleteOptions();
-            options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
             const rv = new RunView();
             const data = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
@@ -226,7 +224,7 @@ export class SyncDataResolver {
             }, user);
             if (data && data.Success) {
                 for (const entityObject of data.Results) {
-                    if (!await entityObject.Delete(options)) {
+                    if (!await entityObject.Delete()) {
                         overallSuccess = false;
                         combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.Message + '\n';
                     }
@@ -299,9 +297,6 @@ export class SyncDataResolver {
     }
 
     protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, result: ActionItemOutputType, userPayload: UserPayload) {
-        const options = new EntityDeleteOptions();
-        options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-        
         if (!pk || pk.KeyValuePairs.length === 0) {
             const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
             if (!altKeyResult) {
@@ -317,7 +312,7 @@ export class SyncDataResolver {
                     omitNullValues: false,
                     oldValues: false
                 });
-                if (await altKeyResult.Delete(options)) {
+                if (await altKeyResult.Delete()) {
                     result.Success = true;
                 }
                 else {
@@ -335,7 +330,7 @@ export class SyncDataResolver {
                 omitNullValues: false,
                 oldValues: false
             });
-            if (await entityObject.Delete(options)) {
+            if (await entityObject.Delete()) {
                 result.Success = true;
             }
             else {
@@ -354,9 +349,7 @@ export class SyncDataResolver {
             delete noPKValues[pk.Name];
         });
         entityObject.SetMany(noPKValues);
-        const saveOptions = new EntitySaveOptions();
-        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-        if (await entityObject.Save(saveOptions)) {
+        if (await entityObject.Save()) {
             result.Success = true;
             result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
             // pass back the full record AFTER the sync, that's often quite useful on the other end
@@ -397,9 +390,7 @@ export class SyncDataResolver {
 
     protected async InnerSyncSingleItemUpdate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType, userPayload: UserPayload) {
         entityObject.SetMany(fieldValues);
-        const saveOptions = new EntitySaveOptions();
-        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-        if (await entityObject.Save(saveOptions)) {
+        if (await entityObject.Save()) {
             result.Success = true;
             if (!result.PrimaryKey || result.PrimaryKey.KeyValuePairs.length === 0) {
                 result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));

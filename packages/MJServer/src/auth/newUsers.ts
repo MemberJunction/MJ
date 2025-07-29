@@ -5,11 +5,9 @@ import { configInfo } from "../config.js";
 import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity, ApplicationEntityType, ApplicationEntityEntityType } from "@memberjunction/core-entities";
 
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, transactionScopeId: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
         try {
             let contextUser: UserInfo | null = null;
-            const saveOptions: EntitySaveOptions = new EntitySaveOptions();
-            saveOptions.TransactionScopeId = transactionScopeId;
 
             const contextUserForNewUserCreation: string = configInfo?.userHandling?.contextUserForNewUserCreation;
             if(contextUserForNewUserCreation){
@@ -45,7 +43,7 @@ export class NewUserBase {
                 user.LinkedEntityRecordID = linkedEntityRecordId;
             }
 
-            const saveResult: boolean = await user.Save(saveOptions);
+            const saveResult: boolean = await user.Save();
             if(!saveResult){
                 LogError(`Failed to create new user ${firstName} ${lastName} ${email}:`, undefined, user.LatestResult);
                 return null;
@@ -66,7 +64,7 @@ export class NewUserBase {
                     }
 
                     userRoleEntity.RoleID = userRole.ID;
-                    const roleSaveResult: boolean = await userRoleEntity.Save(saveOptions);
+                    const roleSaveResult: boolean = await userRoleEntity.Save();
                     if(roleSaveResult){
                         LogStatus(`Assigned role ${role} to new user ${user.Name}`);
                     }
@@ -94,7 +92,7 @@ export class NewUserBase {
                     userApplication.ApplicationID = application.ID;
                     userApplication.IsActive = true;
 
-                    const userApplicationSaveResult: boolean = await userApplication.Save(saveOptions);
+                    const userApplicationSaveResult: boolean = await userApplication.Save();
                     if(userApplicationSaveResult){
                         LogStatus(`Created User Application ${appName} for new user ${user.Name}`);
                         
@@ -119,7 +117,7 @@ export class NewUserBase {
                             userAppEntity.EntityID = appEntity.EntityID;
                             userAppEntity.Sequence = index;
 
-                            const userAppEntitySaveResult: boolean = await userAppEntity.Save(saveOptions);
+                            const userAppEntitySaveResult: boolean = await userAppEntity.Save();
                             if(userAppEntitySaveResult){
                                 LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
                             }
