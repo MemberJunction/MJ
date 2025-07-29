@@ -959,12 +959,13 @@ export class ResolverBase {
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
       
-      // Add the transactionScopeId from the user payload to the delete options
-      if (userPayload?.transactionScopeId) {
-        options.TransactionScopeId = userPayload.transactionScopeId;
-      }
+      // Create internal delete options with transactionScopeId from user payload
+      const internalOptions = {
+        ...options,
+        TransactionScopeId: userPayload?.transactionScopeId
+      };
       
-      if (await entityObject.Delete(options)) {
+      if (await entityObject.Delete(internalOptions)) {
         await this.AfterDelete(dataSource, key); // fire event
         return returnValue;
       } else {

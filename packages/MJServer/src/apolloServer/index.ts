@@ -17,7 +17,7 @@ const TransactionCleanupPlugin = {
         if (transactionScopeId) {
           try {
             const provider = Metadata.Provider as SQLServerDataProvider;
-            provider.disposeTransactionContext(transactionScopeId);
+            provider.DisposeTransactionContext(transactionScopeId);
           } catch (error) {
             console.error(`[TransactionCleanupPlugin] Error disposing transaction context: ${transactionScopeId}`, error);
           }

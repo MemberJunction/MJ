@@ -232,6 +232,19 @@ export class EntityDeleteOptions {
 }
 
 /**
+ * Options used when merging entity records.
+ * Controls transaction isolation and other merge-specific behaviors.
+ */
+export class EntityMergeOptions {
+    /**
+     * Optional transaction scope ID for managing multi-user transaction isolation.
+     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
+     * This allows multiple concurrent requests to have independent transaction contexts.
+     */
+    TransactionScopeId?: string;
+}
+
+/**
  * Input parameters for retrieving entity record names.
  * Used for batch operations to get display names for multiple records.
  */
@@ -369,7 +382,7 @@ export interface IMetadataProvider {
      * @param request 
      * @returns 
      */
-    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> 
+    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> 
 
 
     /**

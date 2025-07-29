@@ -69,6 +69,7 @@ import {
   LogStatus,
   CompositeKey,
   EntityDeleteOptions,
+  EntityMergeOptions,
   BaseEntityResult,
   Metadata,
   DatasetItemResultType,
@@ -285,7 +286,7 @@ export class SQLServerDataProvider
    * Get the request-scoped transaction context by ID
    * Returns null if no context exists for the given ID
    */
-  public getTransactionContext(transactionScopeId: string | undefined): RequestTransactionContext | null {
+  public GetTransactionContext(transactionScopeId: string | undefined): RequestTransactionContext | null {
     if (!transactionScopeId) return null;
     return this._transactionContexts.get(transactionScopeId) || null;
   }
@@ -295,7 +296,7 @@ export class SQLServerDataProvider
    * @param transactionScopeId The unique ID for this transaction scope
    * @returns The created transaction context
    */
-  public createTransactionContext(transactionScopeId: string): RequestTransactionContext {
+  public CreateTransactionContext(transactionScopeId: string): RequestTransactionContext {
     const context: RequestTransactionContext = {
       transaction: undefined,
       transactionDepth: 0,
@@ -312,7 +313,7 @@ export class SQLServerDataProvider
    * Dispose of a transaction context
    * @param transactionScopeId The ID of the transaction context to dispose
    */
-  public disposeTransactionContext(transactionScopeId: string): void {
+  public DisposeTransactionContext(transactionScopeId: string): void {
     const context = this._transactionContexts.get(transactionScopeId);
     if (context) {
       // Clean up the transaction if it's still active
@@ -1732,7 +1733,7 @@ export class SQLServerDataProvider
     return response;
   }
 
-  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
     const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
     if (!e || !e.AllowRecordMerge)
       throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
@@ -1756,8 +1757,7 @@ export class SQLServerDataProvider
              */
 
       // Step 1 - begin transaction
-      // Note: MergeRecords doesn't currently support transactionScopeId
-      await this.BeginTransaction();
+      await this.BeginTransaction({ transactionScopeId: options?.TransactionScopeId });
 
       // Step 2 - update the surviving record, but only do this if we were provided a field map
       if (request.FieldMap && request.FieldMap.length > 0) {
@@ -1814,7 +1814,7 @@ export class SQLServerDataProvider
       await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
 
       // Step 5 - commit transaction
-      await this.CommitTransaction();
+      await this.CommitTransaction({ transactionScopeId: options?.TransactionScopeId });
 
       result.Success = true;
 
@@ -1822,7 +1822,7 @@ export class SQLServerDataProvider
     } catch (e) {
       LogError(e);
 
-      await this.RollbackTransaction();
+      await this.RollbackTransaction({ transactionScopeId: options?.TransactionScopeId });
       // attempt to persist the status to the DB, although that might fail
       await this.CompleteMergeLogging(mergeRecordLog, result, contextUser);
       throw e;
@@ -3857,11 +3857,11 @@ export class SQLServerDataProvider
 
   public async BeginTransaction(options?: { transactionScopeId?: string }) {
     try {
-      let context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      let context = options?.transactionScopeId ? this.GetTransactionContext(options.transactionScopeId) : null;
       
       // If transactionScopeId provided but no context exists, create one
       if (options?.transactionScopeId && !context) {
-        context = this.createTransactionContext(options.transactionScopeId);
+        context = this.CreateTransactionContext(options.transactionScopeId);
       }
       
       if (context) {
@@ -3912,7 +3912,7 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
-      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      const context = options?.transactionScopeId ? this.GetTransactionContext(options.transactionScopeId) : null;
       if (context) {
         context.transactionDepth--; // Restore depth on error
       } else {
@@ -3925,7 +3925,7 @@ export class SQLServerDataProvider
 
   public async CommitTransaction(options?: { transactionScopeId?: string }) {
     try {
-      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      const context = options?.transactionScopeId ? this.GetTransactionContext(options.transactionScopeId) : null;
       
       if (context) {
         // We're in a request context
@@ -4010,7 +4010,7 @@ export class SQLServerDataProvider
 
   public async RollbackTransaction(options?: { transactionScopeId?: string }) {
     try {
-      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      const context = options?.transactionScopeId ? this.GetTransactionContext(options.transactionScopeId) : null;
       
       if (context) {
         // We're in a request context
@@ -4118,7 +4118,7 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
-      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      const context = options?.transactionScopeId ? this.GetTransactionContext(options.transactionScopeId) : null;
       if (context) {
         // On error in nested transaction, maintain state
         // On error in outer transaction, reset everything
