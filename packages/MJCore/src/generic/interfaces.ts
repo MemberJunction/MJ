@@ -16,12 +16,12 @@ import { ExplorerNavigationItem } from "./explorerNavigationItem";
  * Contains schema inclusion/exclusion rules and configuration data.
  * Used to configure which database schemas should be included or excluded from metadata scanning.
  */
-export class ProviderConfigDataBase {
+export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
-    private _data: any;
-    public get Data(): any {
+    private _data: D;
+    public get Data(): D {
         return this._data;
     }
     public get IncludeSchemas(): string[] {
@@ -33,9 +33,9 @@ export class ProviderConfigDataBase {
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: any, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
+    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreScemaName;
+        this._MJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
