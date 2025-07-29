@@ -7,12 +7,14 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { getSigningKeys, getSystemUser, validationOptions, verifyUserRecord } from './auth/index.js';
 import { authCache } from './cache.js';
-import { userEmailMap, apiKey } from './config.js';
+import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { TokenExpiredError } from './auth/index.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
+import { DatabaseProviderBase } from '@memberjunction/core';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 
 const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -34,8 +36,7 @@ export const getUserPayload = async (
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
-  requestApiKey?: string,
-  transactionScopeId?: string
+  requestApiKey?: string 
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -88,7 +89,7 @@ export const getUserPayload = async (
     const fullName = payload?.name;
     const firstName = payload?.given_name || fullName?.split(' ')[0];
     const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
-    const userRecord = await verifyUserRecord(transactionScopeId, email, firstName, lastName, requestDomain, readWriteDataSource);
+    const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, readWriteDataSource);
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -112,9 +113,6 @@ export const contextFunction =
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
-    // Generate a unique transaction scope ID for this request
-    const transactionScopeId = uuidv4();
-    
     // Extract request data first (synchronous operations)
     const sessionIdRaw = req.headers['x-session-id'];
     const requestDomain = url.parse(req.headers.origin || '');
@@ -133,19 +131,19 @@ export const contextFunction =
       sessionId,
       dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
-      apiKey,
-      transactionScopeId
+      apiKey 
     );
 
-    const enhancedPayload = {
-      ...userPayload,
-      transactionScopeId,
-    }
+    // now create a new instance of SQLServerDataProvider for each request
+    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    const p = new SQLServerDataProvider();
+    await p.Config(config);
 
     const contextResult = { 
       dataSource, 
       dataSources, 
-      userPayload: enhancedPayload
+      userPayload: userPayload,
+      provider: p
     };
     
     return contextResult;

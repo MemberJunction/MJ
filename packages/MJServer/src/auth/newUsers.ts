@@ -5,7 +5,7 @@ import { configInfo } from "../config.js";
 import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity, ApplicationEntityType, ApplicationEntityEntityType } from "@memberjunction/core-entities";
 
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, transactionScopeId: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
         try {
             let contextUser: UserInfo | null = null;
 

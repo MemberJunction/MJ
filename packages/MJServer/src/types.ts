@@ -5,6 +5,7 @@ import { PubSubEngine } from 'type-graphql';
 import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export type UserPayload = {
   email: string;
@@ -29,6 +30,10 @@ export type AppContext = {
    * Array of connection pools that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
    */
   dataSources: DataSourceInfo[];
+  /**
+   * Per-request SQLServerDataProvider instance with isolated transaction state.
+   */
+  provider: SQLServerDataProvider;
 };
 
 export class DataSourceInfo  {
