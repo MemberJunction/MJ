@@ -966,13 +966,7 @@ export class ResolverBase {
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
       
-      // Create internal delete options with transactionScopeId from user payload
-      const internalOptions = {
-        ...options,
-        TransactionScopeId: userPayload?.transactionScopeId
-      };
-      
-      if (await entityObject.Delete(internalOptions)) {
+      if (await entityObject.Delete(options)) {
         await this.AfterDelete(provider, key); // fire event
         return returnValue;
       } else {

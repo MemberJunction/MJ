@@ -13,7 +13,6 @@ export type UserPayload = {
   sessionId: string;
   isSystemUser?: boolean;
   apiKey?: string;
-  transactionScopeId?: string;
 };
 
 /**

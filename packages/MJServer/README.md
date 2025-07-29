@@ -119,18 +119,18 @@ serve(resolverPaths.map(localPath), createApp(), options);
 
 ### Transaction Management
 
-MJServer provides automatic transaction management for all GraphQL mutations with full support for multi-user environments.
+MJServer provides automatic transaction management for all GraphQL mutations with full support for multi-user environments through per-request provider instances.
 
-#### Automatic Request Isolation
+#### Per-Request Provider Architecture
 
-Each GraphQL request receives a unique transaction scope ID, ensuring complete isolation between concurrent requests:
+Each GraphQL request receives its own SQLServerDataProvider instance, ensuring complete isolation between concurrent requests:
 
 ```typescript
-// Each request automatically gets wrapped with:
-// 1. A unique transaction scope ID generated via UUID
-// 2. Automatic BEGIN TRANSACTION at request start
-// 3. COMMIT on success or ROLLBACK on error
-// 4. Cleanup of transaction context after response
+// Each request automatically:
+// 1. Creates a new SQLServerDataProvider instance
+// 2. Reuses cached metadata for fast initialization
+// 3. Has isolated transaction state within the provider
+// 4. Gets garbage collected after request completion
 
 mutation {
   CreateUser(input: { FirstName: "John", LastName: "Doe" }) {
@@ -140,19 +140,57 @@ mutation {
     ID
   }
 }
-// Both operations execute within the same transaction scope
+// Both operations execute within the same provider's transaction
 // Success: Both committed together
 // Error: Both rolled back together
 ```
 
 #### Key Transaction Features
 
-- **Request-Scoped Isolation**: Each GraphQL request has its own transaction context
+- **Provider Isolation**: Each request has its own data provider instance
 - **Automatic Management**: Transactions are automatically started, committed, or rolled back
-- **Multi-User Safety**: Concurrent requests from different users have isolated transactions
-- **Context Propagation**: Transaction scope ID flows through all resolver operations
-- **Cleanup**: Transaction contexts are disposed after each request completes
-- **Nested Support**: Operations can use savepoints for nested transaction logic
+- **Multi-User Safety**: Concurrent requests have completely isolated provider instances
+- **Zero Configuration**: No transaction IDs or scope management needed
+- **Efficient**: Metadata caching makes provider creation lightweight
+- **Nested Support**: Providers use SQL Server savepoints for nested transaction logic
+
+### Provider Configuration
+
+MJServer automatically creates per-request SQLServerDataProvider instances for optimal isolation and performance:
+
+```typescript
+// In each GraphQL request context:
+const provider = new SQLServerDataProvider();
+await provider.Config({
+  connectionPool: pool,
+  MJCoreSchemaName: '__mj',
+  ignoreExistingMetadata: false  // Reuse cached metadata
+});
+
+// Provider is included in AppContext
+context.providers = [{
+  provider: provider,
+  type: 'Read-Write'
+}];
+```
+
+#### Provider Types
+
+The AppContext supports multiple providers with different access levels:
+
+```typescript
+export type AppContext = {
+  dataSource: sql.ConnectionPool;  // Legacy, for backward compatibility
+  userPayload: UserPayload;
+  dataSources: DataSourceInfo[];
+  providers: Array<ProviderInfo>;  // Per-request provider instances
+};
+
+export class ProviderInfo {
+  provider: DatabaseProviderBase;
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
+}
+```
 
 ### Custom New User Behavior
 

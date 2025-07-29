@@ -237,12 +237,7 @@ export class EntityDeleteOptions {
  * Controls transaction isolation and other merge-specific behaviors.
  */
 export class EntityMergeOptions {
-    /**
-     * Optional transaction scope ID for managing multi-user transaction isolation.
-     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
-     * This allows multiple concurrent requests to have independent transaction contexts.
-     */
-    TransactionScopeId?: string;
+    // nothing here yet, define for future use
 }
 
 /**

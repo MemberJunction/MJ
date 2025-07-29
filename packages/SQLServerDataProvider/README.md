@@ -136,7 +136,7 @@ if (deleteResult.Success) {
 
 ### Transaction Management
 
-The SQL Server Data Provider supports both transaction groups and request-scoped transactions for multi-user environments.
+The SQL Server Data Provider supports comprehensive transaction management through both transaction groups and instance-level transactions.
 
 #### Transaction Groups
 
@@ -198,45 +198,47 @@ if (success) {
 }
 ```
 
-#### Request-Scoped Transactions (Multi-User Environments)
+#### Instance-Level Transactions (Multi-User Environments)
 
-In multi-user server environments, the SQL Server Data Provider supports request-scoped transactions that provide isolation between concurrent requests. This is automatically handled by multi-user servers like MJServer, and can be used directly as per below whenever required:
+In multi-user server environments like MJServer, each request gets its own SQLServerDataProvider instance with isolated transaction state. This provides automatic transaction isolation without requiring transaction scope IDs:
 
 ```typescript
-// Server-side with transaction scope ID
-const transactionScopeId = uuid(); // Unique ID per request
+// Each request gets its own provider instance
+const dataProvider = new SQLServerDataProvider(connectionPool);
+await dataProvider.Config(config);
 
 try {
-  // Begin a request-scoped transaction
-  await dataProvider.BeginTransaction({ transactionScopeId });
+  // Begin a transaction on this instance
+  await dataProvider.BeginTransaction();
   
-  // Perform operations with the same scope ID
-  const saveOptions = { TransactionScopeId: transactionScopeId };
-  await dataProvider.Save(entity1, contextUser, saveOptions);
-  await dataProvider.Save(entity2, contextUser, saveOptions);
+  // Perform operations - all use this instance's transaction
+  await dataProvider.Save(entity1, contextUser);
+  await dataProvider.Save(entity2, contextUser);
   
-  // Delete with same scope
-  const deleteOptions = { TransactionScopeId: transactionScopeId };
+  // Delete operations also participate in the transaction
   await dataProvider.Delete(entity3, deleteOptions, contextUser);
   
   // Commit the transaction
-  await dataProvider.CommitTransaction({ transactionScopeId });
+  await dataProvider.CommitTransaction();
 } catch (error) {
   // Rollback on error
-  await dataProvider.RollbackTransaction({ transactionScopeId });
+  await dataProvider.RollbackTransaction();
   throw error;
-} finally {
-  // Clean up transaction context
-  dataProvider.DisposeTransactionContext(transactionScopeId);
 }
 ```
 
-**Key Features of Request-Scoped Transactions:**
-- Each request gets its own transaction context via unique transaction scope ID
-- Multiple concurrent requests have isolated transactions
-- Automatic cleanup of transaction contexts after request completion
+**Key Features of Instance-Level Transactions:**
+- Each provider instance maintains its own transaction state
+- No transaction scope IDs needed - simpler API
+- Automatic isolation between concurrent requests (each has its own instance)
 - Supports nested transactions with SQL Server savepoints
 - Used automatically by MJServer for all GraphQL mutations
+
+**Best Practices for Multi-User Environments:**
+1. Create a new SQLServerDataProvider instance per request
+2. Configure with `ignoreExistingMetadata: false` to reuse cached metadata
+3. Let the instance be garbage collected after the request completes
+4. No need for explicit cleanup - transaction state is instance-scoped
 
 ### Running Views and Reports
 
@@ -485,14 +487,32 @@ The main class that implements IEntityDataProvider, IMetadataProvider, IRunViewP
 
 Configuration class for the SQL Server provider.
 
+#### Constructor Parameters
+
+```typescript
+constructor(
+  connectionPool: sql.ConnectionPool,
+  MJCoreSchemaName?: string,
+  checkRefreshIntervalSeconds: number = 0,
+  includeSchemas?: string[],
+  excludeSchemas?: string[],
+  ignoreExistingMetadata: boolean = true
+)
+```
+
 #### Properties
 
-- `DataSource: DataSource` - TypeORM DataSource instance
-- `CurrentUserEmail: string` - Email of the current user
+- `ConnectionPool: sql.ConnectionPool` - SQL Server connection pool instance
 - `CheckRefreshIntervalSeconds: number` - Interval for checking metadata refresh (0 to disable)
 - `MJCoreSchemaName: string` - Schema name for MJ core tables (default: '__mj')
 - `IncludeSchemas?: string[]` - List of schemas to include
 - `ExcludeSchemas?: string[]` - List of schemas to exclude
+- `IgnoreExistingMetadata: boolean` - Whether to ignore cached metadata and force a reload (default: true)
+
+**Important Note on `ignoreExistingMetadata`:**
+- Set to `false` in multi-user environments to reuse cached metadata across provider instances
+- This significantly improves performance when creating provider instances per request
+- The first instance loads metadata from the database, subsequent instances reuse it
 
 ### SQLServerTransactionGroup
 
