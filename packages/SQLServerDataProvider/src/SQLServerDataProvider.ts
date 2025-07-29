@@ -1201,6 +1201,7 @@ export class SQLServerDataProvider
             entityInfo.ID,
             null,
             params.AuditLogDescription,
+            null
           );
         }
 
@@ -1431,6 +1432,7 @@ export class SQLServerDataProvider
     entityId: string,
     recordId: any | null,
     auditLogDescription: string | null,
+    saveOptions: EntitySaveOptions
   ): Promise<AuditLogEntity> {
     try {
       const authorization = authorizationName
@@ -1457,7 +1459,7 @@ export class SQLServerDataProvider
 
       if (auditLogDescription) auditLog.Description = auditLogDescription;
 
-      if (await auditLog.Save()) return auditLog;
+      if (await auditLog.Save(saveOptions)) return auditLog;
       else throw new Error(`Error saving audit log record`);
     } catch (err) {
       LogError(err);
@@ -2063,6 +2065,7 @@ export class SQLServerDataProvider
 
   public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
     const entityResult = new BaseEntityResult();
+    let startedTransaction = false; // tracking if we started a transaction or not, so we can commit/rollback as needed
     try {
       entity.RegisterTransactionPreprocessing();
 
@@ -2173,13 +2176,16 @@ export class SQLServerDataProvider
           } else {
             // no transaction group, just execute this immediately...
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-            let startedTransaction = false; // tracking if we started a transaction or not, so we can commit/rollback as needed
 
             let result;
             if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             } else {
               // Start a transaction to wrap the save operation
+              if (!options.TransactionScopeId) {
+                // create a new transaction scope ID if not provided
+                options.TransactionScopeId = uuidv4(); // generate a new transaction scope ID
+              }
               await this.BeginTransaction({ transactionScopeId: options.TransactionScopeId });
               startedTransaction = true;
               
@@ -2243,6 +2249,12 @@ export class SQLServerDataProvider
       entityResult.EndedAt = new Date();
       entityResult.Message = e.message;
       LogError(e);
+
+      if (startedTransaction) {
+        await this.RollbackTransaction({ transactionScopeId: options.TransactionScopeId });
+        startedTransaction = false;
+      }
+
       throw e; // rethrow the error
     }
   }
