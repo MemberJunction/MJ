@@ -513,6 +513,149 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+    
+    {
+      name: 'parent-event-callback-usage',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        const eventCallbacks = new Map<string, { line: number; column: number }>();
+        const callbackInvocations = new Set<string>();
+        const stateUpdateHandlers = new Map<string, string[]>(); // handler -> state updates
+        
+        // First pass: collect event callback props (onSelect, onChange, etc.)
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+                    // Check for event callback patterns
+                    if (/^on[A-Z]/.test(propName) && 
+                        propName !== 'onSaveUserSettings' && 
+                        !propName.includes('StateChanged')) {
+                      eventCallbacks.set(propName, {
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check arrow function components
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+              const init = path.node.init;
+              if (t.isArrowFunctionExpression(init) && init.params[0]) {
+                const param = init.params[0];
+                if (t.isObjectPattern(param)) {
+                  for (const prop of param.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const propName = prop.key.name;
+                      if (/^on[A-Z]/.test(propName) && 
+                          propName !== 'onSaveUserSettings' && 
+                          !propName.includes('StateChanged')) {
+                        eventCallbacks.set(propName, {
+                          line: prop.loc?.start.line || 0,
+                          column: prop.loc?.start.column || 0
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check if callbacks are invoked in event handlers
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for callback invocations
+            if (t.isIdentifier(path.node.callee)) {
+              const callbackName = path.node.callee.name;
+              if (eventCallbacks.has(callbackName)) {
+                callbackInvocations.add(callbackName);
+              }
+            }
+            
+            // Check for state updates (setSelectedId, setFilters, etc.)
+            if (t.isIdentifier(path.node.callee) && /^set[A-Z]/.test(path.node.callee.name)) {
+              // Find the containing function
+              let containingFunction = path.getFunctionParent();
+              if (containingFunction) {
+                const funcName = ComponentLinter.getFunctionName(containingFunction);
+                if (funcName) {
+                  if (!stateUpdateHandlers.has(funcName)) {
+                    stateUpdateHandlers.set(funcName, []);
+                  }
+                  stateUpdateHandlers.get(funcName)!.push(path.node.callee.name);
+                }
+              }
+            }
+          },
+          
+          // Check conditional callback invocations
+          IfStatement(path: NodePath<t.IfStatement>) {
+            if (t.isBlockStatement(path.node.consequent)) {
+              // Check if the condition tests for callback existence
+              if (t.isIdentifier(path.node.test)) {
+                const callbackName = path.node.test.name;
+                if (eventCallbacks.has(callbackName)) {
+                  // Check if callback is invoked in the block
+                  let hasInvocation = false;
+                  path.traverse({
+                    CallExpression(innerPath: NodePath<t.CallExpression>) {
+                      if (t.isIdentifier(innerPath.node.callee) && 
+                          innerPath.node.callee.name === callbackName) {
+                        hasInvocation = true;
+                        callbackInvocations.add(callbackName);
+                      }
+                    }
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        // Check for unused callbacks that have related state updates
+        for (const [callbackName, location] of eventCallbacks) {
+          if (!callbackInvocations.has(callbackName)) {
+            // Try to find related state update handlers
+            const relatedHandlers: string[] = [];
+            const expectedStateName = callbackName.replace(/^on/, '').replace(/Change$|Select$/, '');
+            
+            for (const [handlerName, stateUpdates] of stateUpdateHandlers) {
+              for (const stateUpdate of stateUpdates) {
+                if (stateUpdate.toLowerCase().includes(expectedStateName.toLowerCase()) ||
+                    handlerName.toLowerCase().includes(expectedStateName.toLowerCase())) {
+                  relatedHandlers.push(handlerName);
+                  break;
+                }
+              }
+            }
+            
+            if (relatedHandlers.length > 0) {
+              violations.push({
+                rule: 'parent-event-callback-usage',
+                severity: 'error',
+                line: location.line,
+                column: location.column,
+                message: `Component receives '${callbackName}' event callback but never invokes it. Found state updates in ${relatedHandlers.join(', ')} but parent is not notified.`,
+                code: `Missing: if (${callbackName}) ${callbackName}(...)`
+              });
+            }
+          }
+        }
+        
+        return violations;
+      }
     }
   ];
   
@@ -576,10 +719,22 @@ export class ComponentLinter {
     const requiredEntities = new Set<string>();
     const requiredQueries = new Set<string>();
     
+    // Map to track allowed fields per entity
+    const entityFieldsMap = new Map<string, {
+      displayFields: Set<string>;
+      filterFields: Set<string>;
+      sortFields: Set<string>;
+    }>();
+    
     if (componentSpec.dataRequirements?.entities) {
       for (const entity of componentSpec.dataRequirements.entities) {
         if (entity.name) {
           requiredEntities.add(entity.name);
+          entityFieldsMap.set(entity.name, {
+            displayFields: new Set(entity.displayFields || []),
+            filterFields: new Set(entity.filterFields || []),
+            sortFields: new Set(entity.sortFields || [])
+          });
         }
       }
     }
@@ -599,6 +754,19 @@ export class ComponentLinter {
           for (const entity of dep.dataRequirements.entities) {
             if (entity.name) {
               requiredEntities.add(entity.name);
+              // Merge fields if entity already exists
+              const existing = entityFieldsMap.get(entity.name);
+              if (existing) {
+                (entity.displayFields || []).forEach((f: string) => existing.displayFields.add(f));
+                (entity.filterFields || []).forEach((f: string) => existing.filterFields.add(f));
+                (entity.sortFields || []).forEach((f: string) => existing.sortFields.add(f));
+              } else {
+                entityFieldsMap.set(entity.name, {
+                  displayFields: new Set(entity.displayFields || []),
+                  filterFields: new Set(entity.filterFields || []),
+                  sortFields: new Set(entity.sortFields || [])
+                });
+              }
             }
           }
         }
@@ -666,6 +834,77 @@ export class ComponentLinter {
                       }`,
                       code: `EntityName: "${usedEntity}"`
                     });
+                  } else {
+                    // Entity is valid, now check fields
+                    const entityFields = entityFieldsMap.get(usedEntity);
+                    if (entityFields) {
+                      // Check Fields array
+                      const fieldsProperty = configObj.properties.find(p => 
+                        t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'Fields'
+                      );
+                      
+                      if (fieldsProperty && t.isObjectProperty(fieldsProperty) && t.isArrayExpression(fieldsProperty.value)) {
+                        for (const fieldElement of fieldsProperty.value.elements) {
+                          if (t.isStringLiteral(fieldElement)) {
+                            const fieldName = fieldElement.value;
+                            
+                            // Check for SQL functions
+                            if (/COUNT\s*\(|SUM\s*\(|AVG\s*\(|MAX\s*\(|MIN\s*\(/i.test(fieldName)) {
+                              violations.push({
+                                rule: 'runview-sql-function',
+                                severity: 'error',
+                                line: fieldElement.loc?.start.line || 0,
+                                column: fieldElement.loc?.start.column || 0,
+                                message: `RunView does not support SQL aggregations. Use RunQuery for aggregations or fetch raw data and aggregate in JavaScript.`,
+                                code: fieldName
+                              });
+                            } else {
+                              // Check if field is in allowed fields
+                              const isAllowed = entityFields.displayFields.has(fieldName) ||
+                                              entityFields.filterFields.has(fieldName) ||
+                                              entityFields.sortFields.has(fieldName);
+                              
+                              if (!isAllowed) {
+                                violations.push({
+                                  rule: 'field-not-in-requirements',
+                                  severity: 'error',
+                                  line: fieldElement.loc?.start.line || 0,
+                                  column: fieldElement.loc?.start.column || 0,
+                                  message: `Field "${fieldName}" not found in dataRequirements for entity "${usedEntity}". Available fields: ${
+                                    [...entityFields.displayFields, ...entityFields.filterFields, ...entityFields.sortFields].join(', ')
+                                  }`,
+                                  code: fieldName
+                                });
+                              }
+                            }
+                          }
+                        }
+                      }
+                      
+                      // Check OrderBy field
+                      const orderByProperty = configObj.properties.find(p => 
+                        t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'OrderBy'
+                      );
+                      
+                      if (orderByProperty && t.isObjectProperty(orderByProperty) && t.isStringLiteral(orderByProperty.value)) {
+                        const orderByValue = orderByProperty.value.value;
+                        // Extract field name from OrderBy (e.g., "AccountName ASC" -> "AccountName")
+                        const orderByField = orderByValue.split(/\s+/)[0];
+                        
+                        if (!entityFields.sortFields.has(orderByField)) {
+                          violations.push({
+                            rule: 'orderby-field-not-sortable',
+                            severity: 'error',
+                            line: orderByProperty.value.loc?.start.line || 0,
+                            column: orderByProperty.value.loc?.start.column || 0,
+                            message: `OrderBy field "${orderByField}" not in sortFields for entity "${usedEntity}". Available sort fields: ${
+                              [...entityFields.sortFields].join(', ')
+                            }`,
+                            code: orderByValue
+                          });
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -727,6 +966,33 @@ export class ComponentLinter {
     });
     
     return violations;
+  }
+  
+  private static getFunctionName(path: NodePath): string | null {
+    const node = path.node;
+    
+    // Check for named function
+    if (t.isFunctionDeclaration(node) && node.id) {
+      return node.id.name;
+    }
+    
+    // Check for arrow function assigned to variable
+    if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
+      const parent = path.parent;
+      if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+        return parent.id.name;
+      }
+    }
+    
+    // Check for function assigned as property
+    if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
+      const parent = path.parent;
+      if (t.isObjectProperty(parent) && t.isIdentifier(parent.key)) {
+        return parent.key.name;
+      }
+    }
+    
+    return null;
   }
   
   private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
@@ -1018,6 +1284,115 @@ await utilities.rv.RunQuery({
 
 // The linter validates that all query names in RunQuery calls
 // match those declared in the component spec's dataRequirements.queries`
+          });
+          break;
+          
+        case 'runview-sql-function':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'RunView does not support SQL aggregations. Use RunQuery or aggregate in JavaScript.',
+            example: `// ❌ WRONG - SQL functions in RunView:
+await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  Fields: ['COUNT(*) as Total', 'SUM(Revenue) as TotalRevenue']
+});
+
+// ✅ OPTION 1 - Use a pre-defined query:
+await utilities.rq.RunQuery({
+  QueryName: 'Account Summary Statistics'
+});
+
+// ✅ OPTION 2 - Fetch raw data and aggregate in JavaScript:
+const result = await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  Fields: ['ID', 'Revenue']
+});
+
+if (result?.Success) {
+  const total = result.Results.length;
+  const totalRevenue = result.Results.reduce((sum, acc) => sum + (acc.Revenue || 0), 0);
+}`
+          });
+          break;
+          
+        case 'field-not-in-requirements':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Only use fields that are defined in dataRequirements for the entity',
+            example: `// Check your dataRequirements to see allowed fields:
+// dataRequirements: {
+//   entities: [{
+//     name: "Accounts",
+//     displayFields: ["ID", "AccountName", "Industry"],
+//     filterFields: ["IsActive", "AccountType"],
+//     sortFields: ["AccountName", "CreatedDate"]
+//   }]
+// }
+
+// ❌ WRONG - Using undefined field:
+await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  Fields: ['ID', 'AccountName', 'RandomField'] // RandomField not in requirements
+});
+
+// ✅ CORRECT - Only use defined fields:
+await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  Fields: ['ID', 'AccountName', 'Industry'] // All from displayFields
+});`
+          });
+          break;
+          
+        case 'orderby-field-not-sortable':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'OrderBy fields must be in the sortFields array for the entity',
+            example: `// ❌ WRONG - Sorting by non-sortable field:
+await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  OrderBy: 'Industry ASC' // Industry not in sortFields
+});
+
+// ✅ CORRECT - Use fields from sortFields:
+await utilities.rv.RunView({
+  EntityName: 'Accounts',
+  OrderBy: 'AccountName ASC' // AccountName is in sortFields
+});`
+          });
+          break;
+          
+        case 'parent-event-callback-usage':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Components must invoke parent event callbacks when state changes',
+            example: `// ❌ WRONG - Only updating internal state:
+function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings }) {
+  const [selectedAccountId, setSelectedAccountId] = useState(savedUserSettings?.selectedAccountId);
+  
+  const handleSelectAccount = (accountId) => {
+    setSelectedAccountId(accountId); // Updates internal state
+    onSaveUserSettings?.({ ...savedUserSettings, selectedAccountId: accountId }); // Saves settings
+    // MISSING: Parent is never notified!
+  };
+}
+
+// ✅ CORRECT - Update state AND invoke parent callback:
+function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings }) {
+  const [selectedAccountId, setSelectedAccountId] = useState(savedUserSettings?.selectedAccountId);
+  
+  const handleSelectAccount = (accountId) => {
+    // 1. Update internal state
+    setSelectedAccountId(accountId);
+    
+    // 2. Invoke parent's event callback
+    if (onSelectAccount) {
+      onSelectAccount(accountId);
+    }
+    
+    // 3. Save user preference
+    onSaveUserSettings?.({ ...savedUserSettings, selectedAccountId: accountId });
+  };
+}`
           });
           break;
       }
