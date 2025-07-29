@@ -22,22 +22,16 @@ import {
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
-  ProviderConfigDataBase,
   RunViewResult,
-  MetadataInfo,
   EntityInfo,
   EntityFieldInfo,
   ApplicationInfo,
   RunViewParams,
-  ProviderBase,
   EntityFieldTSType,
   ProviderType,
   UserInfo,
-  RoleInfo,
   RecordChange,
-  UserRoleInfo,
   ILocalStorageProvider,
-  RowLevelSecurityFilterInfo,
   AuditLogTypeInfo,
   AuthorizationInfo,
   TransactionGroupBase,
@@ -60,7 +54,6 @@ import {
   RecordMergeResult,
   RecordMergeDetailResult,
   EntityDependency,
-  KeyValuePair,
   IRunQueryProvider,
   RunQueryResult,
   RunQueryParams,
@@ -69,6 +62,7 @@ import {
   LogStatus,
   CompositeKey,
   EntityDeleteOptions,
+  EntityMergeOptions,
   BaseEntityResult,
   Metadata,
   DatasetItemResultType,
@@ -162,6 +156,9 @@ async function executeSQLCore(
 
   try {
     // Create a new request object for this query
+    // Note: This looks redundant but is required for TypeScript type narrowing.
+    // The sql.Request constructor has overloads for ConnectionPool and Transaction,
+    // but TypeScript can't resolve the overload with a union type parameter.
     let request: sql.Request;
     if (connectionSource instanceof sql.Transaction) {
       request = new sql.Request(connectionSource);
@@ -209,6 +206,7 @@ async function executeSQLCore(
   }
 }
 
+
 /**
  * SQL Server implementation of the MemberJunction data provider interfaces.
  * 
@@ -233,10 +231,13 @@ export class SQLServerDataProvider
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
   private _pool: sql.ConnectionPool;
+  
+  // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
+  
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -264,9 +265,11 @@ export class SQLServerDataProvider
   private _transactionState$ = new BehaviorSubject<boolean>(false);
   private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
   
+
   /**
    * Observable that emits the current transaction state (true when active, false when not)
    * External code can subscribe to this to know when transactions start and end
+   * 
    * @example
    * provider.transactionState$.subscribe(isActive => {
    *   console.log('Transaction active:', isActive);
@@ -281,6 +284,7 @@ export class SQLServerDataProvider
    * 0 = no transaction, 1 = first level, 2+ = nested transactions
    */
   public get transactionDepth(): number {
+    // Request-specific depth should be accessed via getTransactionContext
     return this._transactionDepth;
   }
   
@@ -288,14 +292,14 @@ export class SQLServerDataProvider
    * Checks if we're currently in a transaction (at any depth)
    */
   public get inTransaction(): boolean {
-    return this._transactionDepth > 0;
+    return this.transactionDepth > 0;
   }
   
   /**
    * Checks if we're currently in a nested transaction (depth > 1)
    */
   public get inNestedTransaction(): boolean {
-    return this._transactionDepth > 1;
+    return this.transactionDepth > 1;
   }
   
   /**
@@ -310,6 +314,8 @@ export class SQLServerDataProvider
    * Gets whether a transaction is currently active
    */
   public get isTransactionActive(): boolean {
+    // Always return instance-level state
+    // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
   }
 
@@ -328,7 +334,7 @@ export class SQLServerDataProvider
    */
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
-      this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
+      this._pool = configData.ConnectionPool; // Now expects a ConnectionPool instead of DataSource
 
       // Initialize the instance queue processor
       this.initializeQueueProcessor();
@@ -1120,6 +1126,7 @@ export class SQLServerDataProvider
             entityInfo.ID,
             null,
             params.AuditLogDescription,
+            null
           );
         }
 
@@ -1350,6 +1357,7 @@ export class SQLServerDataProvider
     entityId: string,
     recordId: any | null,
     auditLogDescription: string | null,
+    saveOptions: EntitySaveOptions
   ): Promise<AuditLogEntity> {
     try {
       const authorization = authorizationName
@@ -1376,7 +1384,7 @@ export class SQLServerDataProvider
 
       if (auditLogDescription) auditLog.Description = auditLogDescription;
 
-      if (await auditLog.Save()) return auditLog;
+      if (await auditLog.Save(saveOptions)) return auditLog;
       else throw new Error(`Error saving audit log record`);
     } catch (err) {
       LogError(err);
@@ -1652,7 +1660,7 @@ export class SQLServerDataProvider
     return response;
   }
 
-  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
     const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
     if (!e || !e.AllowRecordMerge)
       throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
@@ -2097,13 +2105,17 @@ export class SQLServerDataProvider
             if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             } else {
-              // Execute SQL with optional simple SQL fallback for loggers
-              const rawResult = await this.ExecuteSQL(sSQL, null, { 
-                isMutation: true, 
-                description: `Save ${entity.EntityInfo.Name}`,
-                simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-              }, user);
-              result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              try {
+                // Execute SQL with optional simple SQL fallback for loggers
+                const rawResult = await this.ExecuteSQL(sSQL, null, { 
+                  isMutation: true, 
+                  description: `Save ${entity.EntityInfo.Name}`,
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+                }, user);
+                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              } catch (e) {
+                throw e; // rethrow
+              }
             }
 
             this._bAllowRefresh = true; // allow refreshes now
@@ -2138,6 +2150,7 @@ export class SQLServerDataProvider
       entityResult.EndedAt = new Date();
       entityResult.Message = e.message;
       LogError(e);
+
       throw e; // rethrow the error
     }
   }
@@ -2600,7 +2613,6 @@ export class SQLServerDataProvider
 
   public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
     const result = new BaseEntityResult();
-    let startedTransaction = false; // tracking if we started a transaction or not, so we can commit/rollback as needed
     try {
       entity.RegisterTransactionPreprocessing();
 
@@ -2685,9 +2697,6 @@ export class SQLServerDataProvider
         if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
-          // Execute SQL with optional simple SQL fallback for loggers
-          await this.BeginTransaction(); // we are NOT in a trans group, so we need to start a transaction
-          startedTransaction = true;
           d = await this.ExecuteSQL(sSQL, null, { 
             isMutation: true, 
             description: `Delete ${entity.EntityInfo.Name}`,
@@ -2703,7 +2712,9 @@ export class SQLServerDataProvider
               // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
               // it here for clarity.
               result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+              result.EndedAt = new Date();
               result.Success = false;
+
               return false;
             }
           }
@@ -2712,20 +2723,9 @@ export class SQLServerDataProvider
           this.HandleEntityActions(entity, 'delete', false, user);
           this.HandleEntityAIActions(entity, 'delete', false, user);
 
-          if (startedTransaction) {
-            // if we started a transaction, we need to commit it
-            await this.CommitTransaction();
-          } 
-
           result.EndedAt = new Date();
           return true;
         } else {
-          if (startedTransaction) {
-            // if we started a transaction, we need to rollback
-            startedTransaction = false;
-            await this.RollbackTransaction();
-          }
-
           result.Message = 'No result returned from SQL';
           result.EndedAt = new Date();
           return false;
@@ -2736,12 +2736,6 @@ export class SQLServerDataProvider
       result.Message = e.message;
       result.Success = false;
       result.EndedAt = new Date();
-
-      if (startedTransaction) {
-        // if we started a transaction, we need to rollback
-        startedTransaction = false;
-        await this.RollbackTransaction();
-      }
 
       return false;
     }
@@ -3354,7 +3348,7 @@ export class SQLServerDataProvider
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
     } else if (!connectionSource) {
-      // Use our transaction if available
+      // Use instance transaction
       transaction = this._transaction;
     }
     
@@ -3363,7 +3357,9 @@ export class SQLServerDataProvider
       pool: this._pool,
       transaction: transaction,
       logSqlStatement: this._logSqlStatement.bind(this),
-      clearTransaction: () => { this._transaction = null; }
+      clearTransaction: () => { 
+        this._transaction = null;
+      }
     };
     
     // Convert logging options to internal format
@@ -3624,7 +3620,9 @@ export class SQLServerDataProvider
         pool: this._pool,
         transaction: this._transaction,
         logSqlStatement: this._logSqlStatement.bind(this),
-        clearTransaction: () => { this._transaction = null; }
+        clearTransaction: () => { 
+          this._transaction = null;
+        }
       };
 
       // Execute using instance method (which handles queue for transactions)
@@ -3795,7 +3793,6 @@ export class SQLServerDataProvider
         await this.processDeferredTasks();
       } else {
         // Nested transaction - just remove the savepoint from stack
-        // The savepoint remains valid in SQL Server until the outer transaction commits or rolls back
         this._savepointStack.pop();
       }
     } catch (e) {
@@ -3815,7 +3812,7 @@ export class SQLServerDataProvider
       }
       
       if (this._transactionDepth === 1) {
-        // Outermost transaction - use mssql Transaction object to rollback everything
+        // Outermost transaction - rollback everything
         await this._transaction.rollback();
         this._transaction = null;
         this._transactionDepth = 0;
@@ -3827,32 +3824,28 @@ export class SQLServerDataProvider
         // Emit transaction state change
         this._transactionState$.next(false);
         
-        // Clear deferred tasks after rollback (don't process them)
+        // Clear deferred tasks after rollback
         const deferredCount = this._deferredTasks.length;
         this._deferredTasks = [];
         if (deferredCount > 0) {
           LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
         }
       } else {
-        // Nested transaction - rollback to the last savepoint
+        // Nested transaction - rollback to savepoint
         const savepointName = this._savepointStack[this._savepointStack.length - 1];
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
         
-        // Rollback to the savepoint (this preserves the outer transaction)
-        // Note: We use ROLLBACK TRANSACTION SavePointName (without TO) as per SQL Server syntax
         await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
           description: `Rolling back to savepoint ${savepointName}`,
           ignoreLogging: true
         });
         
-        // Remove the savepoint from stack and decrement depth
         this._savepointStack.pop();
         this._transactionDepth--;
       }
     } catch (e) {
-      // On error in nested transaction, maintain state
       // On error in outer transaction, reset everything
       if (this._transactionDepth === 1 || !this._transaction) {
         this._transaction = null;

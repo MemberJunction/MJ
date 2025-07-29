@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView, LogError } from '@memberjunction/core';
+import { Metadata, RunView, LogError, EntitySaveOptions } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { configInfo } from '../config.js';
@@ -13,9 +13,10 @@ import { configInfo } from '../config.js';
 //       so that your class is actually used.
 //@RegisterClass(NewUserBase, undefined, 1) /*by putting 1 into the priority setting, MJGlobal ClassFactory will use this instead of the base class as that registration had no priority*/
 export class ExampleNewUserSubClass extends NewUserBase {
-  public override async createNewUser(firstName: string, lastName: string, email: string) {
+  public override async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string) {
     try {
       const md = new Metadata();
+
       const contextUser = UserCache.Instance.Users.find(
         (u) => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase()
       );

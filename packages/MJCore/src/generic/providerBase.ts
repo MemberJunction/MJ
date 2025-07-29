@@ -1,41 +1,18 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { Metadata } from "./metadata";
 
-/**
- * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
- * Contains all system metadata collections including entities, applications, security, and queries.
- * This class provides a centralized way to access all MemberJunction metadata.
- */
-export class AllMetadata {
-    CurrentUser: UserInfo = null;
 
-    // Arrays of Metadata below
-    AllEntities: EntityInfo[] = [];
-    AllApplications: ApplicationInfo[] = [];
-    AllRoles: RoleInfo[] = [];
-    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
-    AllAuditLogTypes: AuditLogTypeInfo[] = [];
-    AllAuthorizations: AuthorizationInfo[] = [];
-    AllQueryCategories: QueryCategoryInfo[] = [];
-    AllQueries: QueryInfo[] = [];
-    AllQueryFields: QueryFieldInfo[] = [];
-    AllQueryPermissions: QueryPermissionInfo[] = [];
-    AllQueryEntities: QueryEntityInfo[] = [];
-    AllQueryParameters: QueryParameterInfo[] = [];
-    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
-    AllLibraries: LibraryInfo[] = [];
-    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
-}
 
 /**
  * Creates a new instance of AllMetadata from a simple object.
@@ -164,6 +141,13 @@ export abstract class ProviderBase implements IMetadataProvider {
 
 
     /**
+     * Returns the currently loaded local metadata from within the instance
+     */
+    public get AllMetadata(): AllMetadata {
+        return this._localMetadata;
+    }
+
+    /**
      * Configures the provider with the specified configuration data.
      * Handles metadata refresh if needed and initializes the provider.
      * @param data - Configuration including schema filters and connection info
@@ -171,6 +155,16 @@ export abstract class ProviderBase implements IMetadataProvider {
      */
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
+
+        // first, let's check to see if we have an existing Metadata.Provider registered, if so
+        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
+        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+            // we have an existing globally registered provider AND we are not
+            // requested to ignore the existing metadata, so we will not refresh it
+            if (this.CopyMetadataFromGlobalProvider()) {
+                return true; // we're done, if we fail here, we keep going and do normal logic
+            }
+        }
 
         if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
@@ -196,6 +190,25 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
 
         return true;
+    }
+
+    /**
+     * Copies metadata from the global provider to the local instance.
+     * This is used to ensure that the local instance has the latest metadata
+     * information available without having to reload it from the server.
+     */
+    protected CopyMetadataFromGlobalProvider(): boolean {
+        try {
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
+                this._localMetadata = Metadata.Provider.AllMetadata
+                return true;
+            }
+            return false;
+        }
+        catch (e) {
+            LogError(`Failed to copy metadata from global provider: ${e.message}`);
+            return false; // if we fail to copy the metadata, we will return false
+        }
     }
 
     /**
@@ -655,7 +668,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param request 
      * @returns 
      */
-    public abstract MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult>  
+    public abstract MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult>  
 
 
     /**

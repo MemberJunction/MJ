@@ -1,10 +1,10 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
-import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { LogError, Metadata, RunView, UserInfo, CompositeKey, EntitySaveOptions } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity } from '@memberjunction/core-entities';
 import { QueryResolver } from '../generated/generated.js';
-import { GetReadWriteDataSource } from '../util.js';
+import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 
 /**
@@ -108,7 +108,7 @@ export class QueryResolverExtended extends QueryResolver {
             let finalCategoryID = input.CategoryID;
             if (input.CategoryPath) {
                 const md = new Metadata();
-                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
+                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord, context.userPayload);
             }
 
             // Create input for the inherited CreateRecord method
@@ -128,8 +128,8 @@ export class QueryResolverExtended extends QueryResolver {
             };
             
             // Use inherited CreateRecord method which bypasses AI processing
-            const connPool = GetReadWriteDataSource(context.dataSources);
-            const createdQuery = await this.CreateRecord('Queries', createInput, connPool, context.userPayload, pubSub);
+            const provider = GetReadWriteProvider(context.providers);    
+            const createdQuery = await this.CreateRecord('Queries', createInput, provider, context.userPayload, pubSub);
             
             if (createdQuery) {
                 return {
@@ -162,14 +162,22 @@ export class QueryResolverExtended extends QueryResolver {
     @RequireSystemUser()
     @Mutation(() => DeleteQueryResultType)
     async DeleteQuerySystemResolver(
-        @Arg('ID', () => String) queryID: string,
+        @Arg('ID', () => String) ID: string,
         @Arg('options', () => DeleteOptionsInput, { nullable: true }) options: DeleteOptionsInput | null,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
-            const connPool = GetReadWriteDataSource(context.dataSources);
-            const key = new CompositeKey([{FieldName: 'ID', Value: queryID}]);
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                return {
+                    Success: false,
+                    ErrorMessage: 'QueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
+            const provider = GetReadWriteProvider(context.providers);    
+            const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
             
             // Provide default options if none provided
             const deleteOptions = options || {
@@ -178,7 +186,7 @@ export class QueryResolverExtended extends QueryResolver {
             };
             
             // Use inherited DeleteRecord method from ResolverBase
-            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, connPool, context.userPayload, pubSub);
+            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, provider, context.userPayload, pubSub);
             
             if (deletedQuery) {
                 return {
@@ -209,7 +217,7 @@ export class QueryResolverExtended extends QueryResolver {
      * @param contextUser - User context for operations
      * @returns The ID of the final category in the path
      */
-    private async findOrCreateCategoryPath(categoryPath: string, md: Metadata, contextUser: UserInfo): Promise<string> {
+    private async findOrCreateCategoryPath(categoryPath: string, md: Metadata, contextUser: UserInfo, userPayload: UserPayload): Promise<string> {
         if (!categoryPath || categoryPath.trim() === '') {
             throw new Error('CategoryPath cannot be empty');
         }

@@ -24,7 +24,9 @@ import {
   buildComponentProps,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
-  HierarchyRegistrationResult
+  HierarchyRegistrationResult,
+  resourceManager,
+  reactRootManager
 } from '@memberjunction/react-runtime';
 import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 
@@ -177,7 +179,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
-  private reactRoot: any = null;
+  private reactRootId: string | null = null;
   private compiledComponent: any = null;
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
@@ -186,14 +188,17 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private isRendering = false;
   private pendingRender = false;
   private isDestroying = false;
-  private renderTimeout: any = null;
+  private componentId: string;
   hasError = false;
 
   constructor(
     private reactBridge: ReactBridgeService,
     private adapter: AngularAdapterService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    // Generate unique component ID for resource tracking
+    this.componentId = `mj-react-component-${Date.now()}-${Math.random()}`;
+  }
 
   async ngAfterViewInit() {
     // Trigger change detection to show loading state
@@ -244,8 +249,17 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.compiledComponent = result.component!.component(context, this.styles);
       this.currentState = { ...this._state };
       
-      // Create React root
-      this.reactRoot = this.reactBridge.createRoot(this.container.nativeElement);
+      // Create managed React root
+      const reactContext = this.reactBridge.getCurrentContext();
+      if (!reactContext) {
+        throw new Error('React context not available');
+      }
+      
+      this.reactRootId = reactRootManager.createRoot(
+        this.container.nativeElement,
+        (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
+        this.componentId
+      );
       
       // Initial render
       this.renderComponent();
@@ -308,7 +322,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
     
-    if (!this.compiledComponent || !this.reactRoot) {
+    if (!this.compiledComponent || !this.reactRootId) {
       return;
     }
 
@@ -359,32 +373,33 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       React.createElement(this.compiledComponent.component, props)
     );
 
-    // Clear any existing render timeout
-    if (this.renderTimeout) {
-      clearTimeout(this.renderTimeout);
-    }
-    
-    // Render with timeout protection
-    this.renderTimeout = setTimeout(() => {
-      // Check if still rendering and not destroyed
-      if (this.isRendering && !this.isDestroying) {
-        this.componentEvent.emit({
-          type: 'error',
-          payload: {
-            error: 'Component render timeout - possible infinite loop detected',
-            source: 'render'
-          }
-        });
-      }
-    }, 5000);
+    // Render with timeout protection using resource manager
+    const timeoutId = resourceManager.setTimeout(
+      this.componentId,
+      () => {
+        // Check if still rendering and not destroyed
+        if (this.isRendering && !this.isDestroying) {
+          this.componentEvent.emit({
+            type: 'error',
+            payload: {
+              error: 'Component render timeout - possible infinite loop detected',
+              source: 'render'
+            }
+          });
+        }
+      },
+      5000,
+      { purpose: 'render-timeout-protection' }
+    );
 
-    try {
-      this.reactRoot.render(element);
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-      
-      // Reset rendering flag after a microtask to allow React to complete
-      Promise.resolve().then(() => {
+    // Use managed React root for rendering
+    reactRootManager.render(
+      this.reactRootId,
+      element,
+      () => {
+        // Clear the timeout as render completed
+        resourceManager.clearTimeout(this.componentId, timeoutId);
+        
         // Don't update state if component is destroyed
         if (this.isDestroying) {
           return;
@@ -397,13 +412,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           this.pendingRender = false;
           this.renderComponent();
         }
-      });
-    } catch (error) {
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-      this.isRendering = false;
-      this.handleReactError(error);
-    }
+      }
+    );
   }
 
   /**
@@ -481,28 +491,23 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * Clean up resources
    */
   private cleanup() {
-    // Clear any pending render timeout
-    if (this.renderTimeout) {
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-    }
+    // Clean up all resources managed by resource manager
+    resourceManager.cleanupComponent(this.componentId);
     
     // Clean up prop builder subscriptions
     if (this.currentCallbacks) {
       this.currentCallbacks = null;
     }
     
-    // Unmount React root only if not currently rendering
-    if (this.reactRoot) {
-      // If still rendering, wait for completion before unmounting
-      if (this.isRendering) {
-        // Force stop rendering
-        this.isRendering = false;
-        this.pendingRender = false;
-      }
+    // Unmount React root using managed unmount
+    if (this.reactRootId) {
+      // Force stop rendering flags
+      this.isRendering = false;
+      this.pendingRender = false;
       
-      this.reactBridge.unmountRoot(this.reactRoot);
-      this.reactRoot = null;
+      // This will handle waiting for render completion if needed
+      reactRootManager.unmountRoot(this.reactRootId);
+      this.reactRootId = null;
     }
 
     // Clear references

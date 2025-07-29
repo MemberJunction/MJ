@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseEntity, EntitySaveOptions } from '@memberjunction/core';
+import { BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { EntityPermissionEntity } from '@memberjunction/core-entities';
 import axios from 'axios';
 import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } from '../config.js';
@@ -94,8 +94,8 @@ export class EntityPermissionsEntity_Server extends EntityPermissionEntity {
     return super.Save(options);
   }
 
-  override async Delete(): Promise<boolean> {
-    const success = await super.Delete();
+  override async Delete(options: EntityDeleteOptions): Promise<boolean> {
+    const success = await super.Delete(options);
 
     // simply queue up the entity ID if the delete worked
     if (success) EntityPermissionsEntity_Server.AddToQueue(this.EntityID);

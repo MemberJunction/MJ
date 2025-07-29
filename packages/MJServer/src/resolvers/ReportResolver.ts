@@ -1,4 +1,4 @@
-import { Metadata, RunReport } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata, RunReport } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-entities';

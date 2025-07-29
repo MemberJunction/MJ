@@ -4,7 +4,8 @@ import { Disposable } from 'graphql-ws';
 import { Server } from 'http';
 import { enableIntrospection } from '../config.js';
 import { AppContext } from '../types.js';
-import { TransactionPlugin } from './TransactionPlugin.js';
+import { Metadata } from '@memberjunction/core';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 const buildApolloServer = (
   configOverride: ApolloServerOptions<AppContext>,
@@ -15,7 +16,6 @@ const buildApolloServer = (
     cache: 'bounded',
     plugins: [
       ApolloServerPluginDrainHttpServer({ httpServer }),
-      TransactionPlugin,
       {
         async serverWillStart() {
           return {
@@ -24,7 +24,7 @@ const buildApolloServer = (
             },
           };
         },
-      },
+      } 
     ],
     introspection: enableIntrospection,
     ...configOverride,

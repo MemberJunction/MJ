@@ -1,19 +1,21 @@
-import { EntityPermissionType } from '@memberjunction/core';
+import { EntityPermissionType, IRunViewProvider } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
 import { Entity_, EntityResolverBase } from '../generated/generated.js';
 import sql from 'mssql';
+import { GetReadOnlyProvider } from '../util.js';
 
 @Resolver(Entity_)
 export class EntityResolver extends EntityResolverBase {
   @Query(() => [Entity_])
   async EntitiesBySchemas(
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     @Arg('IncludeSchemas', () => [String], { nullable: true }) IncludeSchemas?: string[],
     @Arg('ExcludeSchemas', () => [String], { nullable: true }) ExcludeSchemas?: string[]
   ) {
     this.CheckUserReadPermissions('Entities', userPayload);
-    const rlsWhere = this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, ' WHERE');
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+    const rlsWhere = this.getRowLevelSecurityWhereClause(provider, 'Entities', userPayload, EntityPermissionType.Read, ' WHERE');
     const includeSchemaSQL =
       IncludeSchemas && IncludeSchemas.length > 0 ? `SchemaName IN (${IncludeSchemas.map((s) => `'${s}'`).join(',')})` : '';
     const excludeSchemaSQL =
@@ -25,14 +27,21 @@ export class EntityResolver extends EntityResolverBase {
       else schemaSQL = excludeSchemaSQL;
     }
     let totalWhere = '';
-    if (schemaSQL) totalWhere = ` WHERE ${schemaSQL}`;
+    if (schemaSQL) totalWhere = `${schemaSQL}`;
     if (rlsWhere) {
       if (totalWhere) totalWhere = `${totalWhere} AND ${rlsWhere}`;
-      else totalWhere = ` WHERE ${rlsWhere}`;
+      else totalWhere = ` ${rlsWhere}`;
     }
-    const sSQL = `SELECT * FROM [${this.MJCoreSchema}].vwEntities${totalWhere}`;
-    const request = new sql.Request(dataSource);
-    const result = await request.query(sSQL);
-    return result.recordset;
+    const rv = provider as any as IRunViewProvider;
+    const result = await rv.RunView({
+      EntityName: 'Entities',
+      ExtraFilter: totalWhere,
+    }, userPayload.userRecord);
+    if (result && result.Success) {
+      return result.Results;
+    }
+    else {
+      throw new Error(`Failed to fetch entities: ${result?.ErrorMessage || 'Unknown error'}`);
+    }
   }
 }

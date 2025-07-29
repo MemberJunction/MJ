@@ -43,3 +43,9 @@ export {
   ComponentRegistrationError,
   HierarchyRegistrationOptions
 } from './component-hierarchy';
+
+export {
+  ReactRootManager,
+  reactRootManager,
+  ManagedReactRoot
+} from './react-root-manager';

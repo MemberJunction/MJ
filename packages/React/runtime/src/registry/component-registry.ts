@@ -9,6 +9,7 @@ import {
   ComponentMetadata, 
   RegistryConfig 
 } from '../types';
+import { resourceManager } from '../utilities/resource-manager';
 
 /**
  * Default registry configuration
@@ -28,6 +29,7 @@ export class ComponentRegistry {
   private registry: Map<string, RegistryEntry>;
   private config: RegistryConfig;
   private cleanupTimer?: NodeJS.Timeout | number;
+  private registryId: string;
   
   /**
    * Creates a new ComponentRegistry instance
@@ -36,6 +38,7 @@ export class ComponentRegistry {
   constructor(config?: Partial<RegistryConfig>) {
     this.config = { ...DEFAULT_REGISTRY_CONFIG, ...config };
     this.registry = new Map();
+    this.registryId = `component-registry-${Date.now()}`;
     
     // Start cleanup timer if configured
     if (this.config.cleanupInterval > 0) {
@@ -297,6 +300,8 @@ export class ComponentRegistry {
   destroy(): void {
     this.stopCleanupTimer();
     this.clear();
+    // Clean up any resources associated with this registry
+    resourceManager.cleanupComponent(this.registryId);
   }
 
   /**
@@ -362,9 +367,14 @@ export class ComponentRegistry {
    * Starts the automatic cleanup timer
    */
   private startCleanupTimer(): void {
-    this.cleanupTimer = setInterval(() => {
-      this.cleanup();
-    }, this.config.cleanupInterval);
+    this.cleanupTimer = resourceManager.setInterval(
+      this.registryId,
+      () => {
+        this.cleanup();
+      },
+      this.config.cleanupInterval,
+      { purpose: 'component-registry-cleanup' }
+    );
   }
 
   /**
@@ -372,7 +382,7 @@ export class ComponentRegistry {
    */
   private stopCleanupTimer(): void {
     if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer as any);
+      resourceManager.clearInterval(this.registryId, this.cleanupTimer as number);
       this.cleanupTimer = undefined;
     }
   }

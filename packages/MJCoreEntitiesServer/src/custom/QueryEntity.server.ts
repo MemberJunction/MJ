@@ -54,20 +54,22 @@ export class QueryEntityExtended extends QueryEntity {
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
                 // AI processing happens asynchronously after the main save operation
                 // This ensures the connection is released quickly for the primary operation
-                setImmediate(() => {
-                    this.extractAndSyncDataAsync().catch(e => {
-                        LogError('Background AI processing failed for query:', e);
-                    });
-                });
+                await this.extractAndSyncDataAsync();
+                // setImmediate(() => {
+                //     this.extractAndSyncDataAsync().catch(e => {
+                //         LogError('Background AI processing failed for query:', e);
+                //     });
+                // });
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 // If SQL is empty, ensure UsesTemplate is false and remove all related data
                 // This can also happen asynchronously since it's cleanup work
                 this.UsesTemplate = false;
-                setImmediate(() => {
-                    this.cleanupEmptyQueryAsync().catch(e => {
-                        LogError('Background cleanup failed for query:', e);
-                    });
-                });
+                await this.cleanupEmptyQueryAsync();
+                // setImmediate(() => {
+                //     this.cleanupEmptyQueryAsync().catch(e => {
+                //         LogError('Background cleanup failed for query:', e);
+                //     });
+                // });
             }
             
             return true;

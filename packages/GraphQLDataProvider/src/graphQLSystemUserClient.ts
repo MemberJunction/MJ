@@ -427,6 +427,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
@@ -491,6 +496,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
@@ -591,11 +601,21 @@ export class GraphQLSystemUserClient {
 
     /**
      * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
-     * @param input - DeleteQueryInput containing the query ID and delete options
+     * @param ID - The ID of the query to delete
+     * @param options - Optional delete options controlling action execution
      * @returns Promise containing the result of the query deletion
      */
     public async DeleteQuery(ID: string, options?: DeleteQueryOptionsInput): Promise<DeleteQueryResult> {
         try {
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                LogError('GraphQLSystemUserClient::DeleteQuery - Invalid query ID: ID cannot be null or empty');
+                return {
+                    Success: false,
+                    ErrorMessage: 'Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
             const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
                 DeleteQuerySystemResolver(ID: $ID, options: $options) {
                     Success

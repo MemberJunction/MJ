@@ -130,9 +130,9 @@ export class QueryInfo extends BaseInfo {
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Field Values
-            this._fields = [];
             const f = initData.Fields || initData._Fields;
             if (f) {
+                this._fields = []; // only set to blank array on constructor if we have fields provided, otherwise leave blank because we can later lazy load in the Fields() accessor getter method!
                 for (let j = 0; j < f.length; j++) {
                     this._fields.push(new QueryFieldInfo(f));
                 }

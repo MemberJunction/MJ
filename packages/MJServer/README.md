@@ -119,9 +119,19 @@ serve(resolverPaths.map(localPath), createApp(), options);
 
 ### Transaction Management
 
-The server automatically wraps GraphQL mutations in database transactions. This ensures data consistency when multiple operations are performed:
+MJServer provides automatic transaction management for all GraphQL mutations with full support for multi-user environments through per-request provider instances.
+
+#### Per-Request Provider Architecture
+
+Each GraphQL request receives its own SQLServerDataProvider instance, ensuring complete isolation between concurrent requests:
 
 ```typescript
+// Each request automatically:
+// 1. Creates a new SQLServerDataProvider instance
+// 2. Reuses cached metadata for fast initialization
+// 3. Has isolated transaction state within the provider
+// 4. Gets garbage collected after request completion
+
 mutation {
   CreateUser(input: { FirstName: "John", LastName: "Doe" }) {
     ID
@@ -130,7 +140,56 @@ mutation {
     ID
   }
 }
-// Both operations will be committed together or rolled back on error
+// Both operations execute within the same provider's transaction
+// Success: Both committed together
+// Error: Both rolled back together
+```
+
+#### Key Transaction Features
+
+- **Provider Isolation**: Each request has its own data provider instance
+- **Automatic Management**: Transactions are automatically started, committed, or rolled back
+- **Multi-User Safety**: Concurrent requests have completely isolated provider instances
+- **Zero Configuration**: No transaction IDs or scope management needed
+- **Efficient**: Metadata caching makes provider creation lightweight
+- **Nested Support**: Providers use SQL Server savepoints for nested transaction logic
+
+### Provider Configuration
+
+MJServer automatically creates per-request SQLServerDataProvider instances for optimal isolation and performance:
+
+```typescript
+// In each GraphQL request context:
+const provider = new SQLServerDataProvider();
+await provider.Config({
+  connectionPool: pool,
+  MJCoreSchemaName: '__mj',
+  ignoreExistingMetadata: false  // Reuse cached metadata
+});
+
+// Provider is included in AppContext
+context.providers = [{
+  provider: provider,
+  type: 'Read-Write'
+}];
+```
+
+#### Provider Types
+
+The AppContext supports multiple providers with different access levels:
+
+```typescript
+export type AppContext = {
+  dataSource: sql.ConnectionPool;  // Legacy, for backward compatibility
+  userPayload: UserPayload;
+  dataSources: DataSourceInfo[];
+  providers: Array<ProviderInfo>;  // Per-request provider instances
+};
+
+export class ProviderInfo {
+  provider: DatabaseProviderBase;
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
+}
 ```
 
 ### Custom New User Behavior
