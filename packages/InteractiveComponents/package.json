@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/interactive-component-types",
-  "version": "2.76.0",
+  "version": "2.77.0",
   "description": "MemberJunction: Interactive Component - Type specifications for MJ Interactive UI Componentry",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.76.0",
-    "@memberjunction/data-context": "2.76.0"
+    "@memberjunction/core": "2.77.0",
+    "@memberjunction/data-context": "2.77.0"
   }
 }

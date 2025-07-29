@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+- c91269e: migration file for permissions driving minor bump
+
+### Patch Changes
+
+- 476a458: minor comment
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/ai-vector-dupe@2.77.0
+  - @memberjunction/actions@2.77.0
+  - @memberjunction/queue@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

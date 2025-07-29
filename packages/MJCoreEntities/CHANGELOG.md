@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.77.0
+
+### Patch Changes
+
+- 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
+
+  - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
+  - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
+  - For database providers (server-side), delete operations are wrapped in
+    BeginTransaction/CommitTransaction/RollbackTransaction
+  - For network providers (client-side), deletes pass through as cascade handling occurs server-side
+  - Ensures atomicity of cascade delete operations
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Minor Changes

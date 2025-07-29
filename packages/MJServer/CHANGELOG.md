@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/server
 
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+- c91269e: migration file for permissions driving minor bump
+
+### Patch Changes
+
+- ba11eea: bug fix
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/core@2.77.0
+  - @memberjunction/graphql-dataprovider@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/external-change-detection@2.77.0
+  - @memberjunction/core-entities-server@2.77.0
+  - @memberjunction/ai-agent-manager-actions@2.77.0
+  - @memberjunction/ai-agents@2.77.0
+  - @memberjunction/ai-core-plus@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/ai-prompts@2.77.0
+  - @memberjunction/ai-vectors-pinecone@2.77.0
+  - @memberjunction/actions-bizapps-accounting@2.77.0
+  - @memberjunction/actions-bizapps-crm@2.77.0
+  - @memberjunction/actions-bizapps-lms@2.77.0
+  - @memberjunction/actions-bizapps-social@2.77.0
+  - @memberjunction/core-actions@2.77.0
+  - @memberjunction/actions@2.77.0
+  - @memberjunction/entity-communications-server@2.77.0
+  - @memberjunction/doc-utils@2.77.0
+  - @memberjunction/data-context@2.77.0
+  - @memberjunction/queue@2.77.0
+  - @memberjunction/storage@2.77.0
+  - @memberjunction/skip-types@2.77.0
+  - @memberjunction/templates@2.77.0
+  - @memberjunction/data-context-server@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/ai-anthropic@2.77.0
+  - @memberjunction/ai-cerebras@2.77.0
+  - @memberjunction/ai-groq@2.77.0
+  - @memberjunction/ai-mistral@2.77.0
+  - @memberjunction/ai-openai@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes
