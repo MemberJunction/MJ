@@ -139,12 +139,17 @@ export const contextFunction =
     const p = new SQLServerDataProvider();
     await p.Config(config);
 
-    const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
     let rp = null;
-    if (readOnlyDataSource) {
-      rp = new SQLServerDataProvider();
-      const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
-      await rp.Config(rConfig);
+    try {
+      const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+      if (readOnlyDataSource) {
+        rp = new SQLServerDataProvider();
+        const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
+        await rp.Config(rConfig);
+      }
+    }
+    catch (e) {
+      // no read only data source available, so rp will remain null, this is OK!
     }
 
     const providers = [{
