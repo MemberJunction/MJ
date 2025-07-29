@@ -98,6 +98,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase<SQLServe
     checkRefreshIntervalSeconds: number = 0 /*default to disabling auto refresh */,
     includeSchemas?: string[],
     excludeSchemas?: string[],
+    ignoreExistingMetadata: boolean = true
   ) {
     super(
       {
@@ -107,6 +108,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase<SQLServe
       MJCoreSchemaName,
       includeSchemas,
       excludeSchemas,
+      ignoreExistingMetadata
     );
   }
 }

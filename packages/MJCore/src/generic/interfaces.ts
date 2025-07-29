@@ -47,7 +47,7 @@ export class ProviderConfigDataBase<D = any> {
      * @param excludeSchemas 
      * @param ignoreExistingMetadata if set to true, even if a global provider is already registered for the Metadata static Provider member, this class will still load up fresh metadata for itself. By default this is off and a class will use existing loaded metadata if it exists
      */
-    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = false) {
+    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
         this._MJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
