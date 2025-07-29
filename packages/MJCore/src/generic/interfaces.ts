@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -21,6 +21,8 @@ export class ProviderConfigDataBase<D = any> {
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
     private _data: D;
+    private _ignoreExistingMetadata: boolean = false;
+
     public get Data(): D {
         return this._data;
     }
@@ -33,13 +35,26 @@ export class ProviderConfigDataBase<D = any> {
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
+    public get IgnoreExistingMetadata(): boolean {
+        return this._ignoreExistingMetadata;
+    }
+
+    /**
+     * Constructor for ProviderConfigDataBase
+     * @param data 
+     * @param MJCoreSchemaName 
+     * @param includeSchemas 
+     * @param excludeSchemas 
+     * @param ignoreExistingMetadata if set to true, even if a global provider is already registered for the Metadata static Provider member, this class will still load up fresh metadata for itself. By default this is off and a class will use existing loaded metadata if it exists
+     */
+    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = false) {
         this._data = data;
         this._MJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
             this._excludeSchemas = excludeSchemas;
+        this._ignoreExistingMetadata = ignoreExistingMetadata;
     }
 }
 
@@ -192,13 +207,6 @@ export class EntitySaveOptions {
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
-    
-    /**
-     * Optional transaction scope ID for managing multi-user transaction isolation.
-     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
-     * This allows multiple concurrent requests to have independent transaction contexts.
-     */
-    TransactionScopeId?: string;
 }
 
 /**
@@ -222,13 +230,6 @@ export class EntityDeleteOptions {
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
-    
-    /**
-     * Optional transaction scope ID for managing multi-user transaction isolation.
-     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
-     * This allows multiple concurrent requests to have independent transaction contexts.
-     */
-    TransactionScopeId?: string;
 }
 
 /**
@@ -324,6 +325,8 @@ export interface IMetadataProvider {
     get LatestRemoteMetadata(): MetadataInfo[]
 
     get LatestLocalMetadata(): MetadataInfo[]
+
+    get AllMetadata(): AllMetadata
 
     LocalMetadataObsolete(type?: string): boolean
 
@@ -681,3 +684,30 @@ export type DatasetStatusEntityUpdateDateType = {
     UpdateDate: Date;
     RowCount: number;
 }   
+
+
+/**
+ * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
+ * Contains all system metadata collections including entities, applications, security, and queries.
+ * This class provides a centralized way to access all MemberJunction metadata.
+ */
+export class AllMetadata {
+    CurrentUser: UserInfo = null;
+
+    // Arrays of Metadata below
+    AllEntities: EntityInfo[] = [];
+    AllApplications: ApplicationInfo[] = [];
+    AllRoles: RoleInfo[] = [];
+    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
+    AllAuditLogTypes: AuditLogTypeInfo[] = [];
+    AllAuthorizations: AuthorizationInfo[] = [];
+    AllQueryCategories: QueryCategoryInfo[] = [];
+    AllQueries: QueryInfo[] = [];
+    AllQueryFields: QueryFieldInfo[] = [];
+    AllQueryPermissions: QueryPermissionInfo[] = [];
+    AllQueryEntities: QueryEntityInfo[] = [];
+    AllQueryParameters: QueryParameterInfo[] = [];
+    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    AllLibraries: LibraryInfo[] = [];
+    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
+}

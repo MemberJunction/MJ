@@ -14,7 +14,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
             const provider = new SQLServerDataProvider()
             await provider.Config(config);
 
-            // BaseEntity + Metadata share the same GraphQLDataProvider instance
+            // BaseEntity + Metadata share the same provider instance
             SetProvider(provider);
 
             // now setup the user cache

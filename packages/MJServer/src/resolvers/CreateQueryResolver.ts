@@ -239,10 +239,7 @@ export class QueryResolverExtended extends QueryResolver {
                 newCategory.UserID = contextUser.ID;
                 newCategory.Description = `Auto-created category from path: ${categoryPath}`;
 
-                const saveOptions = new EntitySaveOptions();
-                saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-
-                const saveResult = await newCategory.Save(saveOptions);
+                const saveResult = await newCategory.Save();
                 if (!saveResult) {
                     throw new Error(`Failed to create category '${categoryName}': ${newCategory.LatestResult?.Message || 'Unknown error'}`);
                 }

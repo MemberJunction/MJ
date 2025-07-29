@@ -88,10 +88,6 @@ export class TransactionResolver {
             const tg = await md.CreateTransactionGroup();
             const entityObjects: BaseEntity[] = [];
             const objectValues: any[] = [];
-            const saveOptions: EntitySaveOptions = new EntitySaveOptions();
-            saveOptions.TransactionScopeId = context.userPayload.transactionScopeId; // Pass the transaction scope
-            const deleteOptions: EntityDeleteOptions = new EntityDeleteOptions();
-            deleteOptions.TransactionScopeId = context.userPayload.transactionScopeId; // Pass the transaction scope
 
             for (const item of group.Items) {
                 // instantiate a new entity object for the item
@@ -116,13 +112,13 @@ export class TransactionResolver {
                         objectValues.push(itemValues);
                         entity.SetMany(itemValues, true);
                         entity.TransactionGroup = tg;
-                        await entity.Save(saveOptions);
+                        await entity.Save();
                         break;
                     case "Delete":
                         await entity.InnerLoad(pkey);
                         objectValues.push(entity.GetDataObject());
                         entity.TransactionGroup = tg;
-                        await entity.Delete(deleteOptions);
+                        await entity.Delete();
                         break;
                 }
             }

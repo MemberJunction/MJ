@@ -16,8 +16,6 @@ export class ExampleNewUserSubClass extends NewUserBase {
   public override async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', transactionScopeId: string, linkedEntityId?: string, linkedEntityRecordId?: string) {
     try {
       const md = new Metadata();
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = transactionScopeId;
 
       const contextUser = UserCache.Instance.Users.find(
         (u) => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase()
@@ -61,7 +59,7 @@ export class ExampleNewUserSubClass extends NewUserBase {
         //p.LastName = lastName;
         //p.Email = email;
         //p.Status = 'active';
-        if (await p.Save(saveOptions)) {
+        if (await p.Save()) {
           personId = p.FirstPrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
         } else {
           LogError(`Failed to create new person ${firstName} ${lastName} ${email}`);

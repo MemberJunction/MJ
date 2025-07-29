@@ -52,9 +52,8 @@ export class UserViewResolver extends UserViewResolverBase {
     const viewEntity = <UserViewEntityExtended>await md.GetEntityObject('User Views', u);
     await viewEntity.Load(ID);
     viewEntity.UpdateWhereClause();
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-    if (await viewEntity.Save(saveOptions)) {
+
+    if (await viewEntity.Save()) {
       return viewEntity.GetAll();
     } else {
       throw new Error('Failed to update where clause');

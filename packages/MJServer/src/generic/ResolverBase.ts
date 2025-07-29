@@ -594,9 +594,7 @@ export class ResolverBase {
 
       if (recordId) auditLog.RecordID = recordId;
 
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId; // Pass the transaction scope
-      if (await auditLog.Save(saveOptions)) 
+      if (await auditLog.Save()) 
         return auditLog;
       else 
         throw new Error(`Error saving audit log record`);
@@ -688,10 +686,7 @@ export class ResolverBase {
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
       // Pass the transactionScopeId from the user payload to the save operation
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-      
-      if (await entityObject.Save(saveOptions)) {
+      if (await entityObject.Save()) {
         // save worked, fire the AfterCreate event and then return all the data
         await this.AfterCreate(dataSource, input); // fire event
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
@@ -762,11 +757,7 @@ export class ResolverBase {
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
       
-      // Pass the transactionScopeId from the user payload to the save operation
-      const saveOptions = new EntitySaveOptions();
-      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
-      
-      if (await entityObject.Save(saveOptions)) {
+      if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(dataSource, input); // fire event
         
@@ -932,9 +923,7 @@ export class ResolverBase {
           errorLogEntity.Category = 'Entity Save';
           errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
           
-          const saveOptions = new EntitySaveOptions();
-          saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-          const saveResult = await errorLogEntity.Save(saveOptions);
+          const saveResult = await errorLogEntity.Save();
           if (!saveResult) {
             console.error('Failed to save ErrorLog record');
           }

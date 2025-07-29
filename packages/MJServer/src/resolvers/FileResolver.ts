@@ -78,9 +78,7 @@ export class FileResolver extends FileResolverBase {
     // Save the file record with the updated input
     const mapper = new FieldMapper();
     fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, true);
-    const saveOptions = new EntitySaveOptions();
-    saveOptions.TransactionScopeId = context.userPayload.transactionScopeId; // Pass the transaction scope
-    await fileEntity.Save(saveOptions);
+    await fileEntity.Save();
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };

@@ -33,7 +33,7 @@ export class FileResolver extends FileCategoryResolverBase {
     // Any files using the deleted category fall back to its parent
     const provider = Metadata.Provider as SQLServerDataProvider;
     const transactionScopeId = userPayload.transactionScopeId;
-    await provider.BeginTransaction({ transactionScopeId });
+    await provider.BeginTransaction();
     try {
       // SHOULD USE BaseEntity for each of these records to ensure object model
       // is used everywhere - new code below. The below is SLOWER than a single
@@ -62,17 +62,13 @@ export class FileResolver extends FileCategoryResolverBase {
           const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
           await fileEntity.Load(file.ID);
           fileEntity.CategoryID = fileCategoryEntity.ParentID;
-          const saveOptions = new EntitySaveOptions();
-          saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
-          await fileEntity.Save(saveOptions);
+          await fileEntity.Save();
         }
       }
-      const options: EntityDeleteOptions = new EntityDeleteOptions();
-      options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
       await fileCategoryEntity.Delete(options);
-      await provider.CommitTransaction({ transactionScopeId });
+      await provider.CommitTransaction();
     } catch (error) {
-      await provider.RollbackTransaction({ transactionScopeId });
+      await provider.RollbackTransaction();
       throw error;
     }
 
