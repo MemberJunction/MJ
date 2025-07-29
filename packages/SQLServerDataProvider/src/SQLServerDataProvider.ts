@@ -2803,6 +2803,9 @@ export class SQLServerDataProvider
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
           // Execute SQL with optional simple SQL fallback for loggers
+          if (!options.TransactionScopeId) {
+            options.TransactionScopeId = uuidv4(); // generate a new transaction scope ID
+          }
           await this.BeginTransaction({ transactionScopeId: options.TransactionScopeId }); // we are NOT in a trans group, so we need to start a transaction
           startedTransaction = true;
           d = await this.ExecuteSQL(sSQL, null, { 
