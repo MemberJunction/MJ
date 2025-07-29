@@ -2156,7 +2156,7 @@ export class BaseAgent {
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any): Promise<AIAgentRunStepEntityExtended> {
+    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -2177,6 +2177,7 @@ export class BaseAgent {
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
         stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
+        stepEntity.PayloadAtEnd = payloadAtEnd ? JSON.stringify(payloadAtEnd) : null;
         
         // Populate InputData if provided
         if (inputData) {
@@ -3071,7 +3072,7 @@ export class BaseAgent {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload);
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload, currentPayload);
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
