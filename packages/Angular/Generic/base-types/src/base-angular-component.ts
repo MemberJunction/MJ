@@ -32,13 +32,13 @@ export abstract class BaseAngularComponent {
    * Returns either the default RunQuery provider or the one specified in the Provider property, if it was specified
    */
   public get RunQueryToUse(): IRunQueryProvider {
-    return <IRunQueryProvider><any>this
+    return <IRunQueryProvider><any>this.ProviderToUse;
   }
 
   /**
    * Returns either the default RunReport provider or the one specified in the Provider property, if it was specified
    */
   public get RunReportToUse(): IRunReportProvider {
-    return <IRunReportProvider><any>this
+    return <IRunReportProvider><any>this.ProviderToUse;
   }
 }

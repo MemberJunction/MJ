@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -284,10 +284,10 @@ export class Metadata {
      * @param request 
      * @returns 
      */
-    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.EntityByName(request.EntityName);
         if (e.AllowRecordMerge)
-            return await Metadata.Provider.MergeRecords(request, contextUser);
+            return await Metadata.Provider.MergeRecords(request, contextUser, options);
         else
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }

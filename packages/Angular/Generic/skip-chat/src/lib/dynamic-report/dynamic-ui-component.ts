@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, EventEmitter, Input, OnDestroy, Output, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener } from '@angular/core';
+import { AfterViewInit, Component, EventEmitter, Input, OnDestroy, Output, ViewChildren, QueryList, SimpleChanges, ChangeDetectorRef, NgZone, HostListener, ChangeDetectionStrategy } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata } from '@memberjunction/core';
 import { SkipAPIAnalysisCompleteResponse} from '@memberjunction/skip-types';
 import { ComponentStyles, ComponentCallbacks, ComponentUtilities, ComponentOption, BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -11,6 +11,7 @@ import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (reportOptions.length > 1) {
       <!-- Multiple options: show tabs -->
@@ -154,8 +155,8 @@ import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
                   <div [attr.data-tab-index]="i" 
                        style="flex: 1; position: relative; min-height: 0; overflow: auto;">
                     <mj-react-component
-                      *ngIf="!currentError && componentSpecs.has(i)"
-                      [component]="componentSpecs.get(i)!"
+                      *ngIf="!currentError && reportOptions[i] && i === selectedReportOptionIndex"
+                      [component]="reportOptions[i].option"
                       [data]="getFlattenedDataContext()"
                       [state]="userStates.get(i) || {}"
                       [utilities]="utilities"
@@ -420,8 +421,8 @@ import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
             <!-- React component container (only shown when no error) -->
             <div style="flex: 1; position: relative; min-height: 0; overflow: auto;">
               <mj-react-component
-                *ngIf="componentSpecs.has(0)"
-                [component]="componentSpecs.get(0)!"
+                *ngIf="reportOptions[0]"
+                [component]="reportOptions[0].option"
                 [data]="getFlattenedDataContext()"
                 [state]="userStates.get(0) || {}"
                 [utilities]="utilities"
@@ -751,11 +752,14 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     private startY: number = 0;
     private startHeight: number = 0;
     
-    // Cache for component specs and user states
-    public componentSpecs = new Map<number, any>();
+    // Cache for user states only - component specs come from data
     public userStates = new Map<number, any>();
     public utilities: ComponentUtilities | null = null;
     public componentStyles: ComponentStyles | null = null;
+    
+    // Memoized flattened data context to prevent ExpressionChangedAfterItHasBeenCheckedError
+    private _flattenedDataContext: Record<string, any> | null = null;
+    private _lastDataContextHash: string | null = null;
     
     // Event handlers from React components
 
@@ -830,12 +834,9 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
             this.UIComponentCode = BuildComponentCompleteCode(selectedOption.option);
             this.ComponentObjectName = selectedOption.option.name;
             
-            // Create or update the component spec for this option
-            if (!this.componentSpecs.has(this.selectedReportOptionIndex)) {
-                this.createComponentSpecForOption(this.selectedReportOptionIndex);
-                // Trigger change detection after modifying componentSpecs
-                this.cdr.detectChanges();
-            }
+            // No need to cache component specs - they come from the data
+            // Just trigger change detection to render the new component
+            this.cdr.detectChanges();
         } catch (error) {
             console.error('Failed to build component code:', error);
             this.currentError = {
@@ -905,8 +906,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // Clear the error
         this.currentError = null;
         
-        // Re-create the component spec
-        this.createComponentSpecForOption(this.selectedReportOptionIndex);
+        // Just clear the error and re-render
+        // Component spec comes from reportOptions data
         
         // Trigger change detection
         this.cdr.detectChanges();
@@ -1134,12 +1135,14 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.utilities = runtimeUtils.buildUtilities();
         this.componentStyles = SetupStyles();
         
-        // Create component specs for all options
+        // Initialize user states for all options
         // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
         if (this.reportOptions.length > 0) {
             Promise.resolve().then(() => {
                 this.reportOptions.forEach((_, index) => {
-                    this.createComponentSpecForOption(index);
+                    if (!this.userStates.has(index)) {
+                        this.userStates.set(index, {});
+                    }
                 });
                 this.cdr.detectChanges();
             });
@@ -1147,15 +1150,23 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
     
     ngOnDestroy(): void {
-        // Clean up component specs and states
-        this.componentSpecs.clear();
+        // Clean up user states
         this.userStates.clear();
+        
+        // Ensure resize listeners are removed if still active
+        if (this.isResizing) {
+            this.stopResize();
+        }
         
         // The MJReactComponent handles its own cleanup
     }
     
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['SkipData']) {
+            // Clear cached data context when SkipData changes
+            this._flattenedDataContext = null;
+            this._lastDataContextHash = null;
+            
             const skipData = changes['SkipData'].currentValue;
             if (skipData) {
                 this.setupReportOptions(skipData);
@@ -1226,38 +1237,12 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
 
 
     /**
-     * Create a component spec for a specific option index
+     * Initialize user state for a specific option index
      */
-    private createComponentSpecForOption(optionIndex: number): void {
-        const option = this.reportOptions[optionIndex];
-        if (!option) return;
-
-        try {
-            const component = option.option;
-            
-            // Store the component spec
-            this.componentSpecs.set(optionIndex, component);
-            
-            // Initialize user state if not exists
-            if (!this.userStates.has(optionIndex)) {
-                this.userStates.set(optionIndex, {});
-            }
-        }
-        catch (e: any) {
-            console.error('Error creating component spec:', e);
-            
-            // Determine the type of error and create a user-friendly message
-            let errorType = 'Component Specification Error';
-            let errorMessage = 'Failed to create component specification.';
-            let technicalDetails = e.toString();
-            
-            this.currentError = {
-                type: errorType,
-                message: errorMessage,
-                technicalDetails: technicalDetails + '\n\nComponent Option: ' + (optionIndex + 1) + '\nComponent Name: ' + option.option.name
-            };
-            
-            LogError(e);
+    private initializeUserStateForOption(optionIndex: number): void {
+        // Initialize user state if not exists
+        if (!this.userStates.has(optionIndex)) {
+            this.userStates.set(optionIndex, {});
         }
     }
     
@@ -1299,6 +1284,19 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
 
     
     public getFlattenedDataContext(): Record<string, any> {
+        // Create a simple hash of the data context to detect changes
+        let currentHash = '';
+        if (this.SkipData?.dataContext) {
+            const loadedItems = this.SkipData.dataContext.Items.filter((i: any) => i.DataLoaded && i._Data?.length > 0);
+            currentHash = loadedItems.map((item: any) => `${item.ID}_${item._Data?.length || 0}`).join('_');
+        }
+        
+        // Check if we need to recalculate (data changed)
+        if (this._flattenedDataContext && this._lastDataContextHash === currentHash) {
+            return this._flattenedDataContext;
+        }
+        
+        // Recalculate and cache
         const flattenedDataContext: Record<string, any> = {};
         
         if (this.SkipData?.dataContext) {
@@ -1308,7 +1306,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             }
         }
         
-        return flattenedDataContext;
+        this._flattenedDataContext = flattenedDataContext;
+        this._lastDataContextHash = currentHash;
+        
+        return this._flattenedDataContext;
     }
 
     // Event handler implementations

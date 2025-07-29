@@ -4,6 +4,7 @@ import {
   CompositeKey,
   EntityFieldTSType,
   EntityPermissionType,
+  EntitySaveOptions,
   LogDebug,
   LogError,
   LogStatus,
@@ -682,7 +683,11 @@ export class ResolverBase {
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
-      if (await entityObject.Save()) {
+      // Pass the transactionScopeId from the user payload to the save operation
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+      
+      if (await entityObject.Save(saveOptions)) {
         // save worked, fire the AfterCreate event and then return all the data
         await this.AfterCreate(dataSource, input); // fire event
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
@@ -752,7 +757,12 @@ export class ResolverBase {
       }
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-      if (await entityObject.Save()) {
+      
+      // Pass the transactionScopeId from the user payload to the save operation
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+      
+      if (await entityObject.Save(saveOptions)) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(dataSource, input); // fire event
         
@@ -948,8 +958,14 @@ export class ResolverBase {
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-
-      if (await entityObject.Delete(options)) {
+      
+      // Create internal delete options with transactionScopeId from user payload
+      const internalOptions = {
+        ...options,
+        TransactionScopeId: userPayload?.transactionScopeId
+      };
+      
+      if (await entityObject.Delete(internalOptions)) {
         await this.AfterDelete(dataSource, key); // fire event
         return returnValue;
       } else {

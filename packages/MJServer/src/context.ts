@@ -11,6 +11,7 @@ import { userEmailMap, apiKey } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { TokenExpiredError } from './auth/index.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -109,12 +110,21 @@ export const contextFunction =
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
+    // Generate a unique transaction scope ID for this request
+    const transactionScopeId = uuidv4();
+    
+    // Extract request data first (synchronous operations)
     const sessionIdRaw = req.headers['x-session-id'];
     const requestDomain = url.parse(req.headers.origin || '');
     const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
     const bearerToken = req.headers.authorization ?? '';
-
     const apiKey = String(req.headers['x-mj-api-key']);
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const operationName: string | undefined = (req as any).body?.operationName;
+    if (operationName !== 'IntrospectionQuery') {
+      console.log({ operationName });
+    }
 
     const userPayload = await getUserPayload(
       bearerToken,
@@ -124,11 +134,17 @@ export const contextFunction =
       apiKey
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const operationName: string | undefined = (req as any).body?.operationName;
-    if (operationName !== 'IntrospectionQuery') {
-      console.log({ operationName });
-    }
+    // Add the transaction scope ID to the user payload
+    const enhancedUserPayload = {
+      ...userPayload,
+      transactionScopeId
+    };
 
-    return { dataSource, dataSources, userPayload };
+    const contextResult = { 
+      dataSource, 
+      dataSources, 
+      userPayload: enhancedUserPayload
+    };
+    
+    return contextResult;
   };

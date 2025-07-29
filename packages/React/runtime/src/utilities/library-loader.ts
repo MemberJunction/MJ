@@ -10,6 +10,10 @@ import {
 } from './standard-libraries';
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
 import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
+import { resourceManager } from './resource-manager';
+
+// Unique component ID for resource tracking
+const LIBRARY_LOADER_COMPONENT_ID = 'mj-react-runtime-library-loader-singleton';
 
 /**
  * Represents a loaded script or CSS resource
@@ -214,28 +218,46 @@ export class LibraryLoader {
       script.async = true;
       script.crossOrigin = 'anonymous';
 
-      script.onload = () => {
+      const cleanup = () => {
+        script.removeEventListener('load', onLoad);
+        script.removeEventListener('error', onError);
+      };
+
+      const onLoad = () => {
+        cleanup();
         const global = (window as any)[globalName];
         if (global) {
           resolve(global);
         } else {
           // Some libraries may take a moment to initialize
-          setTimeout(() => {
-            const delayedGlobal = (window as any)[globalName];
-            if (delayedGlobal) {
-              resolve(delayedGlobal);
-            } else {
-              reject(new Error(`${globalName} not found after script load`));
-            }
-          }, 100);
+          const timeoutId = resourceManager.setTimeout(
+            LIBRARY_LOADER_COMPONENT_ID,
+            () => {
+              const delayedGlobal = (window as any)[globalName];
+              if (delayedGlobal) {
+                resolve(delayedGlobal);
+              } else {
+                reject(new Error(`${globalName} not found after script load`));
+              }
+            },
+            100,
+            { url, globalName }
+          );
         }
       };
 
-      script.onerror = () => {
+      const onError = () => {
+        cleanup();
         reject(new Error(`Failed to load script: ${url}`));
       };
 
+      script.addEventListener('load', onLoad);
+      script.addEventListener('error', onError);
+
       document.head.appendChild(script);
+      
+      // Register the script element for cleanup
+      resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, script);
     });
 
     this.loadedResources.set(url, { 
@@ -263,6 +285,9 @@ export class LibraryLoader {
     link.rel = 'stylesheet';
     link.href = url;
     document.head.appendChild(link);
+    
+    // Register the link element for cleanup
+    resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, link);
 
     this.loadedResources.set(url, {
       element: link,
@@ -285,14 +310,19 @@ export class LibraryLoader {
         resolve(global);
       } else {
         // Retry after a short delay
-        setTimeout(() => {
-          const delayedGlobal = (window as any)[globalName];
-          if (delayedGlobal) {
-            resolve(delayedGlobal);
-          } else {
-            reject(new Error(`${globalName} not found after script load`));
-          }
-        }, 100);
+        resourceManager.setTimeout(
+          LIBRARY_LOADER_COMPONENT_ID,
+          () => {
+            const delayedGlobal = (window as any)[globalName];
+            if (delayedGlobal) {
+              resolve(delayedGlobal);
+            } else {
+              reject(new Error(`${globalName} not found after script load`));
+            }
+          },
+          100,
+          { context: 'waitForScriptLoad', globalName }
+        );
       }
     };
 
@@ -304,10 +334,15 @@ export class LibraryLoader {
 
     // Wait for load
     const loadHandler = () => {
-      script.removeEventListener('load', loadHandler);
       checkGlobal();
     };
-    script.addEventListener('load', loadHandler);
+    resourceManager.addEventListener(
+      LIBRARY_LOADER_COMPONENT_ID,
+      script,
+      'load',
+      loadHandler,
+      { once: true }
+    );
   }
 
 
@@ -319,9 +354,19 @@ export class LibraryLoader {
   }
 
   /**
-   * Clear loaded resources cache
+   * Clear loaded resources cache and cleanup DOM elements
    */
   static clearCache(): void {
+    // Remove all script and link elements we added
+    this.loadedResources.forEach((resource, url) => {
+      if (resource.element && resource.element.parentNode) {
+        resource.element.parentNode.removeChild(resource.element);
+      }
+    });
+    
     this.loadedResources.clear();
+    
+    // Clean up any resources managed by resource manager
+    resourceManager.cleanupComponent(LIBRARY_LOADER_COMPONENT_ID);
   }
 }
