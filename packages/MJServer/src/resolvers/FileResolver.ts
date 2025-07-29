@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -78,7 +78,9 @@ export class FileResolver extends FileResolverBase {
     // Save the file record with the updated input
     const mapper = new FieldMapper();
     fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, true);
-    await fileEntity.Save();
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = context.userPayload.transactionScopeId; // Pass the transaction scope
+    await fileEntity.Save(saveOptions);
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };

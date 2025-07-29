@@ -120,6 +120,7 @@ export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCach
 };
 
 export const verifyUserRecord = async (
+  transactionScopeId: string,
   email?: string,
   firstName?: string,
   lastName?: string,
@@ -162,7 +163,7 @@ export const verifyUserRecord = async (
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
         const newUserCreator: NewUserBase = MJGlobal.Instance.ClassFactory.CreateInstance<NewUserBase>(NewUserBase); // this will create the object that handles creating the new user for us
-        const newUser: UserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
+        const newUser: UserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email, transactionScopeId);
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
@@ -174,7 +175,7 @@ export const verifyUserRecord = async (
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);
             const roleID: string = roleInfo ? roleInfo.ID : '';
 
-            return { UserID: initData.ID, RoleName: role, RoleID: roleID };
+            return { UserID: initData.ID, RoleName: role, RoleID: roleID, transactionScopeId };
           });
 
           user = new UserInfo(Metadata.Provider, initData);
@@ -194,7 +195,7 @@ export const verifyUserRecord = async (
 
       await refreshUserCache(dataSource);
 
-      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
+      return verifyUserRecord(transactionScopeId, email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
     }
   }
 

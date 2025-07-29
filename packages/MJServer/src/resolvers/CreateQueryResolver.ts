@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
-import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { LogError, Metadata, RunView, UserInfo, CompositeKey, EntitySaveOptions } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity } from '@memberjunction/core-entities';
 import { QueryResolver } from '../generated/generated.js';
@@ -108,7 +108,7 @@ export class QueryResolverExtended extends QueryResolver {
             let finalCategoryID = input.CategoryID;
             if (input.CategoryPath) {
                 const md = new Metadata();
-                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
+                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord, context.userPayload);
             }
 
             // Create input for the inherited CreateRecord method
@@ -209,7 +209,7 @@ export class QueryResolverExtended extends QueryResolver {
      * @param contextUser - User context for operations
      * @returns The ID of the final category in the path
      */
-    private async findOrCreateCategoryPath(categoryPath: string, md: Metadata, contextUser: UserInfo): Promise<string> {
+    private async findOrCreateCategoryPath(categoryPath: string, md: Metadata, contextUser: UserInfo, userPayload: UserPayload): Promise<string> {
         if (!categoryPath || categoryPath.trim() === '') {
             throw new Error('CategoryPath cannot be empty');
         }
@@ -239,7 +239,10 @@ export class QueryResolverExtended extends QueryResolver {
                 newCategory.UserID = contextUser.ID;
                 newCategory.Description = `Auto-created category from path: ${categoryPath}`;
 
-                const saveResult = await newCategory.Save();
+                const saveOptions = new EntitySaveOptions();
+                saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+
+                const saveResult = await newCategory.Save(saveOptions);
                 if (!saveResult) {
                     throw new Error(`Failed to create category '${categoryName}': ${newCategory.LatestResult?.Message || 'Unknown error'}`);
                 }

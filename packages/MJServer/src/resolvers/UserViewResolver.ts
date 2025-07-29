@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Metadata } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
 import { UserView_, UserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
@@ -52,7 +52,9 @@ export class UserViewResolver extends UserViewResolverBase {
     const viewEntity = <UserViewEntityExtended>await md.GetEntityObject('User Views', u);
     await viewEntity.Load(ID);
     viewEntity.UpdateWhereClause();
-    if (await viewEntity.Save()) {
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+    if (await viewEntity.Save(saveOptions)) {
       return viewEntity.GetAll();
     } else {
       throw new Error('Failed to update where clause');

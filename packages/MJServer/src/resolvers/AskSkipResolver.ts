@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
@@ -390,7 +390,11 @@ export class AskSkipResolver {
       const ck = new CompositeKey();
       ck.KeyValuePairs = compositeKey.KeyValuePairs;
       dci.RecordID = ck.Values();
-      let dciSaveResult: boolean = await dci.Save();
+
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+      let dciSaveResult: boolean = await dci.Save(saveOptions);
       if (!dciSaveResult) {
         LogError(`Error saving DataContextItemEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, dci.LatestResult);
       }
@@ -402,7 +406,7 @@ export class AskSkipResolver {
       convoEntity.LinkedEntityID = dci.EntityID;
       convoEntity.LinkedRecordID = ck.Values();
       convoEntity.DataContextID = dataContext.ID;
-      const convoEntitySaveResult: boolean = await convoEntity.Save();
+      const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
       if (!convoEntitySaveResult) {
         LogError(`Error saving ConversationEntity for record chat: ${EntityName} ${ck.Values()}`, undefined, convoEntity.LatestResult);
       }
@@ -415,7 +419,7 @@ export class AskSkipResolver {
       conversationDetailID: convoDetailEntity.ID,
     });
 
-    return this.handleSimpleSkipChatPostRequest(input, convoEntity, convoDetailEntity, true, user);
+    return this.handleSimpleSkipChatPostRequest(input, convoEntity, convoDetailEntity, true, user, userPayload);
   }
 
   /**
@@ -501,7 +505,10 @@ export class AskSkipResolver {
       learningCycleEntity.Status = 'In-Progress';
       learningCycleEntity.StartedAt = startTime;
 
-      if (!(await learningCycleEntity.Save())) {
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+      if (!(await learningCycleEntity.Save(saveOptions))) {
         throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
       }
 
@@ -521,7 +528,7 @@ export class AskSkipResolver {
           learningCycleEntity.Status = 'Complete';
           learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
           learningCycleEntity.EndedAt = new Date();
-          if (!(await learningCycleEntity.Save())) {
+          if (!(await learningCycleEntity.Save(saveOptions))) {
             LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
           }
           const result: SkipAPILearningCycleResponse = {
@@ -536,7 +543,7 @@ export class AskSkipResolver {
         }
         else {
           // Make the API request
-          const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
+          const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID, userPayload);
 
           // Update learning cycle to completed
           const endTime = new Date();
@@ -547,7 +554,7 @@ export class AskSkipResolver {
           learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
           learningCycleEntity.EndedAt = endTime;
 
-          if (!(await learningCycleEntity.Save())) {
+          if (!(await learningCycleEntity.Save(saveOptions))) {
             LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
           }
           
@@ -560,7 +567,7 @@ export class AskSkipResolver {
         learningCycleEntity.EndedAt = new Date();
         
         try {
-          await learningCycleEntity.Save();
+          await learningCycleEntity.Save(saveOptions);
         } 
         catch (saveError) {
           LogError(`Failed to update learning cycle record after error: ${saveError}`);
@@ -594,7 +601,8 @@ export class AskSkipResolver {
     input: SkipAPILearningCycleRequest, 
     user: UserInfo, 
     learningCycleId: string,
-    agentID: string
+    agentID: string,
+    userPayload: UserPayload
   ): Promise<SkipAPILearningCycleResponse> {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
@@ -608,7 +616,7 @@ export class AskSkipResolver {
 
       // Process any note changes, if any
       if (apiResponse.noteChanges && apiResponse.noteChanges.length > 0) {
-        await this.processLearningCycleNoteChanges(apiResponse.noteChanges, agentID, user);
+        await this.processLearningCycleNoteChanges(apiResponse.noteChanges, agentID, user, userPayload);
       }
 
       // Not yet implemented
@@ -653,7 +661,8 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity = null,
     convoDetailEntity: ConversationDetailEntity = null,
     createAIMessageConversationDetail: boolean = false,
-    user: UserInfo = null
+    user: UserInfo = null,
+    userPayload: UserPayload = null
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
@@ -665,7 +674,7 @@ export class AskSkipResolver {
         // the last object in the response array is the final response from the Skip API
         const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
         const AIMessageConversationDetailID = createAIMessageConversationDetail && convoEntity
-          ? await this.CreateAIMessageConversationDetail(apiResponse, convoEntity.ID, user)
+          ? await this.CreateAIMessageConversationDetail(apiResponse, convoEntity.ID, user, userPayload)
           : '';
         //      const apiResponse = <SkipAPIResponse>response.data;
         LogStatus(`  Skip API response: ${apiResponse.responsePhase}`);
@@ -681,7 +690,7 @@ export class AskSkipResolver {
       } else {
         // Set conversation status to Available on failure so user can try again (if conversation exists)
         if (convoEntity) {
-          await this.setConversationStatus(convoEntity, 'Available');
+          await this.setConversationStatus(convoEntity, 'Available', userPayload);
         }
         
         return {
@@ -697,7 +706,7 @@ export class AskSkipResolver {
     } catch (error) {
       // Set conversation status to Available on error so user can try again (if conversation exists)
       if (convoEntity) {
-        await this.setConversationStatus(convoEntity, 'Available');
+        await this.setConversationStatus(convoEntity, 'Available', userPayload);
       }
       
       // Log the error for debugging
@@ -720,7 +729,8 @@ export class AskSkipResolver {
   protected async processLearningCycleNoteChanges(
     noteChanges: SkipLearningCycleNoteChange[], 
     agentID: string,
-    user: UserInfo
+    user: UserInfo,
+    userPayload: UserPayload
     ): Promise<void> {
       const md = new Metadata();
 
@@ -739,9 +749,9 @@ export class AskSkipResolver {
       await Promise.all(validNoteChanges.map(async (change) => {
         try {
           if (change.changeType === 'add' || change.changeType === 'update') {
-            await this.processAddOrUpdateSkipNote(change, agentID, user);
+            await this.processAddOrUpdateSkipNote(change, agentID, user, userPayload);
           } else if (change.changeType === 'delete') {
-            await this.processDeleteSkipNote(change, user);
+            await this.processDeleteSkipNote(change, user, userPayload);
           }
         } catch (e) {
           LogError(`Error processing note change: ${e}`);
@@ -758,7 +768,7 @@ export class AskSkipResolver {
    * @param user User context for the operation
    * @returns Whether the operation was successful
    */
-  protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo): Promise<boolean> {
+  protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
     try {  
       // Get the note entity object
       const md = new Metadata();
@@ -785,7 +795,10 @@ export class AskSkipResolver {
       }
 
       // Save the note
-      if (!(await noteEntity.Save())) {
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+      if (!(await noteEntity.Save(saveOptions))) {
         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
         return false;
       }
@@ -805,7 +818,7 @@ export class AskSkipResolver {
    * @param user User context for the operation
    * @returns Whether the deletion was successful
    */
-  protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo): Promise<boolean> {
+  protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
     // Get the note entity object
     const md = new Metadata();
     const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
@@ -826,7 +839,9 @@ cycle.`);
     }
 
     // Proceed with deletion
-    if (!(await noteEntity.Delete())) {
+    const options = new EntityDeleteOptions();
+    options.TransactionScopeId = userPayload?.transactionScopeId;
+    if (!(await noteEntity.Delete(options))) {
       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
       return false;
     }
@@ -843,7 +858,7 @@ cycle.`);
    * @param user User context for the operation
    * @returns ID of the created conversation detail, or empty string if creation failed
    */
-  protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: string, user: UserInfo): Promise<string> {
+  protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: string, user: UserInfo, userPayload: UserPayload): Promise<string> {
     const md = new Metadata();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
@@ -853,7 +868,11 @@ cycle.`);
     const lastSystemMessage = systemMessages[systemMessages.length - 1];
     convoDetailEntityAI.Message = lastSystemMessage?.content;
     convoDetailEntityAI.Role = 'AI';
-    if (await convoDetailEntityAI.Save()) {
+
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+    if (await convoDetailEntityAI.Save(saveOptions)) {
       return convoDetailEntityAI.ID;
     } else {
       LogError(
@@ -1287,7 +1306,7 @@ cycle.`);
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
     const input = <SkipAPIRunScriptRequest>await this.buildSkipChatAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, false, user, dataSource, false, false);
     input.scriptText = ScriptText;
-    return this.handleSimpleSkipChatPostRequest(input);
+    return this.handleSimpleSkipChatPostRequest(input, undefined, undefined, undefined, userPayload.userRecord, userPayload);
   }
 
   /**
@@ -1366,7 +1385,7 @@ cycle.`);
     );
 
     // Set the conversation status to 'Processing' when a request is initiated
-    await this.setConversationStatus(convoEntity, 'Processing');
+    await this.setConversationStatus(convoEntity, 'Processing', userPayload);
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -1897,6 +1916,9 @@ cycle.`);
     const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
     let dataContextEntity: DataContextEntity;
 
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
     if (!ConversationId || ConversationId.length === 0) {
       // create a new conversation id
       convoEntity.NewRecord();
@@ -1911,7 +1933,7 @@ cycle.`);
           dataContextEntity.NewRecord();
           dataContextEntity.UserID = user.ID;
           dataContextEntity.Name = 'Data Context for Skip Conversation ';
-          if (!(await dataContextEntity.Save())) {
+          if (!(await dataContextEntity.Save(saveOptions))) {
             LogError(`Creating a new data context failed`, undefined, dataContextEntity.LatestResult);
             throw new Error(`Creating a new data context failed`);
           }
@@ -1923,12 +1945,12 @@ cycle.`);
           }
         }
         convoEntity.DataContextID = dataContextEntity.ID;
-        if (await convoEntity.Save()) {
+        if (await convoEntity.Save(saveOptions)) {
           ConversationId = convoEntity.ID;
           if (!DataContextId || dataContextEntity.ID.length === 0) {
             // only do this if we created a new data context for this conversation
             dataContextEntity.Name += ` ${ConversationId}`;
-            const dciSaveResult: boolean = await dataContextEntity.Save();
+            const dciSaveResult: boolean = await dataContextEntity.Save(saveOptions);
             if (!dciSaveResult) {
               LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
             }
@@ -1952,7 +1974,7 @@ cycle.`);
         if (convoEntity.DataContextID === null) {
           // use the DataContextId passed in if the conversation doesn't have a DataContextID
           convoEntity.DataContextID = DataContextId;
-          const convoEntitySaveResult: boolean = await convoEntity.Save();
+          const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
           if (!convoEntitySaveResult) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
@@ -1974,10 +1996,10 @@ cycle.`);
         dataContextEntity.NewRecord();
         dataContextEntity.UserID = user.ID;
         dataContextEntity.Name = 'Data Context for Skip Conversation ' + ConversationId;
-        if (await dataContextEntity.Save()) {
+        if (await dataContextEntity.Save(saveOptions)) {
           DataContextId = convoEntity.DataContextID;
           convoEntity.DataContextID = dataContextEntity.ID;
-          if (!await convoEntity.Save()) {
+          if (!await convoEntity.Save(saveOptions)) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
         } 
@@ -1998,7 +2020,8 @@ cycle.`);
     convoDetailEntity.Message = UserQuestion;
     convoDetailEntity.Role = 'User';
     convoDetailEntity.HiddenToUser = false;
-    let convoDetailSaveResult: boolean = await convoDetailEntity.Save();
+
+    let convoDetailSaveResult: boolean = await convoDetailEntity.Save(saveOptions);
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
     }
@@ -2174,7 +2197,7 @@ cycle.`);
 
     if (conversationDetailCount > 10) {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available');
+      await this.setConversationStatus(convoEntity, 'Available', userPayload);
 
       // At this point it is likely that we are stuck in a loop, so we stop here
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -2234,7 +2257,7 @@ cycle.`);
       );
     } catch (error) {
       // Set conversation status to Available on error so user can try again
-      await this.setConversationStatus(convoEntity, 'Available');
+      await this.setConversationStatus(convoEntity, 'Available', userPayload);
       
       // Log the error for debugging
       LogError(`Error in HandleSkipChatRequest sendPostRequest: ${error}`);
@@ -2317,7 +2340,7 @@ cycle.`);
       }
     } else {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available');
+      await this.setConversationStatus(convoEntity, 'Available', userPayload);
 
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
@@ -2489,9 +2512,12 @@ cycle.`);
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
     
     // Set conversation status back to Available since we need user input for the clarifying question
-    await this.setConversationStatus(convoEntity, 'Available');
+    await this.setConversationStatus(convoEntity, 'Available', userPayload);
     
-    if (await convoDetailEntityAI.Save()) {
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+    if (await convoDetailEntityAI.Save(saveOptions)) {
       return {
         Success: true,
         Status: 'OK',
@@ -2742,7 +2768,10 @@ cycle.`);
         artifactEntity.ArtifactTypeID = AIEngine.Instance.ArtifactTypes.find((t) => t.Name === 'Report')?.ID;
         artifactEntity.SharingScope = 'None';
 
-        if (await artifactEntity.Save()) {
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+        if (await artifactEntity.Save(saveOptions)) {
           // saved, grab the new ID
           artifactId = artifactEntity.ID;
         }
@@ -2777,7 +2806,11 @@ cycle.`);
         artifactVersionEntity.ConversationArtifactID = artifactId;
         artifactVersionEntity.Version = newVersion;
         artifactVersionEntity.Configuration = sResult; // store the full response here
-        if (await artifactVersionEntity.Save()) {
+
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+        if (await artifactVersionEntity.Save(saveOptions)) {
           // success saving the new version, set the artifactVersionId
           artifactVersionId = artifactVersionEntity.ID;
         }
@@ -2804,7 +2837,11 @@ cycle.`);
         convoDetailEntityAI.ArtifactVersionID = artifactVersionId;
       }
     }    
-    const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
+
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+    const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save(saveOptions);
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
     }
@@ -2826,7 +2863,7 @@ cycle.`);
     
     // Save if any changes were made
     if (needToSaveConvo) {
-      const convoEntitySaveResult: boolean = await convoEntity.Save();
+      const convoEntitySaveResult: boolean = await convoEntity.Save(saveOptions);
       if (!convoEntitySaveResult) {
         LogError(`Error saving conversation entity for AI message: ${sResult}`, undefined, convoEntity.LatestResult);
       }
@@ -2844,7 +2881,7 @@ cycle.`);
       conversationId: convoEntity.ID,
     });
 
-    const userNotificationSaveResult: boolean = await userNotification.Save();
+    const userNotificationSaveResult: boolean = await userNotification.Save(saveOptions);
     if (!userNotificationSaveResult) {
       LogError(`Error saving user notification entity for AI message: ${sResult}`, undefined, userNotification.LatestResult);
     }
@@ -2884,10 +2921,14 @@ cycle.`);
     };
   }
 
-  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available'): Promise<boolean> {
+  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload): Promise<boolean> {
     if (convoEntity.Status !== status) {
     convoEntity.Status = status;
-    const convoSaveResult = await convoEntity.Save();
+
+    const saveOptions = new EntitySaveOptions();
+    saveOptions.TransactionScopeId = userPayload?.transactionScopeId;
+
+    const convoSaveResult = await convoEntity.Save(saveOptions);
     if (!convoSaveResult) {
       LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
     }

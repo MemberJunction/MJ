@@ -12,6 +12,7 @@ import { DataSourceInfo, UserPayload } from './types.js';
 import { TokenExpiredError } from './auth/index.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
+import e from 'express';
 
 const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -33,7 +34,8 @@ export const getUserPayload = async (
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
-  requestApiKey?: string
+  requestApiKey?: string,
+  transactionScopeId?: string
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -86,7 +88,7 @@ export const getUserPayload = async (
     const fullName = payload?.name;
     const firstName = payload?.given_name || fullName?.split(' ')[0];
     const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
-    const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, readWriteDataSource);
+    const userRecord = await verifyUserRecord(transactionScopeId, email, firstName, lastName, requestDomain, readWriteDataSource);
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -131,19 +133,19 @@ export const contextFunction =
       sessionId,
       dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
-      apiKey
+      apiKey,
+      transactionScopeId
     );
 
-    // Add the transaction scope ID to the user payload
-    const enhancedUserPayload = {
+    const enhancedPayload = {
       ...userPayload,
-      transactionScopeId
-    };
+      transactionScopeId,
+    }
 
     const contextResult = { 
       dataSource, 
       dataSources, 
-      userPayload: enhancedUserPayload
+      userPayload: enhancedPayload
     };
     
     return contextResult;

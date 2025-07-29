@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
-import { AppContext } from '../types.js';
-import { BaseEntity, CompositeKey, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { BaseEntity, CompositeKey, EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { DatasetItemEntity } from '@memberjunction/core-entities';
@@ -115,7 +115,7 @@ export class SyncDataResolver {
             const md = new Metadata();
             const results: ActionItemOutputType[] = [];
             for (const item of items) {
-                results.push(await this.SyncSingleItem(item, context, md)); 
+                results.push(await this.SyncSingleItem(item, context, md, context.userPayload)); 
             }
 
             if (await this.DoSyncItemsAffectMetadata(context.userPayload.userRecord, items)) {
@@ -160,7 +160,7 @@ export class SyncDataResolver {
         return false; // didn't find any
     }
 
-    protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: Metadata): Promise<ActionItemOutputType> {
+    protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: Metadata, userPayload: UserPayload): Promise<ActionItemOutputType> {
         const result = new ActionItemOutputType();
         result.AlternateKey = item.AlternateKey;
         result.PrimaryKey = item.PrimaryKey;
@@ -179,20 +179,20 @@ export class SyncDataResolver {
                 const fieldValues = item.RecordJSON ? JSON.parse(item.RecordJSON) : {};
                 switch (item.Type) {
                     case SyncDataActionType.Create:
-                        await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+                        await this.SyncSingleItemCreate(entityObject, fieldValues, result, userPayload);
                         break;
                     case SyncDataActionType.Update:
-                        await this.SyncSingleItemUpdate(entityObject, pk, ak, fieldValues, result);
+                        await this.SyncSingleItemUpdate(entityObject, pk, ak, fieldValues, result, userPayload);
                         break;
                     case SyncDataActionType.CreateOrUpdate:
                         // in this case we attempt to load the item first, if it is not possible to load the item, then we create it
-                        await this.SyncSingleItemCreateOrUpdate(entityObject, pk, ak, fieldValues, result);
+                        await this.SyncSingleItemCreateOrUpdate(entityObject, pk, ak, fieldValues, result, userPayload);
                         break;
                     case SyncDataActionType.Delete:
-                        await this.SyncSingleItemDelete(entityObject, pk, ak, result);
+                        await this.SyncSingleItemDelete(entityObject, pk, ak, result, userPayload);
                         break;
                     case SyncDataActionType.DeleteWithFilter:
-                        await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord);
+                        await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord, userPayload);
                         break;
                     default:
                         throw new Error('Invalid SyncDataActionType');
@@ -211,11 +211,13 @@ export class SyncDataResolver {
     }
 
 
-    protected async SyncSingleItemDeleteWithFilter(entityName: string, filter: string, result: ActionItemOutputType, user: UserInfo) {
+    protected async SyncSingleItemDeleteWithFilter(entityName: string, filter: string, result: ActionItemOutputType, user: UserInfo, userPayload: UserPayload) {
         try {
             // here we will iterate through the result of a RunView on the entityname/filter and delete each matching record
             let overallSuccess: boolean = true;
             let combinedErrorMessage: string = "";
+            const options = new EntityDeleteOptions();
+            options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
             const rv = new RunView();
             const data = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
@@ -224,7 +226,7 @@ export class SyncDataResolver {
             }, user);
             if (data && data.Success) {
                 for (const entityObject of data.Results) {
-                    if (!await entityObject.Delete()) {
+                    if (!await entityObject.Delete(options)) {
                         overallSuccess = false;
                         combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.Message + '\n';
                     }
@@ -273,30 +275,33 @@ export class SyncDataResolver {
         }
     }
 
-    protected async SyncSingleItemCreateOrUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+    protected async SyncSingleItemCreateOrUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType, userPayload: UserPayload) {
         if (!pk || pk.KeyValuePairs.length === 0) {
             // no primary key try to load from alt key
             const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
             if (!altKeyResult) {
                 // no record found, create a new one
-                await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+                await this.SyncSingleItemCreate(entityObject, fieldValues, result, userPayload);
             }
             else {
-                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result);
+                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result, userPayload);
             }
         }
         else {
             // have a primary key do the usual load
             if (await entityObject.InnerLoad(pk)) {
-                await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result);
+                await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result, userPayload);
             }
             else {
-                await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+                await this.SyncSingleItemCreate(entityObject, fieldValues, result, userPayload);
             }    
         }
     }
 
-    protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, result: ActionItemOutputType) {
+    protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, result: ActionItemOutputType, userPayload: UserPayload) {
+        const options = new EntityDeleteOptions();
+        options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+        
         if (!pk || pk.KeyValuePairs.length === 0) {
             const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
             if (!altKeyResult) {
@@ -312,7 +317,7 @@ export class SyncDataResolver {
                     omitNullValues: false,
                     oldValues: false
                 });
-                if (await altKeyResult.Delete()) {
+                if (await altKeyResult.Delete(options)) {
                     result.Success = true;
                 }
                 else {
@@ -330,7 +335,7 @@ export class SyncDataResolver {
                 omitNullValues: false,
                 oldValues: false
             });
-            if (await entityObject.Delete()) {
+            if (await entityObject.Delete(options)) {
                 result.Success = true;
             }
             else {
@@ -342,14 +347,16 @@ export class SyncDataResolver {
         }
     }
 
-    protected async SyncSingleItemCreate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType) {
+    protected async SyncSingleItemCreate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType, userPayload: UserPayload) {
         // make sure we strip out the primary key from fieldValues before we pass it in because otherwise it will appear to be an existing record to the BaseEntity
         const noPKValues = {...fieldValues};
         entityObject.EntityInfo.PrimaryKeys.forEach((pk) => {
             delete noPKValues[pk.Name];
         });
         entityObject.SetMany(noPKValues);
-        if (await entityObject.Save()) {
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+        if (await entityObject.Save(saveOptions)) {
             result.Success = true;
             result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
             // pass back the full record AFTER the sync, that's often quite useful on the other end
@@ -367,7 +374,7 @@ export class SyncDataResolver {
         }
     }
 
-    protected async SyncSingleItemUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+    protected async SyncSingleItemUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType, userPayload: UserPayload) {
         if (!pk || pk.KeyValuePairs.length === 0) {
             // no pk, attempt to load by alt key
             const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
@@ -376,11 +383,11 @@ export class SyncDataResolver {
                 result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified alternate key does not exist';
             }
             else {
-                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result);
+                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result, userPayload);
             }
         }
         else if (await entityObject.InnerLoad(pk)) {
-            await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result);
+            await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result, userPayload);
         }
         else {
             // failed to load the item
@@ -388,9 +395,11 @@ export class SyncDataResolver {
         }
     }
 
-    protected async InnerSyncSingleItemUpdate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType) {
+    protected async InnerSyncSingleItemUpdate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType, userPayload: UserPayload) {
         entityObject.SetMany(fieldValues);
-        if (await entityObject.Save()) {
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+        if (await entityObject.Save(saveOptions)) {
             result.Success = true;
             if (!result.PrimaryKey || result.PrimaryKey.KeyValuePairs.length === 0) {
                 result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));

@@ -1,4 +1,4 @@
-import { Metadata, RunReport } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata, RunReport } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-entities';
@@ -121,7 +121,10 @@ export class ReportResolverExtended {
       report.SharingScope = 'None';
       report.UserID = u.ID;
 
-      if (await report.Save()) {
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+
+      if (await report.Save(saveOptions)) {
         return {
           ReportID: report.ID,
           ReportName: report.Name,

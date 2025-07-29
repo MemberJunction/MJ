@@ -594,8 +594,12 @@ export class ResolverBase {
 
       if (recordId) auditLog.RecordID = recordId;
 
-      if (await auditLog.Save()) return auditLog;
-      else throw new Error(`Error saving audit log record`);
+      const saveOptions = new EntitySaveOptions();
+      saveOptions.TransactionScopeId = userPayload?.transactionScopeId; // Pass the transaction scope
+      if (await auditLog.Save(saveOptions)) 
+        return auditLog;
+      else 
+        throw new Error(`Error saving audit log record`);
     } catch (err) {
       console.log(err);
       return null;
@@ -732,7 +736,7 @@ export class ResolverBase {
           // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
-            await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
+            await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo, userPayload);
           } else {
             // no OldValues, so we can just set the new values from input
             entityObject.SetMany(input);
@@ -785,7 +789,7 @@ export class ResolverBase {
    *
    * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
    */
-  protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
+  protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo, userPayload: UserPayload) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
     // for each item in the oldValues array, add it to the clientOldValues object
@@ -928,7 +932,9 @@ export class ResolverBase {
           errorLogEntity.Category = 'Entity Save';
           errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
           
-          const saveResult = await errorLogEntity.Save();
+          const saveOptions = new EntitySaveOptions();
+          saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+          const saveResult = await errorLogEntity.Save(saveOptions);
           if (!saveResult) {
             console.error('Failed to save ErrorLog record');
           }
