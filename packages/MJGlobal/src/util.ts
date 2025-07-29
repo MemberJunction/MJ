@@ -143,6 +143,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return JSON.stringify(parsed, null, 2);
     } catch (e) {
         // If direct parsing fails, continue with cleanup logic
+        const x = e; // for breakpoints, does nothing
     }
 
     // Handle double-escaped characters
@@ -213,6 +214,19 @@ export function CleanJSON(inputString: string | null): string | null {
             }
         }
     } else {
+        // sometimes LLMs mistakenly add one extra } at the very end of the string so let's 
+        // handle that case and check for an extra closing brace
+        const trim1 = jsonString.trim();
+        if (trim1.endsWith('}')) {
+            const trim2 = trim1.substring(0, trim1.length - 1);
+            try {
+                const parsed = JSON.parse(trim2);
+                return JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                const x = e; // for breakpoints, does nothing
+            }
+        }
+
         // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON
         // Attempt to extract JSON from a mixed string
         const firstBracketIndex = jsonString.indexOf('[');
