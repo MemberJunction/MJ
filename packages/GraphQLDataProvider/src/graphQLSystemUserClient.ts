@@ -427,6 +427,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
@@ -491,6 +496,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
