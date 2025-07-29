@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
-import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -131,9 +131,9 @@ export class SyncRolesAndUsersResolver {
     
             if (result && result.Success) {
                 const currentRoles = result.Results;
-                if (await this.DeleteRemovedRoles(currentRoles, roles, context.userPayload.userRecord)) {
-                    if ( await this.AddNewRoles(currentRoles, roles, context.userPayload.userRecord)) {
-                        return await this.UpdateExistingRoles(currentRoles, roles, context.userPayload.userRecord);
+                if (await this.DeleteRemovedRoles(currentRoles, roles, context.userPayload.userRecord, context.userPayload)) {
+                    if ( await this.AddNewRoles(currentRoles, roles, context.userPayload.userRecord, context.userPayload)) {
+                        return await this.UpdateExistingRoles(currentRoles, roles, context.userPayload);
                     }
                 }
             }
@@ -145,39 +145,43 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async UpdateExistingRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo): Promise<SyncRolesAndUsersResultType> {
+    protected async UpdateExistingRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
         // go through the future roles and update any that are in the current roles
         const md = new Metadata();
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
         let ok: boolean = true;
 
         for (const update of futureRoles) {
             const currentRole = currentRoles.find(r => r.Name.trim().toLowerCase() === update.Name.trim().toLowerCase());
             if (currentRole) {
                 currentRole.Description = update.Description;
-                ok = ok && await currentRole.Save();  
+                ok = ok && await currentRole.Save(saveOptions);  
             }
         }
         return { Success: ok };
     }
 
-    protected async AddNewRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo): Promise<boolean> {
+    protected async AddNewRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // go through the future roles and add any that are not in the current roles
         const md = new Metadata();
         let ok: boolean = true;
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
 
         for (const add of futureRoles) {
             if (!currentRoles.find(r => r.Name.trim().toLowerCase() === add.Name.trim().toLowerCase())) {
                 const role = await md.GetEntityObject<RoleEntity>("Roles", user);
                 role.Name = add.Name;
                 role.Description = add.Description;
-                ok = ok && await role.Save();  
+                ok = ok && await role.Save(saveOptions);  
             }
         }
         return ok;
     }
 
 
-    protected async DeleteRemovedRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo): Promise<boolean> {
+    protected async DeleteRemovedRoles(currentRoles: RoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         const rv = new RunView();
         let ok: boolean = true;
 
@@ -185,7 +189,7 @@ export class SyncRolesAndUsersResolver {
         for (const remove of currentRoles) {
             if (!this.IsStandardRole(remove.Name)) {
                 if (!futureRoles.find(r => r.Name.trim().toLowerCase() === remove.Name.trim().toLowerCase())) {
-                    ok = ok && await this.DeleteSingleRole(remove, rv, user);
+                    ok = ok && await this.DeleteSingleRole(remove, rv, user, userPayload);
                 }    
             }
         }
@@ -199,9 +203,12 @@ export class SyncRolesAndUsersResolver {
         return this.StandardRoles.find(r => r.toLowerCase() === roleName.toLowerCase()) !== undefined;
     }
 
-    protected async DeleteSingleRole(role: RoleEntity, rv: RunView, user: UserInfo): Promise<boolean> {
+    protected async DeleteSingleRole(role: RoleEntity, rv: RunView, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // first, remove all the UserRole records that match this role
         let ok: boolean = true;
+        const options = new EntityDeleteOptions();
+        options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+
         const r2 = await rv.RunView<UserRoleEntity>({
             EntityName: "User Roles",
             ExtraFilter: "RoleID = '" + role.ID + "'",
@@ -209,11 +216,11 @@ export class SyncRolesAndUsersResolver {
         }, user);
         if (r2.Success) {
             for (const ur of r2.Results) {
-                ok = ok && await ur.Delete(); // remove the user role
+                ok = ok && await ur.Delete(options); // remove the user role
             }
         }
 
-        return ok && role.Delete(); // remove the role
+        return ok && role.Delete(options); // remove the role
     }
 
     /**
@@ -238,10 +245,10 @@ export class SyncRolesAndUsersResolver {
             if (result && result.Success) {
                 // go through current users and remove those that are not in the input
                 const currentUsers = result.Results;
-                if (await this.DeleteRemovedUsers(currentUsers, users, context.userPayload.userRecord)) {
-                    if (await this.AddNewUsers(currentUsers, users, context.userPayload.userRecord)) {
-                        if (await this.UpdateExistingUsers(currentUsers, users, context.userPayload.userRecord)) {
-                            if (await this.SyncUserRoles(users, context.userPayload.userRecord)) {
+                if (await this.DeleteRemovedUsers(currentUsers, users, context.userPayload.userRecord, context.userPayload)) {
+                    if (await this.AddNewUsers(currentUsers, users, context.userPayload)) {
+                        if (await this.UpdateExistingUsers(currentUsers, users, context.userPayload)) {
+                            if (await this.SyncUserRoles(users, context.userPayload.userRecord, context.userPayload)) {
                                 return { Success: true };
                             }    
                         }
@@ -256,9 +263,12 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async UpdateExistingUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], u: UserInfo): Promise<boolean> {  
+    protected async UpdateExistingUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {  
         // go through the future users and update any that are in the current users
         let ok: boolean = true;
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+
         for (const update of futureUsers) {
             const current = currentUsers.find(c => c.Email?.trim().toLowerCase() === update.Email?.trim().toLowerCase());
             if (current) {
@@ -267,25 +277,27 @@ export class SyncRolesAndUsersResolver {
                 current.FirstName = update.FirstName;
                 current.LastName = update.LastName;
                 current.Title = update.Title;
-                ok = ok && await current.Save();  
+                ok = ok && await current.Save(saveOptions);  
             }
         }
         return ok;
     }
-    protected async AddNewUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], u: UserInfo): Promise<boolean> {
+    protected async AddNewUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {
         // add users that are not in the current users
         const md = new Metadata();
         let ok: boolean = true;
+        const saveOptions = new EntitySaveOptions();
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
 
         for (const add of futureUsers) {
             const match = currentUsers.find(currentUser => currentUser.Email?.trim().toLowerCase() === add.Email?.trim().toLowerCase());
             if (match) {
                 // make sure the IsActive bit is set to true
                 match.IsActive = true;
-                ok = ok && await match.Save();  
+                ok = ok && await match.Save(saveOptions);  
             }  
             else {
-                const user = await md.GetEntityObject<UserEntity>("Users", u);
+                const user = await md.GetEntityObject<UserEntity>("Users", userPayload.userRecord);
                 user.Name = add.Name;
                 user.Type = add.Type;
                 user.Email = add.Email;
@@ -294,13 +306,13 @@ export class SyncRolesAndUsersResolver {
                 user.Title = add.Title;
                 user.IsActive = true;
 
-                ok = ok && await user.Save();  
+                ok = ok && await user.Save(saveOptions);  
             }
         }
         return ok;
     }
 
-    protected async DeleteRemovedUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], u: UserInfo): Promise<boolean> {
+    protected async DeleteRemovedUsers(currentUsers: UserEntity[], futureUsers: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // remove users that are not in the future users
         const rv = new RunView();
         const md = new Metadata();
@@ -310,16 +322,19 @@ export class SyncRolesAndUsersResolver {
         for (const remove of currentUsers) {
             if (remove.Type.trim().toLowerCase() !== 'owner') {
                 if (!futureUsers.find(r => r.Email.trim().toLowerCase() === remove.Email.trim().toLowerCase())) {
-                    ok = ok && await this.DeleteSingleUser(remove, rv, u);
+                    ok = ok && await this.DeleteSingleUser(remove, rv, u, userPayload);
                 }
             }
         }
         return ok;
     }
 
-    protected async DeleteSingleUser(user: UserEntity, rv: RunView, u: UserInfo): Promise<boolean> {
+    protected async DeleteSingleUser(user: UserEntity, rv: RunView, u: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // first, remove all the UserRole records that match this user
         let ok: boolean = true;
+        const options = new EntityDeleteOptions();
+        options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+
         const r2 = await rv.RunView<UserRoleEntity>({
             EntityName: "User Roles",
             ExtraFilter: "UserID = '" + user.ID + "'",
@@ -328,23 +343,29 @@ export class SyncRolesAndUsersResolver {
         if (r2.Success) {
             for (const ur of r2.Results) {
                 //ur.TransactionGroup = tg;
-                ok = ok && await ur.Delete(); // remove the user role
+                ok = ok && await ur.Delete(options); // remove the user role
             }
         }
-        if (await user.Delete()) {
+        if (await user.Delete(options)) {
             return ok;
         }
         else {
             // in some cases there are a lot of fkey constraints that prevent the user from being deleted, so we mark the user as inactive instead
             user.IsActive = false;
-            return await user.Save() && ok;
+            const saveOptions = new EntitySaveOptions();
+            saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+            return await user.Save(saveOptions) && ok;
         }
     }
 
-    protected async SyncUserRoles(users: UserInputType[], u: UserInfo): Promise<boolean> {
+    protected async SyncUserRoles(users: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
         // for each user in the users array, make sure there is a User Role that matches. First, get a list of all DATABASE user and roels so we have that for fast lookup in memory
         const rv = new RunView();
         const md = new Metadata();
+        const saveOptions = new EntitySaveOptions();
+        const deleteOptions = new EntityDeleteOptions();
+        deleteOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+        saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
 
         const p1 = rv.RunView<UserEntity>({
             EntityName: "Users",
@@ -384,7 +405,7 @@ export class SyncRolesAndUsersResolver {
                                 const ur = await md.GetEntityObject<UserRoleEntity>("User Roles", u);
                                 ur.UserID = dbUser.ID;
                                 ur.RoleID = dbRole.ID;
-                                ok = ok && await ur.Save();  
+                                ok = ok && await ur.Save(saveOptions);  
                             }
                         }
                     }
@@ -395,7 +416,7 @@ export class SyncRolesAndUsersResolver {
                         if (!role && !this.IsStandardRole(dbUserRole.Role)) {
                             // this user role is no longer in the user's roles, we need to remove it
                             //dbUserRole.TransactionGroup = tg;
-                            ok = ok && await dbUserRole.Delete(); // remove the user role - we use await for the DELETE, not the save
+                            ok = ok && await dbUserRole.Delete(deleteOptions); // remove the user role - we use await for the DELETE, not the save
                         }
                     }
                 }

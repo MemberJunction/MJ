@@ -1,9 +1,10 @@
-import { CompositeKey, EntityPermissionType, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity, FileEntity } from '@memberjunction/core-entities';
 import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
 import { mj_core_schema } from '../config.js';
 import { FileCategoryResolver as FileCategoryResolverBase, FileCategory_ } from '../generated/generated.js';
 import sql from 'mssql';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export class FileResolver extends FileCategoryResolverBase {
   @Mutation(() => FileCategory_)
@@ -30,8 +31,9 @@ export class FileResolver extends FileCategoryResolverBase {
     const returnValue = fileCategoryEntity.GetAll();
 
     // Any files using the deleted category fall back to its parent
-    const transaction = new sql.Transaction(dataSource);
-    await transaction.begin();
+    const provider = Metadata.Provider as SQLServerDataProvider;
+    const transactionScopeId = userPayload.transactionScopeId;
+    await provider.BeginTransaction({ transactionScopeId });
     try {
       // SHOULD USE BaseEntity for each of these records to ensure object model
       // is used everywhere - new code below. The below is SLOWER than a single
@@ -60,13 +62,17 @@ export class FileResolver extends FileCategoryResolverBase {
           const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
           await fileEntity.Load(file.ID);
           fileEntity.CategoryID = fileCategoryEntity.ParentID;
-          await fileEntity.Save();
+          const saveOptions = new EntitySaveOptions();
+          saveOptions.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+          await fileEntity.Save(saveOptions);
         }
       }
-      await fileCategoryEntity.Delete();
-      await transaction.commit();
+      const options: EntityDeleteOptions = new EntityDeleteOptions();
+      options.TransactionScopeId = userPayload.transactionScopeId; // Pass the transaction scope
+      await fileCategoryEntity.Delete(options);
+      await provider.CommitTransaction({ transactionScopeId });
     } catch (error) {
-      await transaction.rollback();
+      await provider.RollbackTransaction({ transactionScopeId });
       throw error;
     }
 
