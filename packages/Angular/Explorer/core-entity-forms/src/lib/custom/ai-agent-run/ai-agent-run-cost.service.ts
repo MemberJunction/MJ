@@ -48,17 +48,13 @@ export class AIAgentRunCostService {
     };
 
     try {
-      // Get the MJ Core schema name for cross-environment compatibility
-      const mjCoreSchemaName = Metadata.Provider?.ConfigData?.MJCoreSchemaName || '__mj';
-      
       // Use the high-performance templated query
       const rq = new RunQuery();
       const queryResult = await rq.RunQuery({
         QueryName: 'CalculateRunCost',
         CategoryPath: '/MJ/AI/Agents/',
         Parameters: {
-          AIAgentRunID: agentRunId,
-          MJCoreSchemaName: mjCoreSchemaName
+          AIAgentRunID: agentRunId
         }
       });
 
