@@ -2,14 +2,14 @@
 WITH AgentRunHierarchy AS (
   -- Base case: Start with the specified agent run
   SELECT ID, AgentID, ParentRunID, 1 as Level
-  FROM {{ MJCoreSchemaName }}.vwAIAgentRuns
+  FROM [__mj].vwAIAgentRuns
   WHERE ID = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
   
   UNION ALL
   
   -- Recursive case: Get all child agent runs
   SELECT ar.ID, ar.AgentID, ar.ParentRunID, arh.Level + 1
-  FROM {{ MJCoreSchemaName }}.vwAIAgentRuns ar
+  FROM [__mj].vwAIAgentRuns ar
   INNER JOIN AgentRunHierarchy arh ON ar.ParentRunID = arh.ID
   WHERE arh.Level < 20  -- Prevent infinite recursion
 ),
@@ -21,9 +21,9 @@ PromptRunCosts AS (
     pr.TokensPrompt,
     pr.TokensCompletion,
     ars.AgentRunID
-  FROM {{ MJCoreSchemaName }}.vwAIAgentRunSteps ars
+  FROM [__mj].vwAIAgentRunSteps ars
   INNER JOIN AgentRunHierarchy arh ON ars.AgentRunID = arh.ID
-  INNER JOIN {{ MJCoreSchemaName }}.vwAIPromptRuns pr ON ars.TargetLogID = pr.ID
+  INNER JOIN [__mj].vwAIPromptRuns pr ON ars.TargetLogID = pr.ID
   WHERE ars.StepType = 'Prompt'
 )
 SELECT 
