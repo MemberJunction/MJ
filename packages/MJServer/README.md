@@ -119,9 +119,19 @@ serve(resolverPaths.map(localPath), createApp(), options);
 
 ### Transaction Management
 
-The server automatically wraps GraphQL mutations in database transactions. This ensures data consistency when multiple operations are performed:
+MJServer provides automatic transaction management for all GraphQL mutations with full support for multi-user environments.
+
+#### Automatic Request Isolation
+
+Each GraphQL request receives a unique transaction scope ID, ensuring complete isolation between concurrent requests:
 
 ```typescript
+// Each request automatically gets wrapped with:
+// 1. A unique transaction scope ID generated via UUID
+// 2. Automatic BEGIN TRANSACTION at request start
+// 3. COMMIT on success or ROLLBACK on error
+// 4. Cleanup of transaction context after response
+
 mutation {
   CreateUser(input: { FirstName: "John", LastName: "Doe" }) {
     ID
@@ -130,8 +140,19 @@ mutation {
     ID
   }
 }
-// Both operations will be committed together or rolled back on error
+// Both operations execute within the same transaction scope
+// Success: Both committed together
+// Error: Both rolled back together
 ```
+
+#### Key Transaction Features
+
+- **Request-Scoped Isolation**: Each GraphQL request has its own transaction context
+- **Automatic Management**: Transactions are automatically started, committed, or rolled back
+- **Multi-User Safety**: Concurrent requests from different users have isolated transactions
+- **Context Propagation**: Transaction scope ID flows through all resolver operations
+- **Cleanup**: Transaction contexts are disposed after each request completes
+- **Nested Support**: Operations can use savepoints for nested transaction logic
 
 ### Custom New User Behavior
 

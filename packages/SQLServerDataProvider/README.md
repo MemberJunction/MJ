@@ -136,6 +136,10 @@ if (deleteResult.Success) {
 
 ### Transaction Management
 
+The SQL Server Data Provider supports both transaction groups and request-scoped transactions for multi-user environments.
+
+#### Transaction Groups
+
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { SQLServerTransactionGroup } from '@memberjunction/sqlserver-dataprovider';
@@ -193,6 +197,46 @@ if (success) {
   });
 }
 ```
+
+#### Request-Scoped Transactions (Multi-User Environments)
+
+In multi-user server environments, the SQL Server Data Provider supports request-scoped transactions that provide isolation between concurrent requests. This is automatically handled by multi-user servers like MJServer, and can be used directly as per below whenever required:
+
+```typescript
+// Server-side with transaction scope ID
+const transactionScopeId = uuid(); // Unique ID per request
+
+try {
+  // Begin a request-scoped transaction
+  await dataProvider.BeginTransaction({ transactionScopeId });
+  
+  // Perform operations with the same scope ID
+  const saveOptions = { TransactionScopeId: transactionScopeId };
+  await dataProvider.Save(entity1, contextUser, saveOptions);
+  await dataProvider.Save(entity2, contextUser, saveOptions);
+  
+  // Delete with same scope
+  const deleteOptions = { TransactionScopeId: transactionScopeId };
+  await dataProvider.Delete(entity3, deleteOptions, contextUser);
+  
+  // Commit the transaction
+  await dataProvider.CommitTransaction({ transactionScopeId });
+} catch (error) {
+  // Rollback on error
+  await dataProvider.RollbackTransaction({ transactionScopeId });
+  throw error;
+} finally {
+  // Clean up transaction context
+  dataProvider.DisposeTransactionContext(transactionScopeId);
+}
+```
+
+**Key Features of Request-Scoped Transactions:**
+- Each request gets its own transaction context via unique transaction scope ID
+- Multiple concurrent requests have isolated transactions
+- Automatic cleanup of transaction contexts after request completion
+- Supports nested transactions with SQL Server savepoints
+- Used automatically by MJServer for all GraphQL mutations
 
 ### Running Views and Reports
 
