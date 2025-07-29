@@ -156,6 +156,9 @@ async function executeSQLCore(
 
   try {
     // Create a new request object for this query
+    // Note: This looks redundant but is required for TypeScript type narrowing.
+    // The sql.Request constructor has overloads for ConnectionPool and Transaction,
+    // but TypeScript can't resolve the overload with a union type parameter.
     let request: sql.Request;
     if (connectionSource instanceof sql.Transaction) {
       request = new sql.Request(connectionSource);
