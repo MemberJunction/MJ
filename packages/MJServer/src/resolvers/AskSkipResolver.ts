@@ -1455,7 +1455,19 @@ cycle.`);
             updatedAt: f.__mj_UpdatedAt,
           };
         }),
-      };
+        params: q.Parameters.map((p) => {
+          return {
+            id: p.ID,
+            name: p.Name,
+            description: p.Description,
+            type: p.Type,
+            isRequired: p.IsRequired,
+            defaultValue: p.DefaultValue,
+            createdAt: p.__mj_CreatedAt,
+            updatedAt: p.__mj_UpdatedAt,
+          };
+        })
+      }
     });
   }
 
