@@ -162,14 +162,22 @@ export class QueryResolverExtended extends QueryResolver {
     @RequireSystemUser()
     @Mutation(() => DeleteQueryResultType)
     async DeleteQuerySystemResolver(
-        @Arg('ID', () => String) queryID: string,
+        @Arg('ID', () => String) ID: string,
         @Arg('options', () => DeleteOptionsInput, { nullable: true }) options: DeleteOptionsInput | null,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                return {
+                    Success: false,
+                    ErrorMessage: 'QueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
             const provider = GetReadWriteProvider(context.providers);    
-            const key = new CompositeKey([{FieldName: 'ID', Value: queryID}]);
+            const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
             
             // Provide default options if none provided
             const deleteOptions = options || {
