@@ -4,7 +4,7 @@ import { LogError, Metadata, RunView, UserInfo, CompositeKey, EntitySaveOptions 
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity } from '@memberjunction/core-entities';
 import { QueryResolver } from '../generated/generated.js';
-import { GetReadWriteDataSource } from '../util.js';
+import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 
 /**
@@ -128,8 +128,8 @@ export class QueryResolverExtended extends QueryResolver {
             };
             
             // Use inherited CreateRecord method which bypasses AI processing
-            const connPool = GetReadWriteDataSource(context.dataSources);
-            const createdQuery = await this.CreateRecord('Queries', createInput, connPool, context.userPayload, pubSub);
+            const provider = GetReadWriteProvider(context.providers);    
+            const createdQuery = await this.CreateRecord('Queries', createInput, provider, context.userPayload, pubSub);
             
             if (createdQuery) {
                 return {
@@ -168,7 +168,7 @@ export class QueryResolverExtended extends QueryResolver {
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
-            const connPool = GetReadWriteDataSource(context.dataSources);
+            const provider = GetReadWriteProvider(context.providers);    
             const key = new CompositeKey([{FieldName: 'ID', Value: queryID}]);
             
             // Provide default options if none provided
@@ -178,7 +178,7 @@ export class QueryResolverExtended extends QueryResolver {
             };
             
             // Use inherited DeleteRecord method from ResolverBase
-            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, connPool, context.userPayload, pubSub);
+            const deletedQuery = await this.DeleteRecord('Queries', key, deleteOptions, provider, context.userPayload, pubSub);
             
             if (deletedQuery) {
                 return {

@@ -139,11 +139,30 @@ export const contextFunction =
     const p = new SQLServerDataProvider();
     await p.Config(config);
 
+    const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+    let rp = null;
+    if (readOnlyDataSource) {
+      rp = new SQLServerDataProvider();
+      const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
+      await rp.Config(rConfig);
+    }
+
+    const providers = [{
+      provider: p,
+      type: 'Read-Write' as 'Read-Write' | 'Read-Only'
+    }];
+    if (rp) {
+      providers.push({
+        provider: rp,
+        type: 'Read-Only' as 'Read-Write' | 'Read-Only'
+      });
+    }
+
     const contextResult = { 
       dataSource, 
       dataSources, 
       userPayload: userPayload,
-      provider: p
+      providers,
     };
     
     return contextResult;

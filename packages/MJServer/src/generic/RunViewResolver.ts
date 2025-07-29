@@ -3,6 +3,8 @@ import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { GetReadOnlyProvider } from '../util.js';
+import { UserViewEntity } from '@memberjunction/core-entities';
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -457,17 +459,17 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunViewByName(
     @Arg('input', () => RunViewByNameInput) input: RunViewByNameInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-      if (rawData === null) return null;
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+      if (rawData === null) 
+        return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE Name='${input.ViewName}'`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { Name: input.ViewName }, userPayload.userRecord));
+      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -484,17 +486,17 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunViewByID(
     @Arg('input', () => RunViewByIDInput) input: RunViewByIDInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-      if (rawData === null) return null;
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+      if (rawData === null) 
+        return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE ID=${input.ViewID}`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -511,17 +513,16 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunDynamicView(
     @Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input.EntityName}'`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      const returnData = this.processRawData(rawData.Results, entity.ID);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -538,23 +539,20 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => [RunViewGenericResult])
   async RunViews(
     @Arg('input', () => [RunViewGenericInput]) input: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
         return null;
       }
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const request = dataSource.request();
-        const entityIdResult = await request.query(
-          `SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`
-        );
-        const entityId = entityIdResult.recordset;
-        const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
+        const entity = provider.Entities.find((e) => e.Name === input[index].EntityName);
+        const returnData: any[] = this.processRawData(data.Results, entity.ID);
 
         results.push({
           Results: returnData,
@@ -577,17 +575,17 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunViewByNameSystemUser(
     @Arg('input', () => RunViewByNameInput) input: RunViewByNameInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE Name='${input.ViewName}'`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      const entity = provider.Entities.find((e) => e.Name === input.ViewName);
+      const entityId = entity ? entity.ID : null;
+      const returnData = this.processRawData(rawData.Results, entityId);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -607,17 +605,16 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunViewByIDSystemUser(
     @Arg('input', () => RunViewByIDInput) input: RunViewByIDInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT EntityID from [${this.MJCoreSchema}].vwUserViews WHERE ID=${input.ViewID}`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].EntityID);
+      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -637,17 +634,20 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => RunViewResult)
   async RunDynamicViewSystemUser(
     @Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData = await super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const request = dataSource.request();
-      const entityIdResult = await request.query(`SELECT ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input.EntityName}'`);
-      const entityId = entityIdResult.recordset;
-      const returnData = this.processRawData(rawData.Results, entityId[0].ID);
+      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      if (!entity) {
+        LogError(new Error(`Entity with name ${input.EntityName} not found`));
+        return null;
+      }
+      const returnData = this.processRawData(rawData.Results, entity.ID);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -667,23 +667,24 @@ export class RunViewResolver extends ResolverBase {
   @Query(() => [RunViewGenericResult])
   async RunViewsSystemUser(
     @Arg('input', () => [RunViewGenericInput]) input: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     pubSub: PubSubEngine
   ) {
     try {
-      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, dataSource, userPayload, pubSub);
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      const rawData: RunViewGenericResult[] = await super.RunViewsGeneric(input, provider, userPayload);
       if (!rawData) {
         return null;
       }
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const request = dataSource.request();
-        const entityIdResult = await request.query(
-          `SELECT TOP 1 ID from [${this.MJCoreSchema}].vwEntities WHERE Name='${input[index].EntityName}'`
-        );
-        const entityId = entityIdResult.recordset;
-        const returnData: any[] = this.processRawData(data.Results, entityId[0].ID);
+        const entity = provider.Entities.find((e) => e.Name === input[index].EntityName);
+        if (!entity) {
+          LogError(new Error(`Entity with name ${input[index].EntityName} not found`));
+          continue;
+        }
+        const returnData: any[] = this.processRawData(data.Results, entity.ID);
 
         results.push({
           Results: returnData,
