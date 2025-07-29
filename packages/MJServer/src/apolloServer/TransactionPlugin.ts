@@ -17,27 +17,44 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
     // to do so with SQL Server anyway.
     const pool: sql.ConnectionPool = requestContext.contextValue.dataSource;
     const transaction = new sql.Transaction(pool);
+    let transactionStarted: boolean = false, transactionEnded: boolean = false;
 
     // Store transaction in context for resolvers to use
     (requestContext.contextValue as any).transaction = transaction;
     console.log('Starting transaction wrapper, time spent: ', Date.now() - start, 'ms ');
     await transaction.begin();
+    transactionStarted = true;
 
     return {
       didEncounterErrors: async (requestContext) => {
         console.log('Error in transaction wrapper: ' + requestContext.errors, 'time spent: ', Date.now() - start, 'ms');
+        try {
+          if (transactionStarted && !transactionEnded) {
+            console.log('Rolling back transaction due to errors, time spent: ', Date.now() - start, 'ms ');
+            await transaction.rollback();
+            transactionEnded = true;
+          }
+        } catch (err) {
+          console.error('Error while rolling back transaction', err);
+        }
       },
       executionDidStart: async () => {
         return {
           executionDidEnd: async (err) => {
             try {
               if (err) {
-                console.log('Error in transaction, rolling back, time spent: ', Date.now() - start, 'ms ');
-                console.error('Rolling back transaction', err);
-                await transaction.rollback();
+                if (transactionStarted && !transactionEnded) {
+                  console.log('Error in transaction, rolling back, time spent: ', Date.now() - start, 'ms ');
+                  console.error('Rolling back transaction', err);
+                  await transaction.rollback();
+                  transactionEnded = true;
+                }
               } else {
-                console.log('Committing transaction, time spent: ', Date.now() - start, 'ms ');
-                await transaction.commit();
+                if (transactionStarted && !transactionEnded) {
+                  console.log('Committing transaction, time spent: ', Date.now() - start, 'ms ');
+                  await transaction.commit();
+                  transactionEnded = true;
+                }
               }
             } catch (execErr) {
               console.log('Execution Error, time spent: ', Date.now() - start, 'ms ');

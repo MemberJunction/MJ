@@ -2703,7 +2703,15 @@ export class SQLServerDataProvider
               // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
               // it here for clarity.
               result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+              result.EndedAt = new Date();
               result.Success = false;
+
+              // Rollback the transaction we started, if started...
+              if (startedTransaction) {
+                  await this.RollbackTransaction();
+                  startedTransaction = false;
+              }
+
               return false;
             }
           }
