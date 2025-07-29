@@ -601,11 +601,21 @@ export class GraphQLSystemUserClient {
 
     /**
      * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
-     * @param input - DeleteQueryInput containing the query ID and delete options
+     * @param ID - The ID of the query to delete
+     * @param options - Optional delete options controlling action execution
      * @returns Promise containing the result of the query deletion
      */
     public async DeleteQuery(ID: string, options?: DeleteQueryOptionsInput): Promise<DeleteQueryResult> {
         try {
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                LogError('GraphQLSystemUserClient::DeleteQuery - Invalid query ID: ID cannot be null or empty');
+                return {
+                    Success: false,
+                    ErrorMessage: 'Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
             const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
                 DeleteQuerySystemResolver(ID: $ID, options: $options) {
                     Success

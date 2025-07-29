@@ -168,6 +168,14 @@ export class QueryResolverExtended extends QueryResolver {
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
+            // Validate queryID is not null/undefined/empty
+            if (!queryID || queryID.trim() === '') {
+                return {
+                    Success: false,
+                    ErrorMessage: 'QueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
             const provider = GetReadWriteProvider(context.providers);    
             const key = new CompositeKey([{FieldName: 'ID', Value: queryID}]);
             
