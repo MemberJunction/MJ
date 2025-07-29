@@ -210,6 +210,17 @@ async function executeSQLCore(
 }
 
 /**
+ * Interface for request-scoped transaction context
+ */
+interface RequestTransactionContext {
+  transaction?: sql.Transaction;
+  transactionDepth: number;
+  savepointCounter: number;
+  savepointStack: string[];
+  transactionState$?: BehaviorSubject<boolean>;
+}
+
+/**
  * SQL Server implementation of the MemberJunction data provider interfaces.
  * 
  * This class provides comprehensive database functionality including:
@@ -233,10 +244,16 @@ export class SQLServerDataProvider
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
   private _pool: sql.ConnectionPool;
+  
+  // Request-scoped transaction storage using Map with transaction scope IDs
+  private _transactionContexts = new Map<string, RequestTransactionContext>();
+  
+  // Legacy instance transaction properties - will be migrated to use AsyncLocalStorage
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
+  
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -265,14 +282,71 @@ export class SQLServerDataProvider
   private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
   
   /**
+   * Get the request-scoped transaction context by ID
+   * Returns null if no context exists for the given ID
+   */
+  public getTransactionContext(transactionScopeId: string | undefined): RequestTransactionContext | null {
+    if (!transactionScopeId) return null;
+    return this._transactionContexts.get(transactionScopeId) || null;
+  }
+
+  /**
+   * Create a new transaction context for the given scope ID
+   * @param transactionScopeId The unique ID for this transaction scope
+   * @returns The created transaction context
+   */
+  public createTransactionContext(transactionScopeId: string): RequestTransactionContext {
+    const context: RequestTransactionContext = {
+      transaction: undefined,
+      transactionDepth: 0,
+      savepointCounter: 0,
+      savepointStack: [],
+      transactionState$: new BehaviorSubject<boolean>(false)
+    };
+    
+    this._transactionContexts.set(transactionScopeId, context);
+    return context;
+  }
+
+  /**
+   * Dispose of a transaction context
+   * @param transactionScopeId The ID of the transaction context to dispose
+   */
+  public disposeTransactionContext(transactionScopeId: string): void {
+    const context = this._transactionContexts.get(transactionScopeId);
+    if (context) {
+      // Clean up the transaction if it's still active
+      if (context.transaction) {
+        try {
+          context.transaction.rollback();
+        } catch (e) {
+          // Transaction might already be closed
+        }
+      }
+      
+      // Complete the observable
+      context.transactionState$.complete();
+      
+      // Remove from map
+      this._transactionContexts.delete(transactionScopeId);
+    }
+  }
+
+  /**
    * Observable that emits the current transaction state (true when active, false when not)
    * External code can subscribe to this to know when transactions start and end
+   * 
+   * Note: This returns the request-specific observable if within a request context,
+   * otherwise returns the global observable for backward compatibility
+   * 
    * @example
    * provider.transactionState$.subscribe(isActive => {
    *   console.log('Transaction active:', isActive);
    * });
    */
   public get transactionState$(): Observable<boolean> {
+    // Always return the instance-level observable
+    // Request-specific observables should be accessed via getTransactionContext
     return this._transactionState$.asObservable();
   }
   
@@ -281,6 +355,8 @@ export class SQLServerDataProvider
    * 0 = no transaction, 1 = first level, 2+ = nested transactions
    */
   public get transactionDepth(): number {
+    // Always return instance-level transaction depth
+    // Request-specific depth should be accessed via getTransactionContext
     return this._transactionDepth;
   }
   
@@ -288,14 +364,14 @@ export class SQLServerDataProvider
    * Checks if we're currently in a transaction (at any depth)
    */
   public get inTransaction(): boolean {
-    return this._transactionDepth > 0;
+    return this.transactionDepth > 0;
   }
   
   /**
    * Checks if we're currently in a nested transaction (depth > 1)
    */
   public get inNestedTransaction(): boolean {
-    return this._transactionDepth > 1;
+    return this.transactionDepth > 1;
   }
   
   /**
@@ -308,8 +384,12 @@ export class SQLServerDataProvider
   
   /**
    * Gets whether a transaction is currently active
+   * Note: This checks the instance-level transaction state.
+   * For request-specific state, use getTransactionContext(transactionScopeId).
    */
   public get isTransactionActive(): boolean {
+    // Always return instance-level state
+    // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
   }
 
@@ -1676,6 +1756,7 @@ export class SQLServerDataProvider
              */
 
       // Step 1 - begin transaction
+      // Note: MergeRecords doesn't currently support transactionScopeId
       await this.BeginTransaction();
 
       // Step 2 - update the surviving record, but only do this if we were provided a field map
@@ -2092,24 +2173,43 @@ export class SQLServerDataProvider
           } else {
             // no transaction group, just execute this immediately...
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
+            let startedTransaction = false; // tracking if we started a transaction or not, so we can commit/rollback as needed
 
             let result;
             if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             } else {
-              // Execute SQL with optional simple SQL fallback for loggers
-              const rawResult = await this.ExecuteSQL(sSQL, null, { 
-                isMutation: true, 
-                description: `Save ${entity.EntityInfo.Name}`,
-                simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-              }, user);
-              result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              // Start a transaction to wrap the save operation
+              await this.BeginTransaction({ transactionScopeId: options.TransactionScopeId });
+              startedTransaction = true;
+              
+              try {
+                // Execute SQL with optional simple SQL fallback for loggers
+                const rawResult = await this.ExecuteSQL(sSQL, null, { 
+                  isMutation: true, 
+                  description: `Save ${entity.EntityInfo.Name}`,
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+                }, user);
+                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              } catch (e) {
+                // Rollback the transaction on error
+                if (startedTransaction) {
+                  await this.RollbackTransaction({ transactionScopeId: options.TransactionScopeId });
+                  startedTransaction = false;
+                }
+                throw e; // rethrow
+              }
             }
 
             this._bAllowRefresh = true; // allow refreshes now
 
             entityResult.EndedAt = new Date();
             if (result && result.length > 0) {
+              // Commit the transaction if we started one
+              if (startedTransaction) {
+                await this.CommitTransaction({ transactionScopeId: options.TransactionScopeId });
+              }
+              
               // Entity AI Actions - fired off async, NO await on purpose
               if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/)
                 this.HandleEntityAIActions(entity, 'save', false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
@@ -2120,6 +2220,11 @@ export class SQLServerDataProvider
               entityResult.Success = true;
               return result[0];
             } else {
+              // Rollback the transaction if we started one
+              if (startedTransaction) {
+                await this.RollbackTransaction({ transactionScopeId: options.TransactionScopeId });
+              }
+              
               if (bNewRecord) {
                 throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ` + sSQL);
               }
@@ -2686,7 +2791,7 @@ export class SQLServerDataProvider
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
           // Execute SQL with optional simple SQL fallback for loggers
-          await this.BeginTransaction(); // we are NOT in a trans group, so we need to start a transaction
+          await this.BeginTransaction({ transactionScopeId: options.TransactionScopeId }); // we are NOT in a trans group, so we need to start a transaction
           startedTransaction = true;
           d = await this.ExecuteSQL(sSQL, null, { 
             isMutation: true, 
@@ -2708,7 +2813,7 @@ export class SQLServerDataProvider
 
               // Rollback the transaction we started, if started...
               if (startedTransaction) {
-                  await this.RollbackTransaction();
+                  await this.RollbackTransaction({ transactionScopeId: options.TransactionScopeId });
                   startedTransaction = false;
               }
 
@@ -2722,7 +2827,7 @@ export class SQLServerDataProvider
 
           if (startedTransaction) {
             // if we started a transaction, we need to commit it
-            await this.CommitTransaction();
+            await this.CommitTransaction({ transactionScopeId: options.TransactionScopeId });
           } 
 
           result.EndedAt = new Date();
@@ -2731,7 +2836,7 @@ export class SQLServerDataProvider
           if (startedTransaction) {
             // if we started a transaction, we need to rollback
             startedTransaction = false;
-            await this.RollbackTransaction();
+            await this.RollbackTransaction({ transactionScopeId: options.TransactionScopeId });
           }
 
           result.Message = 'No result returned from SQL';
@@ -3362,7 +3467,7 @@ export class SQLServerDataProvider
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
     } else if (!connectionSource) {
-      // Use our transaction if available
+      // Use instance transaction
       transaction = this._transaction;
     }
     
@@ -3371,7 +3476,9 @@ export class SQLServerDataProvider
       pool: this._pool,
       transaction: transaction,
       logSqlStatement: this._logSqlStatement.bind(this),
-      clearTransaction: () => { this._transaction = null; }
+      clearTransaction: () => { 
+        this._transaction = null;
+      }
     };
     
     // Convert logging options to internal format
@@ -3632,7 +3739,9 @@ export class SQLServerDataProvider
         pool: this._pool,
         transaction: this._transaction,
         logSqlStatement: this._logSqlStatement.bind(this),
-        clearTransaction: () => { this._transaction = null; }
+        clearTransaction: () => { 
+          this._transaction = null;
+        }
       };
 
       // Execute using instance method (which handles queue for transactions)
@@ -3746,128 +3855,293 @@ export class SQLServerDataProvider
     }
   }
 
-  public async BeginTransaction() {
+  public async BeginTransaction(options?: { transactionScopeId?: string }) {
     try {
-      this._transactionDepth++;
+      let context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
       
-      if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object
-        this._transaction = new sql.Transaction(this._pool);
-        await this._transaction.begin();
+      // If transactionScopeId provided but no context exists, create one
+      if (options?.transactionScopeId && !context) {
+        context = this.createTransactionContext(options.transactionScopeId);
+      }
+      
+      if (context) {
+        // We're in a request context - use request-scoped transaction
+        context.transactionDepth++;
         
-        // Emit transaction state change
-        this._transactionState$.next(true);
+        if (context.transactionDepth === 1) {
+          // First transaction - actually begin using mssql Transaction object
+          context.transaction = new sql.Transaction(this._pool);
+          await context.transaction.begin();
+          
+          // Emit transaction state change
+          if (context.transactionState$) {
+            context.transactionState$.next(true);
+          }
+        } else {
+          // Nested transaction - create a savepoint
+          const savepointName = `SavePoint_${++context.savepointCounter}`;
+          context.savepointStack.push(savepointName);
+          
+          // Create savepoint for nested transaction
+          await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
+            description: `Creating savepoint ${savepointName} at depth ${context.transactionDepth}`,
+            ignoreLogging: true
+          });
+        }
       } else {
-        // Nested transaction - create a savepoint
-        const savepointName = `SavePoint_${++this._savepointCounter}`;
-        this._savepointStack.push(savepointName);
+        // No request context - use legacy instance variables
+        this._transactionDepth++;
         
-        // Create savepoint for nested transaction
-        await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-          description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-          ignoreLogging: true
-        });
+        if (this._transactionDepth === 1) {
+          // First transaction - actually begin using mssql Transaction object
+          this._transaction = new sql.Transaction(this._pool);
+          await this._transaction.begin();
+          
+          // Emit transaction state change
+          this._transactionState$.next(true);
+        } else {
+          // Nested transaction - create a savepoint
+          const savepointName = `SavePoint_${++this._savepointCounter}`;
+          this._savepointStack.push(savepointName);
+          
+          // Create savepoint for nested transaction
+          await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
+            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
+            ignoreLogging: true
+          });
+        }
       }
     } catch (e) {
-      this._transactionDepth--; // Restore depth on error
+      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      if (context) {
+        context.transactionDepth--; // Restore depth on error
+      } else {
+        this._transactionDepth--; // Restore depth on error
+      }
       LogError(e);
       throw e; // force caller to handle
     }
   }
 
-  public async CommitTransaction() {
+  public async CommitTransaction(options?: { transactionScopeId?: string }) {
     try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to commit');
-      }
+      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
       
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to commit');
-      }
-      
-      this._transactionDepth--;
-      
-      if (this._transactionDepth === 0) {
-        // Outermost transaction - use mssql Transaction object to commit
-        await this._transaction.commit();
-        this._transaction = null;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Process any deferred tasks after successful commit
-        await this.processDeferredTasks();
-      } else {
-        // Nested transaction - just remove the savepoint from stack
-        // The savepoint remains valid in SQL Server until the outer transaction commits or rolls back
-        this._savepointStack.pop();
-      }
-    } catch (e) {
-      LogError(e);
-      throw e; // force caller to handle
-    }
-  }
-
-  public async RollbackTransaction() {
-    try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 1) {
-        // Outermost transaction - use mssql Transaction object to rollback everything
-        await this._transaction.rollback();
-        this._transaction = null;
-        this._transactionDepth = 0;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Clear deferred tasks after rollback (don't process them)
-        const deferredCount = this._deferredTasks.length;
-        this._deferredTasks = [];
-        if (deferredCount > 0) {
-          LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-        }
-      } else {
-        // Nested transaction - rollback to the last savepoint
-        const savepointName = this._savepointStack[this._savepointStack.length - 1];
-        if (!savepointName) {
-          throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+      if (context) {
+        // We're in a request context
+        if (!context.transaction) {
+          throw new Error('No active transaction to commit');
         }
         
-        // Rollback to the savepoint (this preserves the outer transaction)
-        // Note: We use ROLLBACK TRANSACTION SavePointName (without TO) as per SQL Server syntax
-        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-          description: `Rolling back to savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
+        if (context.transactionDepth === 0) {
+          throw new Error('Transaction depth mismatch - no transaction to commit');
+        }
         
-        // Remove the savepoint from stack and decrement depth
-        this._savepointStack.pop();
+        context.transactionDepth--;
+        
+        if (context.transactionDepth === 0) {
+          // Outermost transaction - use mssql Transaction object to commit
+          await context.transaction.commit();
+          context.transaction = null;
+          
+          // Clear savepoint tracking
+          context.savepointStack = [];
+          context.savepointCounter = 0;
+          
+          // Update legacy instance variables
+          this._transaction = null;
+          this._transactionDepth = 0;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          
+          // Emit transaction state change to both request and global observables
+          if (context.transactionState$) {
+            context.transactionState$.next(false);
+          }
+          this._transactionState$.next(false);
+          
+          // Process any deferred tasks after successful commit
+          await this.processDeferredTasks();
+        } else {
+          // Nested transaction - just remove the savepoint from stack
+          // The savepoint remains valid in SQL Server until the outer transaction commits or rolls back
+          context.savepointStack.pop();
+          
+          // Update legacy instance variables
+          this._transactionDepth = context.transactionDepth;
+          this._savepointStack = [...context.savepointStack];
+        }
+      } else {
+        // No request context - use legacy instance variables
+        if (!this._transaction) {
+          throw new Error('No active transaction to commit');
+        }
+        
+        if (this._transactionDepth === 0) {
+          throw new Error('Transaction depth mismatch - no transaction to commit');
+        }
+        
         this._transactionDepth--;
+        
+        if (this._transactionDepth === 0) {
+          // Outermost transaction - use mssql Transaction object to commit
+          await this._transaction.commit();
+          this._transaction = null;
+          
+          // Clear savepoint tracking
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          
+          // Emit transaction state change
+          this._transactionState$.next(false);
+          
+          // Process any deferred tasks after successful commit
+          await this.processDeferredTasks();
+        } else {
+          // Nested transaction - just remove the savepoint from stack
+          this._savepointStack.pop();
+        }
       }
     } catch (e) {
-      // On error in nested transaction, maintain state
-      // On error in outer transaction, reset everything
-      if (this._transactionDepth === 1 || !this._transaction) {
-        this._transaction = null;
-        this._transactionDepth = 0;
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        this._transactionState$.next(false);
+      LogError(e);
+      throw e; // force caller to handle
+    }
+  }
+
+  public async RollbackTransaction(options?: { transactionScopeId?: string }) {
+    try {
+      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      
+      if (context) {
+        // We're in a request context
+        if (!context.transaction) {
+          throw new Error('No active transaction to rollback');
+        }
+        
+        if (context.transactionDepth === 0) {
+          throw new Error('Transaction depth mismatch - no transaction to rollback');
+        }
+        
+        if (context.transactionDepth === 1) {
+          // Outermost transaction - use mssql Transaction object to rollback everything
+          await context.transaction.rollback();
+          context.transaction = null;
+          context.transactionDepth = 0;
+          
+          // Clear savepoint tracking
+          context.savepointStack = [];
+          context.savepointCounter = 0;
+          
+          // Update legacy instance variables
+          this._transaction = null;
+          this._transactionDepth = 0;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          
+          // Emit transaction state change to both request and global observables
+          if (context.transactionState$) {
+            context.transactionState$.next(false);
+          }
+          this._transactionState$.next(false);
+          
+          // Clear deferred tasks after rollback (don't process them)
+          const deferredCount = this._deferredTasks.length;
+          this._deferredTasks = [];
+          if (deferredCount > 0) {
+            LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+          }
+        } else {
+          // Nested transaction - rollback to the last savepoint
+          const savepointName = context.savepointStack[context.savepointStack.length - 1];
+          if (!savepointName) {
+            throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+          }
+          
+          // Rollback to the savepoint (this preserves the outer transaction)
+          // Note: We use ROLLBACK TRANSACTION SavePointName (without TO) as per SQL Server syntax
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+          
+          // Remove the savepoint from stack and decrement depth
+          context.savepointStack.pop();
+          context.transactionDepth--;
+          
+          // Update legacy instance variables
+          this._transactionDepth = context.transactionDepth;
+          this._savepointStack = [...context.savepointStack];
+        }
+      } else {
+        // No request context - use legacy instance variables
+        if (!this._transaction) {
+          throw new Error('No active transaction to rollback');
+        }
+        
+        if (this._transactionDepth === 0) {
+          throw new Error('Transaction depth mismatch - no transaction to rollback');
+        }
+        
+        if (this._transactionDepth === 1) {
+          // Outermost transaction - rollback everything
+          await this._transaction.rollback();
+          this._transaction = null;
+          this._transactionDepth = 0;
+          
+          // Clear savepoint tracking
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          
+          // Emit transaction state change
+          this._transactionState$.next(false);
+          
+          // Clear deferred tasks after rollback
+          const deferredCount = this._deferredTasks.length;
+          this._deferredTasks = [];
+          if (deferredCount > 0) {
+            LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+          }
+        } else {
+          // Nested transaction - rollback to savepoint
+          const savepointName = this._savepointStack[this._savepointStack.length - 1];
+          if (!savepointName) {
+            throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+          }
+          
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+          
+          this._savepointStack.pop();
+          this._transactionDepth--;
+        }
+      }
+    } catch (e) {
+      const context = options?.transactionScopeId ? this.getTransactionContext(options.transactionScopeId) : null;
+      if (context) {
+        // On error in nested transaction, maintain state
+        // On error in outer transaction, reset everything
+        if (context.transactionDepth === 1 || !context.transaction) {
+          context.transaction = null;
+          context.transactionDepth = 0;
+          context.savepointStack = [];
+          context.savepointCounter = 0;
+          
+          // Emit transaction state change
+          if (context.transactionState$) {
+            context.transactionState$.next(false);
+          }
+        }
+      } else {
+        // No context - reset legacy variables on outer transaction error
+        if (this._transactionDepth === 1 || !this._transaction) {
+          this._transaction = null;
+          this._transactionDepth = 0;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          this._transactionState$.next(false);
+        }
       }
       
       LogError(e);

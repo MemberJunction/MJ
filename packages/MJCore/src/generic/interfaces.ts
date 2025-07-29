@@ -192,6 +192,13 @@ export class EntitySaveOptions {
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
+    
+    /**
+     * Optional transaction scope ID for managing multi-user transaction isolation.
+     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
+     * This allows multiple concurrent requests to have independent transaction contexts.
+     */
+    TransactionScopeId?: string;
 }
 
 /**
@@ -215,6 +222,13 @@ export class EntityDeleteOptions {
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
+    
+    /**
+     * Optional transaction scope ID for managing multi-user transaction isolation.
+     * When provided, operations will use request-scoped transactions instead of instance-level transactions.
+     * This allows multiple concurrent requests to have independent transaction contexts.
+     */
+    TransactionScopeId?: string;
 }
 
 /**
