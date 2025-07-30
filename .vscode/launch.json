@@ -70,7 +70,12 @@
       "name": "CodeGen CLI",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
       "args": ["codegen"],
-      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"],
+      "env": {
+        "FORCE_COLOR": "0",
+        "CI": "true"
+      },
+      "console": "integratedTerminal"
     },
     {
       "type": "chrome",
