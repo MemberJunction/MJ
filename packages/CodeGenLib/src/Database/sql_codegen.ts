@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
-import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -11,7 +11,7 @@ import { ManageMetadataBase } from './manage-metadata';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 
 
@@ -1752,9 +1752,6 @@ GO${permissions}
      */
     protected async getModifiedEntitiesWithUpdateAPI(entities: EntityInfo[]): Promise<Map<string, string>> {
         const modifiedEntitiesMap = new Map<string, string>();
-        
-        // Import the ManageMetadataBase to access the modified entity list
-        const { ManageMetadataBase } = await import('./manage-metadata');
         
         // Get the list of modified entity names from the metadata management phase
         const modifiedEntityNames = ManageMetadataBase.modifiedEntityList;
