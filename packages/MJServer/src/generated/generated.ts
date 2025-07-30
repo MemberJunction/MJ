@@ -40955,6 +40955,52 @@ export class AIPromptRun_ {
     @MaxLength(16)
     RerunFromPromptRunID?: string;
         
+    @Field({nullable: true, description: `JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`}) 
+    ModelSelection?: string;
+        
+    @Field({description: `Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether this prompt run was cancelled before completion`}) 
+    Cancelled: boolean;
+        
+    @Field({nullable: true, description: `Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`}) 
+    CancellationReason?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`}) 
+    ModelPowerRank?: number;
+        
+    @Field({nullable: true, description: `Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`}) 
+    @MaxLength(100)
+    SelectionStrategy?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether this result was served from cache rather than executing a new model call`}) 
+    CacheHit: boolean;
+        
+    @Field({nullable: true, description: `Unique key used for caching this prompt result, typically a hash of the prompt and parameters`}) 
+    @MaxLength(1000)
+    CacheKey?: string;
+        
+    @Field({nullable: true, description: `ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`}) 
+    @MaxLength(16)
+    JudgeID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`}) 
+    JudgeScore?: number;
+        
+    @Field(() => Boolean, {description: `Indicates whether this result was selected as the best result when multiple models were run in parallel`}) 
+    WasSelectedResult: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates whether streaming was enabled for this prompt execution`}) 
+    StreamingEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds from request initiation to receiving the first token from the model`}) 
+    FirstTokenTime?: number;
+        
+    @Field({nullable: true, description: `Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`}) 
+    ErrorDetails?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -40978,6 +41024,10 @@ export class AIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     OriginalModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Judge?: string;
         
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -41168,6 +41218,48 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    ModelSelection: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Cancelled?: boolean;
+
+    @Field({ nullable: true })
+    CancellationReason: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ModelPowerRank: number | null;
+
+    @Field({ nullable: true })
+    SelectionStrategy: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheHit?: boolean;
+
+    @Field({ nullable: true })
+    CacheKey: string | null;
+
+    @Field({ nullable: true })
+    JudgeID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    JudgeScore: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSelectedResult?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    StreamingEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    FirstTokenTime: number | null;
+
+    @Field({ nullable: true })
+    ErrorDetails: string | null;
 }
     
 
@@ -41352,6 +41444,48 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    ModelSelection?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Cancelled?: boolean;
+
+    @Field({ nullable: true })
+    CancellationReason?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ModelPowerRank?: number | null;
+
+    @Field({ nullable: true })
+    SelectionStrategy?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheHit?: boolean;
+
+    @Field({ nullable: true })
+    CacheKey?: string | null;
+
+    @Field({ nullable: true })
+    JudgeID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    JudgeScore?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSelectedResult?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    StreamingEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    FirstTokenTime?: number | null;
+
+    @Field({ nullable: true })
+    ErrorDetails?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
