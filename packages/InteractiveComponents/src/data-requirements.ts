@@ -75,8 +75,16 @@ export type ComponentQueryParameterValue = {
     /**
      * Value of the parameter. If the value is '@runtime', it indicates that the component will determine the value at runtime. 
      * If anything other than '@runtime' is specified, it is a hardcoded value that the component will use.
-     */
+     */ 
     value: string;
+
+    /**
+     * When specifying '@runtime' for the value, populate this field with a value that can be used to test the query to validate it runs. It doesn't need
+     * to be a value that is valid in the sense of being in the database, but is of the right type. For example if the
+     * parameter is a number, date or string, include a test value of that type. **Note** if the parameter is for a UNIQUEIDENTIFIER column
+     * type make sure to use a valid UUID format otherwise the query will FAIL.
+     */
+    testValue: string;
 
     /**
      * Description of the parameter and how it is used in the query. This is particular important if 
