@@ -56,6 +56,11 @@ export class SQLCodeGenBase {
      * Tracks entities that need their delete stored procedures regenerated due to cascade dependencies
      */
     protected entitiesNeedingDeleteSPRegeneration: Set<string> = new Set();
+    
+    /**
+     * Ordered list of entity IDs for delete SP regeneration (dependency order)
+     */
+    protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
     public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
@@ -112,9 +117,16 @@ export class SQLCodeGenBase {
             startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
             const step2StartTime: Date = new Date();
 
+            // First, separate entities that need cascade delete regeneration from others
+            const entitiesWithoutCascadeRegeneration = includedEntities.filter(e => !this.entitiesNeedingDeleteSPRegeneration.has(e.ID));
+            const entitiesForCascadeRegeneration = this.orderedEntitiesForDeleteSPRegeneration
+                .map(id => includedEntities.find(e => e.ID === id))
+                .filter(e => e !== undefined) as EntityInfo[];
+
+            // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool, 
-                entities: includedEntities, 
+                entities: entitiesWithoutCascadeRegeneration, 
                 directory, 
                 onlyPermissions: false, 
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
@@ -125,6 +137,26 @@ export class SQLCodeGenBase {
             if (!genResult.Success) {
                 failSpinner('Failed to generate entity SQL files');
                 return false;
+            }
+            
+            // Generate SQL for cascade delete regenerations in dependency order (sequentially)
+            if (entitiesForCascadeRegeneration.length > 0) {
+                updateSpinner(`Regenerating ${entitiesForCascadeRegeneration.length} delete SPs in dependency order...`);
+                const cascadeGenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
+                    pool, 
+                    entities: entitiesForCascadeRegeneration, 
+                    directory, 
+                    onlyPermissions: false, 
+                    skipExecution: true,
+                    writeFiles: true, 
+                    batchSize: 1, // Process sequentially to maintain dependency order
+                    enableSQLLoggingForNewOrModifiedEntities: true
+                });
+                if (!cascadeGenResult.Success) {
+                    failSpinner('Failed to regenerate cascade delete SPs');
+                    return false;
+                }
+                genResult.Files.push(...cascadeGenResult.Files);
             }
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
@@ -1842,11 +1874,97 @@ GO${permissions}
                             logStatus(`  - Skipping ${entity.Name} - has cascade dependency but spDeleteGenerated=false (custom SP)`);
                         }
                     }
+                    
+                    // Order entities by dependencies for proper regeneration
+                    this.orderedEntitiesForDeleteSPRegeneration = this.orderEntitiesByDependencies(
+                        entities,
+                        this.entitiesNeedingDeleteSPRegeneration
+                    );
+                    
+                    if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
+                        logStatus(`Ordered entities for delete SP regeneration:`);
+                        this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
+                            const entity = entities.find(e => e.ID === entityId);
+                            logStatus(`  ${index + 1}. ${entity?.Name || entityId}`);
+                        });
+                    }
                 }
             }
         } catch (error) {
             logError(`Error in cascade delete dependency analysis: ${error}`);
             // Continue with normal processing even if dependency analysis fails
         }
+    }
+    
+    /**
+     * Orders entities by their cascade delete dependencies using topological sort.
+     * Ensures that if Entity A's delete SP calls Entity B's update/delete SP,
+     * then Entity B is regenerated before Entity A.
+     * 
+     * @param entities All entities for name lookup
+     * @param entityIdsToOrder Set of entity IDs that need ordering
+     * @returns Array of entity IDs in dependency order
+     */
+    protected orderEntitiesByDependencies(entities: EntityInfo[], entityIdsToOrder: Set<string>): string[] {
+        const ordered: string[] = [];
+        const visited = new Set<string>();
+        const visiting = new Set<string>();
+        
+        // Build reverse dependency map for entities we're ordering
+        // If A depends on B, then reverseMap[A] contains B
+        const reverseMap = new Map<string, Set<string>>();
+        
+        for (const entityId of entityIdsToOrder) {
+            reverseMap.set(entityId, new Set<string>());
+        }
+        
+        // For each entity in our set, find what it depends on
+        for (const [dependedOnId, dependentIds] of this.cascadeDeleteDependencies) {
+            for (const dependentId of dependentIds) {
+                if (entityIdsToOrder.has(dependentId) && entityIdsToOrder.has(dependedOnId)) {
+                    // dependentId depends on dependedOnId
+                    reverseMap.get(dependentId)!.add(dependedOnId);
+                }
+            }
+        }
+        
+        // Topological sort using DFS
+        const visit = (entityId: string): boolean => {
+            if (visited.has(entityId)) {
+                return true;
+            }
+            
+            if (visiting.has(entityId)) {
+                // Circular dependency detected
+                const entity = entities.find(e => e.ID === entityId);
+                logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
+                return false;
+            }
+            
+            visiting.add(entityId);
+            
+            // Visit dependencies first
+            const dependencies = reverseMap.get(entityId) || new Set();
+            for (const depId of dependencies) {
+                if (!visit(depId)) {
+                    return false;
+                }
+            }
+            
+            visiting.delete(entityId);
+            visited.add(entityId);
+            ordered.push(entityId);
+            
+            return true;
+        };
+        
+        // Visit all entities that need ordering
+        for (const entityId of entityIdsToOrder) {
+            if (!visited.has(entityId)) {
+                visit(entityId);
+            }
+        }
+        
+        return ordered;
     }
 }
