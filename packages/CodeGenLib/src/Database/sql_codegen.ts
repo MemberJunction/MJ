@@ -45,6 +45,18 @@ export class SQLCodeGenBase {
      */
     protected filterEntitiesQualifiedForRegeneration: boolean = false;
 
+    /**
+     * Tracks cascade delete dependencies between entities.
+     * Key: Entity ID whose update/delete SP is called by other entities' delete SPs
+     * Value: Set of Entity IDs that have CascadeDeletes=true and call this entity's update/delete SP
+     */
+    protected cascadeDeleteDependencies: Map<string, Set<string>> = new Map();
+
+    /**
+     * Tracks entities that need their delete stored procedures regenerated due to cascade dependencies
+     */
+    protected entitiesNeedingDeleteSPRegeneration: Set<string> = new Set();
+
     public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
@@ -85,6 +97,11 @@ export class SQLCodeGenBase {
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+
+            // STEP 1.5 - Check for cascade delete dependencies that require regeneration
+            startSpinner('Analyzing cascade delete dependencies...');
+            await this.markEntitiesForCascadeDeleteRegeneration(pool, includedEntities);
+            succeedSpinner('Cascade delete dependency analysis completed');
 
             // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
             startSpinner('Cleaning generated files...');
@@ -401,6 +418,10 @@ export class SQLCodeGenBase {
             const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) || 
                                    !!ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name);
             
+            // Check if entity is being regenerated due to cascade dependencies
+            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') && 
+                                                   this.entitiesNeedingDeleteSPRegeneration.has(entity.ID);
+            
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
@@ -418,6 +439,9 @@ export class SQLCodeGenBase {
             // Determine if we should log based on entity state and force regeneration settings
             if (isNewOrModified) {
                 // Always log new or modified entities
+                shouldLog = true;
+            } else if (isCascadeDependencyRegeneration) {
+                // Always log cascade dependency regenerations
                 shouldLog = true;
             } else if (isForceRegeneration) {
                 // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
@@ -582,9 +606,13 @@ export class SQLCodeGenBase {
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
                 if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                    options.entity.spDeleteGenerated && // Only generate if marked as generated (not custom)
+                    ((configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                     this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
+                    if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
+                        logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
+                    }
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
@@ -1640,5 +1668,188 @@ GO${permissions}
         }
         
         return { declarations, selectFields, fetchInto, allParams };
+    }
+
+    /**
+     * Analyzes cascade delete dependencies without generating SQL.
+     * This method only tracks which entities depend on others for cascade operations.
+     */
+    protected analyzeCascadeDeleteDependencies(entity: EntityInfo): void {
+        if (entity.CascadeDeletes) {
+            const md = new Metadata();
+
+            // Find all fields in other entities that are foreign keys to this entity
+            for (const e of md.Entities) {
+                for (const ef of e.Fields) {
+                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                        // Check if this would generate a cascade operation
+                        const wouldGenerateOperation = 
+                            (ef.AllowsNull === false && e.AllowDeleteAPI) || // Non-nullable FK: cascade delete
+                            (ef.AllowsNull && e.AllowUpdateAPI); // Nullable FK: cascade update
+                        
+                        if (wouldGenerateOperation) {
+                            // Track the dependency: entity's delete SP depends on e's update/delete SP
+                            if (ef.AllowsNull && e.AllowUpdateAPI) {
+                                // entity's delete SP will call e's update SP
+                                if (!this.cascadeDeleteDependencies.has(e.ID)) {
+                                    this.cascadeDeleteDependencies.set(e.ID, new Set());
+                                }
+                                this.cascadeDeleteDependencies.get(e.ID)!.add(entity.ID);
+                            } else if (!ef.AllowsNull && e.AllowDeleteAPI) {
+                                // entity's delete SP will call e's delete SP
+                                if (!this.cascadeDeleteDependencies.has(e.ID)) {
+                                    this.cascadeDeleteDependencies.set(e.ID, new Set());
+                                }
+                                this.cascadeDeleteDependencies.get(e.ID)!.add(entity.ID);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Builds a complete map of cascade delete dependencies by analyzing all entities.
+     * This method populates the cascadeDeleteDependencies map without generating SQL.
+     */
+    protected async buildCascadeDeleteDependencies(entities: EntityInfo[]): Promise<void> {
+        // Clear existing dependencies
+        this.cascadeDeleteDependencies.clear();
+
+        logStatus(`Building cascade delete dependencies...`);
+        
+        // Analyze cascade deletes for each entity with CascadeDeletes=true
+        // This will populate the cascadeDeleteDependencies map WITHOUT generating SQL
+        let entitiesWithCascadeDeletes = 0;
+        for (const entity of entities) {
+            if (entity.CascadeDeletes) {
+                entitiesWithCascadeDeletes++;
+                if (entity.spDeleteGenerated) {
+                    logStatus(`  Analyzing cascade deletes for ${entity.Name}...`);
+                    this.analyzeCascadeDeleteDependencies(entity);
+                } else {
+                    logStatus(`  Skipping ${entity.Name} - has CascadeDeletes but spDeleteGenerated=false`);
+                }
+            }
+        }
+        logStatus(`Total entities with CascadeDeletes=true: ${entitiesWithCascadeDeletes}`)
+        
+        // Log the dependency map
+        logStatus(`Cascade delete dependency map built:`);
+        for (const [dependedOnEntityId, dependentEntityIds] of this.cascadeDeleteDependencies) {
+            const dependedOnEntity = entities.find(e => e.ID === dependedOnEntityId);
+            const dependentNames = Array.from(dependentEntityIds)
+                .map(id => entities.find(e => e.ID === id)?.Name || id)
+                .join(', ');
+            logStatus(`  ${dependedOnEntity?.Name || dependedOnEntityId} is depended on by: ${dependentNames}`);
+        }
+    }
+
+    /**
+     * Gets entities that had schema changes from the ManageMetadataBase tracking.
+     * Returns a map of entity names to their IDs for entities that had update-affecting changes.
+     */
+    protected async getModifiedEntitiesWithUpdateAPI(entities: EntityInfo[]): Promise<Map<string, string>> {
+        const modifiedEntitiesMap = new Map<string, string>();
+        
+        // Import the ManageMetadataBase to access the modified entity list
+        const { ManageMetadataBase } = await import('./manage-metadata');
+        
+        // Get the list of modified entity names from the metadata management phase
+        const modifiedEntityNames = ManageMetadataBase.modifiedEntityList;
+        
+        logStatus(`Modified entities from metadata phase: ${modifiedEntityNames.join(', ')}`);
+        
+        // Convert entity names to IDs and filter for those with update API
+        for (const entityName of modifiedEntityNames) {
+            const entity = entities.find(e => 
+                e.Name === entityName && 
+                e.AllowUpdateAPI && 
+                e.spUpdateGenerated
+            );
+            
+            if (entity) {
+                modifiedEntitiesMap.set(entity.Name, entity.ID);
+                logStatus(`  - ${entity.Name} (${entity.ID}) has update API and will be tracked`);
+            } else {
+                const nonUpdateEntity = entities.find(e => e.Name === entityName);
+                if (nonUpdateEntity) {
+                    logStatus(`  - ${entityName} found but AllowUpdateAPI=${nonUpdateEntity.AllowUpdateAPI}, spUpdateGenerated=${nonUpdateEntity.spUpdateGenerated}`);
+                } else {
+                    logStatus(`  - ${entityName} not found in entities list`);
+                }
+            }
+        }
+        
+        return modifiedEntitiesMap;
+    }
+
+    /**
+     * Identifies entities that need their delete stored procedures regenerated
+     * due to cascade dependencies on entities that had schema changes.
+     */
+    protected async getEntitiesRequiringCascadeDeleteRegeneration(
+        pool: sql.ConnectionPool, 
+        changedEntityIds: Set<string>
+    ): Promise<Set<string>> {
+        const entitiesNeedingRegeneration = new Set<string>();
+
+        // For each changed entity, find all entities that depend on it
+        for (const changedEntityId of changedEntityIds) {
+            const dependentEntities = this.cascadeDeleteDependencies.get(changedEntityId);
+            if (dependentEntities) {
+                for (const dependentEntityId of dependentEntities) {
+                    entitiesNeedingRegeneration.add(dependentEntityId);
+                }
+            }
+        }
+
+        return entitiesNeedingRegeneration;
+    }
+
+    /**
+     * Marks entities for delete stored procedure regeneration based on cascade dependencies.
+     * This should be called after metadata management and before SQL generation.
+     */
+    protected async markEntitiesForCascadeDeleteRegeneration(
+        pool: sql.ConnectionPool,
+        entities: EntityInfo[]
+    ): Promise<void> {
+        try {
+            // Build the cascade delete dependency map
+            await this.buildCascadeDeleteDependencies(entities);
+
+            // Get entities that were modified during metadata management
+            const modifiedEntitiesMap = await this.getModifiedEntitiesWithUpdateAPI(entities);
+            
+            if (modifiedEntitiesMap.size > 0) {
+                logStatus(`Found ${modifiedEntitiesMap.size} entities with schema changes affecting update SPs`);
+
+                // Convert map values to set of IDs
+                const changedEntityIds = new Set(modifiedEntitiesMap.values());
+
+                // Find entities that need delete SP regeneration
+                const entitiesNeedingRegeneration = await this.getEntitiesRequiringCascadeDeleteRegeneration(pool, changedEntityIds);
+                
+                if (entitiesNeedingRegeneration.size > 0) {
+                    logStatus(`Identified ${entitiesNeedingRegeneration.size} entities requiring delete SP regeneration due to cascade dependencies`);
+
+                    // Store the entity IDs that need regeneration (only if spDeleteGenerated=true)
+                    for (const entityId of entitiesNeedingRegeneration) {
+                        const entity = entities.find(e => e.ID === entityId);
+                        if (entity && entity.spDeleteGenerated) {
+                            this.entitiesNeedingDeleteSPRegeneration.add(entityId);
+                            logStatus(`  - Marked ${entity.Name} for delete SP regeneration (cascade dependency)`);
+                        } else if (entity && !entity.spDeleteGenerated) {
+                            logStatus(`  - Skipping ${entity.Name} - has cascade dependency but spDeleteGenerated=false (custom SP)`);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            logError(`Error in cascade delete dependency analysis: ${error}`);
+            // Continue with normal processing even if dependency analysis fails
+        }
     }
 }
