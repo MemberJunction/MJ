@@ -1,0 +1,26 @@
+{
+  "name": "@memberjunction/ai-agent-manager",
+  "version": "2.77.0",
+  "description": "Core interfaces and types for the MemberJunction Agent Manager system",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "memberjunction",
+    "agent-manager",
+    "ai-agents",
+    "interfaces"
+  ],
+  "author": "MemberJunction",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.11.0",
+    "rimraf": "^3.0.2",
+    "typescript": "^5.0.0"
+  }
+}

@@ -433,7 +433,7 @@ const syncResult = await systemClient.SyncRolesAndUsers({
 
 #### Duplicate Detection
 - `GetRecordDuplicates(request: PotentialDuplicateRequest)` - Find potential duplicate records
-- `MergeRecords(request: RecordMergeRequest)` - Merge duplicate records
+- `MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions)` - Merge duplicate records with optional transaction scope support
 
 #### Metadata Operations
 - `GetEntityRecordName(entityName: string, compositeKey: CompositeKey)` - Get display name for a record

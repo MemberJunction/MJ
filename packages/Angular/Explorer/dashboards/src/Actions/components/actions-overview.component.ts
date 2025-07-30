@@ -40,6 +40,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   @Output() showActionsListView = new EventEmitter<void>();
   @Output() showExecutionsListView = new EventEmitter<void>();
   @Output() showCategoriesListView = new EventEmitter<void>();
+  @Output() showActionGalleryView = new EventEmitter<void>();
 
   public isLoading = true;
   public metrics: ActionMetrics = {
@@ -100,37 +101,18 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
-          EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: '__mj_UpdatedAt DESC',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Actions', 
+          OrderBy: '__mj_UpdatedAt DESC' 
         },
         {
-          EntityName: 'Action Categories',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Categories', 
+          OrderBy: 'Name' 
         },
         {
-          EntityName: 'Action Execution Logs',
-          ExtraFilter: '',
-          OrderBy: 'StartedAt DESC',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Execution Logs', 
+          OrderBy: 'StartedAt DESC', 
         }
       ]);
-      
-      console.log('Actions result:', actionsResult);
-      console.log('Categories result:', categoriesResult);
-      console.log('Executions result:', executionsResult);
       
       if (!actionsResult.Success || !categoriesResult.Success || !executionsResult.Success) {
         const errors = [];
@@ -172,7 +154,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     const result = await rv.RunView({
       EntityName: 'Entity Actions',
       ExtraFilter: '',
-      OrderBy: 'UpdatedAt DESC',
+      OrderBy: '__mj_UpdatedAt DESC',
       UserSearchString: '',
       IgnoreMaxRows: false,
       MaxRows: 1000
@@ -269,7 +251,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       const result = await rv.RunView({
         EntityName: 'Actions',
         ExtraFilter: extraFilter,
-        OrderBy: 'UpdatedAt DESC',
+        OrderBy: '__mj_UpdatedAt DESC',
         UserSearchString: searchTerm,
         IgnoreMaxRows: false,
         MaxRows: 1000
@@ -353,6 +335,10 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     // Filter to show AI generated actions in the current view
     this.selectedType$.next('Generated');
   }
+  
+  public onActionGalleryClick(): void {
+    this.showActionGalleryView.emit();
+  }
 
   public toggleExecutionExpanded(execution: ExecutionWithExpanded): void {
     execution.isExpanded = !execution.isExpanded;
@@ -368,5 +354,14 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       // If parse fails, return as is
       return params;
     }
+  }
+
+
+  /**
+   * Gets the icon class for an action
+   * Falls back to type-based icon if no IconClass is set
+   */
+  public getActionIcon(action: ActionEntity): string {
+    return action?.IconClass || this.getTypeIcon(action.Type);
   }
 }

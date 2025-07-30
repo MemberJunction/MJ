@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
-    SummarizeResult, ModelUsage } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -297,7 +297,8 @@ export class AnthropicLLM extends BaseLLM {
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 errorMessage: e?.message,
-                exception: {exception: e, llmResult: result}
+                exception: {exception: e, llmResult: result},
+                errorInfo: ErrorAnalyzer.analyzeError(e, 'Anthropic')
             };
         }
     }

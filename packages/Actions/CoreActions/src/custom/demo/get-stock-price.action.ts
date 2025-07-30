@@ -116,6 +116,19 @@ export class GetStockPriceAction extends BaseAction {
                 }
             };
 
+            // add the stock data as an output parameter too
+            params.Params.push({
+                Name: "StockData",
+                Value: stockData,
+                Type: "Output"
+            });
+            // and the price itself is the most common thing people want so add that as well
+            params.Params.push({
+                Name: "CurrentPrice",
+                Value: currentPrice,
+                Type: "Output"
+            });
+
             return {
                 Success: true,
                 ResultCode: "SUCCESS",

@@ -1,6 +1,4 @@
 /**
- * @fileoverview Specific API response types for Skip API
- * 
  * This file contains specialized response types that extend the base SkipAPIResponse for different
  * response phases and scenarios. These types define the structure for:
  * 
@@ -16,9 +14,6 @@
  * 
  * The analysis complete response is particularly comprehensive, containing component data,
  * explanations, column metadata, drill-down information, and component options.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 import { SkipAPIResponse } from './api-types';
@@ -26,8 +21,7 @@ import type { SkipSubProcessResponse } from './conversation-types';
 import type { SkipColumnInfo } from './entity-metadata-types';
 import type { SkipDataRequest } from './query-types';
 import type { SkipAPIArtifactRequest } from './artifact-types';
-import { SimpleDataContext } from './shared';
-import { SkipComponentOption } from './component-types';
+import { ComponentOption, SimpleDataContext } from '@memberjunction/interactive-component-types';
 
 /**
  * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down
@@ -125,7 +119,7 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
     /**
      * Contains a list of all the possible components that were generated (1 or more) for the given request.
      */
-    componentOptions?: SkipComponentOption[];
+    componentOptions?: ComponentOption[];
 
     /**
      * If the AI Agent decides it would be best to display the result in an artifact, this information can be used by the calling application to properly

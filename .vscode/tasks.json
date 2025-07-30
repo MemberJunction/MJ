@@ -58,9 +58,20 @@
     },
     {
       "label": "Build MetadataSync",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/metadata-sync && npm run build --workspace=@memberjunction/cli",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build MetadataSync Extension",
       "type": "npm",
       "script": "build",
-      "path": "packages/MetadataSync",
+      "path": "packages/VSCodeExtensions/MetadataSync",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {

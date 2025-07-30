@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
@@ -15,6 +15,12 @@ import { z } from 'zod';
  * used properties from the entity field metadata.
  */
 export class EntityField {
+    /**
+     * Indicates whether the active status of the field should be asserted when accessing or setting the value.
+     * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
+     * temporarily turned off to allow for legacy fields to be created without asserting the active status.
+     */
+    private _assertActiveStatusRequired: boolean = false; 
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
     private _Value: any;
@@ -57,7 +63,9 @@ export class EntityField {
     get Value(): any {
         // Asserting status here for deprecated or disabled fields, not in constructor because
         // we legacy fields will exist
-        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        if (this._assertActiveStatusRequired) {
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        }
         return this._Value;
     }
 
@@ -87,7 +95,12 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
-        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        if (this._assertActiveStatusRequired && value !== this._Value) {
+            // asserting status here becuase the flag is on AND the values
+            // are different - this avoid assertions during sysops like SetMany that often aren't changing
+            // the value of the field
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+        }
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
@@ -104,6 +117,15 @@ export class EntityField {
 
             this._NeverSet = false;
         }
+    }
+
+    /**
+     * Resets the NeverSet flag - this is generally an internal method but is available when working with read only fields (mainly primary key fields) to allow them 
+     * to be set/changed once after the object is created. This is useful for scenarios where you want to set a read only field
+     * after the object is created, but only once. This is typically used in the BaseEntity class when loading an entity from an array of values or the DB and reusing an existing object.
+     */
+    public ResetNeverSetFlag() {
+        this._NeverSet = true;
     }
 
     /**
@@ -130,9 +152,92 @@ export class EntityField {
                     newCompare = this.Value.getTime();
                 }
 
+                // Special handling for bit/Boolean types - treat truthy values as equivalent
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
+                    this._entityFieldInfo.Type.toLowerCase() === 'bit') {
+                    // Convert both values to boolean for comparison
+                    const oldBool = this.convertToBoolean(oldCompare);
+                    const newBool = this.convertToBoolean(newCompare);
+                    return oldBool !== newBool;
+                }
+
+                // Special handling for numeric types - treat numeric strings that convert to same value as equivalent
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
+                    const oldNum = this.convertToNumber(oldCompare);
+                    const newNum = this.convertToNumber(newCompare);
+                    
+                    // Handle NaN cases - if both are NaN, they're equivalent
+                    if (isNaN(oldNum) && isNaN(newNum)) {
+                        return false;
+                    }
+                    // If only one is NaN, they're different
+                    if (isNaN(oldNum) || isNaN(newNum)) {
+                        return true;
+                    }
+                    
+                    return oldNum !== newNum;
+                }
+
                 return oldCompare !== newCompare;
             }
         }
+    }
+
+    /**
+     * Helper method to convert a value to boolean for comparison purposes.
+     * Treats truthy values as true regardless of data type.
+     */
+    private convertToBoolean(value: any): boolean {
+        if (value === null || value === undefined) {
+            return false;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            return value !== 0;
+        }
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1';
+        }
+        // For any other type, use JavaScript's truthiness
+        return !!value;
+    }
+
+    /**
+     * Helper method to check if a SQL type is numeric.
+     */
+    private isNumericType(sqlType: string): boolean {
+        if (!sqlType) return false;
+        const normalizedType = sqlType.toLowerCase().trim();
+        return ['int', 'smallint', 'bigint', 'tinyint', 'money', 'decimal', 'numeric', 'float', 'real'].includes(normalizedType) ||
+               normalizedType.startsWith('decimal(') || 
+               normalizedType.startsWith('numeric(');
+    }
+
+    /**
+     * Helper method to convert a value to number for comparison purposes.
+     */
+    private convertToNumber(value: any): number {
+        if (value === null || value === undefined) {
+            return NaN;
+        }
+        if (typeof value === 'number') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed === '') {
+                return NaN;
+            }
+            return Number(trimmed);
+        }
+        if (typeof value === 'boolean') {
+            return value ? 1 : 0;
+        }
+        // For any other type, attempt conversion
+        return Number(value);
     }
 
     /**
@@ -261,13 +366,29 @@ export class EntityField {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
             this._NeverSet = true; // set this back to true because we are setting the value to null;
         }
+
+        this._assertActiveStatusRequired = true; // turn on assertion for active status now that we're done with constructor.
     }
 
     /**
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
+        this._assertActiveStatusRequired = false; // temporarily turn off assertion for active status so we can set the old value without asserting
         this._OldValue = this.Value;
+        this._assertActiveStatusRequired = true; // turn it back on after we're done
+    }
+
+    /**
+     * This property temporarily will set the active status assertions for this particular instance of EntityField.
+     * It is temporary because other behaviors in the class instance could reset this value for example calling
+     * ResetOldValue() or another caller setting this property to another value.
+     */
+    public get ActiveStatusAssertions(): boolean {
+        return this._assertActiveStatusRequired;
+    }
+    public set ActiveStatusAssertions(value: boolean) {
+        this._assertActiveStatusRequired = value;
     }
 
     /**
@@ -610,6 +731,7 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Sets the value of a given field. If the field doesn't exist, nothing happens.
+     * The field's type is used to convert the value to the appropriate type.
      * @param FieldName
      * @param Value
      */
@@ -618,6 +740,29 @@ export abstract class BaseEntity<T = unknown> {
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
                 field.Value = new Date(Value);
+            }
+            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
+                const numericValue = Number(Value);
+                if (!isNaN(numericValue)) {
+                    field.Value = numericValue;
+                } else {
+                    field.Value = Value;
+                }
+            }
+            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
+                if (typeof Value === 'string') {
+                    if (Value.trim() === '1' || Value.trim().toLowerCase() === 'true') {
+                        field.Value = true;
+                    } else if (Value.trim() === '0' || Value.trim().toLowerCase() === 'false') {
+                        field.Value = false;
+                    } else {
+                        field.Value = Value;
+                    }
+                } else if (typeof Value === 'number') {
+                    field.Value = Value !== 0;
+                } else {
+                    field.Value = Value;
+                }
             }
             else {
                 field.Value = Value;
@@ -649,8 +794,9 @@ export abstract class BaseEntity<T = unknown> {
      * @param object
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
+     * @param ignoreActiveStatusAssertions - if set to true, the active status assertions for the fields will be ignored, if false, an error will be thrown if a field is not active. Defaults to false.
      */
-    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false) {
+    public SetMany(object: any, ignoreNonExistentFields: boolean = false, replaceOldValues: boolean = false, ignoreActiveStatusAssertions: boolean = false) {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
@@ -658,9 +804,16 @@ export abstract class BaseEntity<T = unknown> {
             const field = this.GetFieldByName(key);
             if (field) {
                 // check to see if key matches a field name, if so, set it
+                const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
+                if (ignoreActiveStatusAssertions) {
+                    field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                }
                 this.Set(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
+                }
+                if (ignoreActiveStatusAssertions) {
+                    field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                 }
             }
             else {
@@ -668,9 +821,16 @@ export abstract class BaseEntity<T = unknown> {
                 // because some objects passed in will use the code name
                 const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
                 if (field) {
+                    const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
+                    if (ignoreActiveStatusAssertions) {
+                        field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                    }
                     this.Set(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
+                    }
+                    if (ignoreActiveStatusAssertions) {
+                        field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                     }
                 }
                 else {
@@ -872,6 +1032,24 @@ export abstract class BaseEntity<T = unknown> {
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
         this._everSaved = false; // Reset save state for new record
+        
+        // Generate UUID for non-auto-increment uniqueidentifier primary keys
+        if (this.EntityInfo.PrimaryKeys.length === 1) {
+            const pk = this.EntityInfo.PrimaryKeys[0];
+            if (!pk.AutoIncrement && 
+                pk.Type.toLowerCase().trim() === 'uniqueidentifier' && 
+                !this.Get(pk.Name)) {
+                // Generate and set UUID for this primary key
+                const uuid = uuidv4();
+                this.Set(pk.Name, uuid);
+                const field = this.GetFieldByName(pk.Name);
+                if (field) {
+                    // Reset the never set flag so that we can set this value later if needed, this is so that people who do deferred load after new record are still ok
+                    field.ResetNeverSetFlag(); 
+                }
+            }
+        }
+        
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
@@ -1021,7 +1199,7 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
+            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -1162,7 +1340,7 @@ export abstract class BaseEntity<T = unknown> {
                 return false; // no data loaded, return false
             }
 
-            this.SetMany(data, false, true); // don't ignore non-existent fields, but DO replace old values
+            this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -1233,7 +1411,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
-        this.SetMany(data, true);
+        this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
@@ -1475,7 +1653,7 @@ export abstract class BaseEntity<T = unknown> {
         if(schema){
             const parseResult = schema.safeParse(data);
             if(parseResult.success){
-                this.SetMany(parseResult.data);
+                this.SetMany(parseResult.data, false, false, true);
                 return true;
             }
             else{
@@ -1484,7 +1662,7 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
         else{
-            this.SetMany(data);
+            this.SetMany(data, false, false, true);
             return true;
         }
     }

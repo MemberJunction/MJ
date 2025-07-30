@@ -1,8 +1,8 @@
-<div class="record-form-container">
-    <form *ngIf="record" class="record-form"  #form="ngForm">
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" (ResizeContainer)="InvokeManualResize()">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -25,7 +25,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Run Steps')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
@@ -38,12 +38,12 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Runs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
                     <mj-tab Name="MJ: AI Prompt Runs" [Visible]="record.IsSaved"> 
-                        <span class="fa-terminal tab-header-icon"></span>MJ: AI Prompt Runs
+                        MJ: AI Prompt Runs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
@@ -51,7 +51,7 @@
                             [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

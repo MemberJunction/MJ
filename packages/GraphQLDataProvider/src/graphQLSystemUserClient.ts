@@ -72,7 +72,7 @@ export class GraphQLSystemUserClient {
                     Results
                 }
             }`
-            const result = await this.Client.request(query, {input: {Queries: queries, Token: 'nope'}}) as {GetData: GetDataOutput};
+            const result = await this.Client.request(query, {input: {Queries: queries, Token: accessToken}}) as {GetData: GetDataOutput};
             if (result && result.GetData) {
                 // for each succesful item, we will parse and return the array of objects instead of the string
                 return {
@@ -256,7 +256,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for running by name
      * @returns Promise containing the view execution results
      */
-    public async RunViewByNameSystemUser(input: RunViewByNameSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunViewByName(input: RunViewByNameSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunViewByNameSystemUser($input: RunViewByNameInput!) {
                 RunViewByNameSystemUser(input: $input) {
@@ -300,7 +300,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for running by ID
      * @returns Promise containing the view execution results
      */
-    public async RunViewByIDSystemUser(input: RunViewByIDSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunViewByID(input: RunViewByIDSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunViewByIDSystemUser($input: RunViewByIDInput!) {
                 RunViewByIDSystemUser(input: $input) {
@@ -344,7 +344,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for dynamic view execution
      * @returns Promise containing the view execution results
      */
-    public async RunDynamicViewSystemUser(input: RunDynamicViewSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunDynamicView(input: RunDynamicViewSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunDynamicViewSystemUser($input: RunDynamicViewInput!) {
                 RunDynamicViewSystemUser(input: $input) {
@@ -389,7 +389,7 @@ export class GraphQLSystemUserClient {
      * @param input - Array of view input parameters
      * @returns Promise containing the results from all view executions
      */
-    public async RunViewsSystemUser(input: RunViewSystemUserInput[]): Promise<RunViewSystemUserResult[]> {
+    public async RunViews(input: RunViewSystemUserInput[]): Promise<RunViewSystemUserResult[]> {
         try {
             const query = `query RunViewsSystemUser($input: [RunViewGenericInput!]!) {
                 RunViewsSystemUser(input: $input) {
@@ -422,30 +422,38 @@ export class GraphQLSystemUserClient {
 
     /**
      * Executes a stored query by ID using the GetQueryDataSystemUser resolver.
-     * @param queryId - The ID of the query to execute
-     * @param categoryId - Optional category ID filter
-     * @param categoryName - Optional category name filter
+     * @param input - Query input parameters for execution by ID
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataSystemUser(queryId: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+    public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
                     Results
                     RowCount
+                    TotalRowCount
                     ExecutionTime
                     ErrorMessage
+                    AppliedParameters
                 }
             }`
 
-            const result = await this.Client.request(query, { 
-                QueryID: queryId, 
-                CategoryID: categoryId, 
-                CategoryName: categoryName 
-            }) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
+            const variables: any = { QueryID: input.QueryID };
+            if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
+            if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
+            if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
+            if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+
+            const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
             if (result && result.GetQueryDataSystemUser) {
                 // Parse the JSON results for easier consumption
@@ -455,11 +463,12 @@ export class GraphQLSystemUserClient {
                 };
             } else {
                 return {
-                    QueryID: queryId,
+                    QueryID: input.QueryID,
                     QueryName: '',
                     Success: false,
                     Results: null,
                     RowCount: 0,
+                    TotalRowCount: 0,
                     ExecutionTime: 0,
                     ErrorMessage: 'Query execution failed'
                 };
@@ -468,11 +477,12 @@ export class GraphQLSystemUserClient {
         catch (e) {
             LogError(`GraphQLSystemUserClient::GetQueryDataSystemUser - Error executing query - ${e}`);
             return {
-                QueryID: queryId,
+                QueryID: input.QueryID,
                 QueryName: '',
                 Success: false,
                 Results: null,
                 RowCount: 0,
+                TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: e.toString()
             };
@@ -481,30 +491,38 @@ export class GraphQLSystemUserClient {
 
     /**
      * Executes a stored query by name using the GetQueryDataByNameSystemUser resolver.
-     * @param queryName - The name of the query to execute
-     * @param categoryId - Optional category ID filter
-     * @param categoryName - Optional category name filter
+     * @param input - Query input parameters for execution by name
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataByNameSystemUser(queryName: string, categoryId?: string, categoryName?: string): Promise<RunQuerySystemUserResult> {
+    public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
                     Results
                     RowCount
+                    TotalRowCount
                     ExecutionTime
                     ErrorMessage
+                    AppliedParameters
                 }
             }`
 
-            const result = await this.Client.request(query, { 
-                QueryName: queryName, 
-                CategoryID: categoryId, 
-                CategoryName: categoryName 
-            }) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
+            const variables: any = { QueryName: input.QueryName };
+            if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
+            if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
+            if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
+            if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+
+            const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
             if (result && result.GetQueryDataByNameSystemUser) {
                 // Parse the JSON results for easier consumption
@@ -515,10 +533,11 @@ export class GraphQLSystemUserClient {
             } else {
                 return {
                     QueryID: '',
-                    QueryName: queryName,
+                    QueryName: input.QueryName,
                     Success: false,
                     Results: null,
                     RowCount: 0,
+                    TotalRowCount: 0,
                     ExecutionTime: 0,
                     ErrorMessage: 'Query execution failed'
                 };
@@ -528,11 +547,103 @@ export class GraphQLSystemUserClient {
             LogError(`GraphQLSystemUserClient::GetQueryDataByNameSystemUser - Error executing query - ${e}`);
             return {
                 QueryID: '',
-                QueryName: queryName,
+                QueryName: input.QueryName,
                 Success: false,
                 Results: null,
                 RowCount: 0,
+                TotalRowCount: 0,
                 ExecutionTime: 0,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Creates a new query using the CreateQuerySystemUser mutation. This method is restricted to system users only.
+     * @param input - CreateQuerySystemUserInput containing all the query attributes including optional CategoryPath
+     * @returns Promise containing the result of the query creation
+     */
+    public async CreateQuery(input: CreateQueryInput): Promise<CreateQueryResult> {
+        try {
+            const query = `mutation CreateQuerySystemUser($input: CreateQuerySystemUserInput!) {
+                CreateQuerySystemUser(input: $input) {
+                    Success
+                    ErrorMessage
+                    QueryData
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { CreateQuerySystemUser: CreateQueryResult };
+            if (result && result.CreateQuerySystemUser) {
+                // Parse the QueryData JSON if it exists and was successful
+                if (result.CreateQuerySystemUser.Success && result.CreateQuerySystemUser.QueryData) {
+                    return {
+                        ...result.CreateQuerySystemUser,
+                        QueryData: result.CreateQuerySystemUser.QueryData // Already JSON string from resolver
+                    };
+                }
+                return result.CreateQuerySystemUser;
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to create query'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::CreateQuery - Error creating query - ${e}`);
+            return {
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
+     * @param ID - The ID of the query to delete
+     * @param options - Optional delete options controlling action execution
+     * @returns Promise containing the result of the query deletion
+     */
+    public async DeleteQuery(ID: string, options?: DeleteQueryOptionsInput): Promise<DeleteQueryResult> {
+        try {
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                LogError('GraphQLSystemUserClient::DeleteQuery - Invalid query ID: ID cannot be null or empty');
+                return {
+                    Success: false,
+                    ErrorMessage: 'Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
+            const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
+                DeleteQuerySystemResolver(ID: $ID, options: $options) {
+                    Success
+                    ErrorMessage
+                    QueryData
+                }
+            }`
+
+            const variables: any = { ID: ID };
+            if (options !== undefined) {
+                variables.options = options;
+            }
+
+            const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
+            
+            if (result && result.DeleteQuerySystemResolver) {
+                return result.DeleteQuerySystemResolver;
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to delete query'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${e}`);
+            return {
+                Success: false,
                 ErrorMessage: e.toString()
             };
         }
@@ -541,7 +652,7 @@ export class GraphQLSystemUserClient {
 }
 
 /**
- * Output type for GetData calls
+ * Output type for GetData calls - contains results from executing multiple SQL queries
  */
 export class GetDataOutput {
     /**
@@ -549,7 +660,7 @@ export class GetDataOutput {
      */
     Success: boolean;
     /**
-     * The original input of Queries that were run
+     * The original input of Queries that were run - same order as provided in the request
      */
     Queries: string[];
     /**
@@ -557,19 +668,25 @@ export class GetDataOutput {
      */
     ErrorMessages: (string | null)[];
     /**
-     * An ordered array of results for each query that was run. This array will always have the same # of entries as Queries. If a query failed, the corresponding entry will be null.
+     * An ordered array of results for each query that was run. This array will always have the same # of entries as Queries. If a query failed, the corresponding entry will be null. Successful results are JSON strings containing the query data.
      */
     Results: (string | null)[];
 }
 
 /**
- * Return type for calls to the GetAllRemoteEntities query
+ * Return type for calls to the GetAllRemoteEntities query - provides lightweight entity metadata
  */
 export class SimpleRemoteEntityOutput {
+    /**
+     * Indicates whether the remote entity retrieval was successful
+     */
     Success: boolean;
+    /**
+     * Error message if the operation failed, undefined if successful
+     */
     ErrorMessage?: string;
     /**
-     * An array of simple entity types that are returned from the remote server
+     * An array of simple entity types that are returned from the remote server - contains basic metadata for each entity
      */
     Results: SimpleRemoteEntity[];
 }
@@ -579,144 +696,581 @@ export class SimpleRemoteEntityOutput {
  */
 export class SimpleRemoteEntity {
     /**
-     * ID of the entity on the remote server
+     * Unique identifier of the entity on the remote server
      */
     ID: string;
+    /**
+     * Display name of the entity (e.g., "Users", "Companies")
+     */
     Name: string;
+    /**
+     * Optional description explaining the entity's purpose
+     */
     Description?: string;
+    /**
+     * Database schema name where the entity resides (e.g., "dbo", "custom")
+     */
     SchemaName: string;
+    /**
+     * Name of the database view used for reading this entity
+     */
     BaseView: string;
+    /**
+     * Name of the database table used for storing this entity
+     */
     BaseTable: string;
+    /**
+     * Optional code-friendly name for the entity (typically PascalCase)
+     */
     CodeName?: string;
+    /**
+     * Optional TypeScript/JavaScript class name for the entity
+     */
     ClassName?: string;
+    /**
+     * Array of field definitions for this entity
+     */
     Fields: SimpleRemoteEntityField[];
 }
 
+/**
+ * Represents a field within a remote entity - contains basic field metadata
+ */
 export class SimpleRemoteEntityField {
     /**
-     * ID of the entity field on the remote server
+     * Unique identifier of the entity field on the remote server
      */
     ID: string;
+    /**
+     * Field name (e.g., "FirstName", "Email", "CreatedAt")
+     */
     Name: string;
+    /**
+     * Optional description explaining the field's purpose
+     */
     Description?: string;
+    /**
+     * Data type of the field (e.g., "nvarchar", "int", "datetime", "bit")
+     */
     Type: string;
+    /**
+     * Whether the field can contain null values
+     */
     AllowsNull: boolean;
+    /**
+     * Maximum length for string fields, -1 for unlimited, 0 for non-string types
+     */
     MaxLength: number;
 }
 
 /**
- * Input type for RunViewByNameSystemUser method calls
+ * Input type for RunViewByNameSystemUser method calls - executes a saved view by name
  */
 export interface RunViewByNameSystemUserInput {
+    /**
+     * Name of the saved view to execute
+     */
     ViewName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to save the view execution results for future reference (optional)
+     */
     SaveViewResults?: boolean;
+    /**
+     * Whether to exclude data from all prior view runs (optional)
+     */
     ExcludeDataFromAllPriorViewRuns?: boolean;
+    /**
+     * Whether to ignore the view's MaxRows setting and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return, overrides view setting if specified (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunViewByIDSystemUser method calls
+ * Input type for RunViewByIDSystemUser method calls - executes a saved view by its unique ID
  */
 export interface RunViewByIDSystemUserInput {
+    /**
+     * Unique identifier of the saved view to execute
+     */
     ViewID: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to save the view execution results for future reference (optional)
+     */
     SaveViewResults?: boolean;
+    /**
+     * Whether to exclude data from all prior view runs (optional)
+     */
     ExcludeDataFromAllPriorViewRuns?: boolean;
+    /**
+     * Whether to ignore the view's MaxRows setting and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return, overrides view setting if specified (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunDynamicViewSystemUser method calls
+ * Input type for RunDynamicViewSystemUser method calls - creates and executes a view dynamically based on entity
  */
 export interface RunDynamicViewSystemUserInput {
+    /**
+     * Name of the entity to query (e.g., "Users", "Companies")
+     */
     EntityName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to ignore MaxRows limits and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Input type for RunViewsSystemUser method calls
+ * Input type for RunViewsSystemUser method calls - executes multiple views in parallel
  */
 export interface RunViewSystemUserInput {
+    /**
+     * Name of the entity to query (e.g., "Users", "Companies")
+     */
     EntityName: string;
+    /**
+     * Additional WHERE clause conditions to apply (optional)
+     */
     ExtraFilter?: string;
+    /**
+     * ORDER BY clause for sorting results (optional)
+     */
     OrderBy?: string;
+    /**
+     * Specific fields to return, if not specified returns all fields (optional)
+     */
     Fields?: string[];
+    /**
+     * Search string to filter results across searchable fields (optional)
+     */
     UserSearchString?: string;
+    /**
+     * ID of a previous view run to exclude results from (optional)
+     */
     ExcludeUserViewRunID?: string;
+    /**
+     * Override the exclude filter with custom logic (optional)
+     */
     OverrideExcludeFilter?: string;
+    /**
+     * Whether to ignore MaxRows limits and return all results (optional)
+     */
     IgnoreMaxRows?: boolean;
+    /**
+     * Maximum number of rows to return (optional)
+     */
     MaxRows?: number;
+    /**
+     * Whether to force audit logging for this view execution (optional)
+     */
     ForceAuditLog?: boolean;
+    /**
+     * Description for the audit log entry if ForceAuditLog is true (optional)
+     */
     AuditLogDescription?: string;
+    /**
+     * Type of result format: "simple", "entity_object", etc. (optional)
+     */
     ResultType?: string;
+    /**
+     * Starting row number for pagination (optional, 0-based)
+     */
     StartRow?: number;
 }
 
 /**
- * Result row type for view execution results
+ * Result row type for view execution results - represents a single data row
  */
 export interface RunViewSystemUserResultRow {
+    /**
+     * Unique identifier of the record
+     */
     ID: string;
+    /**
+     * ID of the entity type this record belongs to
+     */
     EntityID: string;
+    /**
+     * JSON string containing the actual record data
+     */
     Data: string;
 }
 
 /**
- * Result type for RunViewsSystemUser method calls
+ * Result type for RunViewsSystemUser method calls - contains execution results and metadata
  */
 export interface RunViewSystemUserResult {
+    /**
+     * Array of result rows containing the actual data
+     */
     Results: RunViewSystemUserResultRow[];
+    /**
+     * Unique identifier for this view execution run (optional)
+     */
     UserViewRunID?: string;
+    /**
+     * Number of rows returned in this result set (optional)
+     */
     RowCount?: number;
+    /**
+     * Total number of rows available (before pagination) (optional)
+     */
     TotalRowCount?: number;
+    /**
+     * Time taken to execute the view in milliseconds (optional)
+     */
     ExecutionTime?: number;
+    /**
+     * Error message if the execution failed (optional)
+     */
     ErrorMessage?: string;
+    /**
+     * Whether the view execution was successful
+     */
     Success: boolean;
 }
 
 /**
- * Result type for query execution methods
+ * Result type for query execution methods - contains query results and execution metadata
  */
 export interface RunQuerySystemUserResult {
+    /**
+     * Unique identifier of the executed query
+     */
     QueryID: string;
+    /**
+     * Display name of the executed query
+     */
     QueryName: string;
+    /**
+     * Whether the query execution was successful
+     */
     Success: boolean;
+    /**
+     * Query results data (parsed from JSON)
+     */
     Results: any;
+    /**
+     * Number of rows returned by the query
+     */
     RowCount: number;
+    /**
+     * Total number of rows available (before pagination)
+     */
+    TotalRowCount: number;
+    /**
+     * Time taken to execute the query in milliseconds
+     */
     ExecutionTime: number;
+    /**
+     * Error message if the query execution failed
+     */
     ErrorMessage: string;
+    /**
+     * JSON string containing the applied parameters (optional)
+     */
+    AppliedParameters?: string;
+}
+
+/**
+ * Input type for GetQueryDataSystemUser method calls - executes a stored query by ID
+ */
+export interface GetQueryDataSystemUserInput {
+    /**
+     * The ID of the query to execute
+     */
+    QueryID: string;
+    /**
+     * Optional category ID filter
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
+     */
+    CategoryPath?: string;
+    /**
+     * Optional parameters for templated queries
+     */
+    Parameters?: Record<string, any>;
+    /**
+     * Optional maximum number of rows to return
+     */
+    MaxRows?: number;
+    /**
+     * Optional starting row number for pagination
+     */
+    StartRow?: number;
+}
+
+/**
+ * Input type for GetQueryDataByNameSystemUser method calls - executes a stored query by name
+ */
+export interface GetQueryDataByNameSystemUserInput {
+    /**
+     * The name of the query to execute
+     */
+    QueryName: string;
+    /**
+     * Optional category ID filter
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
+     */
+    CategoryPath?: string;
+    /**
+     * Optional parameters for templated queries
+     */
+    Parameters?: Record<string, any>;
+    /**
+     * Optional maximum number of rows to return
+     */
+    MaxRows?: number;
+    /**
+     * Optional starting row number for pagination
+     */
+    StartRow?: number;
+}
+
+/**
+ * Input type for CreateQuery mutation calls - creates a new query with optional hierarchical category path
+ */
+export interface CreateQueryInput {
+    /**
+     * Required name for the query (must be unique within category)
+     */
+    Name: string;
+    /**
+     * Optional existing category ID to assign the query to
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path for automatic hierarchy creation (e.g., "Reports/Sales/Monthly") - takes precedence over CategoryID
+     */
+    CategoryPath?: string;
+    /**
+     * Optional natural language question this query answers
+     */
+    UserQuestion?: string;
+    /**
+     * Optional general description of what the query does
+     */
+    Description?: string;
+    /**
+     * Optional SQL query text to execute (can contain Nunjucks template syntax)
+     */
+    SQL?: string;
+    /**
+     * Optional technical documentation for developers
+     */
+    TechnicalDescription?: string;
+    /**
+     * Optional original SQL before optimization or modification
+     */
+    OriginalSQL?: string;
+    /**
+     * Optional user feedback about the query
+     */
+    Feedback?: string;
+    /**
+     * Optional query approval status (defaults to 'Pending')
+     */
+    Status?: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
+    /**
+     * Optional quality indicator (higher = better quality, defaults to 0)
+     */
+    QualityRank?: number;
+    /**
+     * Optional execution cost indicator (higher = more expensive to run)
+     */
+    ExecutionCostRank?: number;
+    /**
+     * Optional flag indicating if the query uses Nunjucks template syntax (auto-detected if not specified)
+     */
+    UsesTemplate?: boolean;
+}
+
+/**
+ * Result type for CreateQuery mutation calls - contains creation success status and query data
+ */
+export interface CreateQueryResult {
+    /**
+     * Whether the query creation was successful
+     */
+    Success: boolean;
+    /**
+     * Error message if the creation failed (optional)
+     */
+    ErrorMessage?: string;
+    /**
+     * JSON string containing the complete created query data if successful (optional)
+     */
+    QueryData?: string;
+}
+
+/**
+ * Delete options input type for controlling delete behavior
+ */
+export interface DeleteQueryOptionsInput {
+    /**
+     * Whether to skip AI actions during deletion
+     */
+    SkipEntityAIActions: boolean;
+    /**
+     * Whether to skip regular entity actions during deletion
+     */
+    SkipEntityActions: boolean;
+}
+
+/**
+ * Result type for DeleteQuery mutation calls - contains deletion success status and deleted query data
+ */
+export interface DeleteQueryResult {
+    /**
+     * Whether the query deletion was successful
+     */
+    Success: boolean;
+    /**
+     * Error message if the deletion failed (optional)
+     */
+    ErrorMessage?: string;
+    /**
+     * JSON string containing the deleted query data if successful (optional)
+     */
+    QueryData?: string;
 }
 
  

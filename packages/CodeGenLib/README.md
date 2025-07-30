@@ -140,6 +140,97 @@ CREATE PROCEDURE [spCreateAIPrompt]
 -- Full implementation auto-generated
 ```
 
+#### 🎯 Smart Delete Procedures with Cascade Handling
+
+Our generated delete procedures are **production-grade** with intelligent handling of:
+
+**1. Result Feedback - Know What Happened**
+```sql
+-- Returns NULL for all PKs when no record found
+IF @@ROWCOUNT = 0
+    SELECT NULL AS [CustomerID], NULL AS [OrderID]
+ELSE
+    SELECT @CustomerID AS [CustomerID], @OrderID AS [OrderID]
+```
+
+**2. Cascade Deletes via Stored Procedure Calls**
+
+Instead of basic DELETE statements, we generate **cursor-based cascade operations** that respect your business logic:
+
+```sql
+-- BAD: Direct DELETE (bypasses business logic)
+DELETE FROM OrderItems WHERE OrderID = @OrderID
+
+-- GOOD: Cursor-based SP calls (respects custom logic)
+DECLARE @RelatedItemID INT
+DECLARE cascade_delete_OrderItem_cursor CURSOR FOR 
+    SELECT [ItemID] FROM [OrderItems] WHERE [OrderID] = @OrderID
+
+OPEN cascade_delete_OrderItem_cursor
+FETCH NEXT FROM cascade_delete_OrderItem_cursor INTO @RelatedItemID
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    -- Calls YOUR stored procedure, enabling N-level cascades
+    EXEC [spDeleteOrderItem] @RelatedItemID
+    FETCH NEXT FROM cascade_delete_OrderItem_cursor INTO @RelatedItemID
+END
+
+CLOSE cascade_delete_OrderItem_cursor
+DEALLOCATE cascade_delete_OrderItem_cursor
+```
+
+**Benefits:**
+- ✅ **Respects custom delete logic** in related entities
+- ✅ **Enables multi-level cascades** (if OrderItem has its own cascades)
+- ✅ **Maintains referential integrity** through proper SP calls
+- ✅ **Clear result feedback** - NULL means no record deleted
+
+**3. Nullable Foreign Key Handling**
+
+For nullable FKs, we update via stored procedures too:
+
+```sql
+-- Fetch all fields, update only the FK to NULL
+DECLARE cascade_update_Customer_cursor CURSOR FOR 
+    SELECT * FROM [Customers] WHERE [RegionID] = @RegionID
+
+-- In cursor loop:
+SET @UpdateRegionID = NULL  -- Only FK changes
+EXEC [spUpdateCustomer] @CustomerID, @Name, @Email, @UpdateRegionID
+```
+
+**4. Configuration Error Detection**
+
+CodeGen **warns you** about misconfigured cascade scenarios:
+
+```sql
+-- WARNING: Orders has non-nullable FK to Customer but doesn't allow delete API
+-- This will cause a referential integrity violation
+```
+
+The warnings appear both in generated SQL **and** console output during generation.
+
+#### 🔄 Smart Update Procedures with Result Validation
+
+Our update procedures also provide **clear feedback** when operating on non-existent records:
+
+```sql
+-- Check if update affected any rows
+IF @@ROWCOUNT = 0
+    -- Return empty result set (maintains column structure)
+    SELECT TOP 0 * FROM [vwCustomer] WHERE 1=0
+ELSE
+    -- Return the updated record with calculated fields
+    SELECT * FROM [vwCustomer] WHERE [CustomerID] = @CustomerID
+```
+
+**Why This Matters:**
+- **Empty result set** = Record not found (update failed)
+- **Record returned** = Update successful
+- **Maintains schema** = Calling code doesn't break
+- **Includes calculated fields** = Get the latest computed values
+
 ### 🌐 GraphQL Schema Generation
 Creates **type-safe GraphQL APIs** from your entities:
 
@@ -411,6 +502,73 @@ onProgress((status) => {
   console.log(`Progress: ${status.message} (${status.percentage}%)`);
 });
 ```
+
+### Force Regeneration with Smart Filtering
+
+Need to regenerate specific SQL objects without schema changes? Our force regeneration feature gives you **surgical precision** over what gets regenerated:
+
+```javascript
+// In mj.config.cjs
+forceRegeneration: {
+  enabled: true,
+  // Filter to specific entities using SQL WHERE clause
+  entityWhereClause: "SchemaName = 'CRM' AND __mj_UpdatedAt >= '2025-06-24'",
+  
+  // Granular control over what gets regenerated
+  baseViews: true,      // Regenerate base views
+  spCreate: false,      // Skip create procedures
+  spUpdate: true,       // Regenerate update procedures
+  spDelete: false,      // Skip delete procedures
+  indexes: true,        // Regenerate foreign key indexes
+  fullTextSearch: false // Skip full-text search components
+}
+```
+
+#### Common Scenarios:
+
+**Regenerate views for recently modified entities:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "__mj_UpdatedAt >= '2025-06-24 22:00:00'",
+  baseViews: true
+}
+```
+
+**Regenerate all stored procedures for a specific schema:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "SchemaName = 'Sales'",
+  allStoredProcedures: true
+}
+```
+
+**Regenerate specific SQL object for a single entity:**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  entityWhereClause: "Name = 'Customer'",
+  spUpdate: true  // Just regenerate the update procedure
+}
+```
+
+**Regenerate everything (no filtering):**
+```javascript
+forceRegeneration: {
+  enabled: true,
+  // No entityWhereClause = regenerate for ALL entities
+  allStoredProcedures: true,
+  baseViews: true,
+  indexes: true
+}
+```
+
+#### How It Works:
+1. **Entity Filtering**: The `entityWhereClause` runs against the Entity metadata table to select which entities qualify
+2. **Type Filtering**: Individual flags control which SQL object types get regenerated
+3. **Smart Combination**: Only regenerates the intersection (selected entities AND selected types)
+4. **Error Handling**: Invalid WHERE clauses stop execution with clear error messages
 
 ## Error Handling
 

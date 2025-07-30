@@ -5,6 +5,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LayoutModule } from '@progress/kendo-angular-layout';
+import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
@@ -37,6 +38,9 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { ModelPromptPriorityMatrixComponent } from './AI/components/prompts/model-prompt-priority-matrix.component';
 import { PromptVersionControlComponent } from './AI/components/prompts/prompt-version-control.component';
+import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
+import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
+import { MemberJunctionCoreEntityFormsModule } from '@memberjunction/ng-core-entity-forms';
 // AI Instrumentation Components
 import { KPICardComponent } from './AI/components/widgets/kpi-card.component';
 import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
@@ -85,11 +89,16 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     DropDownsModule,
     InputsModule,
     LayoutModule,
+    DialogsModule,
+    WindowModule,
     ContainerDirectivesModule,
     NavigationModule,
     CodeEditorModule,
     TreeViewModule,
-    ButtonsModule
+    ButtonsModule,
+    ActionGalleryModule,
+    AITestHarnessModule,
+    MemberJunctionCoreEntityFormsModule
   ],
   providers: [
     AIInstrumentationService

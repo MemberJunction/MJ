@@ -12,7 +12,11 @@
 
 export * from './base-agent-type';
 export * from './loop-agent-type';
+export * from './flow-agent-type';
 
 // Ensure classes are loaded and registered with the ClassFactory
 import { LoadLoopAgentType } from './loop-agent-type';
+import { LoadFlowAgentType } from './flow-agent-type';
+
 LoadLoopAgentType();
+LoadFlowAgentType();

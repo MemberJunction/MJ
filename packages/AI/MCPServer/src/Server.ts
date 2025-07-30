@@ -4,7 +4,10 @@ import { FastMCP, Resource, ResourceResult } from "fastmcp";
 import * as sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
-import { match } from "assert";
+import { AgentRunner } from "@memberjunction/ai-agents";
+import { AIAgentEntity, AIAgentRunEntity } from "@memberjunction/core-entities";
+import { AIEngine } from "@memberjunction/aiengine";
+import { ChatMessage } from "@memberjunction/ai";
 
 
 const mcpServerPort = mcpServerSettings?.port || 3100;
@@ -65,6 +68,7 @@ async function initializeServer() {
         const contextUser = UserCache.Instance.Users[0];
         await loadEntityTools(contextUser);
         await loadActionTools(contextUser);
+        await loadAgentTools(contextUser);
         console.log("Tools loaded successfully.");
         
         // Configure server options
@@ -98,6 +102,283 @@ async function loadActionTools(contextUser: UserInfo) {
     if (actionTools && actionTools.length > 0) {
         console.warn("Action tools are not yet supported");
     }
+}
+
+async function loadAgentTools(contextUser: UserInfo) {
+    const agentTools = mcpServerSettings?.agentTools;
+    
+    if (agentTools && agentTools.length > 0) {
+        // Ensure AIEngine is configured
+        const aiEngine = AIEngine.Instance;
+        await aiEngine.Config(false, contextUser);
+        
+        // Add discovery tool if any agent tool has discover enabled
+        const hasDiscovery = agentTools.some(tool => tool.discover);
+        if (hasDiscovery) {
+            server.addTool({
+                name: "Discover_Agents",
+                description: "List available AI agents based on a name pattern (* for all agents)",
+                parameters: z.object({
+                    pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
+                }),
+                async execute(props: any) {
+                    const agents = await discoverAgents(props.pattern, contextUser);
+                    return JSON.stringify(agents.map(agent => ({
+                        id: agent.ID,
+                        name: agent.Name,
+                        description: agent.Description || '',
+                        typeID: agent.TypeID,
+                        parentID: agent.ParentID
+                    })));
+                }
+            });
+        }
+        
+        // Add general agent execution tool if any tool has execute enabled
+        const hasExecute = agentTools.some(tool => tool.execute);
+        if (hasExecute) {
+            server.addTool({
+                name: "Run_Agent",
+                description: "Execute any AI agent by name or ID",
+                parameters: z.object({
+                    agentName: z.string().optional().describe("Name of the agent to execute"),
+                    agentId: z.string().optional().describe("ID of the agent to execute"),
+                    conversationHistory: z.array(z.object({
+                        role: z.enum(['user', 'assistant', 'system']),
+                        content: z.string()
+                    })).optional().describe("Conversation history for context"),
+                    data: z.record(z.any()).optional().describe("Template data for the agent"),
+                    waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
+                }),
+                async execute(props: any) {
+                    try {
+                        // Find the agent
+                        const aiEngine = AIEngine.Instance;
+                        await aiEngine.Config(false, contextUser);
+                        
+                        let agent: AIAgentEntity | null = null;
+                        
+                        if (props.agentId) {
+                            agent = aiEngine.Agents.find(a => a.ID === props.agentId) || null;
+                            if (!agent) {
+                                return JSON.stringify({ 
+                                    success: false, 
+                                    error: `Agent not found with ID: ${props.agentId}` 
+                                });
+                            }
+                        } else if (props.agentName) {
+                            agent = aiEngine.Agents.find(a => a.Name?.toLowerCase() === props.agentName.toLowerCase()) || null;
+                            if (!agent) {
+                                return JSON.stringify({ 
+                                    success: false, 
+                                    error: `Agent not found with name: ${props.agentName}` 
+                                });
+                            }
+                        } else {
+                            return JSON.stringify({ 
+                                success: false, 
+                                error: "Either agentName or agentId must be provided" 
+                            });
+                        }
+                        
+                        // Convert conversation history to ChatMessage format
+                        const messages: ChatMessage[] = props.conversationHistory?.map((msg: any) => ({
+                            role: msg.role,
+                            content: msg.content
+                        })) || [];
+                        
+                        // Execute the agent
+                        const agentRunner = new AgentRunner();
+                        const result = await agentRunner.RunAgent({
+                            agent,
+                            conversationMessages: messages,
+                            contextUser,
+                            data: props.data
+                        });
+                        
+                        if (props.waitForCompletion) {
+                            // Return the full result
+                            return JSON.stringify({
+                                success: result.success,
+                                runId: result.agentRun?.ID,
+                                errorMessage: result.agentRun?.ErrorMessage,
+                                finalStep: result.agentRun?.FinalStep,
+                                result: result.payload
+                            });
+                        } else {
+                            // Return just the run ID for async checking
+                            return JSON.stringify({
+                                success: result.success,
+                                runId: result.agentRun?.ID,
+                                message: "Agent execution started. Use Get_Agent_Run_Status to check progress."
+                            });
+                        }
+                    } catch (error) {
+                        return JSON.stringify({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        });
+                    }
+                }
+            });
+        }
+
+        // Process each agent tool configuration for specific agent tools
+        for (const tool of agentTools) {
+            const agentPattern = tool.agentName || "*";
+            const agents = await discoverAgents(agentPattern, contextUser);
+            
+            // Add tools for each matching agent
+            for (const agent of agents) {
+                if (tool.execute) {
+                    addAgentExecuteTool(agent, contextUser);
+                }
+            }
+        }
+        
+        // Add status tool if any agent tool has status enabled
+        const hasStatus = agentTools.some(tool => tool.status);
+        if (hasStatus) {
+            server.addTool({
+                name: "Get_Agent_Run_Status",
+                description: "Get the status of a running or completed agent execution",
+                parameters: z.object({
+                    runId: z.string().describe("The agent run ID")
+                }),
+                async execute(props: any) {
+                    const md = new Metadata();
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
+                    const loaded = await agentRun.Load(props.runId);
+                    
+                    if (!loaded) {
+                        return JSON.stringify({ error: "Run not found" });
+                    }
+                    
+                    return JSON.stringify({
+                        runId: agentRun.ID,
+                        agentName: agentRun.Agent,
+                        status: agentRun.Status,
+                        startTime: agentRun.StartedAt,
+                        endTime: agentRun.CompletedAt,
+                        errorMessage: agentRun.ErrorMessage,
+                        totalTokens: agentRun.TotalTokensUsed
+                    });
+                }
+            });
+        }
+        
+        // Add cancel tool if any agent tool has cancel enabled
+        const hasCancel = agentTools.some(tool => tool.cancel);
+        if (hasCancel) {
+            server.addTool({
+                name: "Cancel_Agent_Run",
+                description: "Cancel a running agent execution (Note: cancellation support depends on agent implementation)",
+                parameters: z.object({
+                    runId: z.string().describe("The run ID of the agent execution to cancel")
+                }),
+                async execute(props: any) {
+                    // Note: Actual cancellation would require the agent to check the cancellation token
+                    // For now, we can update the status to indicate cancellation was requested
+                    const md = new Metadata();
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
+                    const loaded = await agentRun.Load(props.runId);
+                    
+                    if (!loaded || agentRun.Status !== 'Running') {
+                        return JSON.stringify({ success: false, message: "Run not found or not running" });
+                    }
+                    
+                    // Update status to indicate cancellation requested
+                    agentRun.Status = 'Cancelled';
+                    agentRun.CompletedAt = new Date();
+                    const saved = await agentRun.Save();
+                    
+                    return JSON.stringify({ success: saved });
+                }
+            });
+        }
+    }
+}
+
+async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntity[]> {
+    const aiEngine = AIEngine.Instance;
+    await aiEngine.Config(false, contextUser);
+    
+    const allAgents = aiEngine.Agents;
+    
+    if (pattern === '*') {
+        return allAgents;
+    }
+
+    const isWildcardPattern = pattern.includes('*');
+    if (!isWildcardPattern) {
+        // Exact match
+        return allAgents.filter(a => a.Name === pattern);
+    }
+
+    // Convert wildcard pattern to regex
+    const regexPattern = pattern
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+        .replace(/\*/g, '.*'); // Convert * to .*
+    
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return allAgents.filter(a => a.Name && regex.test(a.Name));
+}
+
+function addAgentExecuteTool(agent: AIAgentEntity, contextUser: UserInfo) {
+    const agentRunner = new AgentRunner();
+    
+    server.addTool({
+        name: `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`,
+        description: `Execute the ${agent.Name || 'Unknown'} agent. ${agent.Description || ''}`,
+        parameters: z.object({
+            conversationHistory: z.array(z.object({
+                role: z.enum(['user', 'assistant', 'system']),
+                content: z.string()
+            })).optional().describe("Conversation history for context"),
+            data: z.record(z.any()).optional().describe("Template data for the agent"),
+            waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
+        }),
+        async execute(props: any) {
+            try {
+                // Convert conversation history to ChatMessage format
+                const messages: ChatMessage[] = props.conversationHistory?.map((msg: any) => ({
+                    role: msg.role,
+                    content: msg.content
+                })) || [];
+                
+                // Execute the agent
+                const result = await agentRunner.RunAgent({
+                    agent,
+                    conversationMessages: messages,
+                    contextUser,
+                    data: props.data
+                });
+                
+                if (props.waitForCompletion) {
+                    // Return the full result
+                    return JSON.stringify({
+                        success: result.success,
+                        runId: result.agentRun?.ID,
+                        errorMessage: result.agentRun?.ErrorMessage,
+                        finalStep: result.agentRun?.FinalStep,
+                        result: result.payload
+                    });
+                } else {
+                    // Return just the run ID for async checking
+                    return JSON.stringify({
+                        success: result.success,
+                        runId: result.agentRun?.ID,
+                        message: "Agent execution started. Use Get_Agent_Run_Status to check progress."
+                    });
+                }
+            } catch (error) {
+                return JSON.stringify({
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+    });
 }
 
 async function loadEntityTools(contextUser: UserInfo) {

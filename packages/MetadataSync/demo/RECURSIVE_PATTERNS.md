@@ -82,10 +82,10 @@ See `recursive-example.json` for a complete example that shows how to configure 
 
 ```bash
 # Pull AI Agents with recursive hierarchy
-mj-sync pull --entity="AI Agents"
+mj sync pull --entity="AI Agents"
 
 # With verbose output to see recursion in action
-mj-sync pull --entity="AI Agents" --verbose
+mj sync pull --entity="AI Agents" --verbose
 ```
 
 ## Verbose Output Example

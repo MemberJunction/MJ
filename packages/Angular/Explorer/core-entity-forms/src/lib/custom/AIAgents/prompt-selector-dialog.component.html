@@ -1,0 +1,151 @@
+<!-- Prompt Selector Dialog -->
+<div class="prompt-selector-dialog">
+  
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-state">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      </div>
+      <p>Loading prompts...</p>
+    </div>
+  } @else {
+    
+    <!-- Search and Controls Header -->
+    <div class="dialog-header">
+      <div class="search-section">
+        <div class="search-box">
+          <i class="fa-solid fa-search search-icon"></i>
+          <kendo-textbox 
+            [formControl]="searchControl"
+            placeholder="Search prompts by name or description..."
+            class="search-input">
+          </kendo-textbox>
+        </div>
+        
+        <div class="view-controls">
+          <button kendoButton 
+                  size="small"
+                  fillMode="flat"
+                  [class.active]="viewMode === 'list'"
+                  (click)="toggleViewMode()"
+                  title="Toggle between list and grid view">
+            <i class="fa-solid" [class.fa-list]="viewMode === 'grid'" [class.fa-th]="viewMode === 'list'"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="results-summary">
+      <span class="results-count">
+        <i class="fa-solid fa-comment-dots"></i>
+        {{ (filteredPrompts$ | async)?.length || 0 }} prompt(s)
+      </span>
+      @if (config.multiSelect && selectedPrompts.size > 0) {
+        <span class="selected-count">
+          <i class="fa-solid fa-check-circle"></i>
+          {{ selectedPrompts.size }} selected
+        </span>
+      }
+    </div>
+
+    <!-- Prompts List/Grid -->
+    <div class="prompts-container" [class.grid-view]="viewMode === 'grid'" [class.list-view]="viewMode === 'list'">
+      @if ((filteredPrompts$ | async)?.length === 0) {
+        <div class="no-results">
+          <i class="fa-solid fa-search fa-2x"></i>
+          <h4>No prompts found</h4>
+          <p>Try adjusting your search criteria or check that prompts are properly configured.</p>
+        </div>
+      } @else {
+        @for (prompt of filteredPrompts$ | async; track prompt.ID) {
+          <div class="prompt-card" 
+               [class.selected]="isPromptSelected(prompt)"
+               [class.linked]="isPromptLinked(prompt)"
+               (click)="togglePromptSelection(prompt)">
+            
+            <!-- Selection indicator -->
+            <div class="selection-indicator">
+              @if (isPromptLinked(prompt)) {
+                <i class="fa-solid fa-link linked-icon" title="Already linked to this agent"></i>
+              } @else if (isPromptSelected(prompt)) {
+                <i class="fa-solid fa-check-circle selected-icon"></i>
+              } @else {
+                <i class="fa-regular fa-circle unselected-icon"></i>
+              }
+            </div>
+
+            <!-- Prompt Content -->
+            <div class="prompt-content">
+              <div class="prompt-header">
+                <h4 class="prompt-name">{{ prompt.Name }}</h4>
+                <div class="prompt-badges">
+                  @if (isPromptLinked(prompt)) {
+                    <span class="linked-badge">
+                      <i class="fa-solid fa-link"></i>
+                      Linked
+                    </span>
+                  }
+                  <span class="status-badge" 
+                        [style.background-color]="getPromptStatusColor(prompt)">
+                    {{ getPromptStatusText(prompt) }}
+                  </span>
+                </div>
+              </div>
+
+              @if (prompt.Description) {
+                <p class="prompt-description">{{ prompt.Description }}</p>
+              }
+
+              <!-- Prompt Metadata -->
+              <div class="prompt-metadata">
+                @if (prompt.__mj_CreatedAt) {
+                  <span class="metadata-item">
+                    <i class="fa-solid fa-calendar"></i>
+                    Created {{ prompt.__mj_CreatedAt | date:'short' }}
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      }
+    </div>
+  }
+
+  <!-- Dialog Footer -->
+  <div class="dialog-footer">
+    <div class="footer-left">
+      @if (config.showCreateNew) {
+        <button kendoButton 
+                look="flat"
+                (click)="createNew()">
+          <i class="fa-solid fa-plus"></i>
+          Create New Prompt
+        </button>
+      }
+    </div>
+    
+    <div class="footer-right">
+      <button kendoButton 
+              look="flat" 
+              (click)="cancel()">
+        Cancel
+      </button>
+      
+      <button kendoButton 
+              themeColor="primary" 
+              (click)="selectPrompts()"
+              [disabled]="selectedPrompts.size === 0">
+        @if (config.multiSelect) {
+          <i class="fa-solid fa-check"></i>
+          Add {{ selectedPrompts.size }} Prompt{{ selectedPrompts.size === 1 ? '' : 's' }}
+        } @else {
+          <i class="fa-solid fa-check"></i>
+          Select Prompt
+        }
+      </button>
+    </div>
+  </div>
+</div>

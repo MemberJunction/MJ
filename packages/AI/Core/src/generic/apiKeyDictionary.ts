@@ -1,5 +1,21 @@
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import env from 'env-var';
+import { MJGlobal } from '@memberjunction/global';
+
+/**
+ * Represents an API key configuration for AI services.
+ * Used to provide API keys at runtime for specific AI driver classes.
+ */
+export interface AIAPIKey {
+    /**
+     * The driver class name (e.g., 'OpenAILLM', 'AnthropicLLM', 'GroqLLM')
+     * This should match the exact driver class name used by the AI provider
+     */
+    driverClass: string;
+    
+    /**
+     * The API key value for the specified driver class
+     */
+    apiKey: string;
+}
 
 /**
  * Default AI API Key Dictionary. You can override this with a custom implementation by creating a sub-class of this class and doing whatever you want in that class

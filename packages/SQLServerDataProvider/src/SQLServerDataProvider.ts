@@ -22,22 +22,16 @@ import {
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
-  ProviderConfigDataBase,
   RunViewResult,
-  MetadataInfo,
   EntityInfo,
   EntityFieldInfo,
   ApplicationInfo,
   RunViewParams,
-  ProviderBase,
   EntityFieldTSType,
   ProviderType,
   UserInfo,
-  RoleInfo,
   RecordChange,
-  UserRoleInfo,
   ILocalStorageProvider,
-  RowLevelSecurityFilterInfo,
   AuditLogTypeInfo,
   AuthorizationInfo,
   TransactionGroupBase,
@@ -60,19 +54,23 @@ import {
   RecordMergeResult,
   RecordMergeDetailResult,
   EntityDependency,
-  KeyValuePair,
   IRunQueryProvider,
   RunQueryResult,
+  RunQueryParams,
   PotentialDuplicateRequest,
   PotentialDuplicateResponse,
   LogStatus,
   CompositeKey,
   EntityDeleteOptions,
+  EntityMergeOptions,
   BaseEntityResult,
   Metadata,
   DatasetItemResultType,
   DatabaseProviderBase,
+  QueryInfo,
+  QueryCategoryInfo,
 } from '@memberjunction/core';
+import { QueryParameterProcessor } from './queryParameterProcessor';
 
 import {
   AuditLogEntity,
@@ -102,7 +100,6 @@ import {
   InternalSQLOptions
 } from './types.js';
 
-import { RunQueryParams } from '@memberjunction/core/dist/generic/runQuery';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -159,6 +156,9 @@ async function executeSQLCore(
 
   try {
     // Create a new request object for this query
+    // Note: This looks redundant but is required for TypeScript type narrowing.
+    // The sql.Request constructor has overloads for ConnectionPool and Transaction,
+    // but TypeScript can't resolve the overload with a union type parameter.
     let request: sql.Request;
     if (connectionSource instanceof sql.Transaction) {
       request = new sql.Request(connectionSource);
@@ -193,13 +193,19 @@ async function executeSQLCore(
     
     return result;
   } catch (error: any) {
-    // Log all errors
-    LogError(error);
+    // Log all errors along with the query and parameters
+    const errorMessage = `Error executing SQL 
+    Error: ${error?.message ? error.message : error}
+    Query: ${query}
+    Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
     
+    LogError(errorMessage);
+
     // Re-throw all errors
     throw error;
   }
 }
+
 
 /**
  * SQL Server implementation of the MemberJunction data provider interfaces.
@@ -225,10 +231,13 @@ export class SQLServerDataProvider
   implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider
 {
   private _pool: sql.ConnectionPool;
+  
+  // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
+  
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
   private _bAllowRefresh: boolean = true;
@@ -256,9 +265,11 @@ export class SQLServerDataProvider
   private _transactionState$ = new BehaviorSubject<boolean>(false);
   private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
   
+
   /**
    * Observable that emits the current transaction state (true when active, false when not)
    * External code can subscribe to this to know when transactions start and end
+   * 
    * @example
    * provider.transactionState$.subscribe(isActive => {
    *   console.log('Transaction active:', isActive);
@@ -273,6 +284,7 @@ export class SQLServerDataProvider
    * 0 = no transaction, 1 = first level, 2+ = nested transactions
    */
   public get transactionDepth(): number {
+    // Request-specific depth should be accessed via getTransactionContext
     return this._transactionDepth;
   }
   
@@ -280,14 +292,14 @@ export class SQLServerDataProvider
    * Checks if we're currently in a transaction (at any depth)
    */
   public get inTransaction(): boolean {
-    return this._transactionDepth > 0;
+    return this.transactionDepth > 0;
   }
   
   /**
    * Checks if we're currently in a nested transaction (depth > 1)
    */
   public get inNestedTransaction(): boolean {
-    return this._transactionDepth > 1;
+    return this.transactionDepth > 1;
   }
   
   /**
@@ -302,6 +314,8 @@ export class SQLServerDataProvider
    * Gets whether a transaction is currently active
    */
   public get isTransactionActive(): boolean {
+    // Always return instance-level state
+    // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
   }
 
@@ -320,7 +334,7 @@ export class SQLServerDataProvider
    */
   public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
     try {
-      this._pool = configData.DataSource; // Now expects a ConnectionPool instead of DataSource
+      this._pool = configData.ConnectionPool; // Now expects a ConnectionPool instead of DataSource
 
       // Initialize the instance queue processor
       this.initializeQueueProcessor();
@@ -432,7 +446,13 @@ export class SQLServerDataProvider
    */
   public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
     const sessionId = uuidv4();
-    const session = new SqlLoggingSessionImpl(sessionId, filePath, options);
+    const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+    const session = new SqlLoggingSessionImpl(sessionId, filePath, 
+      {
+        defaultSchemaName: mjCoreSchema,
+        ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
+        // the caller's defaultSchemaName will be used
+      });
 
     // Initialize the session (create file, write header)
     await session.initialize();
@@ -662,41 +682,171 @@ export class SQLServerDataProvider
   // END ---- IRunReportProvider
   /**************************************************************************/
 
+  /**
+   * Resolves a hierarchical category path (e.g., "/MJ/AI/Agents/") to a CategoryID.
+   * The path is split by "/" and each segment is matched case-insensitively against
+   * category names, walking down the hierarchy from root to leaf.
+   * 
+   * @param categoryPath The hierarchical category path (e.g., "/MJ/AI/Agents/")
+   * @returns The CategoryID if the path exists, null otherwise
+   */
+  private resolveCategoryPath(categoryPath: string): string | null {
+    if (!categoryPath) return null;
+    
+    // Split path and clean segments - remove empty strings from leading/trailing slashes
+    const segments = categoryPath.split('/')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    
+    if (segments.length === 0) return null;
+    
+    // Walk down the hierarchy to find the target category
+    let currentCategory: QueryCategoryInfo | null = null;
+    
+    for (const segment of segments) {
+      const parentId = currentCategory?.ID || null;
+      currentCategory = this.QueryCategories.find(cat => 
+        cat.Name.trim().toLowerCase() === segment.toLowerCase() && 
+        cat.ParentID === parentId
+      );
+      
+      if (!currentCategory) {
+        return null; // Path not found
+      }
+    }
+    
+    return currentCategory.ID;
+  }
+
+  /**
+   * Finds a query by ID or by Name+Category combination.
+   * Supports both direct CategoryID lookup and hierarchical CategoryPath path resolution.
+   * 
+   * @param QueryID Unique identifier for the query
+   * @param QueryName Name of the query to find
+   * @param CategoryID Direct category ID for the query
+   * @param CategoryPath Hierarchical category path (e.g., "/MJ/AI/Agents/") or simple category name
+   * @param refreshMetadataIfNotFound Whether to refresh metadata if query is not found
+   * @returns The found QueryInfo or null if not found
+   */
+  protected async findQuery(QueryID: string, QueryName: string, CategoryID: string, CategoryPath: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
+      // First, get the query metadata
+      const queries = this.Queries.filter(q => {
+        if (QueryID) {
+          return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
+        } else if (QueryName) {
+          let matches = q.Name.trim().toLowerCase() === QueryName.trim().toLowerCase();
+          if (CategoryID) {
+            matches = matches && q.CategoryID.trim().toLowerCase() === CategoryID.trim().toLowerCase();
+          } else if (CategoryPath) {
+            // New hierarchical path logic - try path resolution first, fall back to simple name match
+            const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+            if (resolvedCategoryId) {
+              // Hierarchical path matched - use the resolved CategoryID
+              matches = matches && q.CategoryID === resolvedCategoryId;
+            } else {
+              // Fall back to simple category name comparison for backward compatibility
+              matches = matches && q.Category.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
+            }
+          }
+          return matches;
+        }
+        return false;
+      });
+
+      if (queries.length === 0) {
+        if (refreshMetadataIfNotFound) {
+          // If we didn't find the query, refresh metadata and try again
+          await this.Refresh();
+          return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
+        } 
+        else {
+          return null; // No query found and not refreshing metadata
+        }
+      }
+      else {
+        return queries[0];
+      }
+  }
+
   /**************************************************************************/
   // START ---- IRunQueryProvider
   /**************************************************************************/
   public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     try {
-      const QueryID = params.QueryID;
-      // run the sql and return the data
+      // Build filter to find the query
       let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
       if (params.CategoryID) {
-        filter += ` AND CategoryID = '${params.CategoryID}'`; /* if CategoryID is provided, we add it to the filter */
+        filter += ` AND CategoryID = '${params.CategoryID}'`;
       }
-      if (params.CategoryName) {
-        filter += ` AND Category = '${params.CategoryName}'`; /* if CategoryName is provided, we add it to the filter */
+      if (params.CategoryPath) {
+        filter += ` AND Category = '${params.CategoryPath}'`;
       }
 
-      const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
-      const queryInfo = await this.ExecuteSQL(sqlQuery, undefined, undefined, contextUser);
-      if (queryInfo && queryInfo.length > 0) {
-        const start = new Date().getTime();
-        const sql = queryInfo[0].SQL;
-        const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
-        const end = new Date().getTime();
-        if (result)
-          return {
-            Success: true,
-            QueryID: queryInfo[0].ID,
-            QueryName: queryInfo[0].Name,
-            Results: result,
-            RowCount: result.length,
-            ExecutionTime: end - start,
-            ErrorMessage: '',
-          };
-        else throw new Error('Error running query SQL');
-      } else {
+      const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath, true);
+      if (!query) {
         throw new Error('Query not found');
+      } 
+
+      // Check permissions and status
+      if (!query.UserCanRun(contextUser)) {
+        if (!query.UserHasRunPermissions(contextUser)) {
+          throw new Error('User does not have permission to run this query');
+        } else {
+          throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
+        }
+      }
+
+      // Process the query with parameters if it uses templates
+      let finalSQL = query.SQL;
+      let appliedParameters: Record<string, any> = {};
+
+      if (query.UsesTemplate) {
+        const processingResult = QueryParameterProcessor.processQueryTemplate(query, params.Parameters);
+        
+        if (!processingResult.success) {
+          throw new Error(processingResult.error);
+        }
+        
+        finalSQL = processingResult.processedSQL;
+        appliedParameters = processingResult.appliedParameters || {};
+      } else if (params.Parameters && Object.keys(params.Parameters).length > 0) {
+        // Warn if parameters were provided but query doesn't use templates
+        LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+      }
+
+      // Execute the query
+      const start = new Date().getTime();
+      const result = await this.ExecuteSQL(finalSQL, undefined, undefined, contextUser);
+      const end = new Date().getTime();
+
+      if (result) {
+        // Apply pagination if specified
+        const totalRowCount = result.length;
+        const startRow = params.StartRow || 0;
+        
+        // Apply StartRow offset and MaxRows limit
+        let paginatedResult = result;
+        if (startRow > 0) {
+          paginatedResult = paginatedResult.slice(startRow);
+        }
+        if (params.MaxRows && params.MaxRows > 0) {
+          paginatedResult = paginatedResult.slice(0, params.MaxRows);
+        }
+          
+        return {
+          Success: true,
+          QueryID: query.ID,
+          QueryName: query.Name,
+          Results: paginatedResult,
+          RowCount: paginatedResult.length,
+          TotalRowCount: totalRowCount,
+          ExecutionTime: end - start,
+          ErrorMessage: '',
+          AppliedParameters: appliedParameters
+        };
+      } else {
+        throw new Error('Error executing query SQL');
       }
     } catch (e) {
       LogError(e);
@@ -706,11 +856,13 @@ export class SQLServerDataProvider
         QueryName: params.QueryName,
         Results: [],
         RowCount: 0,
+        TotalRowCount: 0,
         ExecutionTime: 0,
         ErrorMessage: e.message,
       };
     }
   }
+
   /**************************************************************************/
   // END ---- IRunQueryProvider
   /**************************************************************************/
@@ -974,6 +1126,7 @@ export class SQLServerDataProvider
             entityInfo.ID,
             null,
             params.AuditLogDescription,
+            null
           );
         }
 
@@ -1011,8 +1164,15 @@ export class SQLServerDataProvider
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
+    // First, remove all string literals from the clause to avoid false positives
+    // This regex matches both single and double quoted strings, handling escaped quotes
+    const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
+    
+    // Replace all string literals with empty strings for validation purposes
+    const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+    
     // convert the clause to lower case to make the keyword search case-insensitive
-    const lowerClause = clause.toLowerCase();
+    const lowerClause = clauseWithoutStrings.toLowerCase();
 
     // Define forbidden keywords and characters as whole words using regular expressions
     const forbiddenPatterns: RegExp[] = [
@@ -1197,6 +1357,7 @@ export class SQLServerDataProvider
     entityId: string,
     recordId: any | null,
     auditLogDescription: string | null,
+    saveOptions: EntitySaveOptions
   ): Promise<AuditLogEntity> {
     try {
       const authorization = authorizationName
@@ -1223,7 +1384,7 @@ export class SQLServerDataProvider
 
       if (auditLogDescription) auditLog.Description = auditLogDescription;
 
-      if (await auditLog.Save()) return auditLog;
+      if (await auditLog.Save(saveOptions)) return auditLog;
       else throw new Error(`Error saving audit log record`);
     } catch (err) {
       LogError(err);
@@ -1499,7 +1660,7 @@ export class SQLServerDataProvider
     return response;
   }
 
-  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+  public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
     const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
     if (!e || !e.AllowRecordMerge)
       throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
@@ -1676,29 +1837,39 @@ export class SQLServerDataProvider
 
       if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
 
-      sSQL = `
-                    DECLARE @ResultTable TABLE (
-                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                    );
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      if (logRecordChangeSQL === null) {
+        // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
+        // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
+        // array of fields that are directly stored in the DB and we need to respect that but this will blow up if we try
+        // to log record changes when there are none, so we just return the simple SQL to run
+        sSQL = sSimpleSQL; 
+      }
+      else {
+        sSQL = `
+                      DECLARE @ResultTable TABLE (
+                          ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                      );
 
-                    INSERT INTO @ResultTable
-                    ${sSimpleSQL};
+                      INSERT INTO @ResultTable
+                      ${sSimpleSQL};
 
-                    DECLARE @ID NVARCHAR(MAX);
-                    
-                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
-                    
-                    IF @ID IS NOT NULL
-                    BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        );
+                      DECLARE @ID NVARCHAR(MAX);
+                      
+                      SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                      
+                      IF @ID IS NOT NULL
+                      BEGIN
+                          DECLARE @ResultChangesTable TABLE (
+                              ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                          );
 
-                        INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false)};
-                    END;
+                          INSERT INTO @ResultChangesTable
+                          ${logRecordChangeSQL};
+                      END;
 
-                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                      SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+      }
     } else {
       // not doing track changes for this entity, keep it simple
       sSQL = sSimpleSQL;
@@ -1934,13 +2105,17 @@ export class SQLServerDataProvider
             if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
             } else {
-              // Execute SQL with optional simple SQL fallback for loggers
-              const rawResult = await this.ExecuteSQL(sSQL, null, { 
-                isMutation: true, 
-                description: `Save ${entity.EntityInfo.Name}`,
-                simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
-              }, user);
-              result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              try {
+                // Execute SQL with optional simple SQL fallback for loggers
+                const rawResult = await this.ExecuteSQL(sSQL, null, { 
+                  isMutation: true, 
+                  description: `Save ${entity.EntityInfo.Name}`,
+                  simpleSQLFallback: entity.EntityInfo.TrackRecordChanges ? sqlDetails.simpleSQL : undefined
+                }, user);
+                result = await this.ProcessEntityRows(rawResult, entity.EntityInfo);
+              } catch (e) {
+                throw e; // rethrow
+              }
             }
 
             this._bAllowRefresh = true; // allow refreshes now
@@ -1957,7 +2132,13 @@ export class SQLServerDataProvider
               entityResult.Success = true;
               return result[0];
             } else {
-              throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
+              if (bNewRecord) {
+                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ` + sSQL);
+              }
+              else {
+                // if we get here that means that SQL did NOT find a matching row to update in the DB, so we need to throw an error
+                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ` + sSQL);
+              }
             }
           }
         } else {
@@ -1969,6 +2150,7 @@ export class SQLServerDataProvider
       entityResult.EndedAt = new Date();
       entityResult.Message = e.message;
       LogError(e);
+
       throw e; // rethrow the error
     }
   }
@@ -2094,20 +2276,40 @@ export class SQLServerDataProvider
     }
     if (!isFirst) sRet += ',\n                ';
 
-    sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes)}`;
+    sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes, f.UnicodePrefix)}`;
 
     return sRet;
   }
 
-  protected packageSPParam(paramValue: any, quoteString: string) {
+  /**
+   * Returns a string that packages the parameter value for the stored procedure call.
+   * It will handle quoting the value based on the quoteString provided and will also handle null
+   * values by returning 'NULL' as a string. Finally, the prefix is used for unicode fields to add the 'N' prefix if needed.
+   * @param paramValue 
+   * @param quoteString 
+   * @param prefix 
+   * @returns 
+   */
+  protected packageSPParam(paramValue: any, quoteString: string, unicodePrefix: string) {
+    // Handle null/undefined first
+    if (paramValue === null || paramValue === undefined) {
+      return 'NULL';
+    }
+    
     let pVal: any;
     if (typeof paramValue === 'string') {
-      if (quoteString === "'") pVal = paramValue.toString().replace(/'/g, "''");
-      else if (quoteString === '"') pVal = paramValue.toString().replace(/"/g, '""');
-      else pVal = paramValue;
-    } else pVal = paramValue;
+      if (quoteString === "'") 
+        pVal = paramValue.replace(/'/g, "''");
+      else if (quoteString === '"') 
+        pVal = paramValue.replace(/"/g, '""');
+      else 
+        pVal = paramValue;
+    } 
+    else {
+      pVal = paramValue;
+    }
 
-    return paramValue === null || paramValue === undefined ? 'NULL' : quoteString + pVal + quoteString;
+    return unicodePrefix + quoteString + pVal + quoteString;
   }
 
   protected GetLogRecordChangeSQL(
@@ -2217,6 +2419,10 @@ export class SQLServerDataProvider
       const changes: any = {};
       for (const key in newData) {
         const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
+        if (!f) {
+          continue; // skip if field not found in entity info, sometimes objects have extra properties that are not part of the entity
+        }
+        
         let bDiff: boolean = false;
         if (f.ReadOnly)
           bDiff = false; // read only fields are never different, they can change in the database, but we don't consider them to be a change for record changes purposes.
@@ -2491,7 +2697,6 @@ export class SQLServerDataProvider
         if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
         } else {
-          // Execute SQL with optional simple SQL fallback for loggers
           d = await this.ExecuteSQL(sSQL, null, { 
             isMutation: true, 
             description: `Delete ${entity.EntityInfo.Name}`,
@@ -2503,6 +2708,13 @@ export class SQLServerDataProvider
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
           for (const key of entity.PrimaryKeys) {
             if (key.Value !== d[0][key.Name]) {
+              // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
+              // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
+              // it here for clarity.
+              result.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
+              result.EndedAt = new Date();
+              result.Success = false;
+
               return false;
             }
           }
@@ -2520,10 +2732,11 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
+      LogError(e);
       result.Message = e.message;
       result.Success = false;
       result.EndedAt = new Date();
-      LogError(e);
+
       return false;
     }
   }
@@ -3135,7 +3348,7 @@ export class SQLServerDataProvider
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
     } else if (!connectionSource) {
-      // Use our transaction if available
+      // Use instance transaction
       transaction = this._transaction;
     }
     
@@ -3144,7 +3357,9 @@ export class SQLServerDataProvider
       pool: this._pool,
       transaction: transaction,
       logSqlStatement: this._logSqlStatement.bind(this),
-      clearTransaction: () => { this._transaction = null; }
+      clearTransaction: () => { 
+        this._transaction = null;
+      }
     };
     
     // Convert logging options to internal format
@@ -3405,7 +3620,9 @@ export class SQLServerDataProvider
         pool: this._pool,
         transaction: this._transaction,
         logSqlStatement: this._logSqlStatement.bind(this),
-        clearTransaction: () => { this._transaction = null; }
+        clearTransaction: () => { 
+          this._transaction = null;
+        }
       };
 
       // Execute using instance method (which handles queue for transactions)
@@ -3576,7 +3793,6 @@ export class SQLServerDataProvider
         await this.processDeferredTasks();
       } else {
         // Nested transaction - just remove the savepoint from stack
-        // The savepoint remains valid in SQL Server until the outer transaction commits or rolls back
         this._savepointStack.pop();
       }
     } catch (e) {
@@ -3596,7 +3812,7 @@ export class SQLServerDataProvider
       }
       
       if (this._transactionDepth === 1) {
-        // Outermost transaction - use mssql Transaction object to rollback everything
+        // Outermost transaction - rollback everything
         await this._transaction.rollback();
         this._transaction = null;
         this._transactionDepth = 0;
@@ -3608,32 +3824,28 @@ export class SQLServerDataProvider
         // Emit transaction state change
         this._transactionState$.next(false);
         
-        // Clear deferred tasks after rollback (don't process them)
+        // Clear deferred tasks after rollback
         const deferredCount = this._deferredTasks.length;
         this._deferredTasks = [];
         if (deferredCount > 0) {
           LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
         }
       } else {
-        // Nested transaction - rollback to the last savepoint
+        // Nested transaction - rollback to savepoint
         const savepointName = this._savepointStack[this._savepointStack.length - 1];
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
         
-        // Rollback to the savepoint (this preserves the outer transaction)
-        // Note: We use ROLLBACK TRANSACTION SavePointName (without TO) as per SQL Server syntax
         await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
           description: `Rolling back to savepoint ${savepointName}`,
           ignoreLogging: true
         });
         
-        // Remove the savepoint from stack and decrement depth
         this._savepointStack.pop();
         this._transactionDepth--;
       }
     } catch (e) {
-      // On error in nested transaction, maintain state
       // On error in outer transaction, reset everything
       if (this._transactionDepth === 1 || !this._transaction) {
         this._transaction = null;

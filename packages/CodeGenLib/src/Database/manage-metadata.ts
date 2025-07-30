@@ -1262,15 +1262,15 @@ export class ManageMetadataBase {
          const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
          const sSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFieldsWithCheckConstraints${filter}`
          const resultResult = await pool.request().query(sSQL);
-      const result = resultResult.recordset;
+         const result = resultResult.recordset;
 
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
          const allEntityFieldValuesResult = await pool.request().query(efvSQL);
-      const allEntityFieldValues = allEntityFieldValuesResult.recordset;
+         const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
          const efSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFields ORDER BY EntityID, Sequence`;
          const allEntityFieldsResult = await pool.request().query(efSQL);
-      const allEntityFields = allEntityFieldsResult.recordset;
+         const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
 
@@ -1295,7 +1295,7 @@ export class ManageMetadataBase {
                      // check to see if the ValueListType is already set to "List", if not, update it
                      const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
                      const checkResultResult = await pool.request().query(sSQLCheck);
-      const checkResult = checkResultResult.recordset;
+                     const checkResult = checkResultResult.recordset;
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
                         const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
                         await this.LogSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
@@ -1744,8 +1744,8 @@ export class ManageMetadataBase {
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
-               // use SchemaName: Entity Name instead of just the table name as basis
-               newEntityName = `${newEntity.SchemaName}: ${newEntityName}` 
+               suffix = '__' + newEntity.SchemaName;
+               newEntityName = newEntityName + suffix
                LogError(`   >>>> WARNING: Entity name already exists, so using ${newEntityName} instead. If you did not intend for this, please rename the ${newEntity.SchemaName}.${newEntity.TableName} table in the database.`)
             }
 

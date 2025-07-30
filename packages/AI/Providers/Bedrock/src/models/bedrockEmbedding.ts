@@ -4,7 +4,8 @@ import {
   BaseEmbeddings, 
   ModelUsage, 
   EmbedTextResult, 
-  EmbedTextsResult 
+  EmbedTextsResult,
+  ErrorAnalyzer 
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { 
@@ -84,7 +85,17 @@ export class BedrockEmbedding extends BaseEmbeddings {
         vector: embedding
       };
     } catch (error) {
-      throw new Error(`Error generating embedding: ${error.message}`);
+      // Log error details for debugging
+      const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
+      console.error('Bedrock embedding error:', errorInfo);
+      
+      // Return error result
+      return {
+        object: "object" as "object" | "list",
+        model: params.model || 'amazon.titan-embed-text-v1',
+        ModelUsage: new ModelUsage(0, 0),
+        vector: []
+      };
     }
   }
 
@@ -147,7 +158,17 @@ export class BedrockEmbedding extends BaseEmbeddings {
         };
       }
     } catch (error) {
-      throw new Error(`Error generating embeddings: ${error.message}`);
+      // Log error details for debugging
+      const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
+      console.error('Bedrock embedding error:', errorInfo);
+      
+      // Return error result
+      return {
+        object: "list",
+        model: params.model || 'amazon.titan-embed-text-v1',
+        ModelUsage: new ModelUsage(0, 0),
+        vectors: []
+      };
     }
   }
 
@@ -165,7 +186,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         "cohere.embed-multilingual-v3"
       ];
     } catch (error) {
-      throw new Error(`Error listing embedding models: ${error.message}`);
+      console.error('Error listing Bedrock embedding models:', ErrorAnalyzer.analyzeError(error, 'Bedrock'));
+      return [];
     }
   }
 }

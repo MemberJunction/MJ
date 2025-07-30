@@ -6,6 +6,7 @@ on:
     branches:
       - next
     paths:
+      - 'package-lock.json'
       - 'packages/**'
 
 jobs:

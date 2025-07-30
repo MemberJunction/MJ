@@ -19,9 +19,6 @@
  * 
  * Notes provide a way for Skip to store and retrieve organizational knowledge, user
  * preferences, and contextual information that improves future interactions.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 import type { SkipConversation } from './conversation-types';

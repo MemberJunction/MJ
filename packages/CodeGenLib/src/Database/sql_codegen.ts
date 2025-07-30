@@ -5,7 +5,7 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import * as sql from 'mssql';
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -35,8 +35,40 @@ export class SQLCodeGenBase {
         return this._sqlUtilityObject;
     }
 
+    /**
+     * Array of entity names that qualify for forced regeneration based on the whereClause filter
+     */
+    protected entitiesQualifiedForForcedRegeneration: string[] = [];
+
+    /**
+     * Flag indicating whether to filter entities for forced regeneration based on entityWhereClause
+     */
+    protected filterEntitiesQualifiedForRegeneration: boolean = false;
+
     public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
+            // Build list of entities qualified for forced regeneration if entityWhereClause is provided
+            if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
+                this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
+                try {
+                    const whereClause = configInfo.forceRegeneration.entityWhereClause;
+                    const query = `
+                        SELECT Name 
+                        FROM [${mjCoreSchema}].[Entity] 
+                        WHERE ${whereClause}
+                    `;
+                    const result = await pool.request().query(query);
+                    this.entitiesQualifiedForForcedRegeneration = result.recordset.map((r: any) => r.Name);
+                    
+                    logStatus(`Force regeneration filter enabled: ${this.entitiesQualifiedForForcedRegeneration.length} entities qualified based on entityWhereClause: ${whereClause}`);
+                } catch (error) {
+                    logError(`CRITICAL ERROR: Failed to execute forceRegeneration.entityWhereClause query: ${error}`);
+                    logError(`WHERE clause: ${configInfo.forceRegeneration.entityWhereClause}`);
+                    logError(`Stopping execution due to invalid entityWhereClause configuration`);
+                    throw new Error(`Invalid forceRegeneration.entityWhereClause: ${error}`);
+                }
+            }
+
             // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
             //          we have custom base views, need to have them defined before we do
             //          the rest as the generated stuff might use custom base views in compiled
@@ -383,7 +415,21 @@ export class SQLCodeGenBase {
                   description.toLowerCase().includes('spdelete')))
             );
             
-            shouldLog = isNewOrModified || isForceRegeneration;
+            // Determine if we should log based on entity state and force regeneration settings
+            if (isNewOrModified) {
+                // Always log new or modified entities
+                shouldLog = true;
+            } else if (isForceRegeneration) {
+                // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
+                // already filtered this - now we just need to check entity filtering
+                if (this.filterEntitiesQualifiedForRegeneration) {
+                    // Only log if entity is in the qualified list
+                    shouldLog = this.entitiesQualifiedForForcedRegeneration.includes(entity.Name);
+                } else {
+                    // No entity filtering - regenerate this type for all entities
+                    shouldLog = true;
+                }
+            }
         }
         
         if (shouldLog) {
@@ -1169,7 +1215,7 @@ GO`;
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger: string = hasUpdatedAtField ? this.generateUpdatedAtTrigger(entity) : '';
-        let selectInsertedRecord = `SELECT
+        let selectUpdatedRecord = `SELECT
                                         *
                                     FROM
                                         [${entity.SchemaName}].[${entity.BaseView}]
@@ -1196,8 +1242,13 @@ BEGIN
     WHERE
         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
 
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    ${selectInsertedRecord}
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        ${selectUpdatedRecord}
 END
 GO
 ${permissions}
@@ -1240,7 +1291,6 @@ ${updatedAtTrigger}
     protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement; // Only exclude auto-increment PKs from insert
         let sOutput: string = '', isFirst: boolean = true;
-        const filteredFields = entityFields.filter(f => f.AllowUpdateAPI);
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
             const quotes: string = ef.NeedsQuotes ? "'" : "";
@@ -1262,17 +1312,27 @@ ${updatedAtTrigger}
                     sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
             }
             else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
-                    // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
-                    // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
-                    // otherwise we use the value passed in
-                    // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
-                    let defValue = ef.DefaultValue;
-                    if (ef.TSType === EntityFieldTSType.String) {
-                        if (defValue.startsWith("'") && defValue.endsWith("'")) {
-                            defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
-                        }
+                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
+                // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
+                // When the uniqueidentifier default value is set to NEWID() or NEWSEQUENTIALID(), we need to ensure that the value is not wrapped in quotes, so we check for that
+                // otherwise we use the value passed in
+                // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
+                let defValue = ef.DefaultValue;
+                if (ef.TSType === EntityFieldTSType.String) {
+                    if (defValue.startsWith("'") && defValue.endsWith("'")) {
+                        defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
                     }
-                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${quotes}${defValue}${quotes} ELSE @${ef.CodeName} END`;
+                }
+
+                const defValueLowered = defValue.toLowerCase().trim();
+
+                //If the default value is NEWID or NEWSEQUENTIALID, we will use the default value as is, without quotes.
+                //Otherwise, wrap the default value with the quotes variable value.
+                if (!defValueLowered.includes('newid()') && !defValueLowered.includes('newsequentialid()')) {
+                    defValue = `${quotes}${defValue}${quotes}`;
+                }
+
+                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${defValue} ELSE @${ef.CodeName} END`;
             }
             else {
                 let sVal: string = '';
@@ -1343,6 +1403,14 @@ ${deleteCode}`
 ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
         }
 
+        // Build the NULL select statement for when no rows are affected
+        let sNullSelect: string = '';
+        for (let k of entity.PrimaryKeys) {
+            if (sNullSelect !== '')
+                sNullSelect += ', ';
+            sNullSelect += `NULL AS [${k.Name}]`;
+        }
+
         return `
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
@@ -1358,7 +1426,11 @@ BEGIN
 
 ${deleteCode}
 
-    SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT ${sNullSelect} -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT ${sSelect} -- Return the primary key values to indicate we successfully deleted the record
 END
 GO${permissions}
     `
@@ -1369,45 +1441,204 @@ GO${permissions}
         if (entity.CascadeDeletes) {
             const md = new Metadata();
 
-            // we need to find all of the fields in other entities that are foreign keys to this entity
-            // and generate DELETE statements for those tables
-            for (let i: number = 0; i < md.Entities.length; ++i) {
-                const e = md.Entities[i];
-                for (let j: number = 0; j < e.Fields.length; ++j) {
-                    const ef = e.Fields[j];
+            // Find all fields in other entities that are foreign keys to this entity
+            for (const e of md.Entities) {
+                for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        let sql: string = '';
-                        if (ef.AllowsNull === false) {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and only those that are non-null. If they allow null we want to UPDATE those rows to be null
-                            // so we need to generate a DELETE statement for that table
-                            sql = `
-    -- Cascade delete from ${e.BaseTable}
-    DELETE FROM
-        [${e.SchemaName}].[${e.BaseTable}]
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
+                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
+                        
+                        if (sql !== '') {
+                            if (sOutput !== '')
+                                sOutput += '\n    ';
+                            sOutput += sql;
                         }
-                        else {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and this field ALLOWS nulls, which means we don't delete the rows, we just update them to be null
-                            // so they don't have an orphaned foreign key
-                            sql = `
-    -- Cascade update on ${e.BaseTable} - set FK to null before deleting rows in ${entity.BaseTable}
-    UPDATE
-        [${e.SchemaName}].[${e.BaseTable}]
-    SET
-        [${ef.CodeName}] = NULL
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
-                        }
-                        if (sOutput !== '')
-                            sOutput += '\n    ';
-                        sOutput += sql;
                     }
                 }
             }
         }
         return sOutput === '' ? '' : `${sOutput}\n    `;
+    }
+
+    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+        if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
+            // Non-nullable FK: generate cursor-based cascade delete
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+        }
+        else if (fkField.AllowsNull && relatedEntity.AllowUpdateAPI) {
+            // Nullable FK: generate cursor-based update to set FK to null
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'update');
+        }
+        else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
+            // Nullable FK but no update API - this is a configuration error
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause the delete operation to fail due to referential integrity`;
+        }
+        else if (!relatedEntity.AllowDeleteAPI) {
+            // Entity doesn't allow delete API, so we can't cascade delete
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause a referential integrity violation`;
+        }
+        
+        return '';
+    }
+
+    protected generateCascadeCursorOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, operation: 'delete' | 'update'): string {
+        // Build the WHERE clause for matching foreign key(s)
+        // TODO: Future enhancement to support composite foreign keys
+        const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        
+        // Generate unique cursor name using entity code names
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
+        
+        // Determine which SP to call
+        const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
+        const spName = this.getSPName(relatedEntity, spType);
+        
+        if (operation === 'update') {
+            // For update, we need to include all updateable fields
+            // Use the related entity's code name as prefix to ensure uniqueness
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            const spCallParams = updateParams.allParams;
+            
+            return `
+    -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
+    ${updateParams.declarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${updateParams.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+        }
+        
+        // For delete operation, use a simpler prefix for primary keys only
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        
+        return `
+    -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
+    DECLARE ${pkComponents.varDeclarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${pkComponents.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${pkComponents.spParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+    }
+
+    protected buildPrimaryKeyComponents(entity: EntityInfo, prefix: string = ''): {
+        varDeclarations: string,
+        selectFields: string,
+        fetchInto: string,
+        spParams: string
+    } {
+        let varDeclarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let spParams = '';
+        
+        const varPrefix = prefix || 'Related';
+        
+        for (const pk of entity.PrimaryKeys) {
+            if (varDeclarations !== '')
+                varDeclarations += ', ';
+            varDeclarations += `@${varPrefix}${pk.CodeName} ${pk.SQLFullType}`;
+            
+            if (selectFields !== '')
+                selectFields += ', ';
+            selectFields += `[${pk.Name}]`;
+            
+            if (fetchInto !== '')
+                fetchInto += ', ';
+            fetchInto += `@${varPrefix}${pk.CodeName}`;
+            
+            if (spParams !== '')
+                spParams += ', ';
+            spParams += `@${varPrefix}${pk.CodeName}`;
+        }
+        
+        return { varDeclarations, selectFields, fetchInto, spParams };
+    }
+
+    protected buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+        declarations: string,
+        selectFields: string,
+        fetchInto: string,
+        allParams: string
+    } {
+        let declarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let allParams = '';
+        
+        const varPrefix = prefix || entity.CodeName;
+        
+        // First, handle primary keys with the entity-specific prefix
+        const pkComponents = this.buildPrimaryKeyComponents(entity, varPrefix);
+        
+        // Add primary key declarations to the declarations string
+        // Need to add DECLARE keyword since buildPrimaryKeyComponents doesn't include it
+        declarations = pkComponents.varDeclarations.split(', ').map(decl => `DECLARE ${decl}`).join('\n    ');
+        
+        selectFields = pkComponents.selectFields;
+        fetchInto = pkComponents.fetchInto;
+        allParams = pkComponents.spParams;
+        
+        // Then, add all updateable fields with the same prefix
+        for (const ef of entity.Fields) {
+            if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
+                if (declarations !== '')
+                    declarations += '\n    ';
+                declarations += `DECLARE @${varPrefix}_${ef.CodeName} ${ef.SQLFullType}`;
+                
+                if (selectFields !== '')
+                    selectFields += ', ';
+                selectFields += `[${ef.Name}]`;
+                
+                if (fetchInto !== '')
+                    fetchInto += ', ';
+                fetchInto += `@${varPrefix}_${ef.CodeName}`;
+                
+                if (allParams !== '')
+                    allParams += ', ';
+                allParams += `@${varPrefix}_${ef.CodeName}`;
+            }
+        }
+        
+        return { declarations, selectFields, fetchInto, allParams };
     }
 }

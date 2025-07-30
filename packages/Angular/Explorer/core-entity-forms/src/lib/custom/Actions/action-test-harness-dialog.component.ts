@@ -31,7 +31,7 @@ import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
         </div>
         
         <kendo-dialog-actions>
-            <kendo-button (click)="close()">Close</kendo-button>
+            <button kendoButton (click)="close()">Close</button>
         </kendo-dialog-actions>
     `,
     styles: [`

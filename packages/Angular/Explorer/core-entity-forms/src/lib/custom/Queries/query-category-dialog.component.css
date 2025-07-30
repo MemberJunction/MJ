@@ -1,0 +1,26 @@
+/* Category Dialog Styles */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+}
+
+::ng-deep .k-dialog {
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+::ng-deep .k-dialog-titlebar {
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 16px 20px;
+}
+
+::ng-deep .k-dialog-content {
+    padding: 0;
+}

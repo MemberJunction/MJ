@@ -1,5 +1,233 @@
 # Change Log - @memberjunction/ai
 
+## 2.77.0
+
+### Patch Changes
+
+- @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- eebfb9a: Add comprehensive context length handling with intelligent model
+  selection
+
+  This release adds sophisticated context length management to prevent
+  infinite retry loops when AI models encounter context length exceeded
+  errors.
+
+  **New Features:**
+
+  - **ContextLengthExceeded Error Type**: New error classification for
+    context length exceeded errors
+  - **Smart Failover Logic**: Automatically switches to models with larger
+    context windows when context errors occur
+  - **Proactive Model Selection**: Estimates token usage and selects
+    appropriate models before execution
+  - **Context-Aware Sorting**: Prioritizes models by context window size
+    during failover
+
+  **Enhanced Components:**
+
+  - **ErrorAnalyzer**: Detects context_length_exceeded errors from
+    provider codes, error messages, and JSON objects
+  - **AIPromptRunner**: Adds token estimation, context validation, and
+    intelligent model reselection
+  - **Failover System**: Context-aware candidate selection with detailed
+    logging
+
+  **Key Improvements:**
+
+  - Prevents infinite agent stalling on context length exceeded errors
+  - Reduces API costs by avoiding repeated failed attempts with
+    insufficient context models
+  - Improves reliability through proactive context length validation
+  - Provides detailed logging for monitoring and debugging
+
+  **Breaking Changes:**
+
+  - None - all changes are backward compatible
+
+  **Migration Notes:**
+
+  - No migration required - existing code will automatically benefit from
+    enhanced context handling
+  - Models with MaxInputTokens/MaxOutputTokens configured will be
+    prioritized appropriately
+  - Context length validation occurs transparently during prompt execution
+
+  This resolves the critical issue where agents would infinitely retry
+  prompts that exceed model context limits, improving system reliability
+  and reducing unnecessary API calls.
+
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/global@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- 1d034b7: Added features for agent payload manager + api keys for models
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+  - @memberjunction/global@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/global@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/global@2.59.0
+
+## 2.58.0
+
+### Minor Changes
+
+- db88416: migrations
+
+### Patch Changes
+
+- @memberjunction/global@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/global@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- @memberjunction/global@2.56.0
+
+## 2.55.0
+
+### Minor Changes
+
+- c3a49ff: Agent Manager + SQL Server fix + fix deps in core-entity-forms
+- 659f892: Various
+
+### Patch Changes
+
+- @memberjunction/global@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

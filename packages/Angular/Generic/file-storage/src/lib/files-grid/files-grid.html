@@ -7,21 +7,21 @@
     <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
     <kendo-grid-column field="Actions">
       <ng-template kendoGridCellTemplate let-dataItem>
-        <kendo-button
+        <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="downloadFile(dataItem)"
         >
           <span class="fa-solid fa-download"></span>
-        </kendo-button>
-        <kendo-button [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
+        </button>
+        <button kendoButton [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
           <span class="fa-solid fa-trash-can"></span>
-        </kendo-button>
-        <kendo-button
+        </button>
+        <button kendoButton
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="editFile = dataItem"
         >
           <span class="fa-solid fa-pen-to-square"></span>
-        </kendo-button>
+        </button>
       </ng-template>
     </kendo-grid-column>
   </kendo-grid>

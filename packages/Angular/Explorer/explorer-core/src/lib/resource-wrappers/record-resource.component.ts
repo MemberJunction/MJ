@@ -39,8 +39,8 @@ export class EntityRecordResource extends BaseResourceComponent {
             let pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
             if (pk.HasValue) {
                 const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
-                const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
-                return (name ? name : data.Configuration.Entity) + ` (${displayId})`;    
+                //const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
+                return (name ? name : data.Configuration.Entity);// + ` (${displayId})`;    
             }
             else 
                 return `New ${data.Configuration.Entity} Record`;

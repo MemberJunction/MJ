@@ -1,11 +1,14 @@
-import { Component, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptRunEntity, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Router, ActivatedRoute } from '@angular/router';
+import { ChatMessage } from '@memberjunction/ai';
+import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
@@ -13,32 +16,50 @@ import { Router, ActivatedRoute } from '@angular/router';
     templateUrl: './ai-prompt-run-form.component.html',
     styleUrls: ['./ai-prompt-run-form.component.css']
 })
-export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
-    public record!: AIPromptRunEntity;
+export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit {
+    public record!: AIPromptRunEntityExtended;
     
     // Related entities
     public prompt: AIPromptEntity | null = null;
     public model: AIModelEntity | null = null;
-    public parentRun: AIPromptRunEntity | null = null;
-    public childRuns: AIPromptRunEntity[] = [];
+    public parentRun: AIPromptRunEntityExtended | null = null;
+    public childRuns: AIPromptRunEntityExtended[] = [];
     
     // UI state
     public isLoadingRelatedData = false;
+    public isParsingMessages = true; // Add loading state for message parsing
+    public inputExpanded = true;
     public messagesExpanded = true;
+    public dataExpanded = false; // Changed to false - often blank
+    public rawExpanded = false;
     public resultExpanded = true;
     public metricsExpanded = false;
     public hierarchyExpanded = false;
+    public validationExpanded = true; // Expand validation panel by default if there are retries
     
     // Formatted values
     public formattedMessages = '';
     public formattedResult = '';
+    public formattedValidationSummary = '';
+    public formattedValidationAttempts = '';
+    public formattedData = '';
+    
+    // Parsed input data
+    public chatMessages: ChatMessage[] = [];
+    public inputData: any = null;
+    
+    // Validation data
+    public validationAttempts: any[] = [];
+    public validationSummary: any = null;
     
     constructor(
         elementRef: ElementRef,
         public sharedService: SharedService,
         router: Router,
         route: ActivatedRoute,
-        cdr: ChangeDetectorRef
+        cdr: ChangeDetectorRef,
+        private testHarnessWindowService: TestHarnessWindowService,
+        private viewContainerRef: ViewContainerRef
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -48,7 +69,23 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         if (this.record?.ID) {
             await this.loadRelatedData();
             this.formatJsonFields();
+            this.loadValidationData();
         }
+    }
+    
+    ngAfterViewInit() {
+        // Force change detection to ensure expansion panels render correctly
+        setTimeout(() => {
+            this.cdr.detectChanges();
+        }, 0);
+    }
+    
+    onInputPanelToggle() {
+        // Force change detection when parent panel is toggled
+        // This helps ensure nested expansion panels render correctly
+        setTimeout(() => {
+            this.cdr.detectChanges();
+        }, 100);
     }
     
     private async loadRelatedData() {
@@ -74,7 +111,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
             
             // Load parent run if exists
             if (this.record.ParentID) {
-                this.parentRun = await md.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs');
+                this.parentRun = await md.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
                 if (this.parentRun) {
                     await this.parentRun.Load(this.record.ParentID);
                 }
@@ -93,40 +130,32 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         if (!this.record.ID) return;
         
         const rv = new RunView();
-        const result = await rv.RunView<AIPromptRunEntity>({
+        const result = await rv.RunView<AIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
             OrderBy: 'ExecutionOrder ASC, RunAt DESC',
             ResultType: 'entity_object'
         });
         
-        this.childRuns = result.Results;
+        if (result.Success) {
+            this.childRuns = result.Results || [];
+        }
     }
     
     private formatJsonFields() {
-        // Format messages
-        if (this.record.Messages) {
-            try {
-                const parsed = JSON.parse(this.record.Messages);
-                this.formattedMessages = JSON.stringify(parsed, null, 2);
-            } catch {
-                this.formattedMessages = this.record.Messages;
-            }
-        } else {
-            this.formattedMessages = '';
-        }
+        this.isParsingMessages = true; // Start parsing
         
-        // Format result
-        if (this.record.Result) {
-            try {
-                const parsed = JSON.parse(this.record.Result);
-                this.formattedResult = JSON.stringify(parsed, null, 2);
-            } catch {
-                this.formattedResult = this.record.Result;
-            }
-        } else {
-            this.formattedResult = '';
-        }
+        // Use the extended entity methods to parse messages
+        const messageData = this.record.ParseMessagesData();
+        this.chatMessages = messageData.chatMessages;
+        this.inputData = messageData.inputData;
+        this.formattedMessages = messageData.formattedMessages;
+        this.formattedData = messageData.formattedData;
+        
+        this.isParsingMessages = false; // Done parsing
+        
+        // Format result using extended entity method
+        this.formattedResult = this.record.GetFormattedResult();
     }
     
     getStatusColor(): string {
@@ -231,6 +260,48 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
         SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
     }
     
+    navigateToOriginalRun() {
+        if (this.record?.RerunFromPromptRunID) {
+            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(this.record.RerunFromPromptRunID));
+        }
+    }
+    
+    reRunPrompt() {
+        console.log('🚀 Re-Run button clicked');
+        console.log('📋 Current record:', this.record);
+        console.log('🆔 Record ID:', this.record?.ID);
+        console.log('🎯 Prompt ID:', this.record?.PromptID);
+        
+        if (!this.record?.ID || !this.record.PromptID) {
+            console.error('❌ Cannot re-run: missing record ID or PromptID');
+            return;
+        }
+        
+        const params = {
+            promptId: this.record.PromptID,
+            promptRunId: this.record.ID,
+            title: `Re-Run: ${this.prompt?.Name || 'Prompt'}`,
+            width: '80vw',
+            height: '80vh',
+            viewContainerRef: this.viewContainerRef
+        };
+        
+        console.log('📞 Calling openPromptTestHarness with params:', params);
+        
+        // Open AI Test Harness dialog with the prompt run ID
+        this.testHarnessWindowService.openPromptTestHarness(params).subscribe({
+            next: (result: any) => {
+                if (result) {
+                    // Optionally refresh the current view or show a success message
+                    console.log('Test harness completed', result);
+                }
+            },
+            error: (error: any) => {
+                console.error('Error in test harness:', error);
+            }
+        });
+    }
+    
     copyToClipboard(text: string, fieldName: string) {
         navigator.clipboard.writeText(text).then(() => {
             // Just show a console log for now, as ShowSimpleNotification may not exist
@@ -245,6 +316,50 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent {
             await this.record.Load(this.record.ID);
             await this.loadRelatedData();
             this.formatJsonFields();
+            this.loadValidationData();
         }
+    }
+    
+    private loadValidationData() {
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+
+        // Parse validation attempts if available
+        if (this.record.ValidationAttempts) {
+            try {
+                this.validationAttempts = JSON.parse(this.record.ValidationAttempts);
+                const recursivelyParsed = ParseJSONRecursive(this.validationAttempts, parseOptions);
+                this.formattedValidationAttempts = JSON.stringify(recursivelyParsed, null, 2);
+            } catch (error) {
+                console.error('Error parsing ValidationAttempts:', error);
+                this.validationAttempts = [];
+                this.formattedValidationAttempts = '';
+            }
+        } else {
+            this.validationAttempts = [];
+            this.formattedValidationAttempts = '';
+        }
+        
+        // Parse validation summary if available
+        if (this.record.ValidationSummary) {
+            try {
+                this.validationSummary = JSON.parse(this.record.ValidationSummary);
+                const recursivelyParsed = ParseJSONRecursive(this.validationSummary, parseOptions);
+                this.formattedValidationSummary = JSON.stringify(recursivelyParsed, null, 2);
+            } catch (error) {
+                console.error('Error parsing ValidationSummary:', error);
+                this.validationSummary = null;
+                this.formattedValidationSummary = '';
+            }
+        } else {
+            this.validationSummary = null;
+            this.formattedValidationSummary = '';
+        }
+        
+        // Set validation panel expansion based on whether there were retries
+        this.validationExpanded = (this.record.ValidationAttemptCount || 0) > 1;
     }
 }

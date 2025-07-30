@@ -36,13 +36,15 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 import { DrillDownInfo } from '../drill-down-info';
+import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { BaseManagedComponent } from '../base-managed-component';
 
 @Component({
   selector: 'skip-chat',
   templateUrl: './skip-chat.component.html',
   styleUrls: ['./skip-chat.component.css'],
 })
-export class SkipChatComponent extends BaseAngularComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
+export class SkipChatComponent extends BaseManagedComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
   @Input() public Messages: ConversationDetailEntity[] = [];
   @Input() public Conversations: ConversationEntity[] = [];
@@ -254,6 +256,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     private location: Location,
     private cdRef: ChangeDetectorRef,
     private notificationService: MJNotificationService,
+    private dialogService: DialogService,
   ) {
     super();
   }
@@ -392,9 +395,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   protected SetSkipStatusMessage(message: string, delay: number, startTime?: Date) {
     if (delay && delay > 0) {
-      setTimeout(() => {
+      this.setTimeout(() => {
         this.InnerSetSkipStatusMessage(message, startTime);
-      }, delay);
+      }, delay, { purpose: 'skip-status-message' });
     } 
     else 
       this.InnerSetSkipStatusMessage(message, startTime);
@@ -480,8 +483,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
   
-  // Track the polling intervals so we can clear them when needed
-  private _requestStatusPollingIntervals: { [key: string]: any } = {};
+  // Track the polling intervals for reference
+  private _requestStatusPollingIntervals: { [key: string]: number } = {};
   
   /**
    * Starts polling for conversation status updates
@@ -492,9 +495,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     this.stopRequestStatusPolling(convoID);
     
     // Set up polling every 3 seconds
-    this._requestStatusPollingIntervals[convoID] = setInterval(async () => {
+    this._requestStatusPollingIntervals[convoID] = this.setInterval(async () => {
       await this.checkRequestStatus(convoID);
-    }, 3000);
+    }, 3000, { purpose: 'conversation-status-polling', conversationId: convoID });
   }
   
   /**
@@ -503,7 +506,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   protected stopRequestStatusPolling(conversationId: string) {
     if (this._requestStatusPollingIntervals[conversationId]) {
-      clearInterval(this._requestStatusPollingIntervals[conversationId]);
+      this.clearInterval(this._requestStatusPollingIntervals[conversationId]);
       delete this._requestStatusPollingIntervals[conversationId];
     }
   }
@@ -588,9 +591,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
             this.AddMessageToCurrentConversation(aiDetail, true, true);
             
             // Ensure scroll to bottom after adding AI message from status polling
-            setTimeout(() => {
+            this.setTimeout(() => {
               this.scrollToBottom();
-            }, 100);
+            }, 100, { purpose: 'scroll-after-ai-message' });
             
             // Automatically show artifact if the new AI message has one
             this.autoShowArtifactIfPresent(aiDetail);
@@ -771,9 +774,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // have a short delay to make sure view is fully rendered via event cycle going through its queue
       // NOTE - we only do this setTimeout if we have a scroll to bottom request, otherwise we don't need to do this, and
       // REMEMBER setTimeout() causes Angular to do a change detection cycle, so we don't want to do this unless we need to
-      setTimeout(() => {
+      this.setTimeout(() => {
         this.scrollToBottom();
-      }, 200);
+      }, 200, { purpose: 'scroll-after-view-check' });
     }
   }
 
@@ -1041,9 +1044,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
       await this.SelectConversation(convo);
       // Ensure scroll to bottom for new conversation
-      setTimeout(() => {
+      this.setTimeout(() => {
         this.scrollToBottom();
-      }, 100);
+      }, 100, { purpose: 'scroll-new-conversation' });
     } else {
       this.notificationService.CreateSimpleNotification('Error creating data context', 'error', 5000);
     }
@@ -1192,9 +1195,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.cdRef.reattach(); // resume change detection
         
         // Force scroll to bottom after rendering messages
-        setTimeout(() => {
+        this.setTimeout(() => {
           this.scrollToBottom();
-        }, 300); // Give DOM time to render all messages
+        }, 300, { purpose: 'scroll-after-messages-render' }); // Give DOM time to render all messages
       }
 
       this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
@@ -1208,7 +1211,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.AllowSend = false;
         
         // Create the temporary status message after a brief delay to ensure DOM is ready
-        setTimeout(() => {
+        this.setTimeout(() => {
           this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
           // Start polling after the temporary message is created
           this.startRequestStatusPolling(conversation.ID);
@@ -1242,7 +1245,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       );
 
       if (itemElement) {
-        setTimeout(() => {
+        this.setTimeout(() => {
           // do this within a timeout to ensure rendering is completed
           itemElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
         }, 100);
@@ -1329,9 +1332,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
       
       // Ensure scroll to bottom after adding user message AND progress message
-      setTimeout(() => {
+      this.setTimeout(() => {
         this.scrollToBottom();
-      }, 950); // Slightly after the progress message is shown (850ms + 100ms buffer)
+      }, 950, { purpose: 'scroll-after-user-message' }); // Slightly after the progress message is shown (850ms + 100ms buffer)
 
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
@@ -1382,9 +1385,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           this.AddMessageToCurrentConversation(aiDetail, true, true);
           
           // Ensure scroll to bottom after AI response
-          setTimeout(() => {
+          this.setTimeout(() => {
             this.scrollToBottom();
-          }, 100);
+          }, 100, { purpose: 'scroll-after-ai-response' });
           
           // Automatically show artifact if the new AI message has one
           this.autoShowArtifactIfPresent(aiDetail);
@@ -1606,9 +1609,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       if (!this.scrollContainer) {
         // If scrollContainer is not available yet, retry
         if (retryCount < 10) {
-          setTimeout(() => {
+          this.setTimeout(() => {
             this.scrollToBottom(retryCount + 1);
-          }, 50);
+          }, 50, { purpose: 'scroll-retry', retryCount });
         }
         return;
       }
@@ -1617,9 +1620,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       if (element.scrollHeight === 0 && retryCount < 10) {
         // If scrollHeight is 0, the content hasn't rendered yet, so retry after a delay
         // But limit retries to prevent infinite loops
-        setTimeout(() => {
+        this.setTimeout(() => {
           this.scrollToBottom(retryCount + 1);
-        }, 50);
+        }, 50, { purpose: 'scroll-retry-no-content', retryCount });
       } else if (element.scrollHeight > 0) {
         element.scrollTop = element.scrollHeight;
       }
@@ -1944,6 +1947,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       count++;
     if (this.ShowSharingButton && this.SelectedConversationCurrentUserPermissionLevel === 'Owner') 
       count++;
+    // TEMPORARY: Add 1 for test button
+    count++;
     return count;
   }
 
@@ -1959,7 +1964,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       this.selectedArtifact = artifact;
       
       // Ensure a delay to allow Angular's change detection to catch up
-      setTimeout(() => {
+      this.setTimeout(() => {
         if (this.selectedArtifact && this.splitPanel) {
           // First, check if we're already in BothSides mode
           const currentMode = this.splitPanel.Mode;
@@ -2177,7 +2182,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       
       if (isNewArtifactOrVersion) {
         // Automatically show the artifact
-        setTimeout(() => {
+        this.setTimeout(() => {
           this.onArtifactSelected({
             artifactId: aiMessage.ArtifactID,
             artifactVersionId: aiMessage.ArtifactVersionID,
@@ -2218,4 +2223,50 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     // Same artifact and version, not new
     return false;
   }
+
+  // Component tester properties
+  private componentTesterDialog: DialogRef | null = null;
+  private registeredTestComponents: Map<string, any> = new Map();
+  
+  private async registerPrebuiltComponents(): Promise<void> {
+    console.log('Starting registerPrebuiltComponents...');
+    
+    // Wait for React to be available
+    let attempts = 0;
+    while (!(window as any).React && attempts < 10) {
+      console.log(`Waiting for React... attempt ${attempts + 1}`);
+      await new Promise(resolve => this.setTimeout(() => resolve(undefined), 100, { purpose: 'wait-for-react' }));
+      attempts++;
+    }
+    
+    // Also ensure Babel is loaded for component compilation
+    attempts = 0;
+    while (!(window as any).Babel && attempts < 10) {
+      console.log(`Waiting for Babel... attempt ${attempts + 1}`);
+      await new Promise(resolve => this.setTimeout(() => resolve(undefined), 100, { purpose: 'wait-for-babel' }));
+      attempts++;
+    }
+    
+  }
+  
+  private getRequiredChildComponents(componentName: string): string[] {
+    // For pre-built components, return their specific dependencies
+    if (componentName === 'ActionBrowser') {
+      return ['ActionBrowser', 'ActionCategoryList', 'ActionList'];
+    } else if (componentName === 'SearchBox' || componentName === 'CategoryChart') {
+      return [componentName];
+    } else {
+      // For user-added components, return all registered components
+      const item = this.registeredTestComponents.get(componentName);
+      if (item) {
+        return item.dependencies || item.childComponents || [];
+      }
+      else {
+        console.warn(`No registered components found for ${componentName}`);
+        return [];
+      }
+    }
+  }     
 }
+
+ 

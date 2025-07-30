@@ -1,5 +1,212 @@
 # Change Log - @memberjunction/core
 
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+- c91269e: migration file for permissions driving minor bump
+
+### Patch Changes
+
+- @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- 7dabb22: feat: add hierarchical CategoryName support for query lookup
+
+  Adds support for hierarchical category paths in query lookup operations.
+  The CategoryName parameter now accepts filesystem-like paths (e.g.,
+  "/MJ/AI/Agents/") that walk through the QueryCategory parent-child
+  relationships.
+
+  ### New Features
+
+  - **Hierarchical Path Resolution**: CategoryName now supports paths like
+    "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
+    category hierarchy using ParentID relationships
+  - **CategoryPath Property**: Added CategoryPath getter to QueryInfo class
+    that returns the full hierarchical path for any query
+  - **Backward Compatibility**: Existing simple CategoryName usage (e.g.,
+    "Agents") continues to work unchanged
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Minor Changes
+
+- d316670: migration - MJCore
+
+### Patch Changes
+
+- @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- 2aebdf5: Patch to repackage failed deployment run
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/global@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- b10b7e6: tweaks to EntityField active status assertion - enabled supression per field instance
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/global@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/global@2.61.0
+
+## 2.60.0
+
+### Minor Changes
+
+- e512e4e: metadata + core + ai changes
+
+### Patch Changes
+
+- b5fa80a: Improvements to boolean and numeric handling in EntityField Dirty and Set methods
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/global@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- def26fe: Added UUID generation to BaseEntity for entities that have single-column pkey that is uniqueidentifier type
+  - @memberjunction/global@2.58.0
+
+## 2.57.0
+
+### Minor Changes
+
+- 0ba485f: various bug fixes
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/global@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- @memberjunction/global@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- @memberjunction/global@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- 20f424d: DatabaseProviderBase added and changes to SQLServerDataProvider to fix transaction handling
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Minor Changes

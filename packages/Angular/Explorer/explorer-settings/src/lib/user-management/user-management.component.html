@@ -1,23 +1,23 @@
 <div class="user-management-container">
   <!-- Action Buttons -->
   <div class="action-buttons">
-    <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
       <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
       Refresh
     </button>
-    <button class="btn-secondary" (click)="exportUsers()">
+    <button class="mj-btn mj-btn-secondary" (click)="exportUsers()">
       <i class="fa-solid fa-download"></i>
       Export
     </button>
-    <button class="btn-primary" (click)="createNewUser()">
+    <button class="mj-btn mj-btn-primary" (click)="createNewUser()">
       <i class="fa-solid fa-plus"></i>
       Add User
     </button>
   </div>
 
   <!-- Stats Cards -->
-  <div class="stats-grid" style="display: flex">
-    <div class="stat-card">
+  <div class="mj-grid mj-grid-4">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-total">
         <i class="fa-solid fa-users"></i>
       </div>
@@ -27,7 +27,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-active">
         <i class="fa-solid fa-user-check"></i>
       </div>
@@ -37,7 +37,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-inactive">
         <i class="fa-solid fa-user-xmark"></i>
       </div>
@@ -47,7 +47,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-admin">
         <i class="fa-solid fa-shield-halved"></i>
       </div>
@@ -78,22 +78,22 @@
         <label class="filter-label">Status</label>
         <div class="filter-buttons">
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'all'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'all'"
             (click)="onStatusFilterChange('all')"
           >
             All
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'active'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'active'"
             (click)="onStatusFilterChange('active')"
           >
             Active
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'inactive'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'inactive'"
             (click)="onStatusFilterChange('inactive')"
           >
             Inactive
@@ -115,16 +115,18 @@
       <!-- View Toggle -->
       <div class="view-toggle">
         <button 
-          class="view-btn"
-          [class.active]="viewMode === 'grid'"
+          class="mj-btn mj-btn-icon-only"
+          [class.mj-btn-primary]="viewMode === 'grid'"
+          [class.mj-btn-ghost]="viewMode !== 'grid'"
           (click)="viewMode = 'grid'"
           title="Grid View"
         >
           <i class="fa-solid fa-table"></i>
         </button>
         <button 
-          class="view-btn"
-          [class.active]="viewMode === 'cards'"
+          class="mj-btn mj-btn-icon-only"
+          [class.mj-btn-primary]="viewMode === 'cards'"
+          [class.mj-btn-ghost]="viewMode !== 'cards'"
           (click)="viewMode = 'cards'"
           title="Card View"
         >
@@ -218,17 +220,17 @@
                     </span>
                   </td>
                   <td class="td-actions" (click)="$event.stopPropagation()">
-                    <button class="action-btn" (click)="editUser(user)" title="Edit">
+                    <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editUser(user)" title="Edit">
                       <i class="fa-solid fa-edit"></i>
                     </button>
                     <button 
-                      class="action-btn" 
+                      class="mj-btn mj-btn-ghost mj-btn-sm" 
                       (click)="toggleUserStatus(user)"
                       [title]="user.IsActive ? 'Deactivate' : 'Activate'"
                     >
                       <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'"></i>
                     </button>
-                    <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user)" title="Delete">
+                    <button class="mj-btn mj-btn-ghost mj-btn-sm text-danger" (click)="confirmDeleteUser(user)" title="Delete">
                       <i class="fa-solid fa-trash"></i>
                     </button>
                   </td>
@@ -257,10 +259,10 @@
                   {{ getUserInitials(user) }}
                 </div>
                 <div class="card-actions">
-                  <button class="action-btn" (click)="editUser(user); $event.stopPropagation()" title="Edit">
+                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editUser(user); $event.stopPropagation()" title="Edit">
                     <i class="fa-solid fa-edit"></i>
                   </button>
-                  <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user); $event.stopPropagation()" title="Delete">
+                  <button class="mj-btn mj-btn-ghost mj-btn-sm text-danger" (click)="confirmDeleteUser(user); $event.stopPropagation()" title="Delete">
                     <i class="fa-solid fa-trash"></i>
                   </button>
                 </div>
@@ -307,6 +309,13 @@
     </div>
   }
 
+  <!-- User Create/Edit Dialog -->
+  <mj-user-dialog 
+    [data]="userDialogData"
+    [visible]="showUserDialog"
+    (result)="onUserDialogResult($event)">
+  </mj-user-dialog>
+
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedUser) {
     <div class="modal-backdrop" (click)="showDeleteConfirm = false">
@@ -325,8 +334,8 @@
           <p class="text-muted">This action cannot be undone.</p>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
-          <button class="btn-danger" (click)="deleteUser()">
+          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
+          <button class="mj-btn mj-btn-primary text-danger" (click)="deleteUser()">
             <i class="fa-solid fa-trash"></i>
             Delete User
           </button>

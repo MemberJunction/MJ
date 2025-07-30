@@ -1,7 +1,18 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks } from "./chat.types";
+import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
+import { ErrorAnalyzer } from "./errorAnalyzer";
+
+/**
+ * Type for thinking stream state management
+ */
+type ThinkingStreamState = {
+    accumulatedThinking: string;
+    inThinkingBlock: boolean;
+    pendingContent: string;
+    thinkingComplete: boolean;
+};
 
 /**
  * Base class for all LLM sub-class implementations. Not all sub-classes will support all methods. 
@@ -118,6 +129,7 @@ export abstract class BaseLLM extends BaseModel {
                 errorResult.statusText = 'error';
                 errorResult.errorMessage = result.reason?.message || 'Unknown error';
                 errorResult.exception = {exception: result.reason};
+                errorResult.errorInfo = ErrorAnalyzer.analyzeError(result.reason, this.constructor.name);
                 return errorResult;
             }
         });
@@ -252,6 +264,7 @@ export abstract class BaseLLM extends BaseModel {
                     errorResult.statusText = 'error';
                     errorResult.errorMessage = error?.message || 'Unknown error';
                     errorResult.exception = {exception: error};
+                    errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, this.constructor.name);
                     
                     reject(errorResult);
                 }
@@ -289,4 +302,161 @@ export abstract class BaseLLM extends BaseModel {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult;
+
+    // ============ Thinking Model Support Helper Methods ============
+
+    /**
+     * State tracking for streaming thinking extraction
+     * Providers should initialize this if they support thinking models
+     */
+    protected thinkingStreamState: ThinkingStreamState | null = null;
+
+    /**
+     * Check if the provider supports thinking models
+     * Providers should override this to return true if they support thinking extraction
+     */
+    protected supportsThinkingModels(): boolean {
+        return false;
+    }
+
+    /**
+     * Get the thinking tag format for this provider
+     * Providers can override this to customize the thinking tag format
+     */
+    protected getThinkingTagFormat(): { open: string; close: string } {
+        return { open: '<think>', close: '</think>' };
+    }
+
+    /**
+     * Extract thinking content from non-streaming content
+     * This method handles case-insensitive extraction of thinking blocks
+     */
+    protected extractThinkingFromContent(content: string): {
+        content: string;
+        thinking?: string;
+    } {
+        let processedContent = content.trim();
+        let thinkingContent: string | undefined = undefined;
+        
+        const tags = this.getThinkingTagFormat();
+        const openTagLower = tags.open.toLowerCase();
+        const closeTagLower = tags.close.toLowerCase();
+        const contentLower = processedContent.toLowerCase();
+        
+        // Check if content starts with thinking tag (case-insensitive)
+        if (contentLower.startsWith(openTagLower) && contentLower.includes(closeTagLower)) {
+            // Find the actual positions in the original content
+            const thinkStart = tags.open.length;
+            const thinkEndIndex = contentLower.indexOf(closeTagLower);
+            
+            if (thinkEndIndex !== -1) {
+                thinkingContent = processedContent.substring(thinkStart, thinkEndIndex).trim();
+                processedContent = processedContent.substring(thinkEndIndex + tags.close.length).trim();
+            }
+        }
+        
+        return { content: processedContent, thinking: thinkingContent };
+    }
+
+    /**
+     * Initialize thinking stream state for streaming extraction
+     */
+    protected initializeThinkingStreamState(): void {
+        this.thinkingStreamState = {
+            accumulatedThinking: '',
+            inThinkingBlock: false,
+            pendingContent: '',
+            thinkingComplete: false
+        };
+    }
+
+    /**
+     * Reset thinking stream state
+     */
+    protected resetThinkingStreamState(): void {
+        this.thinkingStreamState = null;
+    }
+
+    /**
+     * Process streaming chunk with thinking extraction
+     * This method handles case-insensitive extraction across chunk boundaries
+     */
+    protected processStreamChunkWithThinking(rawContent: string): string {
+        if (!this.thinkingStreamState) {
+            // If thinking extraction is not enabled, return content as-is
+            return rawContent;
+        }
+        
+        let contentToEmit = '';
+        this.thinkingStreamState.pendingContent += rawContent;
+        
+        // If thinking is already complete, just return the pending content
+        if (this.thinkingStreamState.thinkingComplete) {
+            contentToEmit = this.thinkingStreamState.pendingContent;
+            this.thinkingStreamState.pendingContent = '';
+            return contentToEmit;
+        }
+        
+        const tags = this.getThinkingTagFormat();
+        const pending = this.thinkingStreamState.pendingContent;
+        const pendingLower = pending.toLowerCase();
+        
+        // Check if we're starting a thinking block (case-insensitive)
+        if (!this.thinkingStreamState.inThinkingBlock && pendingLower.includes(tags.open.toLowerCase())) {
+            const thinkStartIndex = pendingLower.indexOf(tags.open.toLowerCase());
+            
+            // If <think> is not at the start, emit content before it
+            if (thinkStartIndex > 0) {
+                contentToEmit = pending.substring(0, thinkStartIndex);
+                this.thinkingStreamState.pendingContent = pending.substring(thinkStartIndex);
+                return contentToEmit;
+            }
+            
+            // We're now in a thinking block
+            this.thinkingStreamState.inThinkingBlock = true;
+            
+            // Remove the opening tag
+            this.thinkingStreamState.pendingContent = pending.substring(tags.open.length);
+        }
+        
+        // If we're in a thinking block, look for the end (case-insensitive)
+        if (this.thinkingStreamState.inThinkingBlock) {
+            const pendingInBlockLower = this.thinkingStreamState.pendingContent.toLowerCase();
+            const thinkEndIndex = pendingInBlockLower.indexOf(tags.close.toLowerCase());
+            
+            if (thinkEndIndex !== -1) {
+                // Found the end of thinking block
+                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent.substring(0, thinkEndIndex);
+                this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(thinkEndIndex + tags.close.length);
+                this.thinkingStreamState.inThinkingBlock = false;
+                this.thinkingStreamState.thinkingComplete = true;
+                
+                // Process any remaining content recursively
+                return this.processStreamChunkWithThinking('');
+            } else {
+                // Still accumulating thinking content
+                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent;
+                this.thinkingStreamState.pendingContent = '';
+                return '';
+            }
+        }
+        
+        // Not in thinking block and no thinking tags found
+        contentToEmit = this.thinkingStreamState.pendingContent;
+        this.thinkingStreamState.pendingContent = '';
+        return contentToEmit;
+    }
+
+    /**
+     * Add thinking content to a chat completion message
+     */
+    protected addThinkingToMessage(
+        message: ChatCompletionMessage,
+        thinkingContent?: string
+    ): ChatCompletionMessage {
+        if (thinkingContent) {
+            message.thinking = thinkingContent;
+        }
+        return message;
+    }
 }

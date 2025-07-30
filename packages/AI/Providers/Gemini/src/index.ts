@@ -4,7 +4,7 @@
 import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -178,7 +178,8 @@ export class GeminiLLM extends BaseLLM {
                     usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
                 },
                 errorMessage: e.message,
-                exception: e
+                exception: e,
+                errorInfo: ErrorAnalyzer.analyzeError(e, 'Gemini')
             }
         }
     }

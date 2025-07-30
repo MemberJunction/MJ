@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -19,6 +19,7 @@ import {
 import { createDownloadUrl, createUploadUrl, deleteObject, moveObject } from '@memberjunction/storage';
 import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -57,23 +58,28 @@ export class FileResolver extends FileResolverBase {
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Check to see if there's already an object with that name
-    const [sameName] = await this.findBy(context.dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
+    const [sameName] = await this.findBy(
+      provider,
+      'Files',
+      { Name: input.Name, ProviderID: input.ProviderID },
+      context.userPayload.userRecord
+    );
     const NameExists = Boolean(sameName);
 
-    const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, context, pubSub)) as File_;
+    const success = fileEntity.NewRecord(FieldValueCollection.FromObject({ ...input, Status: 'Pending' }));
 
     // If there's a problem creating the file record, the base resolver will return null
-    if (!fileRecord) {
+    if (!success) {
       return null;
     }
 
     // Create the upload URL and get the record updates (provider key, content type, etc)
-    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileRecord);
+    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileEntity);
 
     // Save the file record with the updated input
     const mapper = new FieldMapper();
-    await fileEntity.LoadFromData(mapper.ReverseMapFields({ ...input }));
-    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }));
+    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, true);
     await fileEntity.Save();
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 

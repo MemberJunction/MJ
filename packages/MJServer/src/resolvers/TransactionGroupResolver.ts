@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity } from '@memberjunction/core';
+import { CompositeKey, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 
 export enum TransactionVariableType {

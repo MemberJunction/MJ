@@ -1,5 +1,240 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/interactive-component-types@2.77.0
+  - @memberjunction/data-context@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/data-context@2.76.0
+  - @memberjunction/interactive-component-types@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- 0da7b51: tweaks to types
+- Updated dependencies [b403003]
+  - @memberjunction/interactive-component-types@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/data-context@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+  - @memberjunction/data-context@2.74.0
+  - @memberjunction/interactive-component-types@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.73.0
+- @memberjunction/interactive-component-types@2.73.0
+- @memberjunction/core@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.72.0
+- @memberjunction/interactive-component-types@2.72.0
+- @memberjunction/core@2.72.0
+
+## 2.71.0
+
+### Minor Changes
+
+- 91188ab: migration file + various improvements and reorganization
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+- Updated dependencies [91188ab]
+  - @memberjunction/core@2.71.0
+  - @memberjunction/data-context@2.71.0
+  - @memberjunction/interactive-component-types@2.71.0
+
+## 2.70.0
+
+### Minor Changes
+
+- c9d86cd: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.70.0
+- @memberjunction/core-entities@2.70.0
+- @memberjunction/data-context@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/data-context@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/data-context@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- a0ed038: added more granular component definitions (props/events)
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/data-context@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/data-context@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- 22c1340: Remove unneeded JSDoc
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/data-context@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [b029c5d]
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/data-context@2.65.0
+
+## 2.64.0
+
+### Minor Changes
+
+- e775f2b: Found bug in metadata extraction from SQL Server, fixed and migration to capture changes for 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/data-context@2.64.0
+  - @memberjunction/core@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.63.1
+- @memberjunction/data-context@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/data-context@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/data-context@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.61.0
+- @memberjunction/data-context@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [e30ee12]
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/data-context@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.59.0
+- @memberjunction/data-context@2.59.0
+
+## 2.58.0
+
+### Minor Changes
+
+- db88416: migrations
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.58.0
+- @memberjunction/data-context@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/data-context@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- Updated dependencies [bf24cae]
+  - @memberjunction/core-entities@2.56.0
+  - @memberjunction/data-context@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [659f892]
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/data-context@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.54.0
+- @memberjunction/data-context@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

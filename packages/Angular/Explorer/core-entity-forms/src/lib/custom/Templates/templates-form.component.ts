@@ -143,8 +143,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         try {
             const rv = new RunView();
             const results = await rv.RunView({
-                EntityName: 'Template Categories',
-                ResultType: 'entity_object'
+                EntityName: 'Template Categories' 
             });
             
             this.categoryOptions = [

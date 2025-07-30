@@ -48,6 +48,12 @@ The Generic components are designed to be flexible, reusable, and easy to integr
   - Lazy loading
   - Drag and drop
 
+- **[@memberjunction/ng-deep-diff](./deep-diff)** - Object comparison visualization
+  - Deep object difference analysis
+  - Hierarchical change display
+  - Added/removed/modified tracking
+  - Export and filtering capabilities
+
 ### Forms & Input
 
 - **[@memberjunction/ng-record-selector](./record-selector)** - Record selection

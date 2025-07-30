@@ -6,12 +6,15 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
+import { GetRootClass, IsRootClass } from './ClassUtils';
+
 /**
  * Data structure to track the class registrations 
  */
 export class ClassRegistration {
     BaseClass: any // The TYPE of the base class, NOT an instance of the base class
     SubClass: any // The TYPE of the sub-class, NOT an instance of the sub-class
+    RootClass: any // The TYPE of the root class, NOT an instance of the root class. This is used to determine if the baseClass is a root class or not
     Key: string // used to identify a special attribute that we use to determine if this is the right sub-class. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries
                 // in the registration list, so we'll use the key to identify which sub-class to use for a given entity
     Priority: number // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
@@ -32,21 +35,33 @@ export class ClassFactory {
      * @param key A key can be used to differentiate registrations for the same base class/sub-class combination. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries and we want to get the highest priority registered sub-class for a specific key. In that case, the key is the entity name, but the key can be any value you want to use to differentiate registrations.
      * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used. Finally, if you do NOT provide this setting, the order of registrations will increment the priority automatically so dependency injection will typically care care of this. That is, in order for Class B, a subclass of Class A, to be registered properly, Class A code has to already have been loaded and therefore Class A's RegisterClass decorator was run. In that scenario, if neither Class A or B has a priority setting, Class A would be 1 and Class B would be 2 automatically. For this reason, you only need to explicitly set priority if you want to do something atypical as this mechanism normally will solve for setting the priority correctly based on the furthest descendant class that is registered.
      * @param skipNullKeyWarning If true, will not print a warning if the key is null or undefined. This is useful for cases where you know that the key is not needed and you don't want to see the warning in the console.
+     * @param autoRegisterWithRootClass If true (default), will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy.
      */
-    public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0, skipNullKeyWarning: boolean = false): void {
+    public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = true): void {
         if (baseClass && subClass) {
             if (key === undefined || key === null && !skipNullKeyWarning) {
                 console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClass.name} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
             }
 
-            // get all of hte existing registrations for this baseClass and key
-            const registrations = this.GetAllRegistrations(baseClass, key);
+            // Get the root class for this registration
+            const rootClass = GetRootClass(baseClass);
+            
+            // Determine which class to actually register against
+            const effectiveBaseClass = autoRegisterWithRootClass ? rootClass : baseClass;
+            
+            // Log if we're auto-registering with root class
+            if (autoRegisterWithRootClass && effectiveBaseClass !== baseClass) {
+                console.info(`ClassFactory.Register: Auto-registering ${subClass.name} with root class ${rootClass.name} instead of ${baseClass.name}`);
+            }
+
+            // get all of the existing registrations for the effective base class and key
+            const registrations = this.GetAllRegistrations(effectiveBaseClass, key);
 
             if (priority > 0) {
-                // validate to make sure that the comabination of base class and key for the provided priority # is not already registered, if it is, then print a warning
+                // validate to make sure that the combination of base class and key for the provided priority # is not already registered, if it is, then print a warning
                 const existing = registrations.filter(r => r.Priority === priority);
                 if (existing && existing.length > 0) {
-                    console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${baseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
+                    console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${effectiveBaseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
                 }
             }
             else if (priority === 0 || priority === null || priority === undefined) {
@@ -63,8 +78,9 @@ export class ClassFactory {
 
             // this combination of baseclass/key/priority is NOT already registered.
             let reg = new ClassRegistration();
-            reg.BaseClass = baseClass;
+            reg.BaseClass = effectiveBaseClass;
             reg.SubClass = subClass;
+            reg.RootClass = rootClass;
             reg.Key = key;
             reg.Priority = priority;
 
@@ -73,7 +89,8 @@ export class ClassFactory {
     }
 
     /**
-     * Creates an instance of the class registered for the given base class and key. If no registration is found, will return an instance of the base class.
+     * Creates an instance of the class registered for the given base class and key. 
+     * If no registration is found, will return an instance of the base class.
      */
     public CreateInstance<T>(baseClass: any, key: string = null, ...params: any[]): T | null {
         if (baseClass) {
@@ -134,6 +151,23 @@ export class ClassFactory {
         }
 
         return null;
+    }
+
+    /**
+     * Returns all registrations that have the specified root class, regardless of what base class was used in the registration.
+     * This is useful for finding all registrations in a class hierarchy.
+     * @param rootClass The root class to search for
+     * @param key Optional key to filter results
+     * @returns Array of matching registrations
+     */
+    public GetRegistrationsByRootClass(rootClass: any, key: string = undefined): ClassRegistration[] {
+        if (rootClass) {
+            return this._registrations.filter(r => {
+                return r.RootClass?.name === rootClass.name && 
+                       (key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
+            });
+        }
+        return [];
     }
 }
 

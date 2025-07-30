@@ -54,8 +54,8 @@ Located in the [Recommendations](./Recommendations) subdirectory:
 
 ### Server Components
 
-- **[@memberjunction/a2aserver](./A2AServer)** - Agent-to-Agent (A2A) protocol server for AI agent interoperability
-- **[@memberjunction/ai-mcp-server](./MCPServer)** - Model Context Protocol (MCP) server for tool integration
+- **[@memberjunction/a2aserver](./A2AServer)** - Agent-to-Agent (A2A) protocol server for AI agent interoperability. Supports entity operations and AI agent execution through Google's A2A protocol.
+- **[@memberjunction/ai-mcp-server](./MCPServer)** - Model Context Protocol (MCP) server for tool integration. Provides entity CRUD operations and AI agent execution capabilities to MCP-compatible clients.
 
 ## Key Features
 
@@ -86,6 +86,8 @@ Located in the [Recommendations](./Recommendations) subdirectory:
 - **Multimodal Support** - Handle text, images, audio, and video inputs
 - **Validation & Retry** - Automatic output validation with configurable retry strategies
 - **Cancellation Support** - Graceful cancellation of long-running operations
+- **Agent Interoperability** - Execute MemberJunction AI agents through MCP and A2A protocols
+- **Tool Generation** - Automatic tool creation for entities and agents based on configuration
 
 ### Vector Operations
 - **Semantic Search** - Find similar content using embeddings

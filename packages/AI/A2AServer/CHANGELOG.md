@@ -1,5 +1,346 @@
 # Change Log - @memberjunction/a2aserver
 
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/ai-agents@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [b9a94a9]
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/ai-agents@2.76.0
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/sqlserver-dataprovider@2.76.0
+  - @memberjunction/ai@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.75.0
+- @memberjunction/sqlserver-dataprovider@2.75.0
+- @memberjunction/ai@2.75.0
+- @memberjunction/core@2.75.0
+- @memberjunction/core-entities@2.75.0
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [9ff358d]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/ai-agents@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/sqlserver-dataprovider@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [eab6a48]
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/ai-agents@2.73.0
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/sqlserver-dataprovider@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+- Updated dependencies [57375c3]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/ai-agents@2.72.0
+  - @memberjunction/sqlserver-dataprovider@2.72.0
+  - @memberjunction/ai@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [11e9d0b]
+- Updated dependencies [5a127bb]
+- Updated dependencies [91188ab]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-agents@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/sqlserver-dataprovider@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ai-agents@2.70.0
+  - @memberjunction/ai@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/sqlserver-dataprovider@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/ai-agents@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/ai@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+- Updated dependencies [b4a92ae]
+  - @memberjunction/ai-agents@2.69.0
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+  - @memberjunction/ai@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [a6b43d0]
+- Updated dependencies [f9625d0]
+- Updated dependencies [9fac8a4]
+- Updated dependencies [b10b7e6]
+- Updated dependencies [61c6572]
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/ai-agents@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/ai-agents@2.67.0
+  - @memberjunction/ai@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- Updated dependencies [8d3d322]
+- Updated dependencies [1be2d4c]
+- Updated dependencies [a4f3631]
+  - @memberjunction/ai-agents@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/ai@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai-agents@2.65.0
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/ai-agents@2.64.0
+  - @memberjunction/sqlserver-dataprovider@2.64.0
+  - @memberjunction/ai@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai-agents@2.63.1
+  - @memberjunction/ai@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+  - @memberjunction/sqlserver-dataprovider@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/ai-agents@2.63.0
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+  - @memberjunction/ai@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/ai-agents@2.62.0
+  - @memberjunction/sqlserver-dataprovider@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- Updated dependencies [51b2b47]
+  - @memberjunction/ai-agents@2.61.0
+  - @memberjunction/sqlserver-dataprovider@2.61.0
+  - @memberjunction/ai@2.61.0
+  - @memberjunction/core@2.61.0
+  - @memberjunction/core-entities@2.61.0
+  - @memberjunction/global@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e30ee12]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/ai-agents@2.60.0
+  - @memberjunction/core-entities@2.60.0
+  - @memberjunction/sqlserver-dataprovider@2.60.0
+  - @memberjunction/ai@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- Updated dependencies [008fb65]
+- Updated dependencies [2d8913a]
+  - @memberjunction/ai-agents@2.59.0
+  - @memberjunction/ai@2.59.0
+  - @memberjunction/core@2.59.0
+  - @memberjunction/core-entities@2.59.0
+  - @memberjunction/global@2.59.0
+  - @memberjunction/sqlserver-dataprovider@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- Updated dependencies [def26fe]
+- Updated dependencies [db88416]
+  - @memberjunction/core@2.58.0
+  - @memberjunction/sqlserver-dataprovider@2.58.0
+  - @memberjunction/ai@2.58.0
+  - @memberjunction/ai-agents@2.58.0
+  - @memberjunction/core-entities@2.58.0
+  - @memberjunction/global@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/core-entities@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/sqlserver-dataprovider@2.57.0
+  - @memberjunction/ai-agents@2.57.0
+  - @memberjunction/ai@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- Updated dependencies [bf24cae]
+  - @memberjunction/ai-agents@2.56.0
+  - @memberjunction/core-entities@2.56.0
+  - @memberjunction/sqlserver-dataprovider@2.56.0
+  - @memberjunction/ai@2.56.0
+  - @memberjunction/core@2.56.0
+  - @memberjunction/global@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [c3a49ff]
+- Updated dependencies [659f892]
+- Updated dependencies [967bd1d]
+  - @memberjunction/ai-agents@2.55.0
+  - @memberjunction/ai@2.55.0
+  - @memberjunction/sqlserver-dataprovider@2.55.0
+  - @memberjunction/core-entities@2.55.0
+  - @memberjunction/core@2.55.0
+  - @memberjunction/global@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+- Updated dependencies [dfca664]
+- Updated dependencies [1273b07]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/sqlserver-dataprovider@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

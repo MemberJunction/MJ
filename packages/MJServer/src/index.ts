@@ -28,14 +28,33 @@ import { requireSystemUserDirective, publicDirective } from './directives/index.
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
-import { LoadActionEntityServer } from '@memberjunction/actions';
-LoadActionEntityServer(); // prevent tree shaking for this dynamic module
-
-import { LoadGeneratedActions } from '@memberjunction/core-actions';
-LoadGeneratedActions(); // prevent tree shaking for this dynamic module
+import { LoadAllCoreActions } from '@memberjunction/core-actions';
+LoadAllCoreActions(); // prevent tree shaking for this dynamic module
 
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
+
+import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
+LoadAgentManagementActions();
+
+
+import { resolve } from 'node:path';
+import { DataSourceInfo, raiseEvent } from './types.js';
+import { LoadAIEngine } from '@memberjunction/aiengine';
+import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
+import { LoadGroqLLM } from '@memberjunction/ai-groq';
+import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
+import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+// Load AI LLMs and Base AI Engine
+// These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
+// system. They are not tree-shaken because they are dynamically loaded at runtime.
+LoadAIEngine();
+LoadOpenAILLM();
+LoadAnthropicLLM();
+LoadGroqLLM();
+LoadCerebrasLLM();
+LoadMistralLLM();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
@@ -66,19 +85,18 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
+export * from './resolvers/QueryResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-
-export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+export * from './resolvers/CreateQueryResolver.js';
+export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
 
-import { resolve } from 'node:path';
-import { DataSourceInfo, raiseEvent } from './types.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;

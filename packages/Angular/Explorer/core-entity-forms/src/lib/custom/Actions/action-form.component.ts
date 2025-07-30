@@ -112,8 +112,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionParamEntity>({
                 EntityName: 'Action Params',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
+                OrderBy: 'Name' 
             });
             
             if (result.Success) {
@@ -151,8 +150,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionResultCodeEntity>({
                 EntityName: 'Action Result Codes',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'IsSuccess DESC, ResultCode',
-                ResultType: 'entity_object'
+                OrderBy: 'IsSuccess DESC, ResultCode' 
             });
             
             if (result.Success) {
@@ -177,8 +175,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 EntityName: 'Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'StartedAt DESC',
-                MaxRows: 10,
-                ResultType: 'entity_object'
+                MaxRows: 10 
             });
             
             if (result.Success) {
@@ -202,8 +199,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionLibraryEntity>({
                 EntityName: 'Action Libraries',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'Library',
-                ResultType: 'entity_object'
+                OrderBy: 'Library' 
             });
             
             if (result.Success) {
@@ -238,8 +234,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionExecutionLogEntity>({
                 EntityName: 'Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'StartedAt DESC',
-                ResultType: 'entity_object'
+                OrderBy: 'StartedAt DESC' 
             });
             
             if (result.Success && result.Results && result.Results.length > 0) {
@@ -605,6 +600,14 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 }
             }
         }
+    }
+    
+    /**
+     * Gets the action's display icon
+     * Falls back to default cog icon if no IconClass is set
+     */
+    public getActionIcon(): string {
+        return this.record?.IconClass || 'fa-solid fa-cog';
     }
 }
 

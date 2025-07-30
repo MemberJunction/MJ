@@ -6,6 +6,8 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { RoleDialogComponent, RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
+import { WindowModule } from '@progress/kendo-angular-dialog';
 
 interface RoleStats {
   totalRoles: number;
@@ -25,7 +27,9 @@ interface FilterOptions {
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    RoleDialogComponent,
+    WindowModule
   ],
   templateUrl: './role-management.component.html',
   styleUrls: ['./role-management.component.scss']
@@ -37,6 +41,10 @@ export class RoleManagementComponent implements OnInit, OnDestroy {
   public selectedRole: RoleEntity | null = null;
   public isLoading = false;
   public error: string | null = null;
+  
+  // Dialog state
+  public showRoleDialog = false;
+  public roleDialogData: RoleDialogData | null = null;
   
   // Stats
   public stats: RoleStats = {
@@ -185,13 +193,18 @@ export class RoleManagementComponent implements OnInit, OnDestroy {
   }
   
   public createNewRole(): void {
-    this.selectedRole = null;
-    this.showCreateDialog = true;
+    this.roleDialogData = {
+      mode: 'create'
+    };
+    this.showRoleDialog = true;
   }
   
   public editRole(role: RoleEntity): void {
-    this.selectedRole = role;
-    this.showEditDialog = true;
+    this.roleDialogData = {
+      role: role,
+      mode: 'edit'
+    };
+    this.showRoleDialog = true;
   }
   
   public confirmDeleteRole(role: RoleEntity): void {
@@ -203,12 +216,25 @@ export class RoleManagementComponent implements OnInit, OnDestroy {
     if (!this.selectedRole) return;
     
     try {
-      // Implement role deletion logic
-      this.showDeleteConfirm = false;
-      await this.loadInitialData();
-    } catch (error) {
+      // Load role entity to delete
+      const role = await this.metadata.GetEntityObject<RoleEntity>('Roles');
+      const loadResult = await role.Load(this.selectedRole.ID);
+      
+      if (loadResult) {
+        const deleteResult = await role.Delete();
+        if (deleteResult) {
+          this.showDeleteConfirm = false;
+          this.selectedRole = null;
+          await this.loadInitialData();
+        } else {
+          throw new Error(role.LatestResult?.Message || 'Failed to delete role');
+        }
+      } else {
+        throw new Error('Role not found or permission denied');
+      }
+    } catch (error: any) {
       console.error('Error deleting role:', error);
-      this.error = 'Failed to delete role';
+      this.error = error.message || 'Failed to delete role';
     }
   }
   
@@ -229,5 +255,15 @@ export class RoleManagementComponent implements OnInit, OnDestroy {
   
   public refreshData(): void {
     this.loadInitialData();
+  }
+
+  public onRoleDialogResult(result: RoleDialogResult): void {
+    this.showRoleDialog = false;
+    this.roleDialogData = null;
+    
+    if (result.action === 'save') {
+      // Refresh the role list to show changes
+      this.loadInitialData();
+    }
   }
 }

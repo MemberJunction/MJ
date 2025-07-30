@@ -1,5 +1,390 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/ng-link-directives@2.77.0
+  - @memberjunction/ng-record-changes@2.77.0
+  - @memberjunction/ng-shared@2.77.0
+  - @memberjunction/ng-base-types@2.77.0
+  - @memberjunction/ng-code-editor@2.77.0
+  - @memberjunction/ng-container-directives@2.77.0
+  - @memberjunction/ng-tabstrip@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/ng-shared@2.76.0
+  - @memberjunction/ng-base-types@2.76.0
+  - @memberjunction/ng-code-editor@2.76.0
+  - @memberjunction/ng-link-directives@2.76.0
+  - @memberjunction/ng-record-changes@2.76.0
+  - @memberjunction/ng-container-directives@2.76.0
+  - @memberjunction/ng-tabstrip@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [b403003]
+  - @memberjunction/ng-container-directives@2.75.0
+  - @memberjunction/ng-shared@2.75.0
+  - @memberjunction/ng-record-changes@2.75.0
+  - @memberjunction/ng-code-editor@2.75.0
+  - @memberjunction/ng-tabstrip@2.75.0
+  - @memberjunction/ng-link-directives@2.75.0
+  - @memberjunction/ng-base-types@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ng-shared@2.74.0
+  - @memberjunction/ng-base-types@2.74.0
+  - @memberjunction/ng-code-editor@2.74.0
+  - @memberjunction/ng-link-directives@2.74.0
+  - @memberjunction/ng-record-changes@2.74.0
+  - @memberjunction/ng-container-directives@2.74.0
+  - @memberjunction/ng-tabstrip@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.73.0
+- @memberjunction/ng-base-types@2.73.0
+- @memberjunction/ng-code-editor@2.73.0
+- @memberjunction/ng-record-changes@2.73.0
+- @memberjunction/ng-link-directives@2.73.0
+- @memberjunction/ng-container-directives@2.73.0
+- @memberjunction/ng-tabstrip@2.73.0
+- @memberjunction/core@2.73.0
+- @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.72.0
+- @memberjunction/ng-base-types@2.72.0
+- @memberjunction/ng-code-editor@2.72.0
+- @memberjunction/ng-record-changes@2.72.0
+- @memberjunction/ng-link-directives@2.72.0
+- @memberjunction/ng-container-directives@2.72.0
+- @memberjunction/ng-tabstrip@2.72.0
+- @memberjunction/core@2.72.0
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ng-link-directives@2.71.0
+  - @memberjunction/ng-record-changes@2.71.0
+  - @memberjunction/ng-shared@2.71.0
+  - @memberjunction/ng-base-types@2.71.0
+  - @memberjunction/ng-code-editor@2.71.0
+  - @memberjunction/ng-container-directives@2.71.0
+  - @memberjunction/ng-tabstrip@2.71.0
+  - @memberjunction/core@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ng-record-changes@2.70.0
+  - @memberjunction/ng-base-types@2.70.0
+  - @memberjunction/ng-code-editor@2.70.0
+  - @memberjunction/ng-container-directives@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/ng-shared@2.70.0
+  - @memberjunction/ng-tabstrip@2.70.0
+  - @memberjunction/ng-link-directives@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/ng-link-directives@2.69.1
+  - @memberjunction/ng-record-changes@2.69.1
+  - @memberjunction/ng-shared@2.69.1
+  - @memberjunction/ng-base-types@2.69.1
+  - @memberjunction/ng-code-editor@2.69.1
+  - @memberjunction/ng-container-directives@2.69.1
+  - @memberjunction/ng-tabstrip@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/ng-link-directives@2.69.0
+  - @memberjunction/ng-record-changes@2.69.0
+  - @memberjunction/ng-shared@2.69.0
+  - @memberjunction/ng-base-types@2.69.0
+  - @memberjunction/ng-code-editor@2.69.0
+  - @memberjunction/ng-container-directives@2.69.0
+  - @memberjunction/ng-tabstrip@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/ng-link-directives@2.68.0
+  - @memberjunction/ng-record-changes@2.68.0
+  - @memberjunction/ng-shared@2.68.0
+  - @memberjunction/ng-base-types@2.68.0
+  - @memberjunction/ng-code-editor@2.68.0
+  - @memberjunction/ng-container-directives@2.68.0
+  - @memberjunction/ng-tabstrip@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ng-link-directives@2.67.0
+- @memberjunction/ng-record-changes@2.67.0
+- @memberjunction/ng-shared@2.67.0
+- @memberjunction/ng-base-types@2.67.0
+- @memberjunction/ng-code-editor@2.67.0
+- @memberjunction/ng-container-directives@2.67.0
+- @memberjunction/ng-tabstrip@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.66.0
+- @memberjunction/ng-record-changes@2.66.0
+- @memberjunction/ng-link-directives@2.66.0
+- @memberjunction/ng-base-types@2.66.0
+- @memberjunction/ng-code-editor@2.66.0
+- @memberjunction/ng-container-directives@2.66.0
+- @memberjunction/ng-tabstrip@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/ng-record-changes@2.65.0
+  - @memberjunction/ng-base-types@2.65.0
+  - @memberjunction/ng-code-editor@2.65.0
+  - @memberjunction/ng-container-directives@2.65.0
+  - @memberjunction/core@2.65.0
+  - @memberjunction/ng-shared@2.65.0
+  - @memberjunction/ng-tabstrip@2.65.0
+  - @memberjunction/ng-link-directives@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.64.0
+- @memberjunction/ng-base-types@2.64.0
+- @memberjunction/ng-code-editor@2.64.0
+- @memberjunction/ng-record-changes@2.64.0
+- @memberjunction/ng-link-directives@2.64.0
+- @memberjunction/ng-container-directives@2.64.0
+- @memberjunction/ng-tabstrip@2.64.0
+- @memberjunction/core@2.64.0
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ng-record-changes@2.63.1
+  - @memberjunction/ng-base-types@2.63.1
+  - @memberjunction/ng-code-editor@2.63.1
+  - @memberjunction/ng-container-directives@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/ng-shared@2.63.1
+  - @memberjunction/ng-tabstrip@2.63.1
+  - @memberjunction/ng-link-directives@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.63.0
+- @memberjunction/ng-base-types@2.63.0
+- @memberjunction/ng-code-editor@2.63.0
+- @memberjunction/ng-record-changes@2.63.0
+- @memberjunction/ng-link-directives@2.63.0
+- @memberjunction/ng-container-directives@2.63.0
+- @memberjunction/ng-tabstrip@2.63.0
+- @memberjunction/core@2.63.0
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.62.0
+- @memberjunction/ng-base-types@2.62.0
+- @memberjunction/ng-code-editor@2.62.0
+- @memberjunction/ng-record-changes@2.62.0
+- @memberjunction/ng-link-directives@2.62.0
+- @memberjunction/ng-container-directives@2.62.0
+- @memberjunction/ng-tabstrip@2.62.0
+- @memberjunction/core@2.62.0
+- @memberjunction/global@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/ng-link-directives@2.61.0
+- @memberjunction/ng-record-changes@2.61.0
+- @memberjunction/ng-shared@2.61.0
+- @memberjunction/ng-base-types@2.61.0
+- @memberjunction/ng-code-editor@2.61.0
+- @memberjunction/ng-container-directives@2.61.0
+- @memberjunction/ng-tabstrip@2.61.0
+- @memberjunction/core@2.61.0
+- @memberjunction/global@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+  - @memberjunction/ng-link-directives@2.60.0
+  - @memberjunction/ng-record-changes@2.60.0
+  - @memberjunction/ng-shared@2.60.0
+  - @memberjunction/ng-base-types@2.60.0
+  - @memberjunction/ng-code-editor@2.60.0
+  - @memberjunction/ng-container-directives@2.60.0
+  - @memberjunction/ng-tabstrip@2.60.0
+  - @memberjunction/global@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ng-link-directives@2.59.0
+- @memberjunction/ng-record-changes@2.59.0
+- @memberjunction/ng-shared@2.59.0
+- @memberjunction/ng-base-types@2.59.0
+- @memberjunction/ng-code-editor@2.59.0
+- @memberjunction/ng-container-directives@2.59.0
+- @memberjunction/ng-tabstrip@2.59.0
+- @memberjunction/core@2.59.0
+- @memberjunction/global@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- Updated dependencies [def26fe]
+  - @memberjunction/core@2.58.0
+  - @memberjunction/ng-link-directives@2.58.0
+  - @memberjunction/ng-record-changes@2.58.0
+  - @memberjunction/ng-shared@2.58.0
+  - @memberjunction/ng-base-types@2.58.0
+  - @memberjunction/ng-code-editor@2.58.0
+  - @memberjunction/ng-container-directives@2.58.0
+  - @memberjunction/ng-tabstrip@2.58.0
+  - @memberjunction/global@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+  - @memberjunction/global@2.57.0
+  - @memberjunction/ng-link-directives@2.57.0
+  - @memberjunction/ng-record-changes@2.57.0
+  - @memberjunction/ng-shared@2.57.0
+  - @memberjunction/ng-base-types@2.57.0
+  - @memberjunction/ng-code-editor@2.57.0
+  - @memberjunction/ng-container-directives@2.57.0
+  - @memberjunction/ng-tabstrip@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.56.0
+- @memberjunction/ng-base-types@2.56.0
+- @memberjunction/ng-code-editor@2.56.0
+- @memberjunction/ng-record-changes@2.56.0
+- @memberjunction/ng-link-directives@2.56.0
+- @memberjunction/ng-container-directives@2.56.0
+- @memberjunction/ng-tabstrip@2.56.0
+- @memberjunction/core@2.56.0
+- @memberjunction/global@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.55.0
+- @memberjunction/ng-base-types@2.55.0
+- @memberjunction/ng-code-editor@2.55.0
+- @memberjunction/ng-record-changes@2.55.0
+- @memberjunction/ng-link-directives@2.55.0
+- @memberjunction/ng-container-directives@2.55.0
+- @memberjunction/ng-tabstrip@2.55.0
+- @memberjunction/core@2.55.0
+- @memberjunction/global@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+- Updated dependencies [b21ba9e]
+  - @memberjunction/core@2.54.0
+  - @memberjunction/ng-tabstrip@2.54.0
+  - @memberjunction/ng-link-directives@2.54.0
+  - @memberjunction/ng-record-changes@2.54.0
+  - @memberjunction/ng-shared@2.54.0
+  - @memberjunction/ng-base-types@2.54.0
+  - @memberjunction/ng-code-editor@2.54.0
+  - @memberjunction/ng-container-directives@2.54.0
+  - @memberjunction/global@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

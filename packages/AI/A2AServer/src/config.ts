@@ -25,9 +25,18 @@ const a2aServerEntityCapabilitySchema = z.object({
   runView: z.boolean().optional().default(false),
 });
 
+const a2aServerAgentCapabilitySchema = z.object({
+  agentName: z.string().optional(),
+  discover: z.boolean().optional().default(false),
+  execute: z.boolean().optional().default(false),
+  monitor: z.boolean().optional().default(false),
+  cancel: z.boolean().optional().default(false),
+});
+
 const a2aServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3200),
   entityCapabilities: z.array(a2aServerEntityCapabilitySchema).optional(),
+  agentCapabilities: z.array(a2aServerAgentCapabilitySchema).optional(),
   enableA2AServer: z.boolean().optional().default(false),
   agentName: z.string().optional().default("MemberJunction"),
   agentDescription: z.string().optional().default("MemberJunction A2A Agent"),

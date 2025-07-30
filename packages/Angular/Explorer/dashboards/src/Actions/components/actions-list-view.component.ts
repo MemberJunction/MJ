@@ -76,39 +76,26 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'Action Categories',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name'
         }
       ]);
       
-      console.log('Actions list result:', actionsResult);
-      console.log('Categories list result:', categoriesResult);
-      
       if (!actionsResult.Success || !categoriesResult.Success) {
         const errors = [];
-        if (!actionsResult.Success) errors.push('Actions: ' + actionsResult.ErrorMessage);
-        if (!categoriesResult.Success) errors.push('Categories: ' + categoriesResult.ErrorMessage);
+        if (!actionsResult.Success) 
+          errors.push('Actions: ' + actionsResult.ErrorMessage);
+        if (!categoriesResult.Success) 
+          errors.push('Categories: ' + categoriesResult.ErrorMessage);
         throw new Error('Failed to load data: ' + errors.join(', '));
       }
       
       const actions = (actionsResult.Results || []) as ActionEntity[];
       const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
-      
-      console.log(`Loaded ${actions.length} actions and ${categories.length} categories in list view`);
-
+       
       this.actions = actions;
       this.populateCategoriesMap(categories);
       this.buildCategoryOptions(categories);
@@ -218,5 +205,13 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       case 'Custom': return 'fa-solid fa-code';
       default: return 'fa-solid fa-cog';
     }
+  }
+
+  /**
+   * Gets the icon class for an action
+   * Falls back to type-based icon if no IconClass is set
+   */
+  public getActionIcon(action: ActionEntity): string {
+    return action?.IconClass || this.getTypeIcon(action.Type);
   }
 }

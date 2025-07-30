@@ -1,10 +1,40 @@
 # MemberJunction Development Guide
 
+## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
+
+### 1. NO `any` TYPES - EVER
+- **NEVER use `any` types in TypeScript code**
+- **ALWAYS ask the user** if you think you need to use `any`
+- The user will provide a proper typing solution in most cases
+- This includes:
+  - No `as any` type assertions
+  - No `: any` type annotations
+  - No `<any>` generic type arguments
+  - No `unknown` as a lazy alternative
+- **Why**: MemberJunction has strong typing throughout - there's always a proper type available
+
+### 2. NO COMMITS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git commit` without the user explicitly asking you to**
+- You may:
+  - Stage changes with `git add`
+  - Show what would be committed with `git status` and `git diff --cached`
+  - Prepare commit messages
+- You may NOT:
+  - Run `git commit` unless the user says "commit" or "create a commit" or similar
+  - Push changes to remote
+  - Create pull requests without approval
+- **Why**: The user needs to review all changes before they become permanent
+
+### 3. NO MODIFICATIONS TO MERGED PRs
+- **NEVER update title/description of merged PRs** without explicit approval each time
+- Always ask before modifying any historical git data
+
+---
+
 **VERY IMPORTANT** We want you to be a high performance agent. Therefore whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
-- **NEVER commit changes without explicit user request** - Always stage changes and show what would be committed, but wait for user approval before running git commit
 
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
@@ -81,9 +111,10 @@ Look for packages that depend on each other:
 
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
-- Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing, never use `any`
+- Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
 - Study the data model in /packages/MJCoreEntities to understand the schema and use properties/fields defined there
-- No explicit `any` types (enforced by ESLint)
+- No explicit `any` types - see CRITICAL RULES section above
+- Prefer union types over enums for better package exports (e.g., `type Status = 'active' | 'inactive'` instead of `enum Status`)
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
@@ -93,6 +124,54 @@ Look for packages that depend on each other:
 - Error handling: use try/catch blocks and provide meaningful error messages
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
+- Keep functions focused and concise - avoid overly long functions
+  - Functions should have a clear, single purpose
+  - Break complex operations into smaller, well-named helper functions
+  - Aim for functions that fit on a single screen when possible
+
+## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
+
+### Small, Focused Functions Are Required
+- **NEVER** write long, monolithic functions that do multiple things
+- **ALWAYS** decompose complex operations into smaller, well-named helper functions
+- **MAXIMUM** function length should be ~30-40 lines (excluding comments)
+- If a function is getting long, STOP and refactor it immediately
+
+### Benefits We Expect
+- **Readability**: Each function has a clear, single purpose
+- **Testability**: Small functions are easier to unit test
+- **Maintainability**: Bugs are easier to locate and fix
+- **Reusability**: Small functions can be composed and reused
+- **Debugging**: Stack traces are more meaningful with well-named functions
+
+### Example of Good Decomposition
+```typescript
+// BAD: One long function doing everything
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    // 200+ lines of nested loops and complex logic...
+}
+
+// GOOD: Decomposed into focused functions
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    const operations = this.findRelatedEntities(entity);
+    return operations.map(op => this.generateSingleOperation(op)).join('\n');
+}
+
+protected findRelatedEntities(entity: EntityInfo): Operation[] {
+    // Just finds the related entities
+}
+
+protected generateSingleOperation(operation: Operation): string {
+    // Handles one operation type
+}
+```
+
+### When to Decompose
+- Function exceeds 30-40 lines
+- You need to write a comment explaining what a section does
+- You have nested loops or conditions beyond 2 levels
+- You're repeating similar logic patterns
+- The function name would need "And" to be accurate
 
 ## Object-Oriented Design Principles
 

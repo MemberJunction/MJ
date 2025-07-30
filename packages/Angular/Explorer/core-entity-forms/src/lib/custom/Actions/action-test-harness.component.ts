@@ -232,9 +232,11 @@ export class ActionTestHarnessComponent implements OnInit {
                 
                 return {
                     Name: paramValue.param.Name,
-                    Value: typeof paramValue.value === 'object' 
-                        ? JSON.stringify(paramValue.value) 
-                        : String(paramValue.value),
+                    Value: paramValue.value === null || paramValue.value === undefined
+                        ? null
+                        : typeof paramValue.value === 'object' 
+                            ? JSON.stringify(paramValue.value) 
+                            : String(paramValue.value),
                     Type: dataType
                 };
             });

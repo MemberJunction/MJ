@@ -120,7 +120,9 @@ packages/AI/MCPServer/build/Server.js
 
 **/.claude/settings.local.json
 sql_logging/
+.sql-log-push/
+.sql-log-watch/
 kendo-license.txt
 metadata/demo-prompt.md
-
 .mj-ai/
+notes.txt

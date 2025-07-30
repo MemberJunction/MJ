@@ -60,14 +60,16 @@
           </button>
         </div>
         
-        <button 
-          type="button" 
-          class="control-btn primary"
-          (click)="createNewPrompt()"
-          title="Create New Prompt">
-          <i class="fa-solid fa-plus"></i>
-          New Prompt
-        </button>
+        @if (UserCanCreatePrompts) {
+          <button 
+            type="button" 
+            class="control-btn primary"
+            (click)="createNewPrompt()"
+            title="Create New Prompt">
+            <i class="fa-solid fa-plus"></i>
+            New Prompt
+          </button>
+        }
       </div>
     </div>
 
@@ -162,7 +164,7 @@
               <i class="fa-solid fa-comment-dots fa-4x"></i>
               <h3>No prompts found</h3>
               <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI prompt to get started' }}</p>
-              @if (!hasActiveFilters) {
+              @if (!hasActiveFilters && UserCanCreatePrompts) {
                 <button class="primary-action" (click)="createNewPrompt()">
                   <i class="fa-solid fa-plus"></i>
                   Create First Prompt
@@ -225,10 +227,16 @@
                           </div>
 
                           <div class="card-footer">
-                            <button class="action-button" (click)="openPrompt(prompt.ID); $event.stopPropagation()">
-                              <i class="fa-solid fa-edit"></i>
-                              Edit
-                            </button>
+                            @if (UserCanReadPrompts) {
+                              <button class="action-button primary" (click)="testPrompt(prompt.ID, $event)" [disabled]="prompt.Status !== 'Active'" title="Run Prompt">
+                                <i class="fa-solid fa-play"></i>
+                                Run
+                              </button>
+                              <button class="action-button" (click)="openPrompt(prompt.ID); $event.stopPropagation()" title="Edit Prompt">
+                                <i class="fa-solid fa-external-link-alt"></i>
+                                Open
+                              </button>
+                            }
                           </div>
                         </div>
                       }
@@ -274,9 +282,14 @@
                             }
                           </td>
                           <td>
-                            <button class="action-button small" (click)="openPrompt(prompt.ID)">
-                              <i class="fa-solid fa-edit"></i>
-                            </button>
+                            @if (UserCanReadPrompts) {
+                              <button class="action-button small primary" (click)="testPrompt(prompt.ID, $event)" [disabled]="prompt.Status !== 'Active'" title="Run Prompt">
+                                <i class="fa-solid fa-play"></i>
+                              </button>
+                              <button class="action-button small" (click)="openPrompt(prompt.ID)" title="Edit Prompt">
+                                <i class="fa-solid fa-external-link-alt"></i>
+                              </button>
+                            }
                           </td>
                         </tr>
                       }
@@ -287,10 +300,12 @@
               
               @case ('priority-matrix') {
                 <div class="priority-matrix-container">
-                  <app-model-prompt-priority-matrix 
-                    [selectedPrompts]="filteredPromptsAsEntities"
-                    (promptSelected)="openPrompt($event.ID)">
-                  </app-model-prompt-priority-matrix>
+                  @if (UserCanReadPrompts) {
+                    <app-model-prompt-priority-matrix 
+                      [selectedPrompts]="filteredPromptsAsEntities"
+                      (promptSelected)="openPrompt($event.ID)">
+                    </app-model-prompt-priority-matrix>
+                  }
                 </div>
               }
             }
@@ -300,3 +315,5 @@
     </kendo-splitter>
   }
 </div>
+
+<!-- AI Prompt Test Harness - Now handled by service with minimize support -->

@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { getDuckDuckGoRateLimiter, SearchRequest } from "./duckduckgo-rate-limiter";
 
 /**
  * Action that performs web search using DuckDuckGo's Instant Answer API
@@ -41,6 +42,7 @@ export class WebSearchAction extends BaseAction {
      *   - MaxResults: Maximum number of results to return (default: 10, max: 30)
      *   - Region: Regional search preference (default: 'us-en')
      *   - SafeSearch: Safe search level - 'strict', 'moderate', 'off' (default: 'moderate')
+     *   - DisableQueueing: If true, fails immediately when rate limited instead of queueing (default: false)
      * 
      * @returns Web search results with titles, URLs, and snippets
      */
@@ -50,6 +52,7 @@ export class WebSearchAction extends BaseAction {
             const maxResultsParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'maxresults');
             const regionParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'region');
             const safeSearchParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'safesearch');
+            const disableQueueingParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'disablequeueing');
 
             if (!searchTermsParam || !searchTermsParam.Value) {
                 return {
@@ -63,6 +66,7 @@ export class WebSearchAction extends BaseAction {
             const maxResults = Math.min(parseInt(maxResultsParam?.Value?.toString() || '10'), 30);
             const region = regionParam?.Value?.toString() || 'us-en';
             const safeSearch = safeSearchParam?.Value?.toString() || 'moderate';
+            const disableQueueing = disableQueueingParam?.Value?.toString()?.toLowerCase() === 'true';
 
             if (searchTerms.length === 0) {
                 return {
@@ -72,6 +76,9 @@ export class WebSearchAction extends BaseAction {
                 };
             }
 
+            // Get the rate limiter instance
+            const rateLimiter = getDuckDuckGoRateLimiter();
+            
             // Try DuckDuckGo Instant Answer API first (JSON response)
             let response: Response;
             let html: string = '';
@@ -81,14 +88,21 @@ export class WebSearchAction extends BaseAction {
                 // Try the Instant Answer API first (more reliable)
                 const instantUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchTerms)}&format=json&no_html=1&skip_disambig=1`;
                 
-                response = await fetch(instantUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
-                });
-
+                const searchRequest: SearchRequest = {
+                    url: instantUrl,
+                    options: {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                    },
+                    disableQueueing
+                };
+                
+                const result = await rateLimiter.search(searchRequest);
+                response = result.response;
+                
                 if (response.ok) {
-                    const jsonData = await response.text();
+                    const jsonData = result.text;
                     const instantResults = this.parseInstantResults(jsonData, maxResults);
                     
                     if (instantResults.length > 0) {
@@ -118,19 +132,27 @@ export class WebSearchAction extends BaseAction {
             // Fallback to HTML search with more realistic headers
             const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(searchTerms)}&kl=${region}`;
             
-            response = await fetch(searchUrl, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
-            });
-
+            const htmlSearchRequest: SearchRequest = {
+                url: searchUrl,
+                options: {
+                    method: 'GET',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
+                },
+                disableQueueing
+            };
+            
+            const htmlResult = await rateLimiter.search(htmlSearchRequest);
+            response = htmlResult.response;
+            html = htmlResult.text;
+            
             if (!response.ok) {
                 return {
                     Success: false,
@@ -138,8 +160,6 @@ export class WebSearchAction extends BaseAction {
                     ResultCode: "SEARCH_FAILED"
                 };
             }
-
-            html = await response.text();
             
             // Check if we got an empty or invalid response
             if (!html || html.length < 1000 || !html.includes('result')) {
@@ -171,6 +191,36 @@ export class WebSearchAction extends BaseAction {
                 method: 'html-scraping'
             };
 
+            // add output props as well to make it easier to use in flows
+            params.Params.push({
+                Name: 'SearchResultsDetails',
+                Value: resultData,
+                Type: "Output"
+            })
+            params.Params.push({
+                Name: 'SearchUrl',
+                Value: resultData.searchUrl,
+                Type: "Output"
+            });
+            params.Params.push({
+                Name: 'SearchResults',
+                Value: results,
+                Type: "Output"
+            });
+            params.Params.push({
+                Name: 'SearchResultsCount',
+                Value: results.length,
+                Type: "Output"
+            });
+            // and finally share the first result as well
+            if (results.length > 0) {
+                params.Params.push({
+                    Name: 'FirstSearchResult',
+                    Value: results[0],
+                    Type: "Output"
+                });
+            }
+
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
@@ -178,9 +228,21 @@ export class WebSearchAction extends BaseAction {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            
+            // Check if it's a rate limit error with queueing disabled
+            if (errorMessage.includes('Rate limiting active and queueing is disabled') || 
+                errorMessage.includes('Rate limited and queueing is disabled')) {
+                return {
+                    Success: false,
+                    Message: "DuckDuckGo rate limit reached. Queueing is disabled for this request.",
+                    ResultCode: "RATE_LIMITED"
+                };
+            }
+            
             return {
                 Success: false,
-                Message: `Failed to perform web search: ${error instanceof Error ? error.message : String(error)}`,
+                Message: `Failed to perform web search: ${errorMessage}`,
                 ResultCode: "FAILED"
             };
         }

@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -284,36 +284,106 @@ export class Metadata {
      * @param request 
      * @returns 
      */
-    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.EntityByName(request.EntityName);
         if (e.AllowRecordMerge)
-            return await Metadata.Provider.MergeRecords(request, contextUser);
+            return await Metadata.Provider.MergeRecords(request, contextUser, options);
         else
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
 
     /**
-     * Returns a newly created instance of a sub-class of BaseEntity. The subclass depends on the class registrations for the 
-     * requested entity. The class registrations are managed by the MJGlobal ClassFactory component. 
-     * @param entityName - The name of the entity to create an instance of
-     * @param contextUser - The user to use for context. If null, the current user is used. This is mainly used on the server side, for browser based applications generally the context will be known
-     * @returns - a newly created instance of a sub-class of BaseEntity. Remember you still to call Load() or NewRecord() to get going from there.
+     * Creates a new instance of a BaseEntity subclass for the specified entity and automatically calls NewRecord() to initialize it.
+     * This method uses the MJGlobal ClassFactory to instantiate the correct subclass based on registered entity types.
+     * For entities with non-auto-increment uniqueidentifier primary keys, a UUID will be automatically generated.
+     * 
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers", "Orders")
+     * @param contextUser - Optional user context for server-side operations. Client-side code can typically omit this.
+     *                      Can be a UserInfo instance or an object with matching shape (ID, Name, Email, UserRoles)
+     * @returns Promise resolving to a strongly-typed entity instance ready for data entry
+     * 
+     * @example
+     * // Create a new customer record
+     * const customer = await metadata.GetEntityObject<CustomerEntity>('Customers');
+     * customer.Name = 'Acme Corp';
+     * await customer.Save();
+     * 
+     * @example
+     * // Server-side with context user
+     * const order = await metadata.GetEntityObject<OrderEntity>('Orders', contextUser);
+     * order.CustomerID = customerId;
+     * await order.Save();
      */
-    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;
+    
+    /**
+     * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided composite key.
+     * This overload combines entity instantiation with record loading in a single call for convenience.
+     * 
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers", "Orders")
+     * @param loadKey - CompositeKey containing the primary key value(s) to load. Use static helper methods:
+     *                  - CompositeKey.FromID(id) for single "ID" primary keys
+     *                  - CompositeKey.FromKeyValuePair(field, value) for single named primary keys
+     *                  - CompositeKey.FromKeyValuePairs([...]) for composite primary keys
+     * @param contextUser - Optional user context for server-side operations
+     * @returns Promise resolving to the entity instance with the specified record loaded
+     * @throws Error if the entity name is invalid or the record cannot be found
+     * 
+     * @example
+     * // Load by ID (most common case)
+     * const customer = await metadata.GetEntityObject<CustomerEntity>('Customers', CompositeKey.FromID(customerId));
+     * 
+     * @example
+     * // Load by named field
+     * const user = await metadata.GetEntityObject<UserEntity>('Users', CompositeKey.FromKeyValuePair('Email', 'user@example.com'));
+     * 
+     * @example
+     * // Load with composite key
+     * const orderItem = await metadata.GetEntityObject<OrderItemEntity>('OrderItems', 
+     *   CompositeKey.FromKeyValuePairs([
+     *     { FieldName: 'OrderID', Value: orderId },
+     *     { FieldName: 'ProductID', Value: productId }
+     *   ])
+     * );
+     */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>;
+    public async GetEntityObject<T extends BaseEntity>(
+        entityName: string, 
+        loadKeyOrContextUser?: CompositeKey | UserInfo,
+        contextUser?: UserInfo
+    ): Promise<T> {
         // validate that entityName is not null, undefined and IS a string > 0 length
         if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
             throw new Error('GetEntityObject: entityName must be a non-empty string');
         }
+
+        // Determine which overload was called
+        let actualLoadKey: CompositeKey | undefined;
+        let actualContextUser: UserInfo | undefined;
+        
+        if (loadKeyOrContextUser instanceof CompositeKey) {
+            // Second overload: entityName, loadKey, contextUser
+            actualLoadKey = loadKeyOrContextUser;
+            actualContextUser = contextUser;
+        } else if (contextUser !== undefined) {
+            // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+            actualLoadKey = undefined;
+            actualContextUser = contextUser;
+        } else {
+            // First overload: entityName, contextUser
+            actualContextUser = loadKeyOrContextUser as UserInfo;
+        }
+
         // validate that contextUser is either null/undefined or a UserInfo object
-        if (contextUser) {
+        if (actualContextUser) {
             // contextUser has been specified. We need to make sure the shape of the object
             // is correct to allow objects that are not true instances of UserInfo but have the
             // same shape - e.g. duck typing
-            if (!(contextUser instanceof UserInfo)) {
-                const u = contextUser as any;
+            if (!(actualContextUser instanceof UserInfo)) {
+                const u = actualContextUser as any;
                 if (u && u.ID && u.Name && u.Email && u.UserRoles) {
                     // we have a UserInfo-like object, so we can use it
-                    contextUser = new UserInfo(Metadata.Provider, u);
+                    actualContextUser = new UserInfo(Metadata.Provider, u);
                 }
                 else {
                     throw new Error('GetEntityObject: contextUser must be null/undefined, a UserInfo instance, or an object that has the same shape as UserInfo, notably having the following properties: ID, Name, Email, and UserRoles');
@@ -321,7 +391,7 @@ export class Metadata {
             }
         }
         
-        return await Metadata.Provider.GetEntityObject(entityName, contextUser);
+        return await Metadata.Provider.GetEntityObject(entityName, actualLoadKey, actualContextUser);
     }
 
     /**

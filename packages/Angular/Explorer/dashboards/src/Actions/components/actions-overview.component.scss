@@ -111,6 +111,9 @@
       &.success .metric-icon { background: var(--kendo-color-success); }
       &.info .metric-icon { background: var(--kendo-color-info); }
       &.warning .metric-icon { background: var(--kendo-color-warning); }
+      &.gallery .metric-icon { 
+        background: linear-gradient(135deg, var(--kendo-color-primary), var(--kendo-color-secondary)); 
+      }
     }
   }
 

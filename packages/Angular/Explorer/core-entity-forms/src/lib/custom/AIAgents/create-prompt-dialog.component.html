@@ -1,0 +1,257 @@
+<!-- Create Prompt Dialog -->
+<div class="create-prompt-dialog">
+  
+  <!-- Loading State -->
+  @if (isLoading$ | async) {
+    <div class="loading-state">
+      <div class="loading-spinner">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      </div>
+      <p>Loading prompt creation form...</p>
+    </div>
+  } @else {
+    
+    <!-- Form Content -->
+    <form [formGroup]="promptForm" class="dialog-content">
+      
+      <!-- Basic Prompt Information -->
+      <div class="form-section">
+        <h4 class="section-title">
+          <i class="fa-solid fa-info-circle"></i>
+          Basic Information
+        </h4>
+        
+        <div class="form-grid">
+          
+          <!-- Name Field -->
+          <div class="form-field">
+            <label for="promptName" class="field-label required">
+              <i class="fa-solid fa-tag"></i>
+              Name
+            </label>
+            <kendo-textbox 
+              id="promptName"
+              formControlName="name"
+              placeholder="Enter prompt name..."
+              class="full-width">
+            </kendo-textbox>
+            @if (promptForm.get('name')?.invalid && promptForm.get('name')?.touched) {
+              <div class="field-error">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                Name is required
+              </div>
+            }
+          </div>
+
+          <!-- Type Field -->
+          <div class="form-field">
+            <label for="promptType" class="field-label required">
+              <i class="fa-solid fa-category"></i>
+              Type
+            </label>
+            <kendo-dropdownlist 
+              id="promptType"
+              formControlName="typeID"
+              [data]="availablePromptTypes$ | async"
+              textField="Name"
+              valueField="ID"
+              [valuePrimitive]="true"
+              placeholder="Select prompt type..."
+              class="full-width">
+            </kendo-dropdownlist>
+            @if (promptForm.get('typeID')?.invalid && promptForm.get('typeID')?.touched) {
+              <div class="field-error">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                Type is required
+              </div>
+            }
+          </div>
+
+          <!-- Status Field -->
+          <div class="form-field">
+            <label for="promptStatus" class="field-label">
+              <i class="fa-solid fa-toggle-on"></i>
+              Status
+            </label>
+            <kendo-dropdownlist 
+              id="promptStatus"
+              formControlName="status"
+              [data]="['Pending', 'Active', 'Disabled']"
+              [valuePrimitive]="true"
+              class="full-width">
+            </kendo-dropdownlist>
+          </div>
+
+          <!-- Output Type Field -->
+          <div class="form-field">
+            <label for="outputType" class="field-label">
+              <i class="fa-solid fa-file-code"></i>
+              Output Type
+            </label>
+            <kendo-dropdownlist 
+              id="outputType"
+              formControlName="outputType"
+              [data]="['string', 'object']"
+              [valuePrimitive]="true"
+              class="full-width">
+            </kendo-dropdownlist>
+          </div>
+
+        </div>
+
+        <!-- Description Field -->
+        <div class="form-field full-width">
+          <label for="promptDescription" class="field-label">
+            <i class="fa-solid fa-align-left"></i>
+            Description
+          </label>
+          <kendo-textarea 
+            id="promptDescription"
+            formControlName="description"
+            placeholder="Enter prompt description (optional)..."
+            [rows]="3"
+            class="full-width">
+          </kendo-textarea>
+        </div>
+
+      </div>
+
+      <!-- Template Configuration -->
+      <div class="form-section">
+        <h4 class="section-title">
+          <i class="fa-solid fa-file-alt"></i>
+          Template Configuration
+        </h4>
+        
+        <div class="template-mode-section">
+          <label class="field-label">
+            <i class="fa-solid fa-cog"></i>
+            Template Mode
+          </label>
+          
+          <div class="template-mode-options">
+            <div class="radio-option">
+              <input type="radio" 
+                     id="templateNew" 
+                     value="new" 
+                     formControlName="templateMode"
+                     class="radio-input">
+              <label for="templateNew" class="radio-label">
+                <i class="fa-solid fa-plus-circle"></i>
+                Create New Template
+              </label>
+            </div>
+            
+            <div class="radio-option">
+              <input type="radio" 
+                     id="templateExisting" 
+                     value="existing" 
+                     formControlName="templateMode"
+                     class="radio-input">
+              <label for="templateExisting" class="radio-label">
+                <i class="fa-solid fa-link"></i>
+                Link Existing Template
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template Editor Section (New Template) -->
+        @if (showTemplateEditor && templateEntity && templateMode === 'new') {
+          <div class="template-editor-section">
+            <div class="template-info">
+              <h5 class="template-name">
+                <i class="fa-solid fa-file-code"></i>
+                {{ templateEntity.Name }}
+              </h5>
+              @if (templateEntity.Description) {
+                <p class="template-description">{{ templateEntity.Description }}</p>
+              }
+            </div>
+            
+            <div class="template-editor-container">
+              <mj-template-editor 
+                #templateEditor
+                [template]="templateEntity"
+                [config]="templateEditorConfig"
+                (contentChange)="onTemplateContentChange($event)">
+              </mj-template-editor>
+            </div>
+          </div>
+        }
+        
+        <!-- Existing Template Display -->
+        @if (templateEntity && templateMode === 'existing') {
+          <div class="existing-template-section">
+            <div class="existing-template-info">
+              <div class="template-header">
+                <h5 class="template-name">
+                  <i class="fa-solid fa-link"></i>
+                  {{ templateEntity.Name }}
+                </h5>
+                <span class="template-type-badge">
+                  <i class="fa-solid fa-tag"></i>
+                  Existing Template
+                </span>
+              </div>
+              
+              @if (templateEntity.Description) {
+                <p class="template-description">{{ templateEntity.Description }}</p>
+              }
+              
+              <div class="template-actions">
+                <button kendoButton 
+                        look="outline" 
+                        size="small"
+                        (click)="handleTemplateModeChange('existing')">
+                  <i class="fa-solid fa-sync"></i>
+                  Change Template
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
+      </div>
+
+    </form>
+
+  }
+
+</div>
+
+<!-- Dialog Footer -->
+<div class="dialog-footer">
+  <div class="footer-left">
+    <span class="form-hint">
+      <i class="fa-solid fa-info-circle"></i>
+      @if (templateMode === 'new') {
+        Created prompts and templates will be saved when you save the AI Agent
+      } @else {
+        Created prompt will be linked to existing template when you save the AI Agent
+      }
+    </span>
+  </div>
+  
+  <div class="footer-right">
+    <button kendoButton 
+            look="outline"
+            (click)="cancel()"
+            [disabled]="(isSaving$ | async) || false">
+      Cancel
+    </button>
+    
+    <button kendoButton 
+            themeColor="primary"
+            (click)="save()"
+            [disabled]="!promptForm.valid || ((isSaving$ | async) || false)">
+      @if (isSaving$ | async) {
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Creating...
+      } @else {
+        <i class="fa-solid fa-plus"></i>
+        Create Prompt
+      }
+    </button>
+  </div>
+</div>

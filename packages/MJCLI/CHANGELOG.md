@@ -1,5 +1,292 @@
 # Change Log - @memberjunction/cli
 
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/codegen-lib@2.77.0
+  - @memberjunction/metadata-sync@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/sqlserver-dataprovider@2.76.0
+  - @memberjunction/metadata-sync@2.76.0
+  - @memberjunction/codegen-lib@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [9ccd145]
+- Updated dependencies [4ee29f2]
+  - @memberjunction/codegen-lib@2.75.0
+  - @memberjunction/metadata-sync@2.75.0
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+  - @memberjunction/codegen-lib@2.74.0
+  - @memberjunction/metadata-sync@2.74.0
+  - @memberjunction/sqlserver-dataprovider@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.73.0
+- @memberjunction/sqlserver-dataprovider@2.73.0
+- @memberjunction/metadata-sync@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.72.0
+- @memberjunction/metadata-sync@2.72.0
+- @memberjunction/sqlserver-dataprovider@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- e75f0a4: Major AI Agent and AI Prompt Management Enhancements
+
+  - **AI Agent Forms**: Complete redesign with comprehensive sub-agent creation, advanced settings management, and transaction-based persistence
+  - **AI Prompt Forms**: Implemented atomic "Create New Prompt" feature with template linking and proper MemberJunction navigation
+  - **User Permissions**: Added comprehensive user permission reflection across AI forms and dashboards
+  - **UX Improvements**: Enhanced prompt selector with visual indicators for already linked prompts, proper cancel/revert functionality
+  - **Template Management**: Resolved template management issues with improved template editor and selector dialogs
+  - **Sub-Agent System**: Full implementation of sub-agent selector with deferred transactions and database constraint compliance
+  - **Advanced Settings**: New dialogs for AI Agent prompts, sub-agents, and actions with modern UI components
+  - **CLI**: Fixed AUTH0 environment variable casing in install command
+
+  This release significantly improves the AI management experience with better transaction handling, user permissions, and modern UI components.
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/codegen-lib@2.71.0
+  - @memberjunction/metadata-sync@2.71.0
+  - @memberjunction/sqlserver-dataprovider@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.70.0
+- @memberjunction/metadata-sync@2.70.0
+- @memberjunction/sqlserver-dataprovider@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.69.1
+- @memberjunction/metadata-sync@2.69.1
+- @memberjunction/sqlserver-dataprovider@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.69.0
+- @memberjunction/metadata-sync@2.69.0
+- @memberjunction/sqlserver-dataprovider@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- 035690c: MetadataSync pull operations major improvements
+
+  - **JSON Property Ordering**: Fixed inconsistent JSON property ordering
+    across metadata files by implementing JsonWriteHelper with
+    deterministic serialization
+  - **File Write Batching**: Replaced individual file writes with
+    batching system for 90% performance improvement and eliminated write
+    conflicts
+  - **RelatedEntities Support**: Added complete support for pulling
+    related entities as embedded collections with foreign key references
+    (@parent:ID syntax)
+  - **Field Configuration Options**:
+    - Added `ignoreNullFields` option to exclude null values during pull
+      operations
+    - Added `ignoreVirtualFields` option to exclude virtual fields from
+      pulled data
+  - **ExternalizeFields Implementation**: Complete field externalization
+    functionality with:
+
+    - Configurable file patterns with placeholders ({Name}, {ID}, etc.)
+    - Smart merge strategy support preserving existing @file: references
+    - Enhanced checksum calculation including external file content
+    - Automatic JSON formatting and filename sanitization
+
+  - **Change Detection**: Fixed checksum calculation for related entities
+    to prevent unnecessary timestamp updates
+  - **Bug Fixes**: Resolved critical issue where new record operations
+    overwrote existing record updates in batch system
+
+  These improvements provide robust, performant, and feature-complete
+  metadata synchronization with proper change tracking and file
+  organization.
+
+- Updated dependencies [035690c]
+- Updated dependencies [a6b43d0]
+- Updated dependencies [23250f1]
+- Updated dependencies [732c04a]
+  - @memberjunction/metadata-sync@2.68.0
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/codegen-lib@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/codegen-lib@2.67.0
+  - @memberjunction/metadata-sync@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/codegen-lib@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/metadata-sync@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/metadata-sync@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/codegen-lib@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.64.0
+- @memberjunction/metadata-sync@2.64.0
+- @memberjunction/sqlserver-dataprovider@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.63.1
+- @memberjunction/metadata-sync@2.63.1
+- @memberjunction/sqlserver-dataprovider@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [00e19b4]
+  - @memberjunction/metadata-sync@2.63.0
+  - @memberjunction/codegen-lib@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.62.0
+- @memberjunction/sqlserver-dataprovider@2.62.0
+- @memberjunction/metadata-sync@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.61.0
+- @memberjunction/sqlserver-dataprovider@2.61.0
+- @memberjunction/metadata-sync@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [6eabd10]
+  - @memberjunction/codegen-lib@2.60.0
+  - @memberjunction/metadata-sync@2.60.0
+  - @memberjunction/sqlserver-dataprovider@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.59.0
+- @memberjunction/metadata-sync@2.59.0
+- @memberjunction/sqlserver-dataprovider@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- Updated dependencies [def26fe]
+- Updated dependencies [a5f0905]
+- Updated dependencies [264bdc9]
+  - @memberjunction/metadata-sync@2.58.0
+  - @memberjunction/sqlserver-dataprovider@2.58.0
+  - @memberjunction/codegen-lib@2.58.0
+
+## 2.57.0
+
+### Minor Changes
+
+- 0ba485f: various bug fixes
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/metadata-sync@2.57.0
+  - @memberjunction/sqlserver-dataprovider@2.57.0
+  - @memberjunction/codegen-lib@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- 17c7634: Integrate MetadataSync commands into MJCLI
+
+  - Refactored MetadataSync from standalone CLI to reusable library
+  - Moved all sync commands under `mj sync` namespace in MJCLI
+  - Added service-based architecture for better modularity
+  - Removed oclif dependencies from MetadataSync package
+
+- Updated dependencies [17c7634]
+  - @memberjunction/metadata-sync@2.56.0
+  - @memberjunction/codegen-lib@2.56.0
+  - @memberjunction/sqlserver-dataprovider@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- Updated dependencies [9232ce9]
+  - @memberjunction/codegen-lib@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

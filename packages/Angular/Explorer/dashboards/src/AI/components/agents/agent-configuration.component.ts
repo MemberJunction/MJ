@@ -1,6 +1,7 @@
-import { Component, Output, EventEmitter, OnInit, OnDestroy, Inject, Optional, Input } from '@angular/core';
-import { RunView, CompositeKey } from '@memberjunction/core';
+import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 interface AgentFilter {
   searchTerm: string;
@@ -16,7 +17,7 @@ interface AgentFilter {
   templateUrl: './agent-configuration.component.html',
   styleUrls: ['./agent-configuration.component.scss']
 })
-export class AgentConfigurationComponent implements OnInit, OnDestroy {
+export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   @Input() initialState: any = null;
   @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
@@ -38,13 +39,99 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     exposeAsAction: 'all'
   };
 
-  constructor() {}
+  public selectedAgentForTest: AIAgentEntity | null = null;
 
-  ngOnInit(): void {
+  // === Permission Checks ===
+  /** Cache for permission checks to avoid repeated calculations */
+  private _permissionCache = new Map<string, boolean>();
+  private _metadata = new Metadata();
+
+  /** Check if user can create AI Agents */
+  public get UserCanCreateAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Create');
+  }
+
+  /** Check if user can read AI Agents */
+  public get UserCanReadAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Read');
+  }
+
+  /** Check if user can update AI Agents */
+  public get UserCanUpdateAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Update');
+  }
+
+  /** Check if user can delete AI Agents */
+  public get UserCanDeleteAgents(): boolean {
+    return this.checkEntityPermission('AI Agents', 'Delete');
+  }
+
+  /**
+   * Helper method to check entity permissions with caching
+   * @param entityName - The name of the entity to check permissions for
+   * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+   * @returns boolean indicating if user has the permission
+   */
+  private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+    const cacheKey = `${entityName}_${permissionType}`;
+    
+    if (this._permissionCache.has(cacheKey)) {
+      return this._permissionCache.get(cacheKey)!;
+    }
+
+    try {
+      const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+      
+      if (!entityInfo) {
+        console.warn(`Entity '${entityName}' not found for permission check`);
+        this._permissionCache.set(cacheKey, false);
+        return false;
+      }
+
+      const userPermissions = entityInfo.GetUserPermisions(this._metadata.CurrentUser);
+      let hasPermission = false;
+
+      switch (permissionType) {
+        case 'Create':
+          hasPermission = userPermissions.CanCreate;
+          break;
+        case 'Read':
+          hasPermission = userPermissions.CanRead;
+          break;
+        case 'Update':
+          hasPermission = userPermissions.CanUpdate;
+          break;
+        case 'Delete':
+          hasPermission = userPermissions.CanDelete;
+          break;
+      }
+
+      this._permissionCache.set(cacheKey, hasPermission);
+      return hasPermission;
+    } catch (error) {
+      console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+      this._permissionCache.set(cacheKey, false);
+      return false;
+    }
+  }
+
+  /**
+   * Clears the permission cache. Call this when user context changes or permissions are updated.
+   */
+  public clearPermissionCache(): void {
+    this._permissionCache.clear();
+  }
+
+  constructor(
+    private testHarnessService: AITestHarnessDialogService,
+    private cdr: ChangeDetectorRef
+  ) {}
+
+  async ngAfterViewInit() {
     if (this.initialState) {
       this.applyInitialState(this.initialState);
     }
-    this.loadAgents();
+    await this.loadAgents();
   }
 
   ngOnDestroy(): void {
@@ -70,19 +157,21 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       const rv = new RunView();
-      const result = await rv.RunView({
+      const result = await rv.RunView<AIAgentEntity>({
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
-        MaxRows: 1000
+        MaxRows: 1000 
       });
       
-      this.agents = result.Results as AIAgentEntity[];
+      this.agents = result.Results || [];
       this.filteredAgents = [...this.agents];
     } catch (error) {
       console.error('Error loading AI agents:', error);
     } finally {
-      this.isLoading = false;
+      this.isLoading = false;     
+      // force change detection to update the view
+      this.cdr.detectChanges();
     }
   }
 
@@ -91,7 +180,7 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
     this.emitStateChange();
   }
 
-  public onMainSplitterChange(event: any): void {
+  public onMainSplitterChange(_event: any): void {
     this.emitStateChange();
   }
 
@@ -191,14 +280,19 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
   }
 
   public createNewAgent(): void {
-    // Emit event to open a new agent form
-    const compositeKey = new CompositeKey([]);
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: '' });
+    // Use the standard MemberJunction pattern to open a new AI Agent form
+    // null for recordId indicates creating a new record
+    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: null as any });
   }
 
-  public async runAgent(agent: AIAgentEntity): Promise<void> {
-    // Emit event to open test harness for the agent
-    this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: agent.ID });
+  public runAgent(agent: AIAgentEntity): void {
+    // Use the test harness service for window management features
+    this.testHarnessService.openForAgent(agent.ID);
+  }
+
+  public closeTestHarness(): void {
+    // No longer needed - window manages its own closure
+    this.selectedAgentForTest = null;
   }
 
   public getAgentIconColor(agent: AIAgentEntity): string {
@@ -226,6 +320,25 @@ export class AgentConfigurationComponent implements OnInit, OnDestroy {
       case 'Parallel': return 'fa-solid fa-layer-group';
       default: return 'fa-solid fa-robot';
     }
+  }
+
+  /**
+   * Gets the agent's display icon
+   * Prioritizes LogoURL, falls back to IconClass, then default robot icon
+   */
+  public getAgentIcon(agent: AIAgentEntity): string {
+    if (agent?.LogoURL) {
+      // LogoURL is used in img tag, not here
+      return '';
+    }
+    return agent?.IconClass || 'fa-solid fa-robot';
+  }
+
+  /**
+   * Checks if the agent has a logo URL (for image display)
+   */
+  public hasLogoURL(agent: AIAgentEntity): boolean {
+    return !!agent?.LogoURL;
   }
 
 }

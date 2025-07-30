@@ -1,0 +1,287 @@
+<div class="action-gallery" [class.dark-theme]="config.theme === 'dark'" [class.selection-mode]="config.selectionMode">
+  <!-- Gallery Header -->
+  @if (config.showSearch) {
+    <div class="gallery-header">
+      <div class="header-content">
+        <div class="search-section">
+        <kendo-textbox 
+          #searchInput
+          [formControl]="searchControl" 
+          placeholder="Search actions by name, description, or category..."
+          class="search-input"
+          [clearButton]="true">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+      
+      <div class="header-actions">
+        <div class="view-toggle">
+          <button kendoButton 
+                  [toggleable]="true" 
+                  [selected]="(viewMode$ | async) === 'grid'"
+                  (click)="toggleViewMode()"
+                  size="small"
+                  kendoTooltip
+                  [title]="(viewMode$ | async) === 'grid' ? 'Switch to list view' : 'Switch to grid view'">
+            <i class="fa-solid" [class.fa-th]="(viewMode$ | async) === 'grid'" [class.fa-list]="(viewMode$ | async) === 'list'"></i>
+          </button>
+        </div>
+        <div class="stats">
+          <span class="stat-item">
+            <i class="fa-solid fa-bolt"></i>
+            {{ (filteredActions$ | async)?.length }} of {{ totalActions }} actions
+          </span>
+        </div>
+      </div>
+      </div>
+    </div>
+  }
+
+  <!-- Main Content -->
+  <div class="gallery-content" [class.no-categories]="!config.showCategories">
+    <!-- Category Sidebar -->
+    @if (config.showCategories) {
+      <div class="category-sidebar">
+        <div class="category-tree">
+          @for (category of categoryTree$ | async; track category.id) {
+          <div class="category-item" 
+               [class.selected]="(selectedCategory$ | async) === category.id"
+               [class.has-children]="category.children && category.children.length > 0"
+               (click)="selectCategory(category.id)">
+            
+            <div class="category-header">
+              <i class="fa-solid {{ category.icon }} category-icon"></i>
+              <span class="category-name">{{ category.name }}</span>
+              <span class="category-count">{{ category.count }}</span>
+              @if (category.children && category.children.length > 0) {
+                <i class="fa-solid fa-chevron-right expand-icon" 
+                   [class.expanded]="expandedCategories.has(category.id)"
+                   (click)="toggleCategoryExpanded(category.id); $event.stopPropagation()"></i>
+              }
+            </div>
+            
+            <!-- Sub-categories -->
+            @if (category.children && expandedCategories.has(category.id)) {
+              <div class="sub-categories">
+                @for (subCategory of category.children; track subCategory.id) {
+                  <div class="category-item sub-category" 
+                       [class.selected]="(selectedCategory$ | async) === subCategory.id"
+                       (click)="selectCategory(subCategory.id); $event.stopPropagation()">
+                <div class="category-header">
+                  <i class="fa-solid {{ subCategory.icon }} category-icon"></i>
+                  <span class="category-name">{{ subCategory.name }}</span>
+                  <span class="category-count">{{ subCategory.count }}</span>
+                </div>
+              </div>
+                }
+              </div>
+            }
+          </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Actions Display -->
+    <div class="actions-container">
+      <!-- Loading State -->
+      @if (isLoading$ | async) {
+        <div class="loading-state">
+          <kendo-loader size="large"></kendo-loader>
+          <p>Loading actions...</p>
+        </div>
+      }
+
+      <!-- Empty State -->
+      @if (!(isLoading$ | async) && (filteredActions$ | async)?.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-search-minus"></i>
+          <h3>No actions found</h3>
+          <p>Try adjusting your search criteria or selecting a different category</p>
+          <button kendoButton (click)="clearSearch()">Clear Search</button>
+        </div>
+      }
+
+      <!-- Grid View -->
+      @if (!(isLoading$ | async) && (viewMode$ | async) === 'grid' && (filteredActions$ | async) && (filteredActions$ | async)!.length > 0) {
+        <div class="actions-grid" 
+             [style.grid-template-columns]="'repeat(' + (config.gridColumns || 3) + ', 1fr)'">
+          
+          @for (action of filteredActions$ | async; track action.ID) {
+            <div class="action-card" 
+                 [class.expanded]="action.expanded"
+                 [class.selected]="action.selected"
+                 [class.animate]="animateCards"
+                 [class.hover]="hoveredAction === action.ID"
+                 (mouseenter)="hoveredAction = action.ID"
+                 (mouseleave)="hoveredAction = null"
+                 (click)="toggleActionSelection(action)">
+          
+          <!-- Card Header -->
+          <div class="card-header" (click)="toggleActionExpanded(action); $event.stopPropagation()">
+            <div class="action-icon">
+              <i class="fa-solid {{ getActionIcon(action) }}"></i>
+            </div>
+            <div class="action-info">
+              <h3 class="action-name">{{ action.Name }}</h3>
+              <div class="action-meta">
+                @if (action.Category) {
+                  <span class="category-badge">
+                    <i class="fa-solid fa-folder"></i>
+                    {{ action.Category }}
+                  </span>
+                }
+              </div>
+            </div>
+            <div class="card-actions">
+              @if (config.enableQuickTest) {
+                <button kendoButton 
+                        look="flat" 
+                        size="small"
+                        icon="play"
+                        (click)="testAction(action, $event)"
+                        kendoTooltip
+                        title="Test this action">
+                </button>
+              }
+              <i class="fa-solid expand-indicator"
+                 [class.fa-chevron-down]="!action.expanded"
+                 [class.fa-chevron-up]="action.expanded"></i>
+            </div>
+          </div>
+          
+          <!-- Card Body -->
+          <div class="card-body">
+            <p class="action-description">{{ action.Description || 'No description available' }}</p>
+            
+            <!-- Quick Stats -->
+            <div class="action-stats">
+              @if (action.parameters?.length) {
+                <span class="stat">
+                  <i class="fa-solid fa-sliders"></i>
+                  {{ action.parameters?.length || 0 }} params
+                </span>
+              }
+              @if (action.resultCodes?.length) {
+                <span class="stat">
+                  <i class="fa-solid fa-code-branch"></i>
+                  {{ action.resultCodes?.length || 0 }} results
+                </span>
+              }
+              @if (action.Type) {
+                <span class="stat">
+                  <i class="fa-solid fa-tag"></i>
+                  {{ action.Type }}
+                </span>
+              }
+            </div>
+          </div>
+          
+          <!-- Expanded Details -->
+          @if (action.expanded) {
+            <div class="card-details">
+              <!-- Parameters -->
+              @if (action.parameters && action.parameters.length > 0) {
+                <div class="detail-section">
+              <h4>
+                <i class="fa-solid fa-sliders"></i>
+                Parameters
+              </h4>
+              <div class="parameters-list">
+                @for (param of action.parameters; track param.ID) {
+                  <div class="parameter-item">
+                    <span class="param-name">{{ param.Name }}</span>
+                    <span class="param-type">{{ param.Type }}</span>
+                    @if (param.IsRequired) {
+                      <span class="param-required">Required</span>
+                    }
+                  </div>
+                }
+              </div>
+                </div>
+              }
+              
+              <!-- Result Codes -->
+              @if (action.resultCodes && action.resultCodes.length > 0) {
+                <div class="detail-section">
+              <h4>
+                <i class="fa-solid fa-code-branch"></i>
+                Result Codes
+              </h4>
+              <div class="result-codes-list">
+                @for (code of action.resultCodes; track code.ID) {
+                  <div class="result-code-item">
+                    <span class="code-value">{{ code.ResultCode }}</span>
+                    <span class="code-desc">{{ code.Description }}</span>
+                  </div>
+                }
+              </div>
+                </div>
+              }
+            </div>
+          }
+          
+          <!-- Selection Indicator -->
+          @if (config.selectionMode) {
+            <div class="selection-indicator">
+              <i class="fa-solid" [class.fa-check-circle]="action.selected" [class.fa-circle]="!action.selected"></i>
+            </div>
+          }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- List View -->
+      @if (!(isLoading$ | async) && (viewMode$ | async) === 'list' && (filteredActions$ | async) && (filteredActions$ | async)!.length > 0) {
+        <div class="actions-list">
+        
+        <div class="list-header">
+          <span class="col-name">Name</span>
+          <span class="col-category">Category</span>
+          <span class="col-type">Type</span>
+          <span class="col-params">Parameters</span>
+          <span class="col-actions">Actions</span>
+        </div>
+        
+        @for (action of filteredActions$ | async; track action.ID) {
+          <div class="list-item" 
+               [class.selected]="action.selected"
+               (click)="toggleActionSelection(action)">
+          
+          <span class="col-name">
+            <i class="fa-solid {{ getActionIcon(action) }} action-icon"></i>
+            {{ action.Name }}
+          </span>
+          <span class="col-category">{{ action.Category || '-' }}</span>
+          <span class="col-type">{{ action.Type || '-' }}</span>
+          <span class="col-params">{{ action.parameters?.length || 0 }}</span>
+          <span class="col-actions">
+            @if (config.enableQuickTest) {
+              <button kendoButton 
+                      look="flat" 
+                      size="small"
+                      icon="play"
+                      (click)="testAction(action, $event)"
+                      kendoTooltip
+                      title="Test this action">
+              </button>
+            }
+          </span>
+          
+          <!-- Selection Indicator -->
+          @if (config.selectionMode) {
+            <div class="selection-indicator">
+              <i class="fa-solid" [class.fa-check-circle]="action.selected" [class.fa-circle]="!action.selected"></i>
+            </div>
+          }
+          </div>
+        }
+        </div>
+      }
+    </div>
+  </div>
+</div>
+

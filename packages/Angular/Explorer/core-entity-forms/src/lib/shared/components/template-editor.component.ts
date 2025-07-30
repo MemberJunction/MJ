@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
 import { TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -7,6 +7,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
+import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
 export interface TemplateEditorConfig {
     allowEdit?: boolean;
@@ -19,7 +20,7 @@ export interface TemplateEditorConfig {
     templateUrl: './template-editor.component.html',
     styleUrls: ['./template-editor.component.css']
 })
-export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
     @Input() template: TemplateEntity | null = null;
     @Input() config: TemplateEditorConfig = {
         allowEdit: true,
@@ -38,16 +39,90 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     public contentTypeOptions: Array<{text: string, value: string}> = [];
     public supportedLanguages: LanguageDescription[] = languages;
     public isRunningTemplate = false;
+    public activeHelpTab: 'syntax' | 'placeholders' = 'syntax';
+    public activePlaceholderCategory: string = '';
+    
+    // System placeholders organized by category
+    public placeholderCategories: Array<{
+        category: SystemPlaceholderCategory;
+        placeholders: SystemPlaceholder[];
+    }> = [];
     
     @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
     private _metadata = new Metadata();
+    
+    constructor(private notificationService: MJNotificationService) {}
 
     async ngOnInit() {
         this.loadContentTypes();
+        this.organizePlaceholdersByCategory();
         if (this.template) {
             await this.loadTemplateContents();
+        }
+    }
+
+    async ngOnChanges(changes: SimpleChanges) {
+        if (changes['template']) {
+            // Template input has changed, reload contents
+            if (this.template) {
+                await this.loadTemplateContents();
+            } else {
+                // Template cleared, reset state
+                this.templateContents = [];
+                this.selectedContentIndex = 0;
+                this.isAddingNewContent = false;
+                this.newTemplateContent = null;
+                this.hasUnsavedChanges = false;
+            }
+        }
+    }
+    
+    private organizePlaceholdersByCategory() {
+        // Group placeholders by their category
+        this.placeholderCategories = SYSTEM_PLACEHOLDER_CATEGORIES.map(category => {
+            const categoryPlaceholders = DEFAULT_SYSTEM_PLACEHOLDERS.filter(
+                placeholder => placeholder.category === category.name
+            );
+            
+            return {
+                category: category,
+                placeholders: categoryPlaceholders
+            };
+        }).filter(cat => cat.placeholders.length > 0); // Only include categories that have placeholders
+        
+        // Add any uncategorized placeholders to a misc category if needed
+        const categorized = DEFAULT_SYSTEM_PLACEHOLDERS.filter(p => p.category);
+        const uncategorized = DEFAULT_SYSTEM_PLACEHOLDERS.filter(p => !p.category);
+        
+        if (uncategorized.length > 0) {
+            this.placeholderCategories.push({
+                category: {
+                    name: 'Other',
+                    icon: 'fa-ellipsis-h',
+                    color: '#6c757d'
+                },
+                placeholders: uncategorized
+            });
+        }
+        
+        // Set the first category as active
+        if (this.placeholderCategories.length > 0) {
+            this.activePlaceholderCategory = this.placeholderCategories[0].category.name;
+        }
+    }
+    
+    /**
+     * Copies a placeholder to the clipboard
+     */
+    public async copyPlaceholder(placeholderName: string): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(`{{ ${placeholderName} }}`);
+            this.notificationService.CreateSimpleNotification('Placeholder copied to clipboard!', 'success', 2000);
+        } catch (error) {
+            console.error('Failed to copy placeholder:', error);
+            this.notificationService.CreateSimpleNotification('Failed to copy placeholder', 'error', 3000);
         }
     }
 
@@ -62,35 +137,54 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     }
 
     async loadTemplateContents() {
-        if (this.template && this.template.ID) {
-            try {
-                const rv = new RunView();
-                const results = await rv.RunView<TemplateContentEntity>({
-                    EntityName: 'Template Contents',
-                    ExtraFilter: `TemplateID='${this.template.ID}'`,
-                    OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                this.templateContents = results.Results;
-                
-                // If we have contents but no selection, select the first one
-                if (this.templateContents.length > 0 && this.selectedContentIndex === 0) {
-                    this.selectedContentIndex = 0;
+        if (this.template) {
+            // Reset state first
+            this.templateContents = [];
+            this.selectedContentIndex = 0;
+            this.isAddingNewContent = false;
+            this.newTemplateContent = null;
+            this.hasUnsavedChanges = false;
+            
+            if (this.template.IsSaved && this.template.ID) {
+                // Load existing template contents for saved templates
+                try {
+                    const rv = new RunView();
+                    const results = await rv.RunView<TemplateContentEntity>({
+                        EntityName: 'Template Contents',
+                        ExtraFilter: `TemplateID='${this.template.ID}'`,
+                        OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
+                        ResultType: 'entity_object'
+                    });
+                    
+                    this.templateContents = results.Results;
+                } catch (error) {
+                    console.error('Error loading template contents:', error);
                 }
-                
-                // If no template contents exist, create a default one for single-content optimization
-                if (this.templateContents.length === 0) {
-                    await this.createDefaultTemplateContent();
-                }
-
-                // Sync editor value after loading content
-                this.syncEditorValue();
-                this.contentChange.emit(this.templateContents);
-            } catch (error) {
-                console.error('Error loading template contents:', error);
             }
+            
+            // If we have contents but no selection, select the first one
+            if (this.templateContents.length > 0) {
+                this.selectedContentIndex = 0;
+            }
+            
+            // If no template contents exist (either new template or saved template with no content), 
+            // create a default one for single-content optimization
+            if (this.templateContents.length === 0) {
+                await this.createDefaultTemplateContent();
+            }
+
+            // Sync editor value after loading content
+            this.syncEditorValue();
+            this.contentChange.emit(this.templateContents);
         }
+    }
+
+    /**
+     * Public method to refresh the template editor and discard unsaved changes
+     * This should be called when canceling edits to restore the original state
+     */
+    public async refreshAndDiscardChanges() {
+        await this.loadTemplateContents();
     }
 
     async createDefaultTemplateContent() {
@@ -182,7 +276,8 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
         
         const contentToDelete = this.templateContents[index];
         
-        if (contentToDelete.ID) {
+        // Check if the entity is actually saved, not just if it has an ID
+        if (contentToDelete.IsSaved) {
             try {
                 const result = await contentToDelete.Delete();
                 if (result) {
@@ -204,6 +299,7 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
                 }
             } catch (error) {
                 console.error('Error deleting template content:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(`Error deleting template content: ${error}`, 'error');
             }
         } else {
             // Not saved yet, just remove from array

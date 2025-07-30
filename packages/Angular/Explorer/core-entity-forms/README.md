@@ -23,7 +23,6 @@ npm install @memberjunction/ng-core-entity-forms
 - Angular 18+
 - @memberjunction/core
 - @memberjunction/core-entities
-- @memberjunction/ng-explorer-core
 - @memberjunction/ng-base-forms
 - Various MemberJunction and Kendo UI components
 
@@ -218,194 +217,9 @@ Each entity form typically follows this structure:
 | AI-related forms | Forms for AI models, prompts, and agents |
 | Content forms | Forms for content management |
 | Communication forms | Forms for messaging and notifications |
-| **Test Harness Components** | **Interactive testing interfaces for AI agents and prompts** |
-
-## AI Test Harness System
-
-This package includes a comprehensive test harness system for AI Agents and AI Prompts, providing developers with powerful tools for testing, debugging, and validating AI components.
-
-### Test Harness Components
-
-#### 1. AI Agent Test Harness (`AIAgentTestHarnessComponent`)
-
-A full-featured testing interface for AI agents with the following capabilities:
-
-**Core Features:**
-- **Interactive Chat Interface**: Real-time conversation with AI agents
-- **Streaming Support**: Live streaming of agent responses with elapsed time tracking
-- **Data Context Management**: Configure variables passed to agents during execution
-- **Template Data Management**: Manage template variables for agent prompts
-- **Conversation Persistence**: Save/load conversations with full state restoration
-- **Import/Export**: JSON-based conversation backup and sharing
-- **Content Formatting**: Automatic detection and rendering of Markdown, JSON, and plain text
-- **Raw Content Toggle**: View both processed and raw AI responses
-- **Error Handling**: Comprehensive error display and user feedback
-
-**Usage Example:**
-```html
-<mj-ai-agent-test-harness 
-  [aiAgent]="myAgent"
-  [isVisible]="true"
-  (visibilityChange)="onVisibilityChanged($event)">
-</mj-ai-agent-test-harness>
-```
-
-**Data Context Configuration:**
-```typescript
-// Configure variables passed to the agent
-this.testHarness.dataContextVariables = [
-  { name: 'userId', value: 'user-123', type: 'string' },
-  { name: 'department', value: 'Engineering', type: 'string' },
-  { name: 'priority', value: '1', type: 'number' }
-];
-```
-
-#### 2. AI Prompt Test Harness (`AIPromptTestHarnessComponent`)
-
-A specialized testing interface for AI prompts with template variable management:
-
-**Core Features:**
-- **Prompt Testing**: Execute prompts with different AI models
-- **Template Variable Management**: Configure and test prompt variables
-- **Model Selection**: Choose from available AI models for testing
-- **Rendered Prompt Preview**: View how templates render with current variables
-- **Conversation Management**: Similar conversation features as agent harness
-- **Variable Auto-Detection**: Automatically detect variables in prompt templates
-
-**Usage Example:**
-```html
-<mj-ai-prompt-test-harness 
-  [aiPrompt]="myPrompt"
-  [template]="promptTemplate"
-  [templateContent]="templateContent"
-  [isVisible]="true">
-</mj-ai-prompt-test-harness>
-```
-
-#### 3. Test Harness Dialog Service (`TestHarnessDialogService`)
-
-A centralized service for opening test harnesses in modal dialogs:
-
-**Features:**
-- **Configurable Dialogs**: Custom sizing, titles, and initial data
-- **Agent Loading**: Load agents by ID or use existing entities
-- **Dimension Support**: Viewport units (vw, vh) and pixel dimensions
-- **Initial Data Setup**: Pre-populate context and template variables
-
-**Usage Examples:**
-```typescript
-// Open AI Agent test harness
-const dialogRef = this.testHarnessService.openAgentTestHarness({
-  agentId: 'agent-123',
-  title: 'Test My Agent',
-  width: '90vw',
-  height: '80vh',
-  initialDataContext: { 
-    userId: 'user-456',
-    department: 'Engineering'
-  }
-});
-
-// Open AI Prompt test harness
-const dialogRef = this.testHarnessService.openPromptTestHarness({
-  promptId: 'prompt-789',
-  selectedModelId: 'gpt-4',
-  initialTemplateVariables: { 
-    name: 'Alice',
-    context: 'Customer support inquiry'
-  }
-});
-
-// Convenience methods
-await this.testHarnessService.openAgentById('agent-123');
-await this.testHarnessService.openPromptById('prompt-456');
-```
-
-### Enhanced AI Agent Form
-
-The AI Agent form (`AIAgentFormComponentExtended`) includes integrated test harness access:
-
-**Features:**
-- **Built-in Test Button**: Direct access to test harness from agent form
-- **Related Entity Management**: View sub-agents, prompts, actions, and execution history
-- **Status Indicators**: Visual status badges and execution mode icons
-- **Navigation Support**: Links to related entities
-- **Execution History**: Recent runs with timing and status information
-
-**Enhanced Capabilities:**
-```typescript
-// Open test harness from form
-this.openTestHarness(); // Validates agent is saved first
-
-// View execution status
-this.getExecutionStatusIcon(status); // Returns appropriate FontAwesome icon
-this.getExecutionStatusColor(status); // Returns status color
-
-// Format timing information
-this.formatExecutionTime(milliseconds); // Human-readable time format
-```
-
-### Conversation Management
-
-Both test harnesses include comprehensive conversation management:
-
-**Features:**
-- **Auto-Save**: Conversations automatically save during active sessions
-- **Manual Save**: Save conversations with custom names
-- **Load/Restore**: Restore complete conversation state including variables
-- **Export/Import**: JSON-based conversation portability
-- **Storage Limits**: Automatic cleanup (50 conversation limit)
-
-**Export Format:**
-```json
-{
-  "agent": {
-    "id": "agent-123",
-    "name": "Customer Service Agent",
-    "description": "Handles customer inquiries"
-  },
-  "messages": [...],
-  "dataContext": {
-    "userId": "user-456",
-    "department": "Support"
-  },
-  "templateData": {
-    "customerName": "John Doe"
-  },
-  "exportedAt": "2024-01-15T10:30:00.000Z"
-}
-```
-
-### Content Rendering System
-
-Advanced content formatting with automatic type detection:
-
-**Supported Formats:**
-- **Markdown**: Headers, lists, code blocks, links, emphasis
-- **JSON**: Syntax highlighting and pretty formatting
-- **Plain Text**: Clean text rendering with line breaks
-
-**Content Type Detection:**
-```typescript
-// Automatically detects content type
-const contentType = this.detectContentType(content);
-// Returns: 'markdown' | 'json' | 'text'
-
-// Renders content appropriately
-const safeHtml = this.getFormattedContent(message);
-```
-
-### Integration Points
-
-The test harness system integrates seamlessly with:
-
-- **MemberJunction Entity System**: Uses proper entity loading patterns
-- **GraphQL Data Provider**: Executes agents and prompts via GraphQL mutations
-- **Notification Service**: User feedback for actions and errors
-- **LocalStorage**: Conversation persistence across sessions
-- **Kendo UI Dialogs**: Professional modal interfaces
 
 ## Notes
+
 
 - Form components are dynamically instantiated at runtime based on entity names
 - Custom loader functions are used to prevent tree-shaking in production builds
@@ -420,7 +234,6 @@ The test harness system integrates seamlessly with:
 - @angular/forms
 - @memberjunction/core
 - @memberjunction/core-entities
-- @memberjunction/ng-explorer-core
 - @memberjunction/ng-base-forms
 
 ### UI Component Dependencies
@@ -439,21 +252,127 @@ The test harness system integrates seamlessly with:
 - @memberjunction/ng-notifications
 - @memberjunction/graphql-dataprovider
 
-### Test Harness Components
+## AI Agent Type UI Customization
 
-The test harness system introduces several new components and services:
+### Overview
 
-| Component/Service | Purpose |
-|------------------|---------|
-| `AIAgentTestHarnessComponent` | Interactive chat interface for testing AI agents |
-| `AIPromptTestHarnessComponent` | Template variable testing for AI prompts |
-| `AIAgentTestHarnessDialogComponent` | Modal dialog wrapper for agent testing |
-| `AIPromptTestHarnessDialogComponent` | Modal dialog wrapper for prompt testing |
-| `TestHarnessDialogService` | Centralized service for opening test harness dialogs |
-| `AIAgentFormComponentExtended` | Enhanced AI agent form with integrated test harness |
+The AI Agent Type UI Customization feature allows AI Agent Types to define custom form sections or complete form overrides in the AI Agent form UI. This enables different agent types (like Flow, Analysis, Support, etc.) to have specialized UI components tailored to their specific configuration needs.
 
-### New Dependencies Added for Test Harness:
-- **Angular DomSanitizer**: Safe HTML rendering for formatted content
-- **RxJS Subjects**: Component lifecycle and event management
-- **LocalStorage**: Conversation persistence across sessions
-- **File API**: Import/export functionality for conversations
+### Database Schema
+
+The `AIAgentType` table includes three columns for UI customization (added in v2.76):
+
+- `UIFormSectionKey` (NVARCHAR(500) NULL) - Registration key for custom form section component
+- `UIFormKey` (NVARCHAR(500) NULL) - Registration key for complete form override component  
+- `UIFormSectionExpandedByDefault` (BIT NOT NULL DEFAULT 1) - Whether custom section starts expanded
+
+### Implementation Details
+
+#### Dynamic Component Loading
+
+The AI Agent form (`ai-agent-form.component.ts`) implements dynamic loading:
+- Loads the agent type when the form initializes
+- Checks for `UIFormSectionKey` on the agent type
+- Dynamically loads and instantiates the custom section component
+- Propagates `EditMode` changes to the custom section
+
+#### Component Registration
+
+Custom form sections must:
+- Extend `BaseFormSectionComponent`
+- Use `@RegisterClass` decorator with key pattern: `AI Agents.{SectionKey}`
+- Implement standard form section lifecycle
+
+Example:
+```typescript
+@RegisterClass(BaseFormSectionComponent, 'AI Agents.FlowAgentSection')
+export class FlowAgentFormSectionComponent extends BaseFormSectionComponent {
+    // Implementation
+}
+```
+
+#### Flow Agent Example
+
+The `FlowAgentFormSectionComponent` demonstrates a complete implementation:
+- Loads AIAgentStep and AIAgentStepPath entities for the agent
+- Displays workflow steps and paths in a structured view
+- Shows starting steps with special highlighting
+- Provides refresh functionality in edit mode
+- Includes status indicators (Active/Pending/Disabled)
+- Shows action input/output mappings
+
+### Usage Guide
+
+#### Creating a Custom Form Section
+
+1. **Create the Component**
+   ```typescript
+   @Component({
+       selector: 'mj-custom-agent-section',
+       template: `...`,
+       styles: [`...`]
+   })
+   @RegisterClass(BaseFormSectionComponent, 'AI Agents.CustomSection')
+   export class CustomAgentSectionComponent extends BaseFormSectionComponent {
+       // Access this.record for the current AIAgentEntity
+       // Use this.EditMode to determine read/write state
+   }
+   ```
+
+2. **Register in Module**
+   - Add to declarations and exports in `custom-forms.module.ts`
+   - Export from `public-api.ts` if needed externally
+
+3. **Update Agent Type**
+   ```sql
+   UPDATE AIAgentType
+   SET UIFormSectionKey = 'CustomSection',
+       UIFormSectionExpandedByDefault = 1
+   WHERE Name = 'YourAgentType';
+   ```
+
+#### Complete Form Override
+
+For complete form replacement (not just a section), use `UIFormKey`:
+```sql
+UPDATE AIAgentType
+SET UIFormKey = 'CustomCompleteForm'
+WHERE Name = 'YourAgentType';
+```
+
+The custom form component should extend `BaseFormComponent` instead.
+
+### Architecture
+
+#### Component Hierarchy
+```
+AIAgentFormComponent (generated)
+  └── AIAgentFormComponentExtended (custom)
+        └── Dynamic Custom Section (via ViewContainerRef)
+              └── FlowAgentFormSectionComponent (or other custom section)
+```
+
+#### Data Flow
+1. Form loads agent record
+2. Form queries agent type for UI customization keys
+3. Form uses MJGlobal.ClassFactory to resolve component class
+4. Form creates component instance in ViewContainerRef
+5. Form passes record and EditMode to custom component
+6. Custom component manages its own UI and data loading
+
+### Best Practices
+
+1. **Lazy Loading**: Custom sections should load their data only when needed
+2. **Error Handling**: Handle data loading errors gracefully with user feedback
+3. **Edit Mode**: Respect EditMode for read-only vs editable states
+4. **Performance**: Use batch queries (RunViews) for loading related data
+5. **Styling**: Follow existing MJ UI patterns and styles
+6. **Type Safety**: Always use proper entity types, never `any`
+
+### Future Enhancements
+
+1. **Visual Flow Editor**: Integrate a proper flow visualization library (when Angular 18 compatible)
+2. **Drag & Drop**: Allow visual workflow editing with drag and drop
+3. **Conditional UI**: Show/hide sections based on agent configuration
+4. **Template Library**: Pre-built custom sections for common agent types
+

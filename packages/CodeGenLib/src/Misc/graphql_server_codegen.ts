@@ -114,7 +114,7 @@ export class GraphQLServerGeneratorBase {
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
+            GetReadOnlyDataSource, GetReadWriteDataSource, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
@@ -302,22 +302,22 @@ export class Run${entity.BaseTableCodeName}ViewResult {
 @Resolver(${serverGraphQLTypeName})
 export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Base' : ''} extends ResolverBase {
     @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, connPool, userPayload, pubSub);
+    async Run${entity.BaseTableCodeName}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
     }
 
     @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, connPool, userPayload, pubSub);
+    async Run${entity.BaseTableCodeName}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
     }
 
     @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+    async Run${entity.BaseTableCodeName}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         input.EntityName = '${entity.Name}';
-        return super.RunDynamicViewGeneric(input, connPool, userPayload, pubSub);
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
     }`;
       let graphQLPKEYArgs = '';
       let whereClause = '';
@@ -334,10 +334,11 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 
       sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
-    async ${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+    async ${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
+        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : {})
         return result;
@@ -347,10 +348,11 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
         // this entity allows a query to return all rows, so include that type of query next
         sRet += `
     @Query(() => [${serverGraphQLTypeName}])
-    async All${entity.CodeName}(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async All${entity.CodeName}(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
+        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${entity.Name}', rows);
         return result;
@@ -461,11 +463,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     @Mutation(() => ${serverGraphQLTypeName})
     async Create${entity.BaseTableCodeName}(
         @Arg('input', () => Create${entity.BaseTableCodeName}Input) input: Create${entity.BaseTableCodeName}Input,
-        @Ctx() { dataSources, userPayload }: AppContext,
+        @Ctx() { providers, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        const connPool = GetReadWriteDataSource(dataSources);
-        return this.CreateRecord('${entity.Name}', input, connPool, userPayload, pubSub)
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('${entity.Name}', input, provider, userPayload, pubSub)
     }
         `;
     }
@@ -476,11 +478,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
     @Mutation(() => ${serverGraphQLTypeName})
     async Update${entity.BaseTableCodeName}(
         @Arg('input', () => Update${entity.BaseTableCodeName}Input) input: Update${entity.BaseTableCodeName}Input,
-        @Ctx() { dataSources, userPayload }: AppContext,
+        @Ctx() { providers, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        const connPool = GetReadWriteDataSource(dataSources);
-        return this.UpdateRecord('${entity.Name}', input, connPool, userPayload, pubSub);
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('${entity.Name}', input, provider, userPayload, pubSub);
     }
     `;
     }
@@ -512,10 +514,10 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
-    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const connPool = GetReadWriteDataSource(dataSources);
+    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([${compositeKeyString}]);
-        return this.DeleteRecord('${entity.Name}', key, options, connPool, userPayload, pubSub);
+        return this.DeleteRecord('${entity.Name}', key, options, provider, userPayload, pubSub);
     }
     `;
     }
@@ -560,10 +562,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows);
         return result;
@@ -608,10 +611,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.FirstPrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.FirstPrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows);
         return result;

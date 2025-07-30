@@ -1,5 +1,175 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/core@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/core@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/core@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/core@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- @memberjunction/core@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/core@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/core@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/core@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/core@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/core@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/core@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/core@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- Updated dependencies [b5fa80a]
+- Updated dependencies [e512e4e]
+  - @memberjunction/core@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/core@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- Updated dependencies [def26fe]
+  - @memberjunction/core@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- Updated dependencies [0ba485f]
+  - @memberjunction/core@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- @memberjunction/core@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- @memberjunction/core@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- Updated dependencies [20f424d]
+  - @memberjunction/core@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

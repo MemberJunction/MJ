@@ -1,4 +1,4 @@
-<div class="chat-container"  #topLevelDiv>
+<div class="chat-container" kendoDialogContainer #topLevelDiv>
     <div class="layout">
         @if (IsConversationListVisible) {
             <div class="left-panel">
@@ -15,7 +15,6 @@
                     <kendo-listview
                         class="conversation-list"
                         [data]="Conversations"
-                        [style.height.px]="280"
                         [itemClass]="{ 'item-border': true }" 
                         #conversationList
                         >

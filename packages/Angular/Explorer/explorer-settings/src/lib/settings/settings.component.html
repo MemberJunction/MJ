@@ -1,17 +1,17 @@
-<div class="settings-container">
+<div class="mj-page-container">
   <!-- Header Section -->
-  <div class="settings-header">
-    <div class="header-content">
-      <div class="header-title">
-        <i class="fa-solid fa-cog header-icon"></i>
-        <h1>Settings</h1>
-      </div>
-      
-      <div class="header-search">
-        <i class="fa-solid fa-search search-icon"></i>
+  <div class="mj-header">
+    <div class="mj-header-title">
+      <i class="fa-solid fa-cog"></i>
+      <h1>Settings</h1>
+    </div>
+    
+    <div class="mj-header-actions">
+      <div class="mj-search">
+        <i class="fa-solid fa-search mj-search-icon"></i>
         <input 
           type="text" 
-          class="search-input" 
+          class="mj-search-input" 
           placeholder="Search settings..."
           (input)="onSearchChange($event)"
           [value]="searchTerm$.value"
@@ -82,7 +82,7 @@
                 @case ('general') {
                   <div class="general-settings">
                     <h2 class="section-title">General Settings</h2>
-                    <div class="settings-grid">
+                    <div class="mj-grid mj-grid-responsive">
                       <mj-settings-card 
                         title="Profile Information"
                         icon="fa-solid fa-user"

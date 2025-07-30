@@ -1,4 +1,4 @@
-import { ApplicationInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config.js";

@@ -1,0 +1,125 @@
+{
+  "action": "return_to_parent",
+  "output": {
+    "agentDefinition": {
+      "name": "Customer Feedback Analyzer",
+      "description": "Orchestrates the analysis of customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights.",
+      "type": "Loop",
+      "purpose": "Automate customer feedback analysis and reporting",
+      "design": {
+        "actions": [
+          {
+            "id": "run-query-001",
+            "name": "Run Query",
+            "reason": "Execute SQL queries to fetch customer feedback data from the database weekly"
+          },
+          {
+            "id": "web-api-call-001",
+            "name": "Web API Call",
+            "reason": "Retrieve support ticket data from the support system API"
+          },
+          {
+            "id": "generate-report-001",
+            "name": "Generate Report",
+            "reason": "Create formatted reports in PDF/HTML/JSON formats for distribution"
+          },
+          {
+            "id": "send-email-001",
+            "name": "Send Email",
+            "reason": "Distribute weekly reports to stakeholders every Monday morning"
+          }
+        ],
+        "subAgents": [
+          {
+            "name": "Data Collector Agent",
+            "description": "Gathers customer feedback data from all configured sources",
+            "type": "Loop",
+            "purpose": "Aggregate and normalize feedback data from multiple sources",
+            "design": {
+              "actions": [
+                {
+                  "id": "run-query-001",
+                  "name": "Run Query",
+                  "reason": "Query feedback database for raw customer feedback"
+                },
+                {
+                  "id": "web-api-call-001",
+                  "name": "Web API Call",
+                  "reason": "Fetch support tickets from API"
+                },
+                {
+                  "id": "data-transformer-001",
+                  "name": "Data Transformer",
+                  "reason": "Normalize different data formats into consistent structure"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Sentiment Analyzer Agent",
+            "description": "Performs sentiment analysis and categorization on collected feedback",
+            "type": "Loop",
+            "purpose": "Analyze emotional tone and categorize feedback by type",
+            "design": {
+              "actions": [
+                {
+                  "id": "text-analyzer-001",
+                  "name": "Text Analyzer",
+                  "reason": "Analyze sentiment and extract themes from feedback text"
+                },
+                {
+                  "id": "categorize-content-001",
+                  "name": "Categorize Content",
+                  "reason": "Classify feedback by product feature and issue type"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Insight Generator Agent",
+            "description": "Analyzes patterns and generates actionable insights from processed feedback",
+            "type": "Loop",
+            "purpose": "Identify trends and create recommendations",
+            "design": {
+              "actions": [
+                {
+                  "id": "pattern-analysis-001",
+                  "name": "Pattern Analysis",
+                  "reason": "Identify recurring themes and trends in feedback"
+                },
+                {
+                  "id": "generate-insights-001",
+                  "name": "Generate Insights",
+                  "reason": "Create actionable recommendations based on patterns"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Report Builder Agent",
+            "description": "Compiles analysis results into formatted reports",
+            "type": "Loop",
+            "purpose": "Create comprehensive reports with visualizations",
+            "design": {
+              "actions": [
+                {
+                  "id": "generate-report-001",
+                  "name": "Generate Report",
+                  "reason": "Compile analysis into multiple report formats"
+                },
+                {
+                  "id": "create-visualizations-001",
+                  "name": "Create Visualizations",
+                  "reason": "Generate charts and graphs for better insights presentation"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "reasoning": "Designed a hierarchical agent structure with clear separation of concerns. Each sub-agent handles a specific aspect of the analysis pipeline. The design supports parallel execution where possible and includes robust error handling.",
+  "actionDiscoveryComplete": true,
+  "designValidated": true
+}

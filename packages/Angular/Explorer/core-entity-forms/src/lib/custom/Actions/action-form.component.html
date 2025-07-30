@@ -13,7 +13,7 @@
                         <!-- Left: Action Info -->
                         <div style="flex: 1; min-width: 0;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                                <i [class]="'fa-solid ' + getTypeIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
+                                <i [class]="getActionIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
                                 @if (EditMode) {
                                     <kendo-textbox [(ngModel)]="record.Name" 
                                                   name="actionName"
@@ -121,32 +121,32 @@
                         <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                             <div style="display: flex; gap: 8px;">
                                 @if (record.ID) {
-                                    <kendo-button themeColor="primary" size="large"
+                                    <button kendoButton themeColor="primary" size="large"
                                                 (click)="openTestHarness()"
                                                 title="Open Run Harness"
                                                 [disabled]="record.Status !== 'Active'">
                                         <i class="fa-solid fa-play"></i> Run
-                                    </kendo-button>
+                                    </button>
                                 }
                                 @if (EditMode && record.Type === 'Generated') {
-                                    <kendo-button themeColor="info" size="medium"
+                                    <button kendoButton themeColor="info" size="medium"
                                                 (click)="regenerateCode()"
                                                 title="Regenerate Code">
                                         <i class="fa-solid fa-robot"></i> Regenerate
-                                    </kendo-button>
+                                    </button>
                                 }
                             </div>
                             
                             @if (EditMode && record.CodeApprovalStatus === 'Pending' && record.Type === 'Generated') {
                                 <div style="display: flex; gap: 8px;">
-                                    <kendo-button themeColor="success" size="small"
+                                    <button kendoButton themeColor="success" size="small"
                                                 (click)="approveCode()">
                                         <i class="fa-solid fa-check"></i> Approve
-                                    </kendo-button>
-                                    <kendo-button themeColor="error" size="small"
+                                    </button>
+                                    <button kendoButton themeColor="error" size="small"
                                                 (click)="rejectCode()">
                                         <i class="fa-solid fa-times"></i> Reject
-                                    </kendo-button>
+                                    </button>
                                 </div>
                             }
                             
@@ -198,9 +198,9 @@
                                     <div class="params-header">
                                         <h3><i class="fa-solid fa-sign-in-alt"></i> Input Parameters</h3>
                                         @if (EditMode && record.IsSaved) {
-                                            <kendo-button fillMode="flat" size="small" (click)="addParameter('Input')">
+                                            <button kendoButton fillMode="flat" size="small" (click)="addParameter('Input')">
                                                 <i class="fa-solid fa-plus"></i> Add Input
-                                            </kendo-button>
+                                            </button>
                                         }
                                     </div>
                                     
@@ -258,9 +258,9 @@
                                     <div class="params-header">
                                         <h3><i class="fa-solid fa-sign-out-alt"></i> Output Parameters</h3>
                                         @if (EditMode && record.IsSaved) {
-                                            <kendo-button fillMode="flat" size="small" (click)="addParameter('Output')">
+                                            <button kendoButton fillMode="flat" size="small" (click)="addParameter('Output')">
                                                 <i class="fa-solid fa-plus"></i> Add Output
-                                            </kendo-button>
+                                            </button>
                                         }
                                     </div>
                                     
@@ -365,14 +365,14 @@
                                         <h3><i class="fa-solid fa-file-code"></i> Action Code</h3>
                                         <div class="code-actions">
                                             @if (record.CodeComments) {
-                                                <kendo-button fillMode="flat" size="small" (click)="toggleCodeComments()">
+                                                <button kendoButton fillMode="flat" size="small" (click)="toggleCodeComments()">
                                                     <i class="fa-solid fa-comment"></i> 
                                                     {{ showCodeComments ? 'Hide' : 'Show' }} AI Comments
-                                                </kendo-button>
+                                                </button>
                                             }
-                                            <kendo-button fillMode="flat" size="small" (click)="copyToClipboard(record.Code || '')">
+                                            <button kendoButton fillMode="flat" size="small" (click)="copyToClipboard(record.Code || '')">
                                                 <i class="fa-solid fa-copy"></i> Copy
-                                            </kendo-button>
+                                            </button>
                                         </div>
                                     </div>
                                     <mj-code-editor 
@@ -537,9 +537,9 @@
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <kendo-button fillMode="flat" size="small" (click)="navigateToExecution(execution.ID)">
+                                                            <button kendoButton fillMode="flat" size="small" (click)="navigateToExecution(execution.ID)">
                                                                 <i class="fa-solid fa-external-link"></i>
-                                                            </kendo-button>
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 }

@@ -1,6 +1,4 @@
 /**
- * @fileoverview Authentication and API key types for Skip API
- * 
  * This file contains types related to authentication and API key management
  * within the Skip API system. These types define the structure for:
  * 
@@ -14,9 +12,6 @@
  * The vendor driver names correspond to registered classes in the MemberJunction
  * AI namespace that provide standardized interfaces to different AI providers
  * such as OpenAI, Anthropic, Google, and others.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 /**
@@ -30,7 +25,7 @@ export class SkipAPIRequestAPIKey {
      * registered classes in the MemberJunction AI namespace for example the @memberjunction/ai-openai package includes
      * a class called OpenAILLM that is registered with the MemberJunction AI system as a valid sub-class of BaseLLM
      */
-    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM' | 'GroqLLM';
+    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM' | 'GroqLLM' | 'CerebrasLLM';
     /**
      * This is the actual API key for the specified vendor. 
      * NOTE: Skip NEVER stores this information, it is only used to make requests to the AI vendor of choice

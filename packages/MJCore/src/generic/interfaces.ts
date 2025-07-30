@@ -1,22 +1,29 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 
-export class ProviderConfigDataBase {
+/**
+ * Base configuration class for data providers.
+ * Contains schema inclusion/exclusion rules and configuration data.
+ * Used to configure which database schemas should be included or excluded from metadata scanning.
+ */
+export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
-    private _data: any;
-    public get Data(): any {
+    private _data: D;
+    private _ignoreExistingMetadata: boolean = false;
+
+    public get Data(): D {
         return this._data;
     }
     public get IncludeSchemas(): string[] {
@@ -28,16 +35,34 @@ export class ProviderConfigDataBase {
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: any, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
+    public get IgnoreExistingMetadata(): boolean {
+        return this._ignoreExistingMetadata;
+    }
+
+    /**
+     * Constructor for ProviderConfigDataBase
+     * @param data 
+     * @param MJCoreSchemaName 
+     * @param includeSchemas 
+     * @param excludeSchemas 
+     * @param ignoreExistingMetadata if set to true, even if a global provider is already registered for the Metadata static Provider member, this class will still load up fresh metadata for itself. By default this is off and a class will use existing loaded metadata if it exists
+     */
+    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreScemaName;
+        this._MJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
             this._excludeSchemas = excludeSchemas;
+        this._ignoreExistingMetadata = ignoreExistingMetadata;
     }
 }
 
+/**
+ * Information about metadata timestamps and record counts.
+ * Used to track when metadata was last updated and how many records exist.
+ * Helps determine if local metadata cache is up-to-date with the server.
+ */
 export class MetadataInfo {
     ID: string
     Type: string
@@ -53,10 +78,20 @@ export const ProviderType = {
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
 
+/**
+ * Represents a potential duplicate record with its probability score.
+ * Extends CompositeKey to support multi-field primary keys.
+ * Used in duplicate detection and record merging operations.
+ */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
 }
 
+/**
+ * Request parameters for finding potential duplicate records.
+ * Supports various matching strategies including list-based and document-based comparisons.
+ * Can use either a pre-defined list or entity document for duplicate detection.
+ */
 export class PotentialDuplicateRequest {
     /**
     * The ID of the entity the record belongs to
@@ -86,6 +121,11 @@ export class PotentialDuplicateRequest {
     Options?: any;
 }
 
+/**
+ * Result of a potential duplicate search for a single record.
+ * Contains the record being checked and all potential duplicates found.
+ * Includes match details and duplicate run information for tracking.
+ */
 export class PotentialDuplicateResult {
 
     constructor() {
@@ -100,13 +140,22 @@ export class PotentialDuplicateResult {
     DuplicateRunDetailMatchRecordIDs: string[];
 }
 
-//Wrapper for the PotentialDuplicateResponse class that includes  additional properties
+/**
+ * Response wrapper for potential duplicate searches.
+ * Includes status information and array of results.
+ * Status can be 'Inprogress' for asynchronous operations, 'Success' when complete, or 'Error' on failure.
+ */
 export class PotentialDuplicateResponse {
     Status: 'Inprogress' | 'Success' | 'Error';
     ErrorMessage?: string;
     PotentialDuplicateResult: PotentialDuplicateResult[];
 }
 
+/**
+ * Interface for entity data providers.
+ * Defines core CRUD operations and record change tracking.
+ * Implementations handle database-specific operations for entity persistence.
+ */
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
@@ -120,7 +169,9 @@ export interface IEntityDataProvider {
 }
 
 /**
- * Save options used when saving an entity record
+ * Save options used when saving an entity record.
+ * Provides fine-grained control over the save operation including validation,
+ * action execution, and conflict detection.
  */
 export class EntitySaveOptions {
     /**
@@ -159,7 +210,9 @@ export class EntitySaveOptions {
 }
 
 /**
- * Options used when deleting an entity record
+ * Options used when deleting an entity record.
+ * Controls whether associated actions and AI operations should be executed
+ * during the deletion process.
  */
 export class EntityDeleteOptions {
     /**
@@ -179,11 +232,27 @@ export class EntityDeleteOptions {
     ReplayOnly?: boolean = false;
 }
 
+/**
+ * Options used when merging entity records.
+ * Controls transaction isolation and other merge-specific behaviors.
+ */
+export class EntityMergeOptions {
+    // nothing here yet, define for future use
+}
+
+/**
+ * Input parameters for retrieving entity record names.
+ * Used for batch operations to get display names for multiple records.
+ */
 export class EntityRecordNameInput  {
     EntityName: string;
     CompositeKey: CompositeKey;
 }
 
+/**
+ * Result of an entity record name lookup operation.
+ * Contains the display name and status information for the requested record.
+ */
 export class EntityRecordNameResult  {
     Success: boolean;
     Status: string;
@@ -192,12 +261,23 @@ export class EntityRecordNameResult  {
     RecordName?: string;
  }
 
+/**
+ * Interface for local storage providers.
+ * Abstracts storage operations to support different storage backends
+ * (e.g., browser localStorage, IndexedDB, file system).
+ */
 export interface ILocalStorageProvider {
     GetItem(key: string): Promise<string | null>;
     SetItem(key: string, value: string): Promise<void>;
     Remove(key: string): Promise<void>;
 }
 
+/**
+ * Core interface for metadata providers in MemberJunction.
+ * Provides access to all system metadata including entities, applications, security, and queries.
+ * This is the primary interface for accessing MemberJunction's metadata layer.
+ * Implementations typically cache metadata locally for performance.
+ */
 export interface IMetadataProvider {
     get ProviderType(): ProviderType
 
@@ -227,6 +307,10 @@ export interface IMetadataProvider {
 
     get QueryPermissions(): QueryPermissionInfo[]
 
+    get QueryEntities(): QueryEntityInfo[]
+
+    get QueryParameters(): QueryParameterInfo[]
+
     get Libraries(): LibraryInfo[]
 
     get VisibleExplorerNavigationItems(): ExplorerNavigationItem[]
@@ -237,9 +321,28 @@ export interface IMetadataProvider {
 
     get LatestLocalMetadata(): MetadataInfo[]
 
+    get AllMetadata(): AllMetadata
+
     LocalMetadataObsolete(type?: string): boolean
 
-    GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo): Promise<T>
+    /**
+     * Creates a new instance of a BaseEntity subclass for the specified entity and calls NewRecord() to initialize it.
+     * The UUID will be automatically generated for non-auto-increment uniqueidentifier primary keys.
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
+     * @param contextUser - Optional context user for permissions (mainly used server-side)
+     * @returns Promise resolving to the newly created entity instance with NewRecord() already called
+     */
+    GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>
+    
+    /**
+     * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided key.
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
+     * @param loadKey - CompositeKey containing the primary key value(s) to load
+     * @param contextUser - Optional context user for permissions (mainly used server-side)
+     * @returns Promise resolving to the entity instance with the specified record loaded
+     * @throws Error if the record cannot be found or loaded
+     */
+    GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
@@ -277,7 +380,7 @@ export interface IMetadataProvider {
      * @param request 
      * @returns 
      */
-    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> 
+    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> 
 
 
     /**
@@ -400,7 +503,9 @@ export interface IMetadataProvider {
 }
 
 /**
- * Result of a RunView() execution
+ * Result of a RunView() execution.
+ * Contains the query results along with execution metadata like timing,
+ * row counts, and error information.
  */
 export type RunViewResult<T = any> = {
     /**
@@ -435,6 +540,11 @@ export type RunViewResult<T = any> = {
     ErrorMessage: string;
 }
 
+/**
+ * Interface for providers that execute views.
+ * Supports parameterized view execution with filtering and pagination.
+ * Views are the primary way to query entity data in MemberJunction.
+ */
 export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
@@ -442,22 +552,44 @@ export interface IRunViewProvider {
     RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>
 }
 
+/**
+ * Result of executing a saved query.
+ * Contains the query results and execution metadata.
+ */
 export type RunQueryResult = {
     QueryID: string;
     QueryName: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
+    /**
+     * Total number of rows that would be returned without pagination.
+     * Only differs from RowCount when StartRow or MaxRows are used.
+     */
+    TotalRowCount: number;
     ExecutionTime: number;
     ErrorMessage: string;
+    /**
+     * Parameters that were applied to the query, including defaults
+     */
+    AppliedParameters?: Record<string, any>;
 }
 
+/**
+ * Interface for providers that execute stored queries.
+ * Supports execution of pre-defined SQL queries with security controls.
+ * Queries must be pre-approved and stored in the Query entity.
+ */
 export interface IRunQueryProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>
 }
 
+/**
+ * Result of executing a report.
+ * Contains the report data and execution metadata.
+ */
 export type RunReportResult = {
     ReportID: string;
     Success: boolean;
@@ -467,12 +599,22 @@ export type RunReportResult = {
     ErrorMessage: string;
 }
 
+/**
+ * Interface for providers that execute reports.
+ * Handles report generation with various output formats.
+ * Reports combine data from multiple sources and apply formatting.
+ */
 export interface IRunReportProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult>
 }
 
+/**
+ * Result of loading a dataset.
+ * Contains all dataset items with their data and metadata.
+ * Datasets are collections of related entity data loaded together.
+ */
 export type DatasetResultType = {
     DatasetID: string;
     DatasetName: string;
@@ -482,6 +624,10 @@ export type DatasetResultType = {
     Results: DatasetItemResultType[];
 }
 
+/**
+ * Result for a single item within a dataset.
+ * Represents one entity's data within the larger dataset collection.
+ */
 export type DatasetItemResultType = {
     Code: string;
     EntityName: string;
@@ -501,11 +647,19 @@ export type DatasetItemResultType = {
     Success?: boolean;
 }
 
+/**
+ * Filter specification for a dataset item.
+ * Allows applying custom WHERE clauses to individual dataset items.
+ */
 export type DatasetItemFilterType = {
     ItemCode: string;
     Filter: string;
 }
 
+/**
+ * Status information for a dataset.
+ * Used to check if cached data is up-to-date without loading the full dataset.
+ */
 export type DatasetStatusResultType = {
     DatasetID: string;
     DatasetName: string;
@@ -515,9 +669,40 @@ export type DatasetStatusResultType = {
     EntityUpdateDates: DatasetStatusEntityUpdateDateType[];
  }
 
+/**
+ * Update date information for a single entity within a dataset.
+ * Tracks when each entity's data was last modified.
+ */
 export type DatasetStatusEntityUpdateDateType = {
     EntityName: string;
     EntityID: string;
     UpdateDate: Date;
     RowCount: number;
 }   
+
+
+/**
+ * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
+ * Contains all system metadata collections including entities, applications, security, and queries.
+ * This class provides a centralized way to access all MemberJunction metadata.
+ */
+export class AllMetadata {
+    CurrentUser: UserInfo = null;
+
+    // Arrays of Metadata below
+    AllEntities: EntityInfo[] = [];
+    AllApplications: ApplicationInfo[] = [];
+    AllRoles: RoleInfo[] = [];
+    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
+    AllAuditLogTypes: AuditLogTypeInfo[] = [];
+    AllAuthorizations: AuthorizationInfo[] = [];
+    AllQueryCategories: QueryCategoryInfo[] = [];
+    AllQueries: QueryInfo[] = [];
+    AllQueryFields: QueryFieldInfo[] = [];
+    AllQueryPermissions: QueryPermissionInfo[] = [];
+    AllQueryEntities: QueryEntityInfo[] = [];
+    AllQueryParameters: QueryParameterInfo[] = [];
+    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    AllLibraries: LibraryInfo[] = [];
+    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
+}

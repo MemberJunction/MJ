@@ -137,13 +137,11 @@ export class AIInstrumentationService {
     const [promptResults, agentResults] = await rv.RunViews<any>([
       {
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'` 
       },
       {
         EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'` 
       }
     ]);
 
@@ -203,13 +201,11 @@ export class AIInstrumentationService {
     const [promptResults, agentResults] = await rv.RunViews<any>([
       {
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'` 
       },
       {
         EntityName: 'MJ: AI Agent Runs', 
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'` 
       }
     ]);
 
@@ -256,14 +252,12 @@ export class AIInstrumentationService {
       {
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `RunAt >= '${recentTime.toISOString()}'`,
-        OrderBy: 'RunAt DESC',
-        ResultType: 'entity_object'
+        OrderBy: 'RunAt DESC' 
       },
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
-        OrderBy: 'StartedAt DESC', 
-        ResultType: 'entity_object'
+        OrderBy: 'StartedAt DESC' 
       }
     ]);
 
@@ -322,8 +316,7 @@ export class AIInstrumentationService {
     const promptRv = new RunView();
     const promptResults = await promptRv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: dateFilter,
-      ResultType: 'entity_object'
+      ExtraFilter: dateFilter 
     });
 
     const promptRuns = promptResults.Results;
@@ -575,8 +568,7 @@ export class AIInstrumentationService {
     const rv = new RunView();
     const result = await rv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ID = '${promptRunId}'`,
-      ResultType: 'entity_object'
+      ExtraFilter: `ID = '${promptRunId}'` 
     });
 
     const run = result.Results[0];
@@ -584,8 +576,7 @@ export class AIInstrumentationService {
 
     const childrenResult = await rv.RunView<AIPromptRunEntity>({
       EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ParentID = '${promptRunId}'`,
-      ResultType: 'entity_object'
+      ExtraFilter: `ParentID = '${promptRunId}'` 
     });
 
     const children = await Promise.all(
@@ -613,8 +604,7 @@ export class AIInstrumentationService {
     const rv = new RunView();
     const result = await rv.RunView<AIAgentRunEntity>({
       EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `ID = '${agentRunId}'`,
-      ResultType: 'entity_object'
+      ExtraFilter: `ID = '${agentRunId}'` 
     });
 
     const run = result.Results[0];
@@ -622,8 +612,7 @@ export class AIInstrumentationService {
 
     const childrenResult = await rv.RunView<AIAgentRunEntity>({
       EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `ParentRunID = '${agentRunId}'`,
-      ResultType: 'entity_object'
+      ExtraFilter: `ParentRunID = '${agentRunId}'` 
     });
 
     const children = await Promise.all(

@@ -4,8 +4,9 @@ import { gzip as gzipCallback, createGunzip } from 'zlib';
 import { promisify } from 'util';
 import { URL } from 'url';
 import { z } from 'zod';
-import { DataSourceInfo } from './types';
+import { DataSourceInfo, ProviderInfo } from './types';
 import sql from 'mssql';
+import { DatabaseProviderBase } from '@memberjunction/core';
 
 const gzip = promisify(gzipCallback);
 
@@ -29,7 +30,7 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       let data;
       if (useCompression) {
         try {
-          data = await gzip(Buffer.from(JSON.stringify(payload)));
+          data = await gzip(Buffer.from(JSON.stringify(payload)) as any);
           headers = headers || {}; // Ensure headers is an object
           headers['Content-Encoding'] = 'gzip';
         } catch (error) {
@@ -134,6 +135,48 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       }
     }
     throw new Error('No suitable data source found');
+  }
+
+  /**
+   * Returns the read-only provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadWrite is true.
+   * @param options 
+   * @returns 
+   */
+  export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase {
+    if (!providers || providers.length === 0) 
+      return null; // no providers available
+
+    const readOnlyProvider = providers.find((p) => p.type === 'Read-Only');
+    if (readOnlyProvider) {
+      return readOnlyProvider.provider;
+    }
+    else if (options?.allowFallbackToReadWrite) {
+      return providers[0].provider; // if no read-only provider is provided, use the original provider since we are allowed to fallback to read-write
+    }
+    else {
+      return null; // no read only provider available and we are not allowed to fallback to read-write
+    }
+  }
+
+  /**
+   * Returns the read-write provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadOnly is true.
+   * @param options 
+   * @returns 
+   */
+  export function GetReadWriteProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadOnly: boolean}): DatabaseProviderBase {
+    if (!providers || providers.length === 0) 
+      return null; // no providers available
+
+    const readWriteProvider = providers.find((p) => p.type === 'Read-Write');
+    if (readWriteProvider) {
+      return readWriteProvider.provider;
+    }
+    else if (options?.allowFallbackToReadOnly) {
+      return GetReadOnlyProvider(providers, { allowFallbackToReadWrite: false }); // if no read-write provider is provided, use the read-only provider since we are allowed to fallback to read-only
+    }
+    else {
+      return null; // no read-write provider available and we are not allowed to fallback to read-only
+    }
   }
 
   /**

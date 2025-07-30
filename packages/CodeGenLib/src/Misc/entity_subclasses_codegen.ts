@@ -43,7 +43,7 @@ export class EntitySubClassGeneratorBase {
   }
 
   public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -88,9 +88,9 @@ export const loadModule = () => {
           }
         }
         const fieldDeprecatedFlag: string = e.Status === 'Deprecated' || e.Status === 'Disabled' ? 
-            `\n * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
+            `\n    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
         const fieldDisabledFlag: string = e.Status === 'Disabled' ? 
-            `\n * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
+            `\n    * * @disabled This field is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
@@ -133,9 +133,10 @@ export const loadModule = () => {
         ${entity.PrimaryKeys.map((f) => `compositeKey.KeyValuePairs.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
     }`;
-      const deleteFunction: string = entity.AllowDeleteAPI
-        ? ''
-        : `    /**
+      let deleteFunction: string = '';
+      if (!entity.AllowDeleteAPI) {
+        // Entity doesn't allow delete at all
+        deleteFunction = `    /**
     * ${entity.Name} - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
     * @public
     * @method
@@ -146,6 +147,43 @@ export const loadModule = () => {
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
+      } else if (entity.CascadeDeletes) {
+        // Entity has cascading deletes, wrap in transaction
+        deleteFunction = `    /**
+    * ${entity.Name} - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof ${sClassName}
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }`;
+      }
 
       const saveFunction: string =
         entity.AllowCreateAPI || entity.AllowUpdateAPI
@@ -240,7 +278,7 @@ ${fields}
         }
   
         // now Log and Execute the SQL
-        await SQLLogging.LogSQLAndExecute(pool, sSQL);  
+        await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
       }
 
       return ret.code;
@@ -251,7 +289,20 @@ ${fields}
   }
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
-    const validators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    const validators = unsortedValidators.sort((a, b) => {
+      // sort by field name, then by function name
+      if (a.fieldName && b.fieldName) {
+        return a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+      } else if (a.fieldName) {
+        return -1; // a comes first
+      } else if (b.fieldName) {
+        return 1; // b comes first
+      } else {
+        return a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+      }
+    });
+
     if (validators.length === 0) {
       return null;
     }
@@ -321,7 +372,7 @@ ${validationFunctions}`
             typeString += '.nullable()';
           }
         }
-        let sRet: string = `    ${e.CodeName}: z.${typeString}.describe(\`\n${this.GenetateZodDescription(e)}\`),`;
+        let sRet: string = `    ${e.CodeName}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e)}\`),`;
         return sRet;
       }).join('\n');
 
@@ -341,7 +392,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     return content;
   }
 
-  public GenetateZodDescription(entityField: EntityFieldInfo): string {
+  public GenerateZodDescription(entityField: EntityFieldInfo): string {
     let result: string = '';
 
     let valueList: string = '';
@@ -353,7 +404,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n    * * Description: ' + entityField.Description : ''}`;
+    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + entityField.Description : ''}`;
     return result;
   }
 }

@@ -1,4 +1,4 @@
-<div class="record-form-container">
+<div class="record-form-container"  >
     <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
         <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
@@ -125,6 +125,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Agent Steps" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Steps
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Steps','ActionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Steps')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Steps')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Execution Logs" [Visible]="record.IsSaved"> 
                         Execution Logs
                     </mj-tab>
@@ -160,7 +173,7 @@
                             [NewRecordValues]="NewRecordValues('Actions')"
                             [AllowLoad]="IsCurrentTab('Actions')"  
                             [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
+                            >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>

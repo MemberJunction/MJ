@@ -13,7 +13,6 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
-import { uuidv4 } from '@memberjunction/global';
 import { EntityConfig, FolderConfig } from '../config';
 
 /**
@@ -72,9 +71,13 @@ export class SyncEngine {
   }
   
   /**
-   * Process special references in field values
+   * Process special references in field values and handle complex objects
    * 
-   * Handles the following reference types:
+   * Automatically handles:
+   * - Arrays and objects are converted to JSON strings
+   * - Scalars (strings, numbers, booleans, null) pass through unchanged
+   * 
+   * Handles the following reference types for string values:
    * - `@parent:fieldName` - References a field from the parent record
    * - `@root:fieldName` - References a field from the root record
    * - `@file:path` - Reads content from an external file
@@ -96,9 +99,28 @@ export class SyncEngine {
    * 
    * // Lookup with auto-create
    * const userId = await processFieldValue('@lookup:Users.Email=john@example.com?create', '/path');
+   * 
+   * // Complex object - automatically stringified
+   * const jsonStr = await processFieldValue({items: [{id: 1}, {id: 2}]}, '/path');
+   * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
-  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0): Promise<any> {
+    // Check recursion depth limit
+    const MAX_RECURSION_DEPTH = 50;
+    if (depth > MAX_RECURSION_DEPTH) {
+      throw new Error(`Maximum recursion depth (${MAX_RECURSION_DEPTH}) exceeded while processing field value: ${value}`);
+    }
+    // Handle arrays and objects by converting them to JSON strings
+    if (value !== null && typeof value === 'object') {
+      // Check if it's an array or a plain object (not a Date, etc.)
+      if (Array.isArray(value) || value.constructor === Object) {
+        // Convert to pretty-printed JSON string
+        return JSON.stringify(value, null, 2);
+      }
+    }
+    
+    // If not a string, return as-is (numbers, booleans, null, etc.)
     if (typeof value !== 'string') {
       return value;
     }
@@ -176,7 +198,17 @@ export class SyncEngine {
           throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
         }
         const [, fieldName, fieldValue] = fieldMatch;
-        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: fieldValue.trim() });
+        
+        // Recursively process the field value to resolve any nested @ commands
+        const processedValue = await this.processFieldValue(
+          fieldValue.trim(), 
+          baseDir, 
+          parentRecord, 
+          rootRecord,
+          depth + 1
+        );
+        
+        lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
       }
       
       if (lookupFields.length === 0) {
@@ -191,7 +223,15 @@ export class SyncEngine {
         for (const pair of pairs) {
           const [key, val] = pair.split('=');
           if (key && val) {
-            createFields[key] = decodeURIComponent(val);
+            const decodedVal = decodeURIComponent(val);
+            // Recursively process the field value to resolve any nested @ commands
+            createFields[key] = await this.processFieldValue(
+              decodedVal, 
+              baseDir, 
+              parentRecord, 
+              rootRecord,
+              depth + 1
+            );
           }
         }
       }
@@ -293,16 +333,7 @@ export class SyncEngine {
       
       newEntity.NewRecord();
       
-      // Handle explicit ID setting for new records
-      if (entityInfo.PrimaryKeys.length > 0) {
-        for (const pk of entityInfo.PrimaryKeys) {
-          if (!pk.AutoIncrement && pk.Type.toLowerCase() === 'uniqueidentifier') {
-            // Generate UUID for this primary key and set it explicitly
-            const uuid = uuidv4();
-            (newEntity as any)[pk.Name] = uuid;
-          }
-        }
-      }
+      // UUID generation now happens automatically in BaseEntity.NewRecord()
       
       // Set all lookup fields
       for (const {fieldName, fieldValue} of lookupFields) {
@@ -384,7 +415,7 @@ export class SyncEngine {
     
     for (const [field, value] of Object.entries(defaults)) {
       try {
-        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null);
+        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null, 0);
       } catch (error) {
         throw new Error(`Failed to process default for field '${field}': ${error}`);
       }
@@ -439,6 +470,77 @@ export class SyncEngine {
     const hash = crypto.createHash('sha256');
     hash.update(JSON.stringify(data, null, 2));
     return hash.digest('hex');
+  }
+
+  /**
+   * Calculate checksum including resolved file content
+   * 
+   * Enhanced checksum calculation that resolves @file references and includes
+   * the actual file content (with @include directives processed) in the checksum.
+   * This ensures that changes to referenced files are detected.
+   * 
+   * @param data - Fields object that may contain @file references
+   * @param entityDir - Directory for resolving relative file paths
+   * @returns Promise resolving to checksum string
+   */
+  async calculateChecksumWithFileContent(data: any, entityDir: string): Promise<string> {
+    const processedData = await this.resolveFileReferencesForChecksum(data, entityDir);
+    return this.calculateChecksum(processedData);
+  }
+
+  /**
+   * Resolve @file references for checksum calculation
+   * 
+   * Recursively processes an object and replaces @file references with their
+   * actual content (including resolved @include directives). This ensures the
+   * checksum reflects the actual content, not just the reference.
+   * 
+   * @param obj - Object to process
+   * @param entityDir - Directory for resolving relative paths
+   * @returns Promise resolving to processed object
+   * @private
+   */
+  private async resolveFileReferencesForChecksum(obj: any, entityDir: string): Promise<any> {
+    if (!obj || typeof obj !== 'object') {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return Promise.all(obj.map(item => this.resolveFileReferencesForChecksum(item, entityDir)));
+    }
+
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && value.startsWith('@file:')) {
+        // Process @file reference and include actual content
+        try {
+          const filePath = value.substring(6);
+          const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
+          
+          if (await fs.pathExists(fullPath)) {
+            const content = await fs.readFile(fullPath, 'utf-8');
+            // Process any @include directives within the file
+            const processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            result[key] = {
+              _checksumType: 'file',
+              _reference: value,
+              _content: processedContent
+            };
+          } else {
+            // File doesn't exist, keep the reference
+            result[key] = value;
+          }
+        } catch (error) {
+          // Error reading file, keep the reference
+          result[key] = value;
+        }
+      } else if (typeof value === 'object') {
+        result[key] = await this.resolveFileReferencesForChecksum(value, entityDir);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
   
   /**

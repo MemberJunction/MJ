@@ -2,7 +2,8 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graph
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { AIPromptEntity } from '@memberjunction/core-entities';
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
@@ -45,8 +46,8 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('promptId') promptId: string,
         @Ctx() { userPayload }: { userPayload: UserPayload },
         @Arg('data', { nullable: true }) data?: string,
-        @Arg('modelId', { nullable: true }) modelId?: string,
-        @Arg('vendorId', { nullable: true }) vendorId?: string,
+        @Arg('overrideModelId', { nullable: true }) overrideModelId?: string,
+        @Arg('overrideVendorId', { nullable: true }) overrideVendorId?: string,
         @Arg('configurationId', { nullable: true }) configurationId?: string,
         @Arg('skipValidation', { nullable: true }) skipValidation?: boolean,
         @Arg('templateData', { nullable: true }) templateData?: string,
@@ -61,7 +62,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('stopSequences', () => [String], { nullable: true }) stopSequences?: string[],
         @Arg('includeLogProbs', { nullable: true }) includeLogProbs?: boolean,
         @Arg('topLogProbs', () => Int, { nullable: true }) topLogProbs?: number,
-        @Arg('messages', { nullable: true }) messages?: string
+        @Arg('messages', { nullable: true }) messages?: string,
+        @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
+        @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
         const startTime = Date.now();
         
@@ -137,11 +140,19 @@ export class RunAIPromptResolver extends ResolverBase {
             promptParams.prompt = promptEntity;
             promptParams.data = parsedData;
             promptParams.templateData = parsedTemplateData;
-            promptParams.modelId = modelId;
-            promptParams.vendorId = vendorId;
             promptParams.configurationId = configurationId;
             promptParams.contextUser = currentUser;
             promptParams.skipValidation = skipValidation || false;
+            promptParams.rerunFromPromptRunID = rerunFromPromptRunID;
+            promptParams.systemPromptOverride = systemPromptOverride;
+            
+            // Set override if model or vendor ID provided
+            if (overrideModelId || overrideVendorId) {
+                promptParams.override = {
+                    modelId: overrideModelId,
+                    vendorId: overrideVendorId
+                };
+            }
             
             // Parse and set conversation messages if provided
             if (messages) {

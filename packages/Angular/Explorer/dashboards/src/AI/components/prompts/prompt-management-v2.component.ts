@@ -1,9 +1,12 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIPromptEntity, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
+import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 interface PromptWithTemplate extends Omit<AIPromptEntity, 'Template'> {
   Template: string; // From AIPromptEntity (view field)
@@ -54,9 +57,93 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
+  public selectedPromptForTest: AIPromptEntity | null = null;
+
+  // === Permission Checks ===
+  /** Cache for permission checks to avoid repeated calculations */
+  private _permissionCache = new Map<string, boolean>();
+  private _metadata = new Metadata();
+
+  /** Check if user can create AI Prompts */
+  public get UserCanCreatePrompts(): boolean {
+    return this.checkEntityPermission('AI Prompts', 'Create');
+  }
+
+  /** Check if user can read AI Prompts */
+  public get UserCanReadPrompts(): boolean {
+    return this.checkEntityPermission('AI Prompts', 'Read');
+  }
+
+  /** Check if user can update AI Prompts */
+  public get UserCanUpdatePrompts(): boolean {
+    return this.checkEntityPermission('AI Prompts', 'Update');
+  }
+
+  /** Check if user can delete AI Prompts */
+  public get UserCanDeletePrompts(): boolean {
+    return this.checkEntityPermission('AI Prompts', 'Delete');
+  }
+
+  /**
+   * Helper method to check entity permissions with caching
+   * @param entityName - The name of the entity to check permissions for
+   * @param permissionType - The type of permission to check (Create, Read, Update, Delete)
+   * @returns boolean indicating if user has the permission
+   */
+  private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
+    const cacheKey = `${entityName}_${permissionType}`;
+    
+    if (this._permissionCache.has(cacheKey)) {
+      return this._permissionCache.get(cacheKey)!;
+    }
+
+    try {
+      const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+      
+      if (!entityInfo) {
+        console.warn(`Entity '${entityName}' not found for permission check`);
+        this._permissionCache.set(cacheKey, false);
+        return false;
+      }
+
+      const userPermissions = entityInfo.GetUserPermisions(this._metadata.CurrentUser);
+      let hasPermission = false;
+
+      switch (permissionType) {
+        case 'Create':
+          hasPermission = userPermissions.CanCreate;
+          break;
+        case 'Read':
+          hasPermission = userPermissions.CanRead;
+          break;
+        case 'Update':
+          hasPermission = userPermissions.CanUpdate;
+          break;
+        case 'Delete':
+          hasPermission = userPermissions.CanDelete;
+          break;
+      }
+
+      this._permissionCache.set(cacheKey, hasPermission);
+      return hasPermission;
+    } catch (error) {
+      console.error(`Error checking ${permissionType} permission for ${entityName}:`, error);
+      this._permissionCache.set(cacheKey, false);
+      return false;
+    }
+  }
+
+  /**
+   * Clears the permission cache. Call this when user context changes or permissions are updated.
+   */
+  public clearPermissionCache(): void {
+    this._permissionCache.clear();
+  }
 
   constructor(
-    private sharedService: SharedService
+    private sharedService: SharedService,
+    private testHarnessService: AITestHarnessDialogService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -104,32 +191,22 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const [promptResults, categoryResults, typeResults, templateResults, templateContentResults] = await rv.RunViews([
         {
           EntityName: 'AI Prompts',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'AI Prompt Categories',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name', 
         },
         {
           EntityName: 'AI Prompt Types',
-          OrderBy: 'Name',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'Templates',
-          ExtraFilter: `EntityID IN (SELECT ID FROM AIPrompt)`,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)` 
         },
         {
-          EntityName: 'Template Contents',
-          MaxRows: 5000,
-          ResultType: 'entity_object'
+          EntityName: 'Template Contents' 
         }
       ]);
 
@@ -153,18 +230,17 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const categoryMap = new Map(this.categories.map(c => [c.ID, c.Name]));
       const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
-      // Combine the data
+      // Combine the data - keep the actual entity objects
       this.prompts = (promptResults.Results as AIPromptEntity[]).map(prompt => {
         const template = templateMap.get(prompt.ID);
         
-        // Use GetAll() to get all properties as a plain object since BaseEntity uses getters
-        return {
-          ...prompt.GetAll(),
-          TemplateEntity: template,
-          TemplateContents: template ? (templateContentMap.get(template.ID) || []) : [],
-          CategoryName: prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized',
-          TypeName: prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped'
-        } as PromptWithTemplate;
+        // Add the extra properties directly to the entity
+        (prompt as any).TemplateEntity = template;
+        (prompt as any).TemplateContents = template ? (templateContentMap.get(template.ID) || []) : [];
+        (prompt as any).CategoryName = prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized';
+        (prompt as any).TypeName = prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped';
+        
+        return prompt as PromptWithTemplate;
       });
 
       this.filteredPrompts = [...this.prompts];
@@ -172,7 +248,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       this.emitStateChange();
     } catch (error) {
       console.error('Error loading prompt data:', error);
-      this.sharedService.CreateSimpleNotification('Error loading prompts', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification('Error loading prompts', 'error', 3000);
     } finally {
       this.isLoading = false;
       if (this.loadingMessageInterval) {
@@ -273,28 +349,36 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     });
   }
 
-  public async createNewPrompt(): Promise<void> {
+  public testPrompt(promptId: string, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    // Use the test harness service for window management features
+    this.testHarnessService.openForPrompt(promptId);
+  }
+
+  public closeTestHarness(): void {
+    // No longer needed - window manages its own closure
+    this.selectedPromptForTest = null;
+  }
+
+  public createNewPrompt(): void {
     try {
-      const md = new Metadata();
-      const newPrompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
-      
-      if (newPrompt) {
-        newPrompt.Name = 'New Prompt';
-        newPrompt.Status = 'Active';
-        
-        if (await newPrompt.Save()) {
-          this.openEntityRecord.emit({
-            entityName: 'AI Prompts',
-            recordId: newPrompt.ID
-          });
-          
-          // Reload the data
-          await this.loadInitialData();
+      // Navigate to new record form using the MemberJunction pattern
+      // Empty third parameter means new record
+      this.router.navigate(
+        ['resource', 'record', ''], // Empty record ID = new record
+        { 
+          queryParams: { 
+            Entity: 'AI Prompts'
+            // Could add NewRecordValues here for pre-populated defaults if needed
+          } 
         }
-      }
+      );
     } catch (error) {
-      console.error('Error creating new prompt:', error);
-      this.sharedService.CreateSimpleNotification('Error creating prompt', 'error', 3000);
+      console.error('Error navigating to new prompt form:', error);
+      MJNotificationService.Instance.CreateSimpleNotification('Error opening new prompt form', 'error', 3000);
     }
   }
 
@@ -333,8 +417,8 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   }
 
   public get filteredPromptsAsEntities(): AIPromptEntity[] {
-    // Cast PromptWithTemplate[] to AIPromptEntity[] for the priority matrix
-    return this.filteredPrompts as unknown as AIPromptEntity[];
+    // The prompts are already AIPromptEntity instances with extra properties
+    return this.filteredPrompts as AIPromptEntity[];
   }
 
   public clearFilters(): void {

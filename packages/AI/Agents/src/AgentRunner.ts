@@ -10,9 +10,10 @@
  * @since 2.49.0
  */
 
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { AIEngine, ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
+import { ExecuteAgentResult, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
 
 /**
@@ -52,7 +53,11 @@ export class AgentRunner {
      */
     public async RunAgent<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
-            LogStatus(`AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`);
+            LogStatusEx({
+                message: `AgentRunner: Starting execution for agent: ${params.agent.Name} (ID: ${params.agent.ID})`,
+                verboseOnly: true,
+                isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
+            });
             
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
@@ -65,7 +70,11 @@ export class AgentRunner {
             
             // Get the correct agent class using ClassFactory, prefer the agent's DriverClass if specified, otherwise fallback to Agent Type, otherwise we get BaseAgent from ClassFactory
             const driverClass = params.agent.DriverClass || agentType.DriverClass;
-            LogStatus(`AgentRunner: Using driver class: ${driverClass}`);
+            LogStatusEx({
+                message: `AgentRunner: Using driver class: ${driverClass}`,
+                verboseOnly: true,
+                isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
+            });
             
             const agentInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(
                 BaseAgent,
@@ -77,21 +86,15 @@ export class AgentRunner {
             }
             
             // Execute the agent and return the result directly
-            return await agentInstance.Execute(params);
+            return await agentInstance.Execute(params as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`AgentRunner execution failed: ${errorMessage}`, undefined, error);
             
-            // Return error result in the same format as BaseAgent
-            // Create a minimal failure result when we can't get a proper agent run
-            return {
-                success: false,
-                finalStep: 'failed',
-                errorMessage,
-                agentRun: null as any, // This is an edge case where we couldn't create the run
-                executionTree: []
-            };
+            // Re-throw the error since we can't create a proper ExecuteAgentResult without an agent run
+            // BaseAgent.Execute will handle creating a proper error result with an agent run
+            throw error;
         }
     }
 }

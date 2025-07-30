@@ -1,5 +1,165 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 2.77.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- Updated dependencies [b403003]
+  - @memberjunction/ng-container-directives@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/ng-container-directives@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.62.0
+
+## 2.61.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.61.0
+
+## 2.60.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.60.0
+
+## 2.59.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.59.0
+
+## 2.58.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.58.0
+
+## 2.57.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.57.0
+
+## 2.56.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.56.0
+
+## 2.55.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.55.0
+
+## 2.54.0
+
+### Patch Changes
+
+- b21ba9e: This PR addresses multiple UI issues and improvements across the MemberJunction Explorer and Angular components, enhancing user experience and visual consistency throughout the platform.
+  - @memberjunction/ng-container-directives@2.54.0
+
 ## 2.53.0
 
 ### Patch Changes

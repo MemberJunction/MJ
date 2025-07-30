@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/react-test-harness",
+  "version": "2.77.0",
+  "description": "React component test harness for MemberJunction using Playwright",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mj-react-test": "./dist/cli/index.js"
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@memberjunction/react-runtime": "^2.77.0",
+    "@memberjunction/interactive-component-types": "^2.77.0",
+    "@playwright/test": "^1.40.0",
+    "playwright": "^1.40.0",
+    "commander": "^11.1.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "@babel/parser": "^7.23.0",
+    "@babel/traverse": "^7.23.0",
+    "@babel/types": "^7.23.0"
+  }
+}
