@@ -8828,3 +8828,98 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfigurationParam] TO [cd
 /* spDelete Permissions for MJ: AI Configuration Params */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIConfigurationParam] TO [cdp_Integration]
+
+/* SQL text to delete entity field value ID 161A443E-F36B-1410-8D7B-00A3FCABC804 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='161A443E-F36B-1410-8D7B-00A3FCABC804'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='9A1B443E-F36B-1410-8D7B-00A3FCABC804'
+
+/* SQL text to delete entity field value ID 201A443E-F36B-1410-8D7B-00A3FCABC804 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='201A443E-F36B-1410-8D7B-00A3FCABC804'
+
+/* SQL text to update entity field related entity name field map for entity field ID 6915443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6915443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 8C15443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='8C15443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='User'
+
+/* SQL text to update entity field related entity name field map for entity field ID 6D15443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6D15443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='Role'
+
+/* SQL text to update entity field related entity name field map for entity field ID 9215443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='9215443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 6E15443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6E15443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='User'
+
+/* SQL text to update entity field related entity name field map for entity field ID 8313443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='8313443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='Source'
+
+/* SQL text to update entity field related entity name field map for entity field ID B913443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='B913443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID E313443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='E313443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID BF13443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='BF13443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID C513443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='C513443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 6114443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6114443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='AIModel'
+
+/* SQL text to update entity field related entity name field map for entity field ID CD14443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='CD14443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID 1515443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1515443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentItem'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3915443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3915443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='Item'
+
+/* SQL text to update entity field related entity name field map for entity field ID DF14443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='DF14443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID E514443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='E514443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID EB14443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='EB14443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
