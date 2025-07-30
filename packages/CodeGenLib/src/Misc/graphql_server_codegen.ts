@@ -3,8 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
 import { mjCoreSchema } from '../Config/config';
-import { makeDir } from './util';
-import { RegisterClass } from '@memberjunction/global';
+import { makeDir, sortBySequenceAndCreatedAt } from './util';
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
@@ -70,15 +69,18 @@ export class GraphQLServerGeneratorBase {
         sEntityOutput += this.generateServerField(fields[j]);
       }
 
-      for (let j: number = 0; j < entity.RelatedEntities.length; ++j) {
-        const r = entity.RelatedEntities[j];
+      // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+
+      for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
+        const r = sortedRelatedEntities[j];
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
           if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
-            sEntityOutput += this.generateServerRelationship(md, entity.RelatedEntities[j], isInternal);
+            sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
           }
         } else {
           sEntityOutput += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`;
@@ -151,13 +153,16 @@ import { MaxLength } from 'class-validator';
 import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType, GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
 import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `;
-    for (let i: number = 0; i < entity.RelatedEntities.length; ++i) {
-      const r = entity.RelatedEntities[i];
+    // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
+    const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+
+    for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
+      const r = sortedRelatedEntities[i];
       const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
       if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
         // we only include entities that are in the same schema as the current entity
         // OR if we are not excluding related entities external to the schema
-        const tableName = entity.RelatedEntities[i].RelatedEntityBaseTableCodeName;
+        const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
         sRet += `\nimport ${tableName} from './${tableName}';`;
       }
     }
@@ -361,8 +366,11 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
       }
 
       // now, generate the FieldResolvers for each of the one-to-many relationships
-      for (let i = 0; i < entity.RelatedEntities.length; i++) {
-        const r = entity.RelatedEntities[i];
+      // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+
+      for (let i = 0; i < sortedRelatedEntities.length; i++) {
+        const r = sortedRelatedEntities[i];
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
 
         // only include the relationship if we are IncludeInAPI for the related entity
