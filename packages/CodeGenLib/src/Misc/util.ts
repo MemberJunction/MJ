@@ -95,3 +95,27 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
         console.log(...args);
     }
 }
+
+/**
+ * Sorts an array of items by Sequence property first, then by __mj_CreatedAt for consistent ordering.
+ * This ensures that generated code maintains the same order across multiple runs.
+ * @param items - Array of items that have Sequence and optional __mj_CreatedAt properties
+ * @returns A new sorted array
+ */
+export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+        // Primary sort by Sequence
+        if (a.Sequence !== b.Sequence) {
+            return a.Sequence - b.Sequence;
+        }
+        // Secondary sort by __mj_CreatedAt for consistent ordering
+        if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
+            return a.__mj_CreatedAt.getTime() - b.__mj_CreatedAt.getTime();
+        }
+        // If one has a date and the other doesn't, prioritize the one with a date
+        if (a.__mj_CreatedAt && !b.__mj_CreatedAt) return -1;
+        if (!a.__mj_CreatedAt && b.__mj_CreatedAt) return 1;
+        // If neither has a date, maintain original order
+        return 0;
+    });
+}

@@ -16,27 +16,14 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Users" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-user tab-header-icon"></span>Users
+                    <mj-tab Name="Direct Reports" [Visible]="record.IsSaved"> 
+                        <span class="fa-solid fa-users tab-header-icon"></span>Direct Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Users','EmployeeID')"  
-                            [NewRecordValues]="NewRecordValues('Users')"
-                            [AllowLoad]="IsCurrentTab('Users')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Employee Skills" [Visible]="record.IsSaved"> 
-                        Employee Skills
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','EmployeeID')"  
-                            [NewRecordValues]="NewRecordValues('Employee Skills')"
-                            [AllowLoad]="IsCurrentTab('Employee Skills')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employees','SupervisorID')"  
+                            [NewRecordValues]="NewRecordValues('Employees')"
+                            [AllowLoad]="IsCurrentTab('Direct Reports')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -55,19 +42,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Direct Reports" [Visible]="record.IsSaved"> 
-                        <span class="fa-solid fa-users tab-header-icon"></span>Direct Reports
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employees','SupervisorID')"  
-                            [NewRecordValues]="NewRecordValues('Employees')"
-                            [AllowLoad]="IsCurrentTab('Direct Reports')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Employee Roles" [Visible]="record.IsSaved"> 
                         Employee Roles
                     </mj-tab>
@@ -76,6 +50,32 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Employee Roles','EmployeeID')"  
                             [NewRecordValues]="NewRecordValues('Employee Roles')"
                             [AllowLoad]="IsCurrentTab('Employee Roles')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Employee Skills" [Visible]="record.IsSaved"> 
+                        Employee Skills
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','EmployeeID')"  
+                            [NewRecordValues]="NewRecordValues('Employee Skills')"
+                            [AllowLoad]="IsCurrentTab('Employee Skills')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Users" [Visible]="record.IsSaved"> 
+                        <span class="fa-solid fa-user tab-header-icon"></span>Users
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Users','EmployeeID')"  
+                            [NewRecordValues]="NewRecordValues('Users')"
+                            [AllowLoad]="IsCurrentTab('Users')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
