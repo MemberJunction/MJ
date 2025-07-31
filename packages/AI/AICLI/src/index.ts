@@ -5,9 +5,12 @@ export { AgentService } from './services/AgentService';
 export { ActionService } from './services/ActionService';
 export { ConversationService } from './services/ConversationService';
 export { ValidationService } from './services/ValidationService';
+export { PromptService } from './services/PromptService';
 
 // Export utilities
 export { OutputFormatter } from './lib/output-formatter';
 export { ExecutionLogger, createExecutionLogger } from './lib/execution-logger';
 export { initializeMJProvider, getConnectionPool, closeMJProvider } from './lib/mj-provider';
 export { loadAIConfig } from './config';
+
+

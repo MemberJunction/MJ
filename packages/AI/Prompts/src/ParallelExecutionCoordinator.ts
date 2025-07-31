@@ -550,13 +550,20 @@ export class ParallelExecutionCoordinator {
       if (parentPromptRunId) {
         childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder, agentRunId);
       }
-      // Create LLM instance
-      const apiKey = GetAIAPIKey(task.model.DriverClass);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, task.model.DriverClass, apiKey);
+      // Create LLM instance using vendor-specific driver class if available
+      const driverClass = task.vendorDriverClass || task.model.DriverClass;
+      const apiName = task.vendorApiName || task.model.APIName;
+      
+      if (!driverClass) {
+        throw new Error(`No driver class available for model ${task.model.Name}. Vendor selection may have failed.`);
+      }
+      
+      const apiKey = GetAIAPIKey(driverClass);
+      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
       const params = new ChatParams();
-      params.model = task.model.APIName;
+      params.model = apiName;
       params.cancellationToken = task.cancellationToken;
 
       // Configure streaming if enabled in task
@@ -1016,8 +1023,11 @@ export class ParallelExecutionCoordinator {
         promptRun.AgentRunID = agentRunId;
       }
 
-      // Set vendor ID from task if available
-      if (task.promptModel?.VendorID) {
+      // Set vendor ID from task if available (use task vendor ID which comes from vendor selection)
+      if (task.vendorId) {
+        promptRun.VendorID = task.vendorId;
+      } else if (task.promptModel?.VendorID) {
+        // Fallback to prompt model vendor if task vendor not set
         promptRun.VendorID = task.promptModel.VendorID;
       }
 

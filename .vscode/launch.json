@@ -151,6 +151,104 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "MJ CLI - AI Agent Run",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "ai",
+        "agents",
+        "run",
+        "-a",
+        "Demo Loop Agent",
+        "--chat"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "AI CLI - Agent Chat (Verbose Debug)",
+      "program": "${workspaceFolder}/packages/AI/AICLI/bin/run.js",
+      "args": [
+        "agents",
+        "run",
+        "-a",
+        "Demo Loop Agent",
+        "--chat",
+        "--verbose"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEBUG": "*"
+      },
+      "runtimeArgs": ["--enable-source-maps", "--trace-warnings"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      },
+      "preLaunchTask": "Build AI Packages"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MJ CLI - AI Agent List",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
+      "args": [
+        "ai",
+        "agents",
+        "list"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "MetadataSync CLI - Pull with Options",
       "program": "${workspaceFolder}/packages/MJCLI/bin/dev.js",
       "args": [

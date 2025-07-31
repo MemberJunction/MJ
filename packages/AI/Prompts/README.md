@@ -2848,3 +2848,72 @@ WHERE ID = @PromptID;
 6. **Assign models explicitly to configurations** to ensure clear separation between environments
 
 For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).
+
+## Model Selection Tracking (v2.78+)
+
+The AIPromptRunner now provides comprehensive tracking of model selection decisions through the `modelSelectionInfo` property in `AIPromptRunResult`. This feature helps developers understand:
+
+- Which models were considered during selection
+- Why specific models were or weren't available
+- Which configuration influenced the selection
+- What selection strategy was used
+
+### Enhanced Model Selection Information
+
+```typescript
+const result = await promptRunner.ExecutePrompt(params);
+
+if (result.modelSelectionInfo) {
+  // Access the configuration that was used
+  const config = result.modelSelectionInfo.aiConfiguration;
+  console.log(`Configuration: ${config?.Name || 'Default'}`);
+  
+  // See all models that were considered
+  for (const candidate of result.modelSelectionInfo.modelsConsidered) {
+    console.log(`Model: ${candidate.model.Name}`);
+    console.log(`  Vendor: ${candidate.vendor?.Name || 'default'}`);
+    console.log(`  Priority: ${candidate.priority}`);
+    console.log(`  Available: ${candidate.available}`);
+    if (!candidate.available) {
+      console.log(`  Reason: ${candidate.unavailableReason}`);
+    }
+  }
+  
+  // Understand the final selection
+  console.log(`Selected: ${result.modelSelectionInfo.modelSelected.Name}`);
+  console.log(`Vendor: ${result.modelSelectionInfo.vendorSelected?.Name}`);
+  console.log(`Reason: ${result.modelSelectionInfo.selectionReason}`);
+  console.log(`Strategy: ${result.modelSelectionInfo.selectionStrategy}`);
+}
+```
+
+### Database Storage
+
+Model selection information is stored in the `AIPromptRun.ModelSelection` field as JSON, containing:
+- Model and vendor IDs (not full entities)
+- Configuration ID and name
+- Array of considered models with their availability status
+- Selection reason and strategy
+
+Additional fields track:
+- `SelectionStrategy`: The strategy used ('Default', 'Specific', 'ByPower')
+- `ModelPowerRank`: Power rank of the selected model
+- `Status`: Execution status ('Pending', 'Running', 'Completed', 'Failed', 'Cancelled')
+- `Cancelled`: Boolean flag for cancellation
+- `CancellationReason`: Why execution was cancelled
+- `ErrorDetails`: Detailed error information for failures
+
+### Benefits
+
+- **Debugging**: Understand why a specific model was selected
+- **Monitoring**: Track which models are being used across prompts
+- **Optimization**: Identify models that are frequently unavailable
+- **Compliance**: Audit model selection for regulatory requirements
+
+## Version History
+
+- **2.78.0** - Added model selection tracking with full entity objects in results
+- **2.77.0** - Enhanced status tracking and cancellation support
+- **2.76.0** - Added intelligent failover system
+- **2.75.0** - Introduced dynamic template composition
+- **2.50.0** - Initial release with core prompt execution

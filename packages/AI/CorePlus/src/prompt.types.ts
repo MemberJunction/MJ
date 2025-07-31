@@ -9,15 +9,16 @@
  * @since 2.50.0
  */
 
-import { AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntity, AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 
 
 /**
  * Execution status enumeration for better type safety
+ * Values match the database CHECK constraint in AIPromptRun.Status
  */
-export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type ExecutionStatus = 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
 
 /**
  * Cancellation reason enumeration
@@ -228,6 +229,37 @@ export interface AIPromptRunResult<T = unknown> {
     cacheHit: boolean;
     cacheKey?: string;
     cacheSource?: string;
+  };
+
+  /**
+   * Model selection information for debugging and analysis
+   */
+  modelSelectionInfo?: {
+    /** The configuration entity that was used, if any */
+    aiConfiguration?: AIConfigurationEntity;
+    /** All models that were considered for selection */
+    modelsConsidered: Array<{
+      /** The model entity */
+      model: AIModelEntityExtended;
+      /** The vendor entity, if a specific vendor was considered */
+      vendor?: AIVendorEntity;
+      /** Priority of this model/vendor combination */
+      priority: number;
+      /** Whether this model/vendor had an available API key */
+      available: boolean;
+      /** Reason why this model/vendor wasn't available */
+      unavailableReason?: string;
+    }>;
+    /** The model entity that was selected */
+    modelSelected: AIModelEntityExtended;
+    /** The vendor entity that was selected, if applicable */
+    vendorSelected?: AIVendorEntity;
+    /** Reason for the selection */
+    selectionReason: string;
+    /** Whether a fallback model was used */
+    fallbackUsed: boolean;
+    /** The selection strategy that was used */
+    selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
   };
 }
 
