@@ -1,9 +1,10 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
 import { TemplateMessageRole } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngine } from '@memberjunction/aiengine';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -139,6 +140,7 @@ export class ExecutionPlanner {
     }
 
     const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+    const vendorInfo = this.selectVendorForModel(selectedModel);
 
     const task: ExecutionTask = {
       taskId: uuidv4(),
@@ -153,6 +155,9 @@ export class ExecutionPlanner {
       modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
       conversationMessages,
       templateMessageRole,
+      vendorId: vendorInfo.vendorId,
+      vendorDriverClass: vendorInfo.vendorDriverClass,
+      vendorApiName: vendorInfo.vendorApiName,
     };
 
     LogStatus(`Created single execution plan with model: ${selectedModel.Name}`);
@@ -203,6 +208,8 @@ export class ExecutionPlanner {
       const selectedModel = availableModels[modelIndex];
       const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
 
+      const vendorInfo = this.selectVendorForModel(selectedModel);
+
       const task: ExecutionTask = {
         taskId: uuidv4(),
         prompt,
@@ -216,6 +223,9 @@ export class ExecutionPlanner {
         modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
         conversationMessages,
         templateMessageRole,
+        vendorId: vendorInfo.vendorId,
+        vendorDriverClass: vendorInfo.vendorDriverClass,
+        vendorApiName: vendorInfo.vendorApiName,
       };
 
       tasks.push(task);
@@ -279,6 +289,8 @@ export class ExecutionPlanner {
       const selectedModel = availableModels[modelIndex];
       const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
 
+      const vendorInfo = this.selectVendorForModel(selectedModel);
+
       const task: ExecutionTask = {
         taskId: uuidv4(),
         prompt,
@@ -292,6 +304,9 @@ export class ExecutionPlanner {
         modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
         conversationMessages,
         templateMessageRole,
+        vendorId: vendorInfo.vendorId,
+        vendorDriverClass: vendorInfo.vendorDriverClass,
+        vendorApiName: vendorInfo.vendorApiName,
       };
 
       tasks.push(task);
@@ -345,6 +360,8 @@ export class ExecutionPlanner {
 
       // Create multiple tasks for this model if parallel count > 1
       for (let i = 0; i < parallelCount; i++) {
+        const vendorInfo = this.selectVendorForModel(model);
+
         const task: ExecutionTask = {
           taskId: uuidv4(),
           prompt,
@@ -358,6 +375,9 @@ export class ExecutionPlanner {
           modelParameters: this.parseModelParameters(promptModel.ModelParameters),
           conversationMessages,
           templateMessageRole,
+          vendorId: vendorInfo.vendorId,
+          vendorDriverClass: vendorInfo.vendorDriverClass,
+          vendorApiName: vendorInfo.vendorApiName,
         };
 
         tasks.push(task);
@@ -566,5 +586,49 @@ export class ExecutionPlanner {
       LogError(`Failed to parse model parameters JSON: ${error.message}`);
       return undefined;
     }
+  }
+
+  /**
+   * Selects vendor information for a model, preferring inference providers
+   */
+  private selectVendorForModel(model: AIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
+    // Find the inference provider type from vendor type definitions
+    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
+      vt => vt.Name === 'Inference Provider'
+    );
+    
+    if (!inferenceProviderType) {
+      // Fallback to model defaults if we can't find the inference provider type
+      return {
+        vendorDriverClass: model.DriverClass,
+        vendorApiName: model.APIName
+      };
+    }
+
+    // Get active model vendors for this model that are inference providers
+    const modelVendors = AIEngine.Instance.ModelVendors
+      .filter(mv => 
+        mv.ModelID === model.ID && 
+        mv.Status === 'Active' && 
+        mv.TypeID === inferenceProviderType.ID
+      )
+      .sort((a, b) => b.Priority - a.Priority);
+
+    if (modelVendors.length === 0) {
+      // No vendors found, use model defaults
+      return {
+        vendorDriverClass: model.DriverClass,
+        vendorApiName: model.APIName
+      };
+    }
+
+    // Use the highest priority vendor
+    const selectedVendor = modelVendors[0];
+
+    return {
+      vendorId: selectedVendor.VendorID,
+      vendorDriverClass: selectedVendor.DriverClass || model.DriverClass,
+      vendorApiName: selectedVendor.APIName || model.APIName
+    };
   }
 }

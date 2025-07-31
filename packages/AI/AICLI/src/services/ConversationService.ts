@@ -161,6 +161,10 @@ Log file: ${logger.getLogFilePath()}`);
       // Show thinking indicator
       console.log(chalk.dim('\n🤔 Agent is thinking...'));
 
+      // For the first message, conversationMessages will be empty, so the agent won't have context
+      // We need to ensure the conversation history includes all messages up to this point
+      // but NOT the current message (which will be added by AgentService)
+      
       // Suppress console output during agent execution unless verbose
       let result;
       const executionOptions = {
@@ -297,9 +301,13 @@ Log file: ${logger.getLogFilePath()}`);
   }
 
   private extractAgentResponse(result: any): string {
+    if (!result) {
+      return 'No response from agent';
+    }
+    
     if (typeof result === 'string') {
       return result;
-    } else if (typeof result === 'object' && result) {
+    } else if (typeof result === 'object') {
       // For chat mode, prioritize actual user-facing messages
       if (result.message) {
         return result.message;
@@ -307,13 +315,11 @@ Log file: ${logger.getLogFilePath()}`);
         return result.userMessage;
       } else if (result.nextStep && result.nextStep.userMessage) {
         return result.nextStep.userMessage;
-      } else if (result.returnValue) {
-        return typeof result.returnValue === 'string' ? result.returnValue : JSON.stringify(result.returnValue);
       } else {
-        // Fallback to JSON representation
+        // Fallback to JSON representation with nice formatting
         return JSON.stringify(result, null, 2);
       }
     }
-    return JSON.stringify(result);
+    return String(result);
   }
 }
