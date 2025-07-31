@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { table } from 'table';
+import { TextFormatter } from './text-formatter';
 
 export type OutputFormat = 'compact' | 'json' | 'table';
 
@@ -294,9 +295,14 @@ export class OutputFormatter {
       if (result.result) {
         output += chalk.bold('Result:') + '\n';
         if (typeof result.result === 'string') {
-          output += result.result + '\n';
+          const formatted = TextFormatter.formatText(result.result, {
+            maxWidth: 80,
+            indent: 2,
+            preserveParagraphs: true
+          });
+          output += formatted + '\n';
         } else {
-          output += JSON.stringify(result.result, null, 2) + '\n';
+          output += TextFormatter.formatJSON(result.result, 2) + '\n';
         }
       }
 

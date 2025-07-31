@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { AgentService } from './AgentService';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { ConsoleManager } from '../lib/console-manager';
+import { TextFormatter } from '../lib/text-formatter';
 
 export interface ConversationOptions {
   verbose?: boolean;
@@ -184,7 +185,14 @@ Log file: ${logger.getLogFilePath()}`);
       if (result.success) {
         // Display agent response
         const agentMessage = this.extractAgentResponse(result.result);
-        console.log(chalk.green(`\n🤖 ${agentName}: `) + agentMessage);
+        const formattedMessage = TextFormatter.formatText(agentMessage, {
+          maxWidth: 80,
+          indent: 3,
+          preserveParagraphs: true,
+          highlightCode: true
+        });
+        console.log(chalk.green(`\n🤖 ${agentName}: `));
+        console.log(formattedMessage);
         
         if (options.verbose) {
           console.log(chalk.dim(`\n⏱️  Response time: ${duration}ms`));
@@ -317,7 +325,7 @@ Log file: ${logger.getLogFilePath()}`);
         return result.nextStep.userMessage;
       } else {
         // Fallback to JSON representation with nice formatting
-        return JSON.stringify(result, null, 2);
+        return TextFormatter.formatJSON(result);
       }
     }
     return String(result);
