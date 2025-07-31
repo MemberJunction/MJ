@@ -148,9 +148,18 @@ export default class AgentsRun extends Command {
       // If it's a formatted error message, show it cleanly
       if (error.message.startsWith('❌')) {
         this.log(error.message);
+        if (flags.verbose && error.stack) {
+          this.log('\nStack trace:');
+          this.log(error.stack);
+        }
         this.exit(1);
       } else {
-        this.error(error.message);
+        // Show stack trace in verbose mode
+        if (flags.verbose && error.stack) {
+          this.error(error.stack);
+        } else {
+          this.error(error.message);
+        }
       }
     }
   }
