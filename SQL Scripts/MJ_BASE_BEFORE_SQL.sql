@@ -1672,13 +1672,11 @@ ALTER TABLE [__mj].[EntityField]
 ADD CONSTRAINT UQ_EntityField_EntityID_Sequence 
 UNIQUE (EntityID, Sequence);
 
+GO
+
 -- Create stored procedure to recompile all stored procedures in dependency order
 -- This preserves code, comments, and permissions while forcing new execution plans
-
-IF EXISTS (SELECT * FROM sys.objects 
-           WHERE object_id = OBJECT_ID(N'[__mj].[spRecompileAllProceduresInDependencyOrder]') 
-           AND type in (N'P', N'PC'))
-DROP PROCEDURE [__mj].[spRecompileAllProceduresInDependencyOrder]
+DROP PROCEDURE IF EXISTS [__mj].[spRecompileAllProceduresInDependencyOrder]
 GO
 
 CREATE PROCEDURE [__mj].[spRecompileAllProceduresInDependencyOrder]
