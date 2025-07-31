@@ -10132,11 +10132,11 @@ export class User_ {
     @Field(() => [ReportUserState_])
     MJ_ReportUserStates_UserIDArray: ReportUserState_[]; // Link to MJ_ReportUserStates
     
-    @Field(() => [DashboardUserPreference_])
-    MJ_DashboardUserPreferences_UserIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
-    
     @Field(() => [DashboardUserState_])
     MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
+    
+    @Field(() => [DashboardUserPreference_])
+    MJ_DashboardUserPreferences_UserIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
     
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
@@ -10705,17 +10705,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [DashboardUserPreference_])
-    async MJ_DashboardUserPreferences_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [DashboardUserState_])
     async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
@@ -10724,6 +10713,17 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserPreference_])
+    async MJ_DashboardUserPreferences_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
         return result;
     }
         
@@ -41103,6 +41103,10 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`}) 
     ErrorDetails?: string;
         
+    @Field({nullable: true, description: `References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`}) 
+    @MaxLength(16)
+    ChildPromptID?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41130,6 +41134,10 @@ export class AIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Judge?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ChildPrompt?: string;
         
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -41362,6 +41370,9 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorDetails: string | null;
+
+    @Field({ nullable: true })
+    ChildPromptID: string | null;
 }
     
 
@@ -41588,6 +41599,9 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorDetails?: string | null;
+
+    @Field({ nullable: true })
+    ChildPromptID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

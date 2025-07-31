@@ -9155,6 +9155,12 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
+    ChildPromptID: z.string().nullable().describe(`
+        * * Field Name: ChildPromptID
+        * * Display Name: Child Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -9182,6 +9188,10 @@ export const AIPromptRunSchema = z.object({
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
         * * Display Name: Judge
+        * * SQL Data Type: nvarchar(255)`),
+    ChildPrompt: z.string().nullable().describe(`
+        * * Field Name: ChildPrompt
+        * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -37370,6 +37380,20 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: ChildPromptID
+    * * Display Name: Child Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
+    */
+    get ChildPromptID(): string | null {
+        return this.Get('ChildPromptID');
+    }
+    set ChildPromptID(value: string | null) {
+        this.Set('ChildPromptID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -37430,6 +37454,15 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get Judge(): string | null {
         return this.Get('Judge');
+    }
+
+    /**
+    * * Field Name: ChildPrompt
+    * * Display Name: Child Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ChildPrompt(): string | null {
+        return this.Get('ChildPrompt');
     }
 }
 
