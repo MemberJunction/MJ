@@ -2008,8 +2008,16 @@ export class SQLServerDataProvider
         if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
           entityResult.StartedAt = new Date();
           entityResult.Type = bNewRecord ? 'create' : 'update';
+
           entityResult.OriginalValues = entity.Fields.map((f) => {
-            return { FieldName: f.Name, Value: f.Value };
+            const tempStatus = f.ActiveStatusAssertions;
+            f.ActiveStatusAssertions = false; // turn off warnings for this operation
+            const ret = { 
+              FieldName: f.Name, 
+              Value: f.Value 
+            };
+            f.ActiveStatusAssertions = tempStatus; // restore the status assertions
+            return ret;
           }); // save the original values before we start the process
           entity.ResultHistory.push(entityResult); // push the new result as we have started a process
 
@@ -2206,7 +2214,13 @@ export class SQLServerDataProvider
           // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
           // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
           // EXCEPTION: Include primary keys for CREATE when they have values and are not auto-increment
-          let value = entity.Get(f.Name);
+
+          const theField = entity.Fields.find((field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase());
+          const tempStatus = theField.ActiveStatusAssertions;
+          theField.ActiveStatusAssertions = false; // turn off warnings for this operation
+          let value = theField.Value;// entity.Get(f.Name);
+          theField.ActiveStatusAssertions = tempStatus; // restore the status assertions
+
           if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
             // for non-null datetimeoffset fields, we need to convert the value to ISO format
             value = new Date(value).toISOString();

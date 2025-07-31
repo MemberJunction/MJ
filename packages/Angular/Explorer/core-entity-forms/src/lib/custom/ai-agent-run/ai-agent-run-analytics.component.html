@@ -117,7 +117,7 @@
               <div class="chart-container">
                 <div id="modelDistributionChart" #modelDistributionChart></div>
                 <div class="chart-legend" *ngIf="promptMetrics.byModel.size > 0">
-                  <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue">
+                  <div class="legend-item" *ngFor="let item of promptMetrics.byModel | keyvalue; trackBy: trackByKey">
                     <span class="legend-color" [style.backgroundColor]="getModelColor(item.key)"></span>
                     <span class="legend-label">{{ item.key }}: {{ item.value.count }} ({{ (item.value.count / promptMetrics.totalCount * 100).toFixed(1) }}%)</span>
                   </div>
@@ -257,7 +257,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let prompt of promptMetrics.byPrompt | keyvalue">
+                <tr *ngFor="let prompt of promptMetrics.byPrompt | keyvalue; trackBy: trackByKey">
                   <td>{{ prompt.key }}</td>
                   <td>{{ prompt.value.count }}</td>
                   <td>{{ formatDuration(prompt.value.avgTime) }}</td>
@@ -338,7 +338,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let action of actionMetrics.byAction | keyvalue">
+                <tr *ngFor="let action of actionMetrics.byAction | keyvalue; trackBy: trackByKey">
                   <td>{{ action.key }}</td>
                   <td>{{ action.value.count }}</td>
                   <td>{{ formatDuration(action.value.avgTime) }}</td>
@@ -367,7 +367,7 @@
             This section shows the most frequent error messages from failed actions, helping identify systemic issues that may need attention.
           </p>
           <div class="error-list">
-            <div class="error-item" *ngFor="let error of getTopErrors()">
+            <div class="error-item" *ngFor="let error of getTopErrors(); trackBy: trackByErrorMessage">
               <span class="error-count">{{ error.count }}x</span>
               <span class="error-message">{{ error.message }}</span>
             </div>
@@ -405,7 +405,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let model of getModelPerformanceData()">
+              <tr *ngFor="let model of getModelPerformanceData(); trackBy: trackByModelName">
                 <td>{{ model.name }}</td>
                 <td>{{ model.vendor }}</td>
                 <td>{{ model.count }}</td>
@@ -452,7 +452,7 @@
         <div class="step-breakdown">
           <h3>Steps by Type</h3>
           <div class="step-type-list">
-            <div class="step-type-item" *ngFor="let type of timelineMetrics.stepsByType | keyvalue">
+            <div class="step-type-item" *ngFor="let type of timelineMetrics.stepsByType | keyvalue; trackBy: trackByKey">
               <i class="fas" [ngClass]="getStepTypeIcon(type.key)"></i>
               <span class="type-name">{{ type.key }}</span>
               <span class="type-count">{{ type.value }}</span>

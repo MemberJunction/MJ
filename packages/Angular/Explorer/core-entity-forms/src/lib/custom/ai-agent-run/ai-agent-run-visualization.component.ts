@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil, take } from 'rxjs/operators';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -29,7 +29,8 @@ interface ScopeData {
 @Component({
   selector: 'mj-ai-agent-run-visualization',
   templateUrl: './ai-agent-run-visualization.component.html',
-  styleUrls: ['./ai-agent-run-visualization.component.css']
+  styleUrls: ['./ai-agent-run-visualization.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('svgContainer', { static: false }) svgContainer!: ElementRef<HTMLDivElement>;
@@ -41,7 +42,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   
   loading = false;  // Start with false so the container renders
   error: string | null = null;
-  dataLoading = true;  // Track data loading separately
+  private dataLoading = false;  // Track data loading state from service
   
   selectedItem: TimelineItem | null = null;
   
@@ -68,6 +69,8 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     startX: number;
     startY: number;
     startTransform: { x: number; y: number };
+    initialX?: number;
+    initialY?: number;
   } = {
     isDragging: false,
     element: null,
@@ -76,6 +79,24 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     startY: 0,
     startTransform: { x: 0, y: 0 }
   };
+  
+  // Pan state
+  private panState = {
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    initialTranslateX: 0,
+    initialTranslateY: 0
+  };
+  
+  // Animation frame ID for cleanup
+  private animationFrameId: number | null = null;
+  
+  // Bound event handlers for proper cleanup
+  private boundOnWheel = this.onWheel.bind(this);
+  private boundOnSvgMouseDown = this.onSvgMouseDown.bind(this);
+  private boundOnSvgMouseMove = this.onSvgMouseMove.bind(this);
+  private boundOnSvgMouseUp = this.onSvgMouseUp.bind(this);
   
   constructor(
     private cdr: ChangeDetectorRef,
@@ -94,6 +115,8 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       ]).pipe(
         takeUntil(this.destroy$)
       ).subscribe(([steps, subRuns, actionLogs, promptRuns, loading]) => {
+        this.dataLoading = loading;
+        
         if (!loading && steps && steps.length > 0) {
           console.log('Visualization: Received data from service', {
             steps: steps.length,
@@ -108,11 +131,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
             // Store data for when view is ready
             console.log('View not ready, storing data for later');
             this.pendingData = { steps, subRuns, actionLogs, promptRuns };
-            this.loading = false;  // Show the container so it can render
           }
         } else if (!loading && (!steps || steps.length === 0)) {
           console.log('Visualization: No steps available');
-          this.loading = false;
           this.error = null;
         }
       });
@@ -127,8 +148,6 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     } else {
       console.error('Visualization: No agent run ID provided');
       this.error = 'No agent run ID provided';
-      this.loading = false;
-      this.dataLoading = false;
     }
   }
   
@@ -162,11 +181,69 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     this.destroy$.next();
     this.destroy$.complete();
     
-    // Clean up drag listeners
-    if (this.dragState.isDragging) {
-      document.removeEventListener('mousemove', this.onMouseMove);
-      document.removeEventListener('mouseup', this.onMouseUp);
+    // Clean up document-level event listeners
+    document.removeEventListener('mousemove', this.onMouseMove);
+    document.removeEventListener('mouseup', this.onMouseUp);
+    
+    // Clean up SVG and all its event listeners
+    if (this.svgContainer?.nativeElement) {
+      const svg = this.svgContainer.nativeElement.querySelector('svg');
+      if (svg) {
+        // Remove all SVG event listeners with bound handlers
+        svg.removeEventListener('wheel', this.boundOnWheel);
+        svg.removeEventListener('mousedown', this.boundOnSvgMouseDown);
+        svg.removeEventListener('mousemove', this.boundOnSvgMouseMove);
+        svg.removeEventListener('mouseup', this.boundOnSvgMouseUp);
+        
+        // Remove all node and scope event listeners
+        // We can't remove specific listeners if we don't have references to them
+        // The best approach is to clone and replace the elements, which removes all listeners
+        svg.querySelectorAll('g[id^="node-"], g[id^="scope-"]').forEach(element => {
+          const clone = element.cloneNode(true);
+          element.parentNode?.replaceChild(clone, element);
+        });
+        
+        // Remove expand button listeners
+        svg.querySelectorAll('.expand-button').forEach(button => {
+          const clone = button.cloneNode(true);
+          button.parentNode?.replaceChild(clone, button);
+        });
+        
+        // Clear all SVG content
+        while (svg.firstChild) {
+          svg.removeChild(svg.firstChild);
+        }
+      }
     }
+    
+    // Clear data structures
+    this.nodes.clear();
+    this.scopes.clear();
+    this.connections = [];
+    
+    // Clear any pending animation frames
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    // Reset state
+    this.dragState = {
+      isDragging: false,
+      element: null,
+      nodeId: null,
+      startX: 0,
+      startY: 0,
+      startTransform: { x: 0, y: 0 }
+    };
+    
+    this.panState = {
+      isPanning: false,
+      startX: 0,
+      startY: 0,
+      initialTranslateX: 0,
+      initialTranslateY: 0
+    };
   }
   
   private initializeSVG() {
@@ -184,11 +261,11 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       svg.setAttribute('width', '100%');
       svg.setAttribute('height', '100%');
       
-      // Add event listeners
-      svg.addEventListener('wheel', (e) => this.onWheel(e as WheelEvent));
-      svg.addEventListener('mousedown', (e) => this.onSvgMouseDown(e));
-      svg.addEventListener('mousemove', (e) => this.onSvgMouseMove(e));
-      svg.addEventListener('mouseup', (e) => this.onSvgMouseUp(e));
+      // Add event listeners with bound handlers
+      svg.addEventListener('wheel', this.boundOnWheel);
+      svg.addEventListener('mousedown', this.boundOnSvgMouseDown);
+      svg.addEventListener('mousemove', this.boundOnSvgMouseMove);
+      svg.addEventListener('mouseup', this.boundOnSvgMouseUp);
       
       container.appendChild(svg);
     }
@@ -264,10 +341,16 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       
       this.loading = false;
       console.log('Visualization built successfully');
+      
+      // Trigger change detection since we're using OnPush
+      this.cdr.markForCheck();
     } catch (error) {
       this.error = 'Failed to build visualization';
       console.error('Visualization error:', error);
       this.loading = false;
+      
+      // Trigger change detection since we're using OnPush
+      this.cdr.markForCheck();
     }
   }
   

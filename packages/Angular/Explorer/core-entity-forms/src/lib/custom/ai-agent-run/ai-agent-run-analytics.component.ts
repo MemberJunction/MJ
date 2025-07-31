@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, AfterViewInit, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
@@ -63,7 +63,8 @@ interface SimpleActionLog {
 @Component({
   selector: 'mj-ai-agent-run-analytics',
   templateUrl: './ai-agent-run-analytics.component.html',
-  styleUrls: ['./ai-agent-run-analytics.component.css']
+  styleUrls: ['./ai-agent-run-analytics.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentRunId!: string;
@@ -149,6 +150,46 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    
+    // Clean up all D3 charts
+    this.cleanupAllCharts();
+  }
+  
+  private cleanupAllCharts() {
+    // List of all chart element refs
+    const chartRefs = [
+      this.modelDistributionChart,
+      this.executionTimeChart,
+      this.costByVendorChart,
+      this.tokenUsageChart,
+      this.actionSuccessRateChart,
+      this.stepTypeChart,
+      this.promptTimeDistributionChart,
+      this.promptTokenDistributionChart,
+      this.promptCostDistributionChart,
+      this.promptCountByNameChart
+    ];
+    
+    // Clean up each chart
+    chartRefs.forEach(chartRef => {
+      if (chartRef?.nativeElement) {
+        const element = chartRef.nativeElement;
+        
+        // Remove all event listeners
+        d3.select(element).selectAll('*')
+          .on('click', null)
+          .on('mouseover', null)
+          .on('mouseout', null)
+          .on('mousemove', null)
+          .on('mouseleave', null);
+        
+        // Remove all SVG elements
+        d3.select(element).selectAll('*').remove();
+      }
+    });
+    
+    // Clear any tooltips that might be attached to body
+    d3.selectAll('.d3-tooltip').remove();
   }
   
   ngAfterViewInit() {
@@ -1579,5 +1620,26 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
     });
     
     return promptResult.Success ? (promptResult.Results || []) : [];
+  }
+  
+  /**
+   * TrackBy function for keyvalue pipe
+   */
+  trackByKey(index: number, item: { key: string; value: any }): string {
+    return item.key;
+  }
+  
+  /**
+   * TrackBy function for error messages
+   */
+  trackByErrorMessage(index: number, error: { message: string; count: number }): string {
+    return error.message;
+  }
+  
+  /**
+   * TrackBy function for model performance data
+   */
+  trackByModelName(index: number, model: any): string {
+    return model.name || index.toString();
   }
 }

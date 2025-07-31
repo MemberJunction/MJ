@@ -795,6 +795,7 @@ export class BaseAgent {
         }
         
         promptParams.data = promptTemplateData;
+        promptParams.agentRunId = this.AgentRun?.ID;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
@@ -819,7 +820,8 @@ export class BaseAgent {
                 contextUser: params.contextUser,
                 conversationMessages: params.conversationMessages,
                 templateMessageRole: 'user',
-                verbose: params.verbose
+                verbose: params.verbose,
+                agentRunId: this.AgentRun?.ID
             };
             
             // Pass through API keys to child prompt if provided
@@ -883,7 +885,7 @@ export class BaseAgent {
     protected async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         const newParams = {
             ...promptParams,
-            attemptJSONRepair: true
+            attemptJSONRepair: true 
         }
         return await this._promptRunner.ExecutePrompt(newParams);
     }
@@ -2075,6 +2077,21 @@ export class BaseAgent {
         if (modifiedParams.payload) {
             this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
         }
+        
+        // Set new fields from ExecuteAgentParams
+        if (params.configurationId) {
+            this._agentRun.ConfigurationID = params.configurationId;
+        }
+        if (params.override?.modelId) {
+            this._agentRun.OverrideModelID = params.override.modelId;
+        }
+        if (params.override?.vendorId) {
+            this._agentRun.OverrideVendorID = params.override.vendorId;
+        }
+        if (params.data) {
+            this._agentRun.Data = JSON.stringify(params.data);
+        }
+        this._agentRun.Verbose = params.verbose || false;
         
         // Save the agent run
         if (!await this._agentRun.Save()) {
