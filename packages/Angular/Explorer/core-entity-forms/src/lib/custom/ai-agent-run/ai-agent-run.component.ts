@@ -297,6 +297,35 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
 
   /**
+   * Get the Data field with recursive JSON parsing applied
+   */
+  get parsedData(): string {
+    if (!this.record?.Data) return '';
+    
+    try {
+      // First, check if Data is a JSON string that needs to be parsed
+      let data = this.record.Data;
+      try {
+        // If Data is a JSON string, parse it first
+        data = JSON.parse(this.record.Data);
+      } catch {
+        // If it's not valid JSON, use it as-is
+        data = this.record.Data;
+      }
+      
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      const parsed = ParseJSONRecursive(data, parseOptions);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return this.record.Data;
+    }
+  }
+  
+  /**
    * Get parsed Starting Payload as an object for deep diff
    */
   get startingPayloadObject(): any {

@@ -71,9 +71,11 @@
       <button class="tab" [class.active]="activeTab === 'visualization'" (click)="changeTab('visualization')">
         <i class="fas fa-diagram-project"></i> Visualization
       </button>
-      <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
-        <i class="fas fa-chart-line"></i> Analytics
-      </button>
+      @if (false) {
+        <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
+          <i class="fas fa-chart-line"></i> Analytics
+        </button>
+      }
       <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
         <i class="fas fa-info-circle"></i> Details
       </button>
@@ -117,13 +119,15 @@
       </div>
 
       <!-- Analytics Tab -->
-      <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
-        <mj-ai-agent-run-analytics 
-          #analyticsComponent
-          [agentRunId]="record.ID"
-          *ngIf="analyticsLoaded">
-        </mj-ai-agent-run-analytics>
-      </div>
+      @if (false) {
+        <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
+          <mj-ai-agent-run-analytics 
+            #analyticsComponent
+            [agentRunId]="record.ID"
+            *ngIf="analyticsLoaded">
+          </mj-ai-agent-run-analytics>
+        </div>
+      }
 
       <!-- Details Tab -->
       <div class="tab-content" *ngIf="activeTab === 'details'">
@@ -174,6 +178,44 @@
                     </a>
                     <span *ngIf="!record.UserID">N/A</span>
                   </span>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Settings">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Configuration</label>
+                  <span>
+                    <a *ngIf="record.ConfigurationID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Configurations', record.ConfigurationID)">
+                      {{ record.Configuration || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.ConfigurationID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Override Model</label>
+                  <span>
+                    <a *ngIf="record.OverrideModelID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Models', record.OverrideModelID)">
+                      {{ record.OverrideModel || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideModelID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Override Vendor</label>
+                  <span>
+                    <a *ngIf="record.OverrideVendorID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
+                      {{ record.OverrideVendor || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideVendorID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Verbose Logging</label>
+                  <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
                 </div>
               </div>
             </ng-template>
@@ -247,6 +289,19 @@
               <div class="result-viewer">
                 <mj-code-editor
                   [ngModel]="parsedStartingPayload"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 300px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Data" *ngIf="record.Data">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                <mj-code-editor
+                  [ngModel]="parsedData"
                   [language]="'json'"
                   [readonly]="true"
                   style="height: 300px; width: 100%;">

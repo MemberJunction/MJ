@@ -43,6 +43,8 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     public formattedValidationSummary = '';
     public formattedValidationAttempts = '';
     public formattedData = '';
+    public formattedModelSelection = '';
+    public formattedErrorDetails = '';
     
     // Parsed input data
     public chatMessages: ChatMessage[] = [];
@@ -156,6 +158,35 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         
         // Format result using extended entity method
         this.formattedResult = this.record.GetFormattedResult();
+        
+        // Format v2.78 JSON fields
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+        
+        // Format ModelSelection
+        if (this.record.ModelSelection) {
+            try {
+                const modelSelection = JSON.parse(this.record.ModelSelection);
+                const parsed = ParseJSONRecursive(modelSelection, parseOptions);
+                this.formattedModelSelection = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedModelSelection = this.record.ModelSelection;
+            }
+        }
+        
+        // Format ErrorDetails
+        if (this.record.ErrorDetails) {
+            try {
+                const errorDetails = JSON.parse(this.record.ErrorDetails);
+                const parsed = ParseJSONRecursive(errorDetails, parseOptions);
+                this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedErrorDetails = this.record.ErrorDetails;
+            }
+        }
     }
     
     getStatusColor(): string {

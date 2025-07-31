@@ -2076,6 +2076,21 @@ export class BaseAgent {
             this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
         }
         
+        // Set new fields from ExecuteAgentParams
+        if (params.configurationId) {
+            this._agentRun.ConfigurationID = params.configurationId;
+        }
+        if (params.override?.modelId) {
+            this._agentRun.OverrideModelID = params.override.modelId;
+        }
+        if (params.override?.vendorId) {
+            this._agentRun.OverrideVendorID = params.override.vendorId;
+        }
+        if (params.data) {
+            this._agentRun.Data = JSON.stringify(params.data);
+        }
+        this._agentRun.Verbose = params.verbose || false;
+        
         // Save the agent run
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
