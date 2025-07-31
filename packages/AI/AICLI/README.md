@@ -19,6 +19,9 @@ A fully functional command-line interface for executing MemberJunction AI agents
 - ✅ Interactive chat mode with agents
 - ✅ Comprehensive error handling and logging
 - ✅ Multiple output formats (compact, table, JSON)
+- ✅ Real-time progress tracking with visual indicators
+- ✅ Advanced text formatting for improved readability
+- ✅ Full conversation context in chat mode
 
 ## Installation
 
@@ -120,6 +123,46 @@ All commands support multiple output formats:
 - `--output <format>`: Output format (compact, json, table)
 - `--help`: Show command-specific help and examples
 
+## Features
+
+### Progress Tracking
+
+The CLI provides real-time progress updates during agent execution:
+
+**Non-verbose mode**: Compact progress indicators on a single line
+```
+🚀 [  0%] initialization: Initializing agent...
+✓ [ 10%] validation: Validating agent configuration
+💭 [ 30%] prompt execution: Running agent's initial prompt...
+🧠 [ 70%] decision processing: Analyzing response
+✨ [ 95%] finalization: Finalizing agent execution
+```
+
+**Verbose mode**: Detailed progress with metadata
+```
+  🚀 [  0%] initialization - Initializing Demo Loop Agent agent and preparing execution environment
+     {"agentRun":null}
+  
+  ✓ [ 10%] validation - Validating agent configuration and loading prompts
+```
+
+### Text Formatting
+
+Long agent responses are automatically formatted for better readability:
+- **Word wrapping** at console width (default 80 characters)
+- **Paragraph preservation** maintains original structure
+- **List formatting** with proper indentation for bullets and numbered lists
+- **Code highlighting** in gray for code blocks
+- **JSON formatting** with syntax highlighting for structured data
+
+### Interactive Chat Mode
+
+The chat mode maintains full conversation context:
+- Previous messages are sent with each new prompt
+- Agent maintains context across the entire conversation
+- Supports natural back-and-forth dialogue
+- Exit with "exit", "quit", or Ctrl+C
+
 ## Architecture
 
 The CLI follows the MetadataSync pattern with:
@@ -129,6 +172,8 @@ The CLI follows the MetadataSync pattern with:
 - **Logging**: Comprehensive execution tracking with file output
 - **Error Handling**: User-friendly error messages with next steps
 - **Configuration**: Automatic mj.config.cjs detection and loading
+- **Text Formatting**: Advanced console output formatting with TextFormatter
+- **Progress Tracking**: Real-time execution status with visual indicators
 
 ### Design Decisions
 

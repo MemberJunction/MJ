@@ -200,6 +200,24 @@ mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 
 - `-v, --verbose`: Show detailed execution information
 - `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
 
+#### AI Features:
+
+**Progress Tracking**: Real-time visual progress indicators during agent execution
+- Compact single-line progress in normal mode
+- Detailed progress with metadata in verbose mode
+- Visual icons for each execution phase (🚀 initialization, ✓ validation, 💭 execution, etc.)
+
+**Text Formatting**: Automatic formatting of long AI responses for better readability
+- Word wrapping at console width
+- Paragraph and list preservation
+- Code block highlighting
+- JSON syntax coloring
+
+**Interactive Chat**: Full conversation context maintained across messages
+- Agent remembers previous exchanges
+- Natural back-and-forth dialogue
+- Exit with "exit", "quit", or Ctrl+C
+
 #### AI Configuration:
 
 Add AI-specific settings to your `mj.config.cjs`:
