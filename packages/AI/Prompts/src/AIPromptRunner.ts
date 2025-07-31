@@ -2798,6 +2798,8 @@ export class AIPromptRunner {
         // Type parsing failed
         const validationResult = new ValidationResult();
         validationResult.Success = false;
+        const error = new ValidationErrorInfo('parseAndValidateResultEnhanced', `Invalid OutputExample JSON: ${parseError.message}`, rawOutput, ValidationErrorType.Failure);
+        validationErrors.push(error);
         validationResult.Errors = validationErrors;
         return { result: rawOutput, validationResult, validationErrors };
       }
