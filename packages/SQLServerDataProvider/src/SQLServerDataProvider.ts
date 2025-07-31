@@ -2008,8 +2008,16 @@ export class SQLServerDataProvider
         if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
           entityResult.StartedAt = new Date();
           entityResult.Type = bNewRecord ? 'create' : 'update';
+
           entityResult.OriginalValues = entity.Fields.map((f) => {
-            return { FieldName: f.Name, Value: f.Value };
+            const tempStatus = f.ActiveStatusAssertions;
+            f.ActiveStatusAssertions = false; // turn off warnings for this operation
+            const ret = { 
+              FieldName: f.Name, 
+              Value: f.Value 
+            };
+            f.ActiveStatusAssertions = tempStatus; // restore the status assertions
+            return ret;
           }); // save the original values before we start the process
           entity.ResultHistory.push(entityResult); // push the new result as we have started a process
 
