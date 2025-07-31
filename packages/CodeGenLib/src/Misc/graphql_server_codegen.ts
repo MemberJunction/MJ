@@ -52,7 +52,7 @@ export class GraphQLServerGeneratorBase {
     let sEntityOutput: string = '';
     try {
       const md = new Metadata();
-      const fields: EntityFieldInfo[] = entity.Fields;
+      const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = entity.ClassName + this.GraphQLTypeSuffix;
 
       if (includeFileHeader)
@@ -427,8 +427,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
       return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
     });
 
+    // sort the fields by sequence and created date for consistent ordering
+    const sortedFieldsToInclude = sortBySequenceAndCreatedAt(fieldsToInclude);
+
     // now iterate through the filtered fields
-    for (const f of fieldsToInclude) {
+    for (const f of sortedFieldsToInclude) {
       const sTypeGraphQLString: string = this.getTypeGraphQLFieldString(f);
       // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
       const codeName: string = f.CodeName.startsWith('__mj') ? '_mj_' + f.CodeName.substring(4) : f.CodeName;

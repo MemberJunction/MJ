@@ -478,7 +478,8 @@ export function Load${entity.ClassName}FormComponent() {
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
-          for (const field of entity.Fields) {
+          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm) 
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category);
@@ -562,7 +563,8 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       
           // figure out which fields will be in this section first
           section.Fields = [];
-          for (const field of entity.Fields) {
+          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   let bMatch: boolean = false;
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top && section.Type === GeneratedFormSectionType.Top) {

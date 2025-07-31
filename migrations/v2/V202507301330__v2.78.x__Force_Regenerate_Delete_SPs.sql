@@ -3,14 +3,14 @@ UPDATE [${flyway:defaultSchema}].[Entity] SET spDeleteGenerated = 1 WHERE ID = '
 
 /*********** CODEGEN OUTPUT ***********/
 
-/* SQL text to delete entity field value ID 82CF433E-F36B-1410-8D7B-00A3FCABC804 */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='82CF433E-F36B-1410-8D7B-00A3FCABC804'
+/* SQL text to delete entity field value ID 9642443E-F36B-1410-8D7B-00A3FCABC804 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='9642443E-F36B-1410-8D7B-00A3FCABC804'
 
 /* SQL text to update entity field value sequence */
-UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='1ED0433E-F36B-1410-8D7B-00A3FCABC804'
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='6A44443E-F36B-1410-8D7B-00A3FCABC804'
 
-/* SQL text to delete entity field value ID 8CCF433E-F36B-1410-8D7B-00A3FCABC804 */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='8CCF433E-F36B-1410-8D7B-00A3FCABC804'
+/* SQL text to delete entity field value ID B442443E-F36B-1410-8D7B-00A3FCABC804 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='B442443E-F36B-1410-8D7B-00A3FCABC804'
 
 /* spDelete SQL for Scheduled Actions */
 -----------------------------------------------------------------
@@ -3288,7 +3288,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteReportSnapshot] @ReportSnapshotsID
+        EXEC [${flyway:defaultSchema}].[spDeleteReportSnapshot] @ID = @ReportSnapshotsID
         
         FETCH NEXT FROM cascade_delete_ReportSnapshots_cursor INTO @ReportSnapshotsID
     END
@@ -3309,7 +3309,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteReportUserState] @MJ_ReportUserStatesID
+        EXEC [${flyway:defaultSchema}].[spDeleteReportUserState] @ID = @MJ_ReportUserStatesID
         
         FETCH NEXT FROM cascade_delete_MJ_ReportUserStates_cursor INTO @MJ_ReportUserStatesID
     END
@@ -3330,7 +3330,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteReportVersion] @MJ_ReportVersionsID
+        EXEC [${flyway:defaultSchema}].[spDeleteReportVersion] @ID = @MJ_ReportVersionsID
         
         FETCH NEXT FROM cascade_delete_MJ_ReportVersions_cursor INTO @MJ_ReportVersionsID
     END
@@ -3774,7 +3774,7 @@ BEGIN
         SET @MJ_AIAgentRuns_ConversationDetailID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @ID = @MJ_AIAgentRunsID, @AgentID = @MJ_AIAgentRuns_AgentID, @ParentRunID = @MJ_AIAgentRuns_ParentRunID, @Status = @MJ_AIAgentRuns_Status, @StartedAt = @MJ_AIAgentRuns_StartedAt, @CompletedAt = @MJ_AIAgentRuns_CompletedAt, @Success = @MJ_AIAgentRuns_Success, @ErrorMessage = @MJ_AIAgentRuns_ErrorMessage, @ConversationID = @MJ_AIAgentRuns_ConversationID, @UserID = @MJ_AIAgentRuns_UserID, @Result = @MJ_AIAgentRuns_Result, @AgentState = @MJ_AIAgentRuns_AgentState, @TotalTokensUsed = @MJ_AIAgentRuns_TotalTokensUsed, @TotalCost = @MJ_AIAgentRuns_TotalCost, @TotalPromptTokensUsed = @MJ_AIAgentRuns_TotalPromptTokensUsed, @TotalCompletionTokensUsed = @MJ_AIAgentRuns_TotalCompletionTokensUsed, @TotalTokensUsedRollup = @MJ_AIAgentRuns_TotalTokensUsedRollup, @TotalPromptTokensUsedRollup = @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @TotalCompletionTokensUsedRollup = @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @TotalCostRollup = @MJ_AIAgentRuns_TotalCostRollup, @ConversationDetailID = @MJ_AIAgentRuns_ConversationDetailID, @ConversationDetailSequence = @MJ_AIAgentRuns_ConversationDetailSequence, @CancellationReason = @MJ_AIAgentRuns_CancellationReason, @FinalStep = @MJ_AIAgentRuns_FinalStep, @FinalPayload = @MJ_AIAgentRuns_FinalPayload, @Message = @MJ_AIAgentRuns_Message, @LastRunID = @MJ_AIAgentRuns_LastRunID, @StartingPayload = @MJ_AIAgentRuns_StartingPayload, @TotalPromptIterations = @MJ_AIAgentRuns_TotalPromptIterations
         
         FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations
     END
@@ -3814,7 +3814,7 @@ BEGIN
         SET @Reports_ConversationDetailID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail
+        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ID = @ReportsID, @Name = @Reports_Name, @Description = @Reports_Description, @CategoryID = @Reports_CategoryID, @UserID = @Reports_UserID, @SharingScope = @Reports_SharingScope, @ConversationID = @Reports_ConversationID, @ConversationDetailID = @Reports_ConversationDetailID, @DataContextID = @Reports_DataContextID, @Configuration = @Reports_Configuration, @OutputTriggerTypeID = @Reports_OutputTriggerTypeID, @OutputFormatTypeID = @Reports_OutputFormatTypeID, @OutputDeliveryTypeID = @Reports_OutputDeliveryTypeID, @OutputFrequency = @Reports_OutputFrequency, @OutputTargetEmail = @Reports_OutputTargetEmail, @OutputWorkflowID = @Reports_OutputWorkflowID, @Thumbnail = @Reports_Thumbnail
         
         FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail
     END
@@ -3910,7 +3910,7 @@ BEGIN
         SET @MJ_AIAgentRuns_ConversationID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @ID = @MJ_AIAgentRunsID, @AgentID = @MJ_AIAgentRuns_AgentID, @ParentRunID = @MJ_AIAgentRuns_ParentRunID, @Status = @MJ_AIAgentRuns_Status, @StartedAt = @MJ_AIAgentRuns_StartedAt, @CompletedAt = @MJ_AIAgentRuns_CompletedAt, @Success = @MJ_AIAgentRuns_Success, @ErrorMessage = @MJ_AIAgentRuns_ErrorMessage, @ConversationID = @MJ_AIAgentRuns_ConversationID, @UserID = @MJ_AIAgentRuns_UserID, @Result = @MJ_AIAgentRuns_Result, @AgentState = @MJ_AIAgentRuns_AgentState, @TotalTokensUsed = @MJ_AIAgentRuns_TotalTokensUsed, @TotalCost = @MJ_AIAgentRuns_TotalCost, @TotalPromptTokensUsed = @MJ_AIAgentRuns_TotalPromptTokensUsed, @TotalCompletionTokensUsed = @MJ_AIAgentRuns_TotalCompletionTokensUsed, @TotalTokensUsedRollup = @MJ_AIAgentRuns_TotalTokensUsedRollup, @TotalPromptTokensUsedRollup = @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @TotalCompletionTokensUsedRollup = @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @TotalCostRollup = @MJ_AIAgentRuns_TotalCostRollup, @ConversationDetailID = @MJ_AIAgentRuns_ConversationDetailID, @ConversationDetailSequence = @MJ_AIAgentRuns_ConversationDetailSequence, @CancellationReason = @MJ_AIAgentRuns_CancellationReason, @FinalStep = @MJ_AIAgentRuns_FinalStep, @FinalPayload = @MJ_AIAgentRuns_FinalPayload, @Message = @MJ_AIAgentRuns_Message, @LastRunID = @MJ_AIAgentRuns_LastRunID, @StartingPayload = @MJ_AIAgentRuns_StartingPayload, @TotalPromptIterations = @MJ_AIAgentRuns_TotalPromptIterations
         
         FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations
     END
@@ -3950,7 +3950,7 @@ BEGIN
         SET @Reports_ConversationID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail
+        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ID = @ReportsID, @Name = @Reports_Name, @Description = @Reports_Description, @CategoryID = @Reports_CategoryID, @UserID = @Reports_UserID, @SharingScope = @Reports_SharingScope, @ConversationID = @Reports_ConversationID, @ConversationDetailID = @Reports_ConversationDetailID, @DataContextID = @Reports_DataContextID, @Configuration = @Reports_Configuration, @OutputTriggerTypeID = @Reports_OutputTriggerTypeID, @OutputFormatTypeID = @Reports_OutputFormatTypeID, @OutputDeliveryTypeID = @Reports_OutputDeliveryTypeID, @OutputFrequency = @Reports_OutputFrequency, @OutputTargetEmail = @Reports_OutputTargetEmail, @OutputWorkflowID = @Reports_OutputWorkflowID, @Thumbnail = @Reports_Thumbnail
         
         FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail
     END
@@ -3971,7 +3971,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteConversationDetail] @ConversationDetailsID
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationDetail] @ID = @ConversationDetailsID
         
         FETCH NEXT FROM cascade_delete_ConversationDetails_cursor INTO @ConversationDetailsID
     END
@@ -3992,7 +3992,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifact] @MJ_ConversationArtifactsID
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifact] @ID = @MJ_ConversationArtifactsID
         
         FETCH NEXT FROM cascade_delete_MJ_ConversationArtifacts_cursor INTO @MJ_ConversationArtifactsID
     END
@@ -4363,7 +4363,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteQueryField] @QueryFieldsID
+        EXEC [${flyway:defaultSchema}].[spDeleteQueryField] @ID = @QueryFieldsID
         
         FETCH NEXT FROM cascade_delete_QueryFields_cursor INTO @QueryFieldsID
     END
@@ -4384,7 +4384,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteQueryPermission] @QueryPermissionsID
+        EXEC [${flyway:defaultSchema}].[spDeleteQueryPermission] @ID = @QueryPermissionsID
         
         FETCH NEXT FROM cascade_delete_QueryPermissions_cursor INTO @QueryPermissionsID
     END
@@ -4419,7 +4419,7 @@ BEGIN
         SET @DataContextItems_QueryID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateDataContextItem] @DataContextItemsID, @DataContextItems_DataContextID, @DataContextItems_Type, @DataContextItems_ViewID, @DataContextItems_QueryID, @DataContextItems_EntityID, @DataContextItems_RecordID, @DataContextItems_SQL, @DataContextItems_DataJSON, @DataContextItems_LastRefreshedAt, @DataContextItems_Description, @DataContextItems_CodeName
+        EXEC [${flyway:defaultSchema}].[spUpdateDataContextItem] @ID = @DataContextItemsID, @DataContextID = @DataContextItems_DataContextID, @Type = @DataContextItems_Type, @ViewID = @DataContextItems_ViewID, @QueryID = @DataContextItems_QueryID, @EntityID = @DataContextItems_EntityID, @RecordID = @DataContextItems_RecordID, @SQL = @DataContextItems_SQL, @DataJSON = @DataContextItems_DataJSON, @LastRefreshedAt = @DataContextItems_LastRefreshedAt, @Description = @DataContextItems_Description, @CodeName = @DataContextItems_CodeName
         
         FETCH NEXT FROM cascade_update_DataContextItems_cursor INTO @DataContextItemsID, @DataContextItems_DataContextID, @DataContextItems_Type, @DataContextItems_ViewID, @DataContextItems_QueryID, @DataContextItems_EntityID, @DataContextItems_RecordID, @DataContextItems_SQL, @DataContextItems_DataJSON, @DataContextItems_LastRefreshedAt, @DataContextItems_Description, @DataContextItems_CodeName
     END
@@ -4440,7 +4440,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteQueryEntity] @QueryEntitiesID
+        EXEC [${flyway:defaultSchema}].[spDeleteQueryEntity] @ID = @QueryEntitiesID
         
         FETCH NEXT FROM cascade_delete_QueryEntities_cursor INTO @QueryEntitiesID
     END
@@ -4461,7 +4461,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteQueryParameter] @MJ_QueryParametersID
+        EXEC [${flyway:defaultSchema}].[spDeleteQueryParameter] @ID = @MJ_QueryParametersID
         
         FETCH NEXT FROM cascade_delete_MJ_QueryParameters_cursor INTO @MJ_QueryParametersID
     END
@@ -7000,14 +7000,14 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteLibraryItem] TO [cdp_Integra
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID F4C9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 6B3D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='F4C9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='6B3D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ResourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 13CA433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID CC3D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='13CA433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='CC3D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='User'
 
 /* spDelete SQL for Entity Relationship Display Components */
@@ -7149,7 +7149,7 @@ BEGIN
         SET @ConversationDetails_ArtifactVersionID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ConversationDetailsID, @ConversationDetails_ConversationID, @ConversationDetails_ExternalID, @ConversationDetails_Role, @ConversationDetails_Message, @ConversationDetails_Error, @ConversationDetails_HiddenToUser, @ConversationDetails_UserRating, @ConversationDetails_UserFeedback, @ConversationDetails_ReflectionInsights, @ConversationDetails_SummaryOfEarlierConversation, @ConversationDetails_UserID, @ConversationDetails_ArtifactID, @ConversationDetails_ArtifactVersionID, @ConversationDetails_CompletionTime
+        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @ConversationDetailsID, @ConversationID = @ConversationDetails_ConversationID, @ExternalID = @ConversationDetails_ExternalID, @Role = @ConversationDetails_Role, @Message = @ConversationDetails_Message, @Error = @ConversationDetails_Error, @HiddenToUser = @ConversationDetails_HiddenToUser, @UserRating = @ConversationDetails_UserRating, @UserFeedback = @ConversationDetails_UserFeedback, @ReflectionInsights = @ConversationDetails_ReflectionInsights, @SummaryOfEarlierConversation = @ConversationDetails_SummaryOfEarlierConversation, @UserID = @ConversationDetails_UserID, @ArtifactID = @ConversationDetails_ArtifactID, @ArtifactVersionID = @ConversationDetails_ArtifactVersionID, @CompletionTime = @ConversationDetails_CompletionTime
         
         FETCH NEXT FROM cascade_update_ConversationDetails_cursor INTO @ConversationDetailsID, @ConversationDetails_ConversationID, @ConversationDetails_ExternalID, @ConversationDetails_Role, @ConversationDetails_Message, @ConversationDetails_Error, @ConversationDetails_HiddenToUser, @ConversationDetails_UserRating, @ConversationDetails_UserFeedback, @ConversationDetails_ReflectionInsights, @ConversationDetails_SummaryOfEarlierConversation, @ConversationDetails_UserID, @ConversationDetails_ArtifactID, @ConversationDetails_ArtifactVersionID, @ConversationDetails_CompletionTime
     END
@@ -7180,15 +7180,20 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationArtifactVersion]
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID F8C9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID D33D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='F8C9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='D33D443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 7F3D443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='7F3D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='Role'
 
-/* SQL text to update entity field related entity name field map for entity field ID 17CA433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 843D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='17CA433E-F36B-1410-8D7B-00A3FCABC804',
-         @RelatedEntityNameFieldMap='ResourceType'
+         @EntityFieldID='843D443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='User'
 
 /* spDelete SQL for Resource Links */
 -----------------------------------------------------------------
@@ -7233,11 +7238,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteResourceLink] TO [cdp_Integr
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteResourceLink] TO [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID F9C9433E-F36B-1410-8D7B-00A3FCABC804 */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='F9C9433E-F36B-1410-8D7B-00A3FCABC804',
-         @RelatedEntityNameFieldMap='User'
 
 /* spDelete SQL for Resource Permissions */
 -----------------------------------------------------------------
@@ -7686,7 +7686,7 @@ BEGIN
         SET @ConversationDetails_ArtifactID = NULL
         
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ConversationDetailsID, @ConversationDetails_ConversationID, @ConversationDetails_ExternalID, @ConversationDetails_Role, @ConversationDetails_Message, @ConversationDetails_Error, @ConversationDetails_HiddenToUser, @ConversationDetails_UserRating, @ConversationDetails_UserFeedback, @ConversationDetails_ReflectionInsights, @ConversationDetails_SummaryOfEarlierConversation, @ConversationDetails_UserID, @ConversationDetails_ArtifactID, @ConversationDetails_ArtifactVersionID, @ConversationDetails_CompletionTime
+        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @ConversationDetailsID, @ConversationID = @ConversationDetails_ConversationID, @ExternalID = @ConversationDetails_ExternalID, @Role = @ConversationDetails_Role, @Message = @ConversationDetails_Message, @Error = @ConversationDetails_Error, @HiddenToUser = @ConversationDetails_HiddenToUser, @UserRating = @ConversationDetails_UserRating, @UserFeedback = @ConversationDetails_UserFeedback, @ReflectionInsights = @ConversationDetails_ReflectionInsights, @SummaryOfEarlierConversation = @ConversationDetails_SummaryOfEarlierConversation, @UserID = @ConversationDetails_UserID, @ArtifactID = @ConversationDetails_ArtifactID, @ArtifactVersionID = @ConversationDetails_ArtifactVersionID, @CompletionTime = @ConversationDetails_CompletionTime
         
         FETCH NEXT FROM cascade_update_ConversationDetails_cursor INTO @ConversationDetailsID, @ConversationDetails_ConversationID, @ConversationDetails_ExternalID, @ConversationDetails_Role, @ConversationDetails_Message, @ConversationDetails_Error, @ConversationDetails_HiddenToUser, @ConversationDetails_UserRating, @ConversationDetails_UserFeedback, @ConversationDetails_ReflectionInsights, @ConversationDetails_SummaryOfEarlierConversation, @ConversationDetails_UserID, @ConversationDetails_ArtifactID, @ConversationDetails_ArtifactVersionID, @ConversationDetails_CompletionTime
     END
@@ -7707,7 +7707,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifactVersion] @MJ_ConversationArtifactVersionsID
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifactVersion] @ID = @MJ_ConversationArtifactVersionsID
         
         FETCH NEXT FROM cascade_delete_MJ_ConversationArtifactVersions_cursor INTO @MJ_ConversationArtifactVersionsID
     END
@@ -7728,7 +7728,7 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Call the delete SP for the related entity, which handles its own cascades
-        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifactPermission] @MJ_ConversationArtifactPermissionsID
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifactPermission] @ID = @MJ_ConversationArtifactPermissionsID
         
         FETCH NEXT FROM cascade_delete_MJ_ConversationArtifactPermissions_cursor INTO @MJ_ConversationArtifactPermissionsID
     END
@@ -7803,19 +7803,19 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentPrompt] TO [cdp_Integ
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID D2C7433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 553C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='D2C7433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='553C443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='Source'
 
-/* SQL text to update entity field related entity name field map for entity field ID 08C8433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 703C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='08C8433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='703C443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 32C8433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 853C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='32C8433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='853C443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentSource'
 
 /* spDelete SQL for MJ: Dashboard User Preferences */
@@ -7906,6 +7906,11 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryParameter] TO [cdp_Inte
 
 
 
+/* SQL text to update entity field related entity name field map for entity field ID 733C443E-F36B-1410-8D7B-00A3FCABC804 */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='733C443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
 /* spDelete SQL for Content Process Runs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7950,10 +7955,10 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentProcessRun] TO [cdp_I
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 0EC8433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 763C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='0EC8433E-F36B-1410-8D7B-00A3FCABC804',
-         @RelatedEntityNameFieldMap='ContentSourceType'
+         @EntityFieldID='763C443E-F36B-1410-8D7B-00A3FCABC804',
+         @RelatedEntityNameFieldMap='ContentFileType'
 
 /* spDelete SQL for Content Source Params */
 -----------------------------------------------------------------
@@ -7999,11 +8004,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSourceParam] TO [cdp_
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 14C8433E-F36B-1410-8D7B-00A3FCABC804 */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='14C8433E-F36B-1410-8D7B-00A3FCABC804',
-         @RelatedEntityNameFieldMap='ContentFileType'
-
 /* spDelete SQL for Content Sources */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8048,9 +8048,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] TO [cdp_Integ
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID B0C8433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID C43C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='B0C8433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='C43C443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='AIModel'
 
 /* spDelete SQL for Content Source Types */
@@ -8273,19 +8273,19 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] TO [cdp_Integra
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 1CC9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID FA3C443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='1CC9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='FA3C443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentSource'
 
-/* SQL text to update entity field related entity name field map for entity field ID 64C9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 1E3D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='64C9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='1E3D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentItem'
 
-/* SQL text to update entity field related entity name field map for entity field ID 88C9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 303D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='88C9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='303D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='Item'
 
 /* spDelete SQL for Generated Codes */
@@ -8376,9 +8376,53 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Develop
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 2EC9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* spDelete SQL for Content Item Attributes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Content Item Attributes
+-- Item: spDeleteContentItemAttribute
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ContentItemAttribute
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteContentItemAttribute]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemAttribute]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ContentItemAttribute]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemAttribute] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for Content Item Attributes */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemAttribute] TO [cdp_Integration]
+
+
+
+/* SQL text to update entity field related entity name field map for entity field ID 033D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='2EC9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='033D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentType'
 
 /* spDelete SQL for Content Item Tags */
@@ -8425,58 +8469,14 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemTag] TO [cdp_Inte
 
 
 
-/* spDelete SQL for Content Item Attributes */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Content Item Attributes
--- Item: spDeleteContentItemAttribute
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR ContentItemAttribute
-------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteContentItemAttribute]
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemAttribute]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[ContentItemAttribute]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemAttribute] TO [cdp_Integration]
-    
-
-/* spDelete Permissions for Content Item Attributes */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemAttribute] TO [cdp_Integration]
-
-
-
-/* SQL text to update entity field related entity name field map for entity field ID 34C9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 063D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='34C9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='063D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentSourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3AC9433E-F36B-1410-8D7B-00A3FCABC804 */
+/* SQL text to update entity field related entity name field map for entity field ID 093D443E-F36B-1410-8D7B-00A3FCABC804 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3AC9433E-F36B-1410-8D7B-00A3FCABC804',
+         @EntityFieldID='093D443E-F36B-1410-8D7B-00A3FCABC804',
          @RelatedEntityNameFieldMap='ContentFileType'
 
 /* spDelete SQL for Content Items */

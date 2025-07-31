@@ -9,7 +9,7 @@ import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreS
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { combineFiles, logIf } from '../Misc/util';
+import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
@@ -1648,7 +1648,8 @@ GO${permissions}
             
             if (spParams !== '')
                 spParams += ', ';
-            spParams += `@${varPrefix}${pk.CodeName}`;
+            // Use named parameters: @ParamName = @VariableValue
+            spParams += `@${pk.CodeName} = @${varPrefix}${pk.CodeName}`;
         }
         
         return { varDeclarations, selectFields, fetchInto, spParams };
@@ -1679,7 +1680,8 @@ GO${permissions}
         allParams = pkComponents.spParams;
         
         // Then, add all updateable fields with the same prefix
-        for (const ef of entity.Fields) {
+        const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+        for (const ef of sortedFields) {
             if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
                 if (declarations !== '')
                     declarations += '\n    ';
@@ -1695,7 +1697,8 @@ GO${permissions}
                 
                 if (allParams !== '')
                     allParams += ', ';
-                allParams += `@${varPrefix}_${ef.CodeName}`;
+                // Use named parameters: @ParamName = @VariableValue
+                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
             }
         }
         
