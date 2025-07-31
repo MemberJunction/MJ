@@ -1,5 +1,13 @@
 # @memberjunction/react-runtime
 
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.78.0
+- @memberjunction/core@2.78.0
+- @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Patch Changes
