@@ -7864,6 +7864,35 @@ export const AIAgentRunSchema = z.object({
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
 each time the agent processes a prompt step.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
+    OverrideModelID: z.string().nullable().describe(`
+        * * Field Name: OverrideModelID
+        * * Display Name: Override Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
+    OverrideVendorID: z.string().nullable().describe(`
+        * * Field Name: OverrideVendorID
+        * * Display Name: Override Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+        * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
+    Data: z.string().nullable().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
+    Verbose: z.boolean().nullable().describe(`
+        * * Field Name: Verbose
+        * * Display Name: Verbose
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -7876,6 +7905,18 @@ each time the agent processes a prompt step.`),
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+    OverrideModel: z.string().nullable().describe(`
+        * * Field Name: OverrideModel
+        * * Display Name: Override Model
+        * * SQL Data Type: nvarchar(50)`),
+    OverrideVendor: z.string().nullable().describe(`
+        * * Field Name: OverrideVendor
+        * * Display Name: Override Vendor
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -33758,6 +33799,75 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: OverrideModelID
+    * * Display Name: Override Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
+    */
+    get OverrideModelID(): string | null {
+        return this.Get('OverrideModelID');
+    }
+    set OverrideModelID(value: string | null) {
+        this.Set('OverrideModelID', value);
+    }
+
+    /**
+    * * Field Name: OverrideVendorID
+    * * Display Name: Override Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
+    */
+    get OverrideVendorID(): string | null {
+        return this.Get('OverrideVendorID');
+    }
+    set OverrideVendorID(value: string | null) {
+        this.Set('OverrideVendorID', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
+    */
+    get Data(): string | null {
+        return this.Get('Data');
+    }
+    set Data(value: string | null) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: Verbose
+    * * Display Name: Verbose
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
+    */
+    get Verbose(): boolean | null {
+        return this.Get('Verbose');
+    }
+    set Verbose(value: boolean | null) {
+        this.Set('Verbose', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -33782,6 +33892,33 @@ each time the agent processes a prompt step.
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+
+    /**
+    * * Field Name: OverrideModel
+    * * Display Name: Override Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideModel(): string | null {
+        return this.Get('OverrideModel');
+    }
+
+    /**
+    * * Field Name: OverrideVendor
+    * * Display Name: Override Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideVendor(): string | null {
+        return this.Get('OverrideVendor');
     }
 }
 
