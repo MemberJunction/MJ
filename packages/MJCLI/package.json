@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
+    "@memberjunction/ai-cli": "2.77.0",
     "@memberjunction/codegen-lib": "2.77.0",
     "@memberjunction/metadata-sync": "2.77.0",
     "@memberjunction/sqlserver-dataprovider": "2.77.0",

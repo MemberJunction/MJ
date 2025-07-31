@@ -9026,6 +9026,94 @@ export const AIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
+    ModelSelection: z.string().nullable().describe(`
+        * * Field Name: ModelSelection
+        * * Display Name: Model Selection
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
+    Status: z.union([z.literal('Pending'), z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+        * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`),
+    Cancelled: z.boolean().describe(`
+        * * Field Name: Cancelled
+        * * Display Name: Cancelled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this prompt run was cancelled before completion`),
+    CancellationReason: z.string().nullable().describe(`
+        * * Field Name: CancellationReason
+        * * Display Name: Cancellation Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`),
+    ModelPowerRank: z.number().nullable().describe(`
+        * * Field Name: ModelPowerRank
+        * * Display Name: Model Power Rank
+        * * SQL Data Type: int
+        * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`),
+    SelectionStrategy: z.union([z.literal('Default'), z.literal('Specific'), z.literal('ByPower')]).nullable().describe(`
+        * * Field Name: SelectionStrategy
+        * * Display Name: Selection Strategy
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
+        * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`),
+    CacheHit: z.boolean().describe(`
+        * * Field Name: CacheHit
+        * * Display Name: Cache Hit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this result was served from cache rather than executing a new model call`),
+    CacheKey: z.string().nullable().describe(`
+        * * Field Name: CacheKey
+        * * Display Name: Cache Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
+    JudgeID: z.string().nullable().describe(`
+        * * Field Name: JudgeID
+        * * Display Name: Judge ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
+    JudgeScore: z.number().nullable().describe(`
+        * * Field Name: JudgeScore
+        * * Display Name: Judge Score
+        * * SQL Data Type: float(53)
+        * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`),
+    WasSelectedResult: z.boolean().describe(`
+        * * Field Name: WasSelectedResult
+        * * Display Name: Was Selected Result
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel`),
+    StreamingEnabled: z.boolean().describe(`
+        * * Field Name: StreamingEnabled
+        * * Display Name: Streaming Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether streaming was enabled for this prompt execution`),
+    FirstTokenTime: z.number().nullable().describe(`
+        * * Field Name: FirstTokenTime
+        * * Display Name: First Token Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds from request initiation to receiving the first token from the model`),
+    ErrorDetails: z.string().nullable().describe(`
+        * * Field Name: ErrorDetails
+        * * Display Name: Error Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -9050,6 +9138,10 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: OriginalModel
         * * Display Name: Original Model
         * * SQL Data Type: nvarchar(50)`),
+    Judge: z.string().nullable().describe(`
+        * * Field Name: Judge
+        * * Display Name: Judge
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -36941,6 +37033,206 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: ModelSelection
+    * * Display Name: Model Selection
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
+    */
+    get ModelSelection(): string | null {
+        return this.Get('ModelSelection');
+    }
+    set ModelSelection(value: string | null) {
+        this.Set('ModelSelection', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled
+    */
+    get Status(): 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Cancelled
+    * * Display Name: Cancelled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this prompt run was cancelled before completion
+    */
+    get Cancelled(): boolean {
+        return this.Get('Cancelled');
+    }
+    set Cancelled(value: boolean) {
+        this.Set('Cancelled', value);
+    }
+
+    /**
+    * * Field Name: CancellationReason
+    * * Display Name: Cancellation Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit
+    */
+    get CancellationReason(): string | null {
+        return this.Get('CancellationReason');
+    }
+    set CancellationReason(value: string | null) {
+        this.Set('CancellationReason', value);
+    }
+
+    /**
+    * * Field Name: ModelPowerRank
+    * * Display Name: Model Power Rank
+    * * SQL Data Type: int
+    * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models
+    */
+    get ModelPowerRank(): number | null {
+        return this.Get('ModelPowerRank');
+    }
+    set ModelPowerRank(value: number | null) {
+        this.Set('ModelPowerRank', value);
+    }
+
+    /**
+    * * Field Name: SelectionStrategy
+    * * Display Name: Selection Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
+    * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)
+    */
+    get SelectionStrategy(): 'Default' | 'Specific' | 'ByPower' | null {
+        return this.Get('SelectionStrategy');
+    }
+    set SelectionStrategy(value: 'Default' | 'Specific' | 'ByPower' | null) {
+        this.Set('SelectionStrategy', value);
+    }
+
+    /**
+    * * Field Name: CacheHit
+    * * Display Name: Cache Hit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this result was served from cache rather than executing a new model call
+    */
+    get CacheHit(): boolean {
+        return this.Get('CacheHit');
+    }
+    set CacheHit(value: boolean) {
+        this.Set('CacheHit', value);
+    }
+
+    /**
+    * * Field Name: CacheKey
+    * * Display Name: Cache Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters
+    */
+    get CacheKey(): string | null {
+        return this.Get('CacheKey');
+    }
+    set CacheKey(value: string | null) {
+        this.Set('CacheKey', value);
+    }
+
+    /**
+    * * Field Name: JudgeID
+    * * Display Name: Judge ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
+    */
+    get JudgeID(): string | null {
+        return this.Get('JudgeID');
+    }
+    set JudgeID(value: string | null) {
+        this.Set('JudgeID', value);
+    }
+
+    /**
+    * * Field Name: JudgeScore
+    * * Display Name: Judge Score
+    * * SQL Data Type: float(53)
+    * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results
+    */
+    get JudgeScore(): number | null {
+        return this.Get('JudgeScore');
+    }
+    set JudgeScore(value: number | null) {
+        this.Set('JudgeScore', value);
+    }
+
+    /**
+    * * Field Name: WasSelectedResult
+    * * Display Name: Was Selected Result
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel
+    */
+    get WasSelectedResult(): boolean {
+        return this.Get('WasSelectedResult');
+    }
+    set WasSelectedResult(value: boolean) {
+        this.Set('WasSelectedResult', value);
+    }
+
+    /**
+    * * Field Name: StreamingEnabled
+    * * Display Name: Streaming Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether streaming was enabled for this prompt execution
+    */
+    get StreamingEnabled(): boolean {
+        return this.Get('StreamingEnabled');
+    }
+    set StreamingEnabled(value: boolean) {
+        this.Set('StreamingEnabled', value);
+    }
+
+    /**
+    * * Field Name: FirstTokenTime
+    * * Display Name: First Token Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds from request initiation to receiving the first token from the model
+    */
+    get FirstTokenTime(): number | null {
+        return this.Get('FirstTokenTime');
+    }
+    set FirstTokenTime(value: number | null) {
+        this.Set('FirstTokenTime', value);
+    }
+
+    /**
+    * * Field Name: ErrorDetails
+    * * Display Name: Error Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes
+    */
+    get ErrorDetails(): string | null {
+        return this.Get('ErrorDetails');
+    }
+    set ErrorDetails(value: string | null) {
+        this.Set('ErrorDetails', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -36992,6 +37284,15 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get OriginalModel(): string | null {
         return this.Get('OriginalModel');
+    }
+
+    /**
+    * * Field Name: Judge
+    * * Display Name: Judge
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Judge(): string | null {
+        return this.Get('Judge');
     }
 }
 
@@ -39133,6 +39434,41 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Queries - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof QueryEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**

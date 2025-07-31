@@ -4,12 +4,58 @@
  * @module @memberjunction/react-runtime/utilities
  */
 
+// Type alias for timer IDs that works in both browser and Node.js
+export type TimerId = number | NodeJS.Timeout;
+
 export interface ManagedResource {
   type: 'timer' | 'interval' | 'animationFrame' | 'eventListener' | 'domElement' | 'observable' | 'reactRoot';
-  id: string | number;
+  id: string | TimerId;
   cleanup: () => void;
   metadata?: Record<string, any>;
 }
+
+/**
+ * Environment-agnostic timer functions that work in both browser and Node.js
+ */
+const getTimerFunctions = () => {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined' && window.setTimeout) {
+    return {
+      setTimeout: window.setTimeout.bind(window),
+      clearTimeout: window.clearTimeout.bind(window),
+      setInterval: window.setInterval.bind(window),
+      clearInterval: window.clearInterval.bind(window),
+      requestAnimationFrame: window.requestAnimationFrame?.bind(window),
+      cancelAnimationFrame: window.cancelAnimationFrame?.bind(window)
+    };
+  }
+  // Node.js environment
+  else if (typeof global !== 'undefined' && global.setTimeout) {
+    return {
+      setTimeout: global.setTimeout,
+      clearTimeout: global.clearTimeout,
+      setInterval: global.setInterval,
+      clearInterval: global.clearInterval,
+      requestAnimationFrame: undefined, // Not available in Node.js
+      cancelAnimationFrame: undefined
+    };
+  }
+  // Fallback - return no-op functions
+  else {
+    const noop = () => {};
+    const noopWithReturn = () => 0;
+    return {
+      setTimeout: noopWithReturn,
+      clearTimeout: noop,
+      setInterval: noopWithReturn,
+      clearInterval: noop,
+      requestAnimationFrame: undefined,
+      cancelAnimationFrame: undefined
+    };
+  }
+};
+
+const timers = getTimerFunctions();
 
 /**
  * ResourceManager provides centralized management of resources that need cleanup.
@@ -29,7 +75,7 @@ export class ResourceManager {
     delay: number,
     metadata?: Record<string, any>
   ): number {
-    const id = window.setTimeout(() => {
+    const id = timers.setTimeout(() => {
       this.removeResource(componentId, 'timer', id);
       callback();
     }, delay);
@@ -37,11 +83,11 @@ export class ResourceManager {
     this.addResource(componentId, {
       type: 'timer',
       id,
-      cleanup: () => window.clearTimeout(id),
+      cleanup: () => timers.clearTimeout(id),
       metadata
     });
 
-    return id;
+    return id as any;
   }
 
   /**
@@ -53,16 +99,16 @@ export class ResourceManager {
     delay: number,
     metadata?: Record<string, any>
   ): number {
-    const id = window.setInterval(callback, delay);
+    const id = timers.setInterval(callback, delay);
 
     this.addResource(componentId, {
       type: 'interval',
       id,
-      cleanup: () => window.clearInterval(id),
+      cleanup: () => timers.clearInterval(id),
       metadata
     });
 
-    return id;
+    return id as any;
   }
 
   /**
@@ -72,8 +118,13 @@ export class ResourceManager {
     componentId: string,
     callback: FrameRequestCallback,
     metadata?: Record<string, any>
-  ): number {
-    const id = window.requestAnimationFrame((time) => {
+  ): TimerId {
+    if (!timers.requestAnimationFrame) {
+      // Fallback to setTimeout in non-browser environments
+      return this.setTimeout(componentId, () => callback(Date.now()), 16, metadata);
+    }
+
+    const id = timers.requestAnimationFrame((time) => {
       this.removeResource(componentId, 'animationFrame', id);
       callback(time);
     });
@@ -81,18 +132,18 @@ export class ResourceManager {
     this.addResource(componentId, {
       type: 'animationFrame',
       id,
-      cleanup: () => window.cancelAnimationFrame(id),
+      cleanup: () => timers.cancelAnimationFrame?.(id),
       metadata
     });
 
-    return id;
+    return id as any;
   }
 
   /**
    * Clear a specific timeout
    */
   clearTimeout(componentId: string, id: number): void {
-    window.clearTimeout(id);
+    timers.clearTimeout(id);
     this.removeResource(componentId, 'timer', id);
   }
 
@@ -100,15 +151,20 @@ export class ResourceManager {
    * Clear a specific interval
    */
   clearInterval(componentId: string, id: number): void {
-    window.clearInterval(id);
+    timers.clearInterval(id);
     this.removeResource(componentId, 'interval', id);
   }
 
   /**
    * Cancel a specific animation frame
    */
-  cancelAnimationFrame(componentId: string, id: number): void {
-    window.cancelAnimationFrame(id);
+  cancelAnimationFrame(componentId: string, id: TimerId): void {
+    if (timers.cancelAnimationFrame) {
+      timers.cancelAnimationFrame(id as number);
+    } else {
+      // If we fell back to setTimeout, use clearTimeout
+      timers.clearTimeout(id as any);
+    }
     this.removeResource(componentId, 'animationFrame', id);
   }
 
@@ -122,15 +178,22 @@ export class ResourceManager {
     listener: EventListener,
     options?: AddEventListenerOptions
   ): void {
-    target.addEventListener(type, listener, options);
-    
-    const resourceId = `${type}-${Date.now()}-${Math.random()}`;
-    this.addResource(componentId, {
-      type: 'eventListener',
-      id: resourceId,
-      cleanup: () => target.removeEventListener(type, listener, options),
-      metadata: { target, type, options }
-    });
+    // Only add event listeners if we have a valid EventTarget (browser environment)
+    if (target && typeof target.addEventListener === 'function') {
+      target.addEventListener(type, listener, options);
+      
+      const resourceId = `${type}-${Date.now()}-${Math.random()}`;
+      this.addResource(componentId, {
+        type: 'eventListener',
+        id: resourceId,
+        cleanup: () => {
+          if (target && typeof target.removeEventListener === 'function') {
+            target.removeEventListener(type, listener, options);
+          }
+        },
+        metadata: { target, type, options }
+      });
+    }
   }
 
   /**
@@ -138,23 +201,26 @@ export class ResourceManager {
    */
   registerDOMElement(
     componentId: string,
-    element: HTMLElement,
+    element: any, // Use 'any' to avoid HTMLElement type in Node.js
     cleanup?: () => void
   ): void {
-    const resourceId = `dom-${Date.now()}-${Math.random()}`;
-    this.addResource(componentId, {
-      type: 'domElement',
-      id: resourceId,
-      cleanup: () => {
-        if (cleanup) {
-          cleanup();
-        }
-        if (element.parentNode) {
-          element.parentNode.removeChild(element);
-        }
-      },
-      metadata: { element }
-    });
+    // Only register if we're in a browser environment with DOM support
+    if (typeof document !== 'undefined' && element && element.parentNode) {
+      const resourceId = `dom-${Date.now()}-${Math.random()}`;
+      this.addResource(componentId, {
+        type: 'domElement',
+        id: resourceId,
+        cleanup: () => {
+          if (cleanup) {
+            cleanup();
+          }
+          if (element && element.parentNode && typeof element.parentNode.removeChild === 'function') {
+            element.parentNode.removeChild(element);
+          }
+        },
+        metadata: { element }
+      });
+    }
   }
 
   /**
@@ -206,7 +272,7 @@ export class ResourceManager {
   private removeResource(
     componentId: string,
     type: ManagedResource['type'],
-    id: string | number
+    id: string | number | NodeJS.Timeout
   ): void {
     const componentResources = this.resources.get(componentId);
     if (componentResources) {

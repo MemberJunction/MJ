@@ -6,6 +6,7 @@
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { logStatus } from '../Misc/status_logging';
+import { sortBySequenceAndCreatedAt } from '../Misc/util';
 import fs from 'fs';
 import path from 'path';
 import { configInfo } from '../Config/config';
@@ -177,11 +178,13 @@ export class DBSchemaGeneratorBase {
     
         if (simpleVersion) {
             // just create a comma delim string of the field names
-            sOutput += `"${entity.Fields.map(f => f.Name).join('","')}"]`;
+            const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+            sOutput += `"${sortedFields.map(f => f.Name).join('","')}"]`;
         }
         else {
-            for (let i:number = 0; i < entity.Fields.length; ++i) {
-                const field = entity.Fields[i];
+            const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+            for (let i:number = 0; i < sortedFields.length; ++i) {
+                const field = sortedFields[i];
                 if (i > 0) sOutput += ',';
                 sOutput += this.generateFieldJSON(field, simpleVersion);
             }
