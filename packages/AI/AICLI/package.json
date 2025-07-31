@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-cli",
-  "version": "2.53.0",
+  "version": "2.77.0",
   "description": "MemberJunction AI agent and action execution CLI",
   "keywords": [
     "oclif",
@@ -50,7 +50,15 @@
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
     "@memberjunction/actions": "2.53.0",
+    "@memberjunction/ai": "2.77.0",
+    "@memberjunction/ai-groq": "2.77.0",
+    "@memberjunction/ai-openai": "2.77.0",
+    "@memberjunction/ai-cerebras": "2.77.0",
+    "@memberjunction/ai-anthropic": "2.77.0",
+    "@memberjunction/ai-betty-bot": "2.77.0",
+    "@memberjunction/ai-mistral": "2.77.0",
     "@memberjunction/ai-agents": "2.53.0",
+    "@memberjunction/ai-prompts": "2.77.0",
     "@memberjunction/core": "2.53.0",
     "@memberjunction/core-actions": "2.53.0",
     "@memberjunction/core-entities": "2.53.0",
@@ -62,6 +70,7 @@
     "@oclif/plugin-warn-if-update-available": "^3.0.16",
     "cosmiconfig": "9.0.0",
     "dotenv": "16.4.5",
+    "chalk": "^4.1.2",
     "ora-classic": "^5.4.2",
     "readline": "^1.3.0",
     "table": "^6.8.1"

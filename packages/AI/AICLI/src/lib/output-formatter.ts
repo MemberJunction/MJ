@@ -102,6 +102,20 @@ export class OutputFormatter {
     }
   }
 
+  public formatPromptResult(result: ExecutionResult): string {
+    switch (this.format) {
+      case 'json':
+        return JSON.stringify(result, null, 2);
+      
+      case 'table':
+        return this.formatResultTable(result, 'Prompt');
+      
+      case 'compact':
+      default:
+        return this.formatPromptResultCompact(result);
+    }
+  }
+
   private formatAgentTable(agents: AgentInfo[]): string {
     const tableData = [
       [chalk.bold('Name'), chalk.bold('Status'), chalk.bold('Description'), chalk.bold('Last Used')]
@@ -306,6 +320,72 @@ export class OutputFormatter {
 
       if (result.logFilePath) {
         output += chalk.dim(`\nError logs: ${result.logFilePath}\n`);
+      }
+    }
+
+    return output;
+  }
+
+  private formatPromptResultCompact(result: ExecutionResult): string {
+    let output = '';
+
+    if (result.success) {
+      output += chalk.green('✓ Prompt executed successfully\n\n');
+      
+      // If result has structure with model selection info
+      if (result.result && typeof result.result === 'object' && 'response' in result.result) {
+        // Show the response
+        output += chalk.bold('Response:\n');
+        output += result.result.response + '\n';
+        
+        // Show model selection info if available
+        if (result.result.modelSelection) {
+          output += '\n' + chalk.bold('Model Information:\n');
+          const ms = result.result.modelSelection;
+          output += chalk.gray(`• Model: ${ms.modelUsed || 'Default'}\n`);
+          output += chalk.gray(`• Vendor: ${ms.vendorUsed || 'Default'}\n`);
+          if (ms.configurationUsed) {
+            output += chalk.gray(`• Configuration: ${ms.configurationUsed}\n`);
+          }
+          if (ms.selectionStrategy) {
+            output += chalk.gray(`• Selection Strategy: ${ms.selectionStrategy}\n`);
+          }
+          if (ms.modelsConsidered) {
+            output += chalk.gray(`• Models Considered: ${ms.modelsConsidered}\n`);
+          }
+        }
+        
+        // Show usage info if available
+        if (result.result.usage) {
+          output += '\n' + chalk.bold('Token Usage:\n');
+          const usage = result.result.usage;
+          if (usage.promptTokens) output += chalk.gray(`• Prompt Tokens: ${usage.promptTokens}\n`);
+          if (usage.completionTokens) output += chalk.gray(`• Completion Tokens: ${usage.completionTokens}\n`);
+          if (usage.totalTokens) output += chalk.gray(`• Total Tokens: ${usage.totalTokens}\n`);
+        }
+      } else {
+        // Simple string response
+        output += chalk.bold('Response:\n');
+        output += (typeof result.result === 'string' ? result.result : JSON.stringify(result.result, null, 2)) + '\n';
+      }
+      
+      output += '\n' + chalk.gray(`Duration: ${result.duration}ms`);
+      
+      if (result.logFilePath) {
+        output += chalk.dim(`\nDetailed logs: ${result.logFilePath}`);
+      }
+
+    } else {
+      output += chalk.red('✗ Prompt execution failed\n\n');
+      
+      if (result.error) {
+        output += chalk.bold('Error:') + ` ${chalk.red(result.error)}\n`;
+      }
+      
+      output += chalk.gray(`Duration: ${result.duration}ms`);
+      
+      if (result.logFilePath) {
+        output += chalk.dim(`\nError logs: ${result.logFilePath}`);
       }
     }
 

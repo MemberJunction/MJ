@@ -52,6 +52,15 @@ interface MJConfig {
   coreSchema?: string;         // Core schema name (default: '__mj')
   cleanDisabled?: boolean;     // Disable database cleaning (default: true)
   mjRepoUrl?: string;          // MemberJunction repository URL
+  
+  // AI-specific settings (optional)
+  aiSettings?: {
+    defaultTimeout?: number;    // Default timeout for AI operations (default: 300000ms)
+    outputFormat?: 'compact' | 'json' | 'table'; // Default output format
+    logLevel?: 'info' | 'debug' | 'verbose';     // Logging detail level
+    enableChat?: boolean;       // Enable chat features (default: true)
+    chatHistoryLimit?: number;  // Chat history size limit
+  };
 }
 ```
 
@@ -105,6 +114,111 @@ mj sync push
 # Watch for changes
 mj sync watch
 ```
+
+### `mj ai`
+
+Execute AI agents and actions using MemberJunction's AI framework. This command provides access to 20+ AI agents and 30+ actions for various tasks.
+
+```bash
+mj ai [COMMAND] [OPTIONS]
+```
+
+Available AI commands:
+- `agents list` - List available AI agents
+- `agents run` - Execute an AI agent with a prompt or start interactive chat
+- `actions list` - List available AI actions
+- `actions run` - Execute an AI action with parameters
+- `prompts list` - List available AI models for direct prompt execution
+- `prompts run` - Execute a direct prompt with an AI model
+
+#### Quick Examples:
+
+```bash
+# List all available agents
+mj ai agents list
+
+# Execute an agent with a prompt
+mj ai agents run -a "Skip: Requirements Expert" -p "Create a dashboard for sales metrics"
+
+# Start interactive chat with an agent
+mj ai agents run -a "Child Component Generator Sub-agent" --chat
+
+# List all available actions
+mj ai actions list --output=table
+
+# Execute an action with parameters
+mj ai actions run -n "Get Weather" --param "Location=Boston"
+
+# Execute action with multiple parameters
+mj ai actions run -n "Send Single Message" \
+  --param "To=user@example.com" \
+  --param "Subject=Test Message" \
+  --param "Body=Hello from MJ CLI"
+
+# Validate action without executing
+mj ai actions run -n "Calculate Expression" --param "Expression=2+2*3" --dry-run
+
+# List available AI models
+mj ai prompts list
+
+# Execute a direct prompt
+mj ai prompts run -p "Explain quantum computing in simple terms"
+
+# Use a specific model
+mj ai prompts run -p "Write a Python function to sort a list" --model "gpt-4"
+
+# Use system prompt and temperature
+mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 0.3
+```
+
+#### AI Command Options:
+
+**Agent Commands:**
+- `-a, --agent <name>`: Agent name (required)
+- `-p, --prompt <text>`: Prompt to execute
+- `-c, --chat`: Start interactive chat mode
+- `-o, --output <format>`: Output format (compact, json, table)
+- `-v, --verbose`: Show detailed execution information
+- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
+
+**Action Commands:**
+- `-n, --name <name>`: Action name (required)
+- `-p, --param <key=value>`: Action parameters (can be specified multiple times)
+- `--dry-run`: Validate without executing
+- `-o, --output <format>`: Output format (compact, json, table)
+- `-v, --verbose`: Show detailed execution information
+- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
+
+**Prompt Commands:**
+- `-p, --prompt <text>`: The prompt to execute (required)
+- `-m, --model <name>`: AI model to use (e.g., gpt-4, claude-3-opus)
+- `-s, --system <text>`: System prompt to set context
+- `-t, --temperature <0.0-2.0>`: Temperature for response creativity
+- `--max-tokens <number>`: Maximum tokens for the response
+- `-c, --configuration <id>`: AI Configuration ID to use
+- `-o, --output <format>`: Output format (compact, json, table)
+- `-v, --verbose`: Show detailed execution information
+- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
+
+#### AI Configuration:
+
+Add AI-specific settings to your `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  // Existing database settings...
+  
+  aiSettings: {
+    defaultTimeout: 300000,
+    outputFormat: 'compact',
+    logLevel: 'info',
+    enableChat: true,
+    chatHistoryLimit: 10
+  }
+};
+```
+
+Execution logs are stored in `.mj-ai/logs/` for debugging and audit purposes.
 
 ### `mj install`
 
@@ -208,6 +322,8 @@ The CLI respects the following environment variables:
 The CLI integrates seamlessly with other MemberJunction packages:
 
 - **@memberjunction/codegen-lib**: Powers the code generation functionality
+- **@memberjunction/metadata-sync**: Provides metadata synchronization capabilities
+- **@memberjunction/ai-cli**: Enables AI agent and action execution
 - **Generated Entities**: Automatically linked during installation
 - **MJAPI**: Configured and linked during installation
 - **MJExplorer**: UI configuration handled during installation

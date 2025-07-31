@@ -1,7 +1,12 @@
-import { SetProvider } from '@memberjunction/core';
+import { SetProvider, Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { loadAIConfig } from '../config';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from .env file
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // Import action and agent registrations
 import '@memberjunction/core-actions';  // Register core actions
@@ -17,6 +22,13 @@ let connectionPool: sql.ConnectionPool | null = null;
 
 export async function initializeMJProvider(): Promise<void> {
   if (isInitialized) {
+    return;
+  }
+
+  // Check if MJ provider is already initialized
+  if (Metadata.Provider) {
+    console.log('MJ Provider already initialized');
+    isInitialized = true;
     return;
   }
 

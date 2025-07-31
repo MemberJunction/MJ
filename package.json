@@ -11,6 +11,7 @@
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/AgentManager/*",
+    "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
     "packages/Templates/*",

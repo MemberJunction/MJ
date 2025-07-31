@@ -2,17 +2,20 @@
 
 MemberJunction AI agent and action execution CLI
 
-[![Status](https://img.shields.io/badge/status-production%20ready-brightgreen)](https://github.com/MemberJunction/MJ)
+[![Status](https://img.shields.io/badge/status-deprecated-orange)](https://github.com/MemberJunction/MJ)
 [![Version](https://img.shields.io/badge/version-2.53.0-blue)](https://github.com/MemberJunction/MJ)
+
+> ⚠️ **DEPRECATION NOTICE**: The standalone `mj-ai` CLI is now deprecated. All AI functionality has been integrated into the main MemberJunction CLI. Please use `mj ai` commands instead. See the [Migration Guide](#migration-guide) below.
 
 ## Overview
 
-A fully functional command-line interface for executing MemberJunction AI agents and actions. The CLI provides seamless integration with the MJ infrastructure, supporting both interactive and programmatic execution of AI workflows.
+A fully functional command-line interface for executing MemberJunction AI agents, actions, and direct prompts. The CLI provides seamless integration with the MJ infrastructure, supporting both interactive and programmatic execution of AI workflows.
 
 **Current Status: ✅ Production Ready**
 - ✅ Database integration and metadata loading
 - ✅ 20+ AI agents available for execution
 - ✅ 30+ actions with parameter validation
+- ✅ Direct prompt execution with any AI model
 - ✅ Interactive chat mode with agents
 - ✅ Comprehensive error handling and logging
 - ✅ Multiple output formats (compact, table, JSON)
@@ -27,7 +30,7 @@ npm install
 
 ## Usage
 
-The CLI provides commands for executing AI agents and actions:
+The CLI provides commands for executing AI agents, actions, and direct prompts:
 
 ### Agent Commands
 
@@ -71,6 +74,27 @@ Execute individual actions with parameters:
 
 # Validate action without executing
 ./packages/AI/AICLI/bin/run actions:run -n "Calculate Expression" --param "Expression=2+2*3" --dry-run
+```
+
+### Prompt Commands
+
+Execute direct prompts with any available AI model:
+
+```bash
+# List available AI models
+./packages/AI/AICLI/bin/run prompts:list
+
+# Execute a direct prompt
+./packages/AI/AICLI/bin/run prompts:run -p "Explain machine learning in simple terms"
+
+# Use a specific model
+./packages/AI/AICLI/bin/run prompts:run -p "Write a Python function" --model "gpt-4"
+
+# Use system prompt and parameters
+./packages/AI/AICLI/bin/run prompts:run -p "Generate a haiku" \
+  --system "You are a poet" \
+  --temperature 0.3 \
+  --max-tokens 100
 ```
 
 ### Output Formats
@@ -236,3 +260,54 @@ Execution logs are stored in `.mj-ai/logs/` directory with comprehensive trackin
 # Global help
 ./packages/AI/AICLI/bin/run --help
 ```
+
+## Migration Guide
+
+The AI CLI functionality has been integrated into the main MemberJunction CLI. To migrate:
+
+### Command Changes
+
+| Old Command (mj-ai) | New Command (mj) |
+|---------------------|------------------|
+| `mj-ai agents:list` | `mj ai agents list` |
+| `mj-ai agents:run` | `mj ai agents run` |
+| `mj-ai actions:list` | `mj ai actions list` |
+| `mj-ai actions:run` | `mj ai actions run` |
+| `mj-ai prompts:list` | `mj ai prompts list` |
+| `mj-ai prompts:run` | `mj ai prompts run` |
+
+### Examples
+
+```bash
+# Old way
+mj-ai agents:run -a "Skip: Requirements Expert" -p "Create a dashboard"
+
+# New way
+mj ai agents run -a "Skip: Requirements Expert" -p "Create a dashboard"
+
+# Old way
+mj-ai actions:run -n "Get Weather" --param "Location=Boston"
+
+# New way
+mj ai actions run -n "Get Weather" --param "Location=Boston"
+```
+
+### Installation
+
+Instead of using this package directly, install the main MJ CLI:
+
+```bash
+npm install -g @memberjunction/cli
+```
+
+### Configuration
+
+No changes needed - both CLIs use the same `mj.config.cjs` file.
+
+### Support Timeline
+
+- **Now**: Both `mj-ai` and `mj ai` commands work
+- **3 months**: `mj-ai` will show deprecation warnings
+- **6 months**: `mj-ai` package will be archived
+
+For the latest documentation, see the [MJ CLI README](https://github.com/MemberJunction/MJ/tree/main/packages/MJCLI).
