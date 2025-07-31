@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.78.0
+
+### Minor Changes
+
+- ef7c014: migration file
+
+### Patch Changes
+
+- @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Patch Changes

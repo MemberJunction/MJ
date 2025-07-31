@@ -1855,10 +1855,3 @@ BEGIN
     DROP TABLE #ExcludedSchemas;
 END
 GO
-
--- Add extended property description
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description',
-    @value = N'Recompiles all stored procedures in dependency order, preserving code, comments, and permissions. This forces SQL Server to create new execution plans without dropping/recreating procedures. Excludes specified schemas and handles circular dependencies gracefully.',
-    @level0type = N'SCHEMA', @level0name = '__mj',
-    @level1type = N'PROCEDURE', @level1name = 'spRecompileAllProceduresInDependencyOrder';

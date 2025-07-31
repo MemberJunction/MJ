@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.78.0
+
+### Patch Changes
+
+- d9abd67: feat(codegen-lib): Add cascade delete dependency tracking for
+  stored procedures
+
+  When an entity's schema changes (e.g., new columns added), any
+  delete stored procedures that reference its update SP via cascade
+  operations need to be regenerated to include the new parameters.
+  This prevents runtime failures when cascade delete operations
+  reference outdated stored procedure signatures.
+
+  - Track cascade delete dependencies during SQL generation
+  - Detect entities with schema changes from metadata management
+    phase
+  - Automatically mark dependent delete SPs for regeneration
+  - Ensure SQL logging captures cascade dependency regenerations
+  - Respect spDeleteGenerated flag - never modify custom stored
+    procedures
+
+- Updated dependencies [ef7c014]
+- Updated dependencies [06088e5]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/ai-anthropic@2.78.0
+  - @memberjunction/ai-groq@2.78.0
+  - @memberjunction/ai-mistral@2.78.0
+  - @memberjunction/ai-openai@2.78.0
+  - @memberjunction/actions@2.78.0
+  - @memberjunction/sqlserver-dataprovider@2.78.0
+  - @memberjunction/core-entities-server@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Minor Changes

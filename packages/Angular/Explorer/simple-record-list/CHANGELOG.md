@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [06088e5]
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/ng-entity-form-dialog@2.78.0
+  - @memberjunction/ng-notifications@2.78.0
+  - @memberjunction/ng-container-directives@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Patch Changes
