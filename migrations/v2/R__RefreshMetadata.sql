@@ -15,3 +15,6 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
 
 /* SQL text to set default column width where needed */
 EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to recompile all stored procedures in dependency order */
+EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
