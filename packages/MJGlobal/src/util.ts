@@ -134,6 +134,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return null;
 
     let processedString = inputString.trim();
+    let originalException = null;
     
     // First, try to parse the string as-is
     // This preserves any embedded JSON or markdown blocks within string values
@@ -142,6 +143,9 @@ export function CleanJSON(inputString: string | null): string | null {
         // If successful, return formatted JSON
         return JSON.stringify(parsed, null, 2);
     } catch (e) {
+        // save the original exception to throw later if we can't find a path to valid JSON
+        originalException = e;
+
         // common JSON patterns from LLM often have extra } or missing final
         // } so let's test those two patterns quickly here and if they fail
         // then we'll continue with the rest of the logic
@@ -236,9 +240,9 @@ export function CleanJSON(inputString: string | null): string | null {
             const jsonObject = JSON.parse(potentialJSON);
             return JSON.stringify(jsonObject, null, 2);
         } catch (error) {
-            console.error("Failed to parse extracted string as JSON:", error);
-            // Return null or potentially invalid JSON text as a fallback
-            return null;
+            // that was our last attempt and it failed so we need
+            // to throw an exception here with the orignal exception
+            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`);
         }     
     }
 }
