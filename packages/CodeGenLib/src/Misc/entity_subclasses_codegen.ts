@@ -1,9 +1,8 @@
 import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from '../Misc/util';
-import { RegisterClass } from '@memberjunction/global';
-import { logError, logStatus } from './status_logging';
+import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
+import { logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
@@ -64,7 +63,10 @@ export const loadModule = () => {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
     } else {
-      const fields: string = entity.Fields.map((e) => {
+      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      
+      const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
@@ -348,7 +350,10 @@ ${validationFunctions}`
     if (entity.PrimaryKeys.length === 0) {
       logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
     } else {
-      const fields: string = entity.Fields.map((e) => {
+      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      
+      const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {

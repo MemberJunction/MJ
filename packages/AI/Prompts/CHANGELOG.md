@@ -1,5 +1,24 @@
 # @memberjunction/ai-prompts
 
+## 2.78.0
+
+### Minor Changes
+
+- ef7c014: migration file
+
+### Patch Changes
+
+- Updated dependencies [ef7c014]
+- Updated dependencies [06088e5]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/ai-core-plus@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/templates@2.78.0
+  - @memberjunction/templates-base-types@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Patch Changes

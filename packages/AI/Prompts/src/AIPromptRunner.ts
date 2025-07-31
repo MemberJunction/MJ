@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -90,6 +90,7 @@ interface ModelVendorCandidate {
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
 }
+
 
 /**
  * Configuration for failover behavior when primary model fails
@@ -200,6 +201,27 @@ export class AIPromptRunner {
     });
   }
 
+  /**
+   * Checks if a model vendor is configured as an inference provider
+   * @param modelVendor The model vendor to check
+   * @returns true if the vendor is an inference provider
+   */
+  private isInferenceProvider(modelVendor: AIModelVendorEntity): boolean {
+    // Find the inference provider type from cached vendor type definitions
+    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
+      vt => vt.Name === 'Inference Provider'
+    );
+    
+    if (!inferenceProviderType) {
+      // Fallback to checking if it's not a model developer (should rarely happen)
+      const modelDeveloperType = AIEngine.Instance.VendorTypeDefinitions.find(
+        vt => vt.Name === 'Model Developer'  
+      );
+      return modelVendor.TypeID !== modelDeveloperType?.ID;
+    }
+    
+    return modelVendor.TypeID === inferenceProviderType.ID;
+  }
 
   /**
    * Executes an AI prompt with full support for templates, model selection, and validation.
@@ -235,7 +257,7 @@ export class AIPromptRunner {
     if (params.cancellationToken?.aborted) {
       const result: AIPromptRunResult<T> = {
         success: false,
-        status: 'cancelled',
+        status: 'Cancelled',
         cancelled: true,
         cancellationReason: 'user_requested',
         errorMessage: 'Prompt execution was cancelled before starting',
@@ -264,6 +286,7 @@ export class AIPromptRunner {
       let parentPromptRun: AIPromptRunEntity | undefined;
       let selectedModel: AIModelEntityExtended | undefined;
       let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
+      let modelSelectionInfo: any | undefined;
 
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -278,7 +301,9 @@ export class AIPromptRunner {
         }
         
         // Select model using the appropriate prompt
-        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        const modelResult = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        selectedModel = modelResult.model;
+        modelSelectionInfo = modelResult.selectionInfo;
         if (!selectedModel) {
           throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
@@ -296,7 +321,7 @@ export class AIPromptRunner {
         }
 
           // Create parent prompt run for the final composed prompt execution
-        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
+        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -337,7 +362,9 @@ export class AIPromptRunner {
           this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
         }
         
-        selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        const modelResult = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        selectedModel = modelResult.model;
+        modelSelectionInfo = modelResult.selectionInfo;
         if (!selectedModel) {
           throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
         }
@@ -359,6 +386,11 @@ export class AIPromptRunner {
       // Note: With template composition, we only execute once so no rollup calculations needed
       // The final composed prompt is executed as a single operation
 
+      // Add model selection info to the result
+      if (modelSelectionInfo) {
+        result.modelSelectionInfo = modelSelectionInfo;
+      }
+
       return result;
     } catch (error) {
       this.logError(error, {
@@ -377,6 +409,17 @@ export class AIPromptRunner {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
         promptRun.Result = `ERROR: ${error.message}`;
+        
+        // Set Status and Cancelled based on error type
+        if (error.message.includes('cancelled')) {
+          promptRun.Status = 'Cancelled';
+          promptRun.Cancelled = true;
+          promptRun.CancellationReason = 'user_requested';
+        } else {
+          promptRun.Status = 'Failed';
+          promptRun.ErrorDetails = error.message;
+        }
+        
         const saveResult = await promptRun.Save();
         if (!saveResult) {
           this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`, {
@@ -426,6 +469,10 @@ export class AIPromptRunner {
 
     // Use existing model if provided (hierarchical case) or select one
     let selectedModel = existingModel;
+    let modelSelectionInfo: any | undefined;
+    let vendorDriverClass: string | undefined;
+    let vendorApiName: string | undefined;
+    
     if (!selectedModel) {
       // Determine which prompt to use for model selection
       let modelSelectionPrompt = prompt;
@@ -434,7 +481,11 @@ export class AIPromptRunner {
         this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
       }
       
-      selectedModel = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+      const modelResult = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+      selectedModel = modelResult.model;
+      vendorDriverClass = modelResult.vendorDriverClass;
+      vendorApiName = modelResult.vendorApiName;
+      modelSelectionInfo = modelResult.selectionInfo;
       if (!selectedModel) {
         throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
       }
@@ -446,7 +497,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -460,6 +511,8 @@ export class AIPromptRunner {
       prompt,
       params,
       promptRun,
+      vendorDriverClass,
+      vendorApiName,
     );
 
     // Calculate execution metrics
@@ -598,7 +651,8 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId);
+    // TODO: For parallel execution, we may want to track model selection info differently
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, undefined);
 
     // Update with parallel execution metadata
     const endTime = new Date();
@@ -646,6 +700,10 @@ export class AIPromptRunner {
     if (hasCost) {
       consolidatedPromptRun.TotalCost = totalCost;
     }
+    
+    // Set Status and WasSelectedResult for parallel execution
+    consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
+    consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
 
     const saveResult = await consolidatedPromptRun.Save();
     if (!saveResult) {
@@ -993,10 +1051,35 @@ export class AIPromptRunner {
     configurationId?: string,
     vendorId?: string,
     params?: AIPromptParams
-  ): Promise<AIModelEntityExtended | null> {
+  ): Promise<{
+    model: AIModelEntityExtended | null;
+    vendorDriverClass?: string;
+    vendorApiName?: string;
+    selectionInfo?: AIPromptRunResult<any>['modelSelectionInfo'];
+  }> {
+    // Declare variables outside try block for catch block access
+    let configurationName: string | undefined;
+    let configuration: AIConfigurationEntity | undefined;
+    
     try {
       // Load AI Engine to access cached models and prompt models
       await AIEngine.Instance.Config(false, contextUser);
+
+      // Determine selection strategy
+      let selectionStrategy: 'Default' | 'Specific' | 'ByPower' = 'Default';
+      if (explicitModelId) {
+        selectionStrategy = 'Specific';
+      } else if (prompt.SelectionStrategy === 'Specific') {
+        selectionStrategy = 'Specific';
+      } else if (prompt.SelectionStrategy === 'ByPower' || prompt.MinPowerRank != null) {
+        selectionStrategy = 'ByPower';
+      }
+
+      // Get configuration info if provided
+      if (configurationId) {
+        configuration = AIEngine.Instance.Configurations.find(c => c.ID === configurationId);
+        configurationName = configuration?.Name;
+      }
 
       // Build unified list of model-vendor candidates
       const candidates = this.buildModelVendorCandidates(
@@ -1006,13 +1089,32 @@ export class AIPromptRunner {
         vendorId
       );
 
+      // Track all models considered for selection info
+      const modelsConsidered: Array<{
+        model: AIModelEntityExtended;
+        vendor?: AIVendorEntity;
+        priority: number;
+        available: boolean;
+        unavailableReason?: string;
+      }> = [];
+
       if (candidates.length === 0) {
         this.logError(`No suitable model candidates found for prompt ${prompt.Name}`, {
           category: 'ModelSelection',
           prompt: prompt,
           severity: 'critical'
         });
-        return null;
+        return {
+          model: null,
+          selectionInfo: {
+            aiConfiguration: configuration,
+            modelsConsidered: [],
+            modelSelected: undefined as any, // Type requirement, but null model means no selection
+            selectionReason: 'No suitable model candidates found',
+            fallbackUsed: false,
+            selectionStrategy
+          }
+        };
       }
 
       // this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
@@ -1023,32 +1125,87 @@ export class AIPromptRunner {
       //   });
       // }
 
-      // Select the first candidate with an available API key
-      const selected = await this.selectModelWithAPIKey(candidates, params);
+      // Select the first candidate with an available API key and track all attempts
+      const { selected, consideredModels } = await this.selectModelWithAPIKeyTracked(candidates, params);
       
+      // Merge considered models into our tracking
+      modelsConsidered.push(...consideredModels);
+
       if (!selected) {
         // No models with API keys found
-        return null;
+        return {
+          model: null,
+          vendorDriverClass: undefined,
+          vendorApiName: undefined,
+          selectionInfo: {
+            aiConfiguration: configuration,
+            modelsConsidered,
+            modelSelected: undefined as any, // Type requirement, but null model means no selection
+            selectionReason: 'No API keys found for any model-vendor combination',
+            fallbackUsed: false,
+            selectionStrategy
+          }
+        };
       }
 
-      // Store the selected vendor info on the model for later use by executeModel
-      const modelWithVendor = selected.model as AIModelEntityExtended & { 
-        _selectedVendorId?: string;
-        _selectedDriverClass?: string;
-        _selectedApiName?: string;
-      };
-      
-      modelWithVendor._selectedVendorId = selected.vendorId;
-      modelWithVendor._selectedDriverClass = selected.driverClass;
-      modelWithVendor._selectedApiName = selected.apiName;
 
-      return modelWithVendor;
+      // Determine selection reason
+      let selectionReason = `Selected ${selected.model.Name} via ${selected.vendorName || 'default vendor'}`;
+      if (selected.source === 'explicit') {
+        selectionReason = `Explicitly requested model ${selected.model.Name}`;
+      } else if (selected.source === 'prompt-model') {
+        selectionReason = `Selected from prompt-specific models (priority: ${selected.priority})`;
+      } else if (selected.source === 'model-type') {
+        selectionReason = `Selected based on model type filtering`;
+      } else if (selected.source === 'power-rank') {
+        selectionReason = `Selected by power rank (${selected.model.PowerRank || 0})`;
+      }
+
+      if (selected.isPreferredVendor) {
+        selectionReason += ' using preferred vendor';
+      }
+
+      // Check if fallback was used (not the first candidate)
+      const fallbackUsed = candidates.indexOf(selected) > 0;
+
+      // Get selected vendor entity
+      let selectedVendor: AIVendorEntity | undefined;
+      if (selected.vendorId) {
+        selectedVendor = AIEngine.Instance.Vendors.find(v => v.ID === selected.vendorId);
+      }
+
+      return {
+        model: selected.model,
+        vendorDriverClass: selected.driverClass,
+        vendorApiName: selected.apiName,
+        selectionInfo: {
+          aiConfiguration: configuration,
+          modelsConsidered,
+          modelSelected: selected.model,
+          vendorSelected: selectedVendor,
+          selectionReason,
+          fallbackUsed,
+          selectionStrategy
+        }
+      };
     } catch (error) {
       this.logError(error, {
         category: 'ModelSelection',
         prompt: prompt
       });
-      return null;
+      return {
+        model: null,
+        vendorDriverClass: undefined,
+        vendorApiName: undefined,
+        selectionInfo: {
+          aiConfiguration: configuration,
+          modelsConsidered: [],
+          modelSelected: undefined as any, // Type requirement, but null model means no selection
+          selectionReason: `Error during model selection: ${error.message}`,
+          fallbackUsed: false,
+          selectionStrategy: 'Default'
+        }
+      };
     }
   }
 
@@ -1081,9 +1238,9 @@ export class AIPromptRunner {
     ): ModelVendorCandidate[] => {
       const modelCandidates: ModelVendorCandidate[] = [];
       
-      // Get all vendors for this model
+      // Get all vendors for this model - filter for inference providers only
       const modelVendors = AIEngine.Instance.ModelVendors
-        .filter(mv => mv.ModelID === model.ID && mv.Status === 'Active')
+        .filter(mv => mv.ModelID === model.ID && mv.Status === 'Active' && this.isInferenceProvider(mv))
         .sort((a, b) => b.Priority - a.Priority);
 
       // First, add preferred vendor if it exists
@@ -1192,7 +1349,7 @@ export class AIPromptRunner {
           if (pmPreferredVendorId && pmPreferredVendorId !== preferredVendorId) {
             // AIPromptModel has a specific vendor preference
             const vendor = AIEngine.Instance.ModelVendors.find(
-              mv => mv.ModelID === model.ID && mv.VendorID === pmPreferredVendorId && mv.Status === 'Active'
+              mv => mv.ModelID === model.ID && mv.VendorID === pmPreferredVendorId && mv.Status === 'Active' && this.isInferenceProvider(mv)
             );
             if (vendor) {
               candidates.push({
@@ -1224,7 +1381,8 @@ export class AIPromptRunner {
               AIEngine.Instance.ModelVendors.some(mv => 
                 mv.ModelID === m.ID && 
                 mv.Status === 'Active' && 
-                mv.Vendor === preferredVendorName
+                mv.Vendor === preferredVendorName &&
+                this.isInferenceProvider(mv)
               ))
       );
 
@@ -1274,6 +1432,94 @@ export class AIPromptRunner {
     candidates.sort((a, b) => b.priority - a.priority);
 
     return candidates;
+  }
+
+  /**
+   * Enhanced version of selectModelWithAPIKey that tracks all considered models
+   * for model selection reporting.
+   * 
+   * @param candidates - Ordered array of model-vendor candidates
+   * @param params - Optional prompt parameters for verbose logging
+   * @returns Object containing selected candidate and all considered models
+   */
+  private async selectModelWithAPIKeyTracked(
+    candidates: ModelVendorCandidate[],
+    params?: AIPromptParams
+  ): Promise<{
+    selected: ModelVendorCandidate | null;
+    consideredModels: Array<{
+      model: AIModelEntityExtended;
+      vendor?: AIVendorEntity;
+      priority: number;
+      available: boolean;
+      unavailableReason?: string;
+    }>;
+  }> {
+    const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
+    const consideredModels: Array<{
+      model: AIModelEntityExtended;
+      vendor?: AIVendorEntity;
+      priority: number;
+      available: boolean;
+      unavailableReason?: string;
+    }> = [];
+    
+    let attemptCount = 0;
+    
+    for (const candidate of candidates) {
+      attemptCount++;
+      
+      // Check cache first
+      let hasKey: boolean;
+      if (checkedDrivers.has(candidate.driverClass)) {
+        hasKey = checkedDrivers.get(candidate.driverClass)!;
+      } else {
+        // Check for API key with robust validation
+        const apiKey = GetAIAPIKey(candidate.driverClass);
+        hasKey = this.isValidAPIKey(apiKey);
+        checkedDrivers.set(candidate.driverClass, hasKey);
+      }
+      
+      // Get vendor entity from AIEngine cache if vendorId is available
+      let vendorEntity: AIVendorEntity | undefined;
+      if (candidate.vendorId) {
+        vendorEntity = AIEngine.Instance.Vendors.find(v => v.ID === candidate.vendorId);
+      }
+      
+      // Track this model as considered
+      consideredModels.push({
+        model: candidate.model,
+        vendor: vendorEntity,
+        priority: candidate.priority,
+        available: hasKey,
+        unavailableReason: hasKey ? undefined : `No API key for driver ${candidate.driverClass}`
+      });
+      
+      if (hasKey) {
+        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        if (candidate.isPreferredVendor) {
+          this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
+        }
+        this.logStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`, true, params);
+        return { selected: candidate, consideredModels };
+      }
+    }
+    
+    // Log what we tried
+    const triedSummary = candidates.slice(0, 5).map(c => 
+      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
+    ).join(', ');
+    
+    this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
+      category: 'APIKeyValidation',
+      severity: 'critical',
+      metadata: {
+        candidatesChecked: candidates.length,
+        modelsChecked: consideredModels.length
+      }
+    });
+    
+    return { selected: null, consideredModels };
   }
 
   /**
@@ -1354,6 +1600,7 @@ export class AIPromptRunner {
     systemPromptText: string, 
     startTime: Date,
     vendorId?: string,
+    modelSelectionInfo?: any
   ): Promise<AIPromptRunEntity> {
     const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
     try {
@@ -1361,6 +1608,44 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+      
+      // Set initial status and tracking fields
+      promptRun.Status = 'Running';
+      promptRun.Cancelled = false;
+      promptRun.CacheHit = false;
+      promptRun.StreamingEnabled = false;
+      promptRun.WasSelectedResult = false;
+      
+      // Set model selection tracking fields
+      if (modelSelectionInfo) {
+        // Convert the rich entity objects to simple IDs/names for database storage
+        const dbSelectionInfo = {
+          configurationId: modelSelectionInfo.aiConfiguration?.ID,
+          configurationName: modelSelectionInfo.aiConfiguration?.Name,
+          modelsConsidered: modelSelectionInfo.modelsConsidered.map(mc => ({
+            modelId: mc.model.ID,
+            modelName: mc.model.Name,
+            vendorId: mc.vendor?.ID,
+            vendorName: mc.vendor?.Name || 'default',
+            priority: mc.priority,
+            available: mc.available,
+            unavailableReason: mc.unavailableReason
+          })),
+          modelSelected: modelSelectionInfo.modelSelected?.ID,
+          vendorSelected: modelSelectionInfo.vendorSelected?.ID,
+          selectionReason: modelSelectionInfo.selectionReason,
+          fallbackUsed: modelSelectionInfo.fallbackUsed,
+          selectionStrategy: modelSelectionInfo.selectionStrategy
+        };
+        
+        promptRun.ModelSelection = JSON.stringify(dbSelectionInfo);
+        promptRun.SelectionStrategy = modelSelectionInfo.selectionStrategy || 'Default';
+        
+        // Set ModelPowerRank if available
+        if (model.PowerRank != null) {
+          promptRun.ModelPowerRank = model.PowerRank;
+        }
+      }
       
       // Set original model tracking for failover
       // TODO: Remove type assertions after CodeGen updates entities with new fields
@@ -1394,9 +1679,9 @@ export class AIPromptRunner {
         // Use vendor selected during model selection (with API key verification)
         promptRun.VendorID = modelWithVendor._selectedVendorId;
       } else {
-        // Fallback: grab the highest priority AI Model Vendor record for this model
+        // Fallback: grab the highest priority AI Model Vendor record for this model (inference providers only)
         const modelVendors = AIEngine.Instance.ModelVendors
-          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active')
+          .filter((mv) => mv.ModelID === model.ID && mv.Status === 'Active' && this.isInferenceProvider(mv))
           .sort((a, b) => b.Priority - a.Priority);
         
         if (modelVendors.length > 0) {
@@ -1603,7 +1888,9 @@ export class AIPromptRunner {
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
     allCandidates?: ModelVendorCandidate[],
-    promptRun?: AIPromptRunEntity
+    promptRun?: AIPromptRunEntity,
+    vendorDriverClass?: string,
+    vendorApiName?: string
   ): Promise<ChatResult> {
     // Get failover configuration
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -1612,7 +1899,8 @@ export class AIPromptRunner {
     if (failoverConfig.strategy === 'None') {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
-        conversationMessages, templateMessageRole, cancellationToken
+        conversationMessages, templateMessageRole, cancellationToken,
+        vendorDriverClass, vendorApiName
       );
     }
 
@@ -1651,7 +1939,8 @@ export class AIPromptRunner {
         // Execute the model
         const result = await this.executeModel(
           currentModel, renderedPrompt, prompt, params, currentVendorId,
-          conversationMessages, templateMessageRole, cancellationToken
+          conversationMessages, templateMessageRole, cancellationToken,
+          vendorDriverClass, vendorApiName
         );
         
         // Success! Update promptRun with failover information if we had attempts
@@ -1709,6 +1998,9 @@ export class AIPromptRunner {
         const nextCandidate = nextCandidates[0];
         currentModel = nextCandidate.model;
         currentVendorId = nextCandidate.vendorId;
+        // Update vendor info for the next attempt
+        vendorDriverClass = nextCandidate.driverClass;
+        vendorApiName = nextCandidate.apiName;
         
         // Log the attempt
         this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
@@ -1896,6 +2188,8 @@ export class AIPromptRunner {
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
+    vendorDriverClass?: string,
+    vendorApiName?: string
   ): Promise<ChatResult> {
     // define these variables here to ensure they're available in the catch block
     let driverClass: string;
@@ -1908,36 +2202,28 @@ export class AIPromptRunner {
       const verbose = params.verbose === true || IsVerboseLoggingEnabled();
       
       // Get vendor-specific configuration
-      // Check if model has pre-selected vendor info from selectModel
-      const modelWithVendor = model as AIModelEntityExtended & { 
-        _selectedVendorId?: string;
-        _selectedDriverClass?: string;
-        _selectedApiName?: string;
-      };
-
-      // If vendor info was pre-selected by selectModel, use it
-      if (modelWithVendor._selectedDriverClass) {
-        driverClass = modelWithVendor._selectedDriverClass;
-        apiName = modelWithVendor._selectedApiName;
-        
-        // Clean up temporary properties
-        delete modelWithVendor._selectedVendorId;
-        delete modelWithVendor._selectedDriverClass;
-        delete modelWithVendor._selectedApiName;
+      // Use passed vendor info if available, otherwise fall back to vendor lookup
+      if (vendorDriverClass && vendorApiName) {
+        // Vendor info was provided by the caller (from model selection)
+        driverClass = vendorDriverClass;
+        apiName = vendorApiName;
       } else {
-        // Fallback to existing logic if not pre-selected (shouldn't happen with new flow)
+        // Fallback to model defaults or vendor lookup
         driverClass = model.DriverClass;
         apiName = model.APIName;
         
         if (vendorId) {
-          // Find the AIModelVendor record for this specific vendor
+          // Find the AIModelVendor record for this specific vendor - must be an inference provider
           const modelVendor = AIEngine.Instance.ModelVendors.find(
-            (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active'
+            (mv) => mv.ModelID === model.ID && mv.VendorID === vendorId && mv.Status === 'Active' && this.isInferenceProvider(mv)
           );
           
           if (modelVendor) {
             driverClass = modelVendor.DriverClass || driverClass;
             apiName = modelVendor.APIName || apiName;
+          } else {
+            // Log warning if vendor was specified but not found or not an inference provider
+            this.logStatus(`⚠️ Vendor ${vendorId} not found or is not an inference provider for model ${model.Name}, using model defaults`, true, params);
           }
         }
       }
@@ -2114,6 +2400,8 @@ export class AIPromptRunner {
     prompt: AIPromptEntity,
     params: AIPromptParams,
     promptRun: AIPromptRunEntity,
+    vendorDriverClass?: string,
+    vendorApiName?: string,
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -2156,7 +2444,9 @@ export class AIPromptRunner {
           params.templateMessageRole || 'system',
           params.cancellationToken,
           undefined, // allCandidates - will be determined in executeModelWithFailover
-          promptRun
+          promptRun,
+          vendorDriverClass,
+          vendorApiName
         );
 
         // Accumulate token usage from this attempt
@@ -3047,6 +3337,18 @@ export class AIPromptRunner {
 
       // Set Success flag based on validation result
       promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
+      
+      // Set final Status based on success
+      promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
+      
+      // Set ErrorDetails if failed
+      if (!promptRun.Success) {
+        if (!modelResult.success && modelResult.errorMessage) {
+          promptRun.ErrorDetails = modelResult.errorMessage;
+        } else if (parsedResult.validationResult?.Success === false) {
+          promptRun.ErrorDetails = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join(', ')}`;
+        }
+      }
 
       // Note: Failover tracking fields are now updated directly in executeModelWithFailover
       // The promptRun entity already has the failover information set

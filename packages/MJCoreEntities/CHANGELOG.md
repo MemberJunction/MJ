@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.78.0
+
+### Minor Changes
+
+- 06088e5: Queries Entity - Cascade Deletes Turned On
+
+### Patch Changes
+
+- @memberjunction/core@2.78.0
+- @memberjunction/global@2.78.0
+
 ## 2.77.0
 
 ### Patch Changes
