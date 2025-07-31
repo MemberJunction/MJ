@@ -3222,7 +3222,33 @@ export class AIPromptRunner {
     try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
-      promptRun.Result = typeof parsedResult.result === 'string' ? parsedResult.result : JSON.stringify(parsedResult.result);
+      
+      // Determine what to save as the result
+      let resultToSave: string;
+      const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
+      
+      if (parsedResult.result === undefined || 
+          parsedResult.result === null || 
+          (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0)) {
+        // Use raw result as fallback when parsed result is undefined, null, or empty string
+        resultToSave = rawResult;
+        
+        // Also set error message when we have to fall back to raw result
+        if (!promptRun.ErrorMessage) {
+          const validationErrors = parsedResult.validationResult?.Errors;
+          if (validationErrors && validationErrors.length > 0) {
+            promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
+          } else {
+            promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
+          }
+        }
+      } else if (typeof parsedResult.result === 'string') {
+        resultToSave = parsedResult.result;
+      } else {
+        resultToSave = JSON.stringify(parsedResult.result);
+      }
+      
+      promptRun.Result = resultToSave;
 
       // Extract token usage and cost - use cumulative if retries occurred
       if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
