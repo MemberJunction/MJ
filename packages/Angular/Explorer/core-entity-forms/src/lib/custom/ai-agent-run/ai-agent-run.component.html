@@ -71,11 +71,9 @@
       <button class="tab" [class.active]="activeTab === 'visualization'" (click)="changeTab('visualization')">
         <i class="fas fa-diagram-project"></i> Visualization
       </button>
-      @if (false) {
-        <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
-          <i class="fas fa-chart-line"></i> Analytics
-        </button>
-      }
+      <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
+        <i class="fas fa-chart-line"></i> Analytics
+      </button>
       <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
         <i class="fas fa-info-circle"></i> Details
       </button>
@@ -91,9 +89,10 @@
             <mj-ai-agent-run-timeline
               [aiAgentRunId]="record.ID"
               [autoRefresh]="record.Status === 'Running'"
-              [refreshInterval]="3000"
+              [refreshInterval]="30000"
               (itemSelected)="selectTimelineItem($event)"
-              (navigateToEntity)="navigateToEntityRecord($event)">
+              (navigateToEntity)="navigateToEntityRecord($event)"
+              (agentRunCompleted)="onAgentRunCompleted($event)">
             </mj-ai-agent-run-timeline>
           </kendo-splitter-pane>
           
@@ -119,15 +118,13 @@
       </div>
 
       <!-- Analytics Tab -->
-      @if (false) {
-        <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
-          <mj-ai-agent-run-analytics 
-            #analyticsComponent
-            [agentRunId]="record.ID"
-            *ngIf="analyticsLoaded">
-          </mj-ai-agent-run-analytics>
-        </div>
-      }
+      <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
+        <mj-ai-agent-run-analytics 
+          #analyticsComponent
+          [agentRunId]="record.ID"
+          *ngIf="analyticsLoaded">
+        </mj-ai-agent-run-analytics>
+      </div>
 
       <!-- Details Tab -->
       <div class="tab-content" *ngIf="activeTab === 'details'">

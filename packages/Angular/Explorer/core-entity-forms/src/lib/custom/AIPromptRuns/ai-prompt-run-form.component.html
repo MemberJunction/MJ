@@ -294,6 +294,32 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-inbox"></i>
                                         <p>No result data recorded</p>
+                                        @if (record.Status === 'Failed' || record.Success === false) {
+                                            <div class="error-info">
+                                                @if (record.Status) {
+                                                    <p class="finish-reason">
+                                                        <strong>Status:</strong> {{ record.Status }}
+                                                    </p>
+                                                }
+                                                @if (formattedErrorDetails) {
+                                                    <div class="error-details">
+                                                        <h4>Error Details</h4>
+                                                        <mj-code-editor
+                                                            [ngModel]="formattedErrorDetails"
+                                                            [disabled]="true"
+                                                            [language]="'json'"
+                                                            [lineWrapping]="true"
+                                                            style="height: 200px; width: 100%;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                }
+                                                @if (!formattedErrorDetails) {
+                                                    <p class="error-hint">
+                                                        The prompt execution failed but no additional error information is available.
+                                                    </p>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>

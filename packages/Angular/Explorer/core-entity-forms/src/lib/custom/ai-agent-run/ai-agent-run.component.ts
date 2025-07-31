@@ -209,6 +209,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     }
   }
   
+  onAgentRunCompleted(status: string) {
+    // Update the record status
+    this.record.Status = status as 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Paused';
+    this.cdr.detectChanges();
+    
+    // Reload the full record to get updated data
+    this.refreshData();
+  }
+  
   /**
    * Get the Result field with recursive JSON parsing applied
    */

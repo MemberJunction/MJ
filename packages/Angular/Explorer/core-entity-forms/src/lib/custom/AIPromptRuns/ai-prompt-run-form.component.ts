@@ -1,4 +1,4 @@
-import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef } from '@angular/core';
+import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AIPromptRunEntityExtended, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
@@ -14,9 +14,10 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 @Component({
     selector: 'mj-ai-prompt-run-form',
     templateUrl: './ai-prompt-run-form.component.html',
-    styleUrls: ['./ai-prompt-run-form.component.css']
+    styleUrls: ['./ai-prompt-run-form.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit {
+export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: AIPromptRunEntityExtended;
     
     // Related entities
@@ -80,6 +81,12 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         setTimeout(() => {
             this.cdr.detectChanges();
         }, 0);
+    }
+    
+    ngOnDestroy() {
+        // Clean up any resources
+        // Currently no subscriptions or timers to clean up
+        // This is here for future use and to complete the lifecycle
     }
     
     onInputPanelToggle() {
