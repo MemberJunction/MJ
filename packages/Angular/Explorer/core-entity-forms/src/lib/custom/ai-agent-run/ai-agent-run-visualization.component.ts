@@ -42,7 +42,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   
   loading = false;  // Start with false so the container renders
   error: string | null = null;
-  dataLoading = true;  // Track data loading separately
+  private dataLoading = false;  // Track data loading state from service
   
   selectedItem: TimelineItem | null = null;
   
@@ -115,6 +115,8 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       ]).pipe(
         takeUntil(this.destroy$)
       ).subscribe(([steps, subRuns, actionLogs, promptRuns, loading]) => {
+        this.dataLoading = loading;
+        
         if (!loading && steps && steps.length > 0) {
           console.log('Visualization: Received data from service', {
             steps: steps.length,
@@ -129,11 +131,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
             // Store data for when view is ready
             console.log('View not ready, storing data for later');
             this.pendingData = { steps, subRuns, actionLogs, promptRuns };
-            this.loading = false;  // Show the container so it can render
           }
         } else if (!loading && (!steps || steps.length === 0)) {
           console.log('Visualization: No steps available');
-          this.loading = false;
           this.error = null;
         }
       });
@@ -148,8 +148,6 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     } else {
       console.error('Visualization: No agent run ID provided');
       this.error = 'No agent run ID provided';
-      this.loading = false;
-      this.dataLoading = false;
     }
   }
   
@@ -343,10 +341,16 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       
       this.loading = false;
       console.log('Visualization built successfully');
+      
+      // Trigger change detection since we're using OnPush
+      this.cdr.markForCheck();
     } catch (error) {
       this.error = 'Failed to build visualization';
       console.error('Visualization error:', error);
       this.loading = false;
+      
+      // Trigger change detection since we're using OnPush
+      this.cdr.markForCheck();
     }
   }
   
