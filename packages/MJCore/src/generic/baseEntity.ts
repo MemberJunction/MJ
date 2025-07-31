@@ -857,10 +857,15 @@ export abstract class BaseEntity<T = unknown> {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
+                const tempStatus = field.ActiveStatusAssertions; // save the current active status assertions
+                field.ActiveStatusAssertions = false; // disable active status assertions for this field
+
                 obj[field.Name] = oldValues ? field.OldValue : field.Value;
                 if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
                     obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
                 }
+
+                field.ActiveStatusAssertions = tempStatus; // restore the prior status for assertions
             }
         }
         return obj;

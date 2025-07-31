@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { Subject, Observable, combineLatest } from 'rxjs';
-import { takeUntil, map, shareReplay } from 'rxjs/operators';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Subject, Observable, combineLatest, interval, of, from, Subscription } from 'rxjs';
+import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataService } from './ai-agent-run-data.service';
@@ -28,14 +28,16 @@ export interface TimelineItem {
 @Component({
   selector: 'mj-ai-agent-run-timeline',
   templateUrl: './ai-agent-run-timeline.component.html',
-  styleUrls: ['./ai-agent-run-timeline.component.css']
+  styleUrls: ['./ai-agent-run-timeline.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
   @Input() autoRefresh = false;
-  @Input() refreshInterval = 5000;
+  @Input() refreshInterval = 30000; // Minimum 30 seconds
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() agentRunCompleted = new EventEmitter<string>();
 
   private destroy$ = new Subject<void>();
   
@@ -52,8 +54,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   selectedItem: TimelineItem | null = null;
   
   private refreshTimer: any;
+  private refreshSubscription: Subscription | null = null;
   
-  constructor(private dataService: AIAgentRunDataService) {
+  constructor(
+    private dataService: AIAgentRunDataService,
+    private cdr: ChangeDetectorRef
+  ) {
     // Combine all data sources to build timeline
     this.timelineItems$ = combineLatest([
       this.steps$,
@@ -94,19 +100,51 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private startAutoRefresh() {
-    this.refreshTimer = setInterval(() => {
-      // Check if we should still be refreshing
-      this.dataService.steps$.pipe(takeUntil(this.destroy$)).subscribe(steps => {
-        const hasRunningSteps = steps.some(s => s.Status === 'Running');
-        if (!hasRunningSteps && this.refreshTimer) {
-          clearInterval(this.refreshTimer);
-          this.refreshTimer = null;
-        } else if (hasRunningSteps && this.aiAgentRunId) {
-          // Trigger parent to reload data
+    // Ensure minimum 30 second interval
+    const refreshIntervalMs = Math.max(30000, this.refreshInterval);
+    
+    // Don't create multiple subscriptions - subscribe once and use interval
+    this.refreshSubscription = interval(refreshIntervalMs)
+      .pipe(
+        takeUntil(this.destroy$),
+        // Get the latest agent run status
+        switchMap(() => {
+          if (!this.aiAgentRunId) return of(null);
+          
+          const rv = new RunView();
+          return from(rv.RunView({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID = '${this.aiAgentRunId}'`,
+            ResultType: 'simple'
+          }));
+        }),
+        filter(result => result !== null && result.Success && result.Results?.length > 0),
+        map(result => result!.Results[0])
+      )
+      .subscribe(agentRun => {
+        // Check if the agent run is still running
+        if (agentRun.Status === 'Running') {
+          // Reload data
           this.dataService.loadAgentRunData(this.aiAgentRunId);
+        } else {
+          // Agent run completed/failed - stop refresh
+          console.log(`Agent run ${agentRun.Status} - stopping auto-refresh`);
+          this.stopAutoRefresh();
+          // Emit event to parent to update status
+          this.agentRunCompleted.emit(agentRun.Status);
         }
       });
-    }, this.refreshInterval);
+  }
+  
+  private stopAutoRefresh() {
+    if (this.refreshSubscription) {
+      this.refreshSubscription.unsubscribe();
+      this.refreshSubscription = null;
+    }
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
   
   // This method is now just for compatibility - actual loading is done by parent
@@ -247,10 +285,14 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       );
       
       item.childrenLoaded = true;
+      // Trigger change detection after updating the data
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('🔄 Timeline: Error loading sub-agent children:', error);
       item.hasNoChildren = true;
       item.childrenLoaded = true;
+      // Trigger change detection for error state
+      this.cdr.markForCheck();
     }
   }
   
@@ -267,5 +309,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   navigateToPromptRun(runId: string, event: Event) {
     event.stopPropagation();
     this.navigateToEntity.emit({ entityName: 'MJ: AI Prompt Runs', recordId: runId });
+  }
+  
+  /**
+   * TrackBy function for timeline items
+   */
+  trackByItemId(index: number, item: TimelineItem): string {
+    return item.id;
   }
 }
