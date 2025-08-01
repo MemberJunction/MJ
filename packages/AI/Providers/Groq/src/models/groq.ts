@@ -139,7 +139,25 @@ export class GroqLLM extends BaseLLM {
             return res;
         });
         
-        return {
+        // Create ModelUsage with timing data if available
+        const usage = new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens);
+        
+        // Groq provides detailed timing in the usage object
+        const groqUsage = chatResponse.usage;
+        if (groqUsage.queue_time !== undefined) {
+            // Convert from seconds to milliseconds
+            usage.queueTime = groqUsage.queue_time * 1000;
+        }
+        if (groqUsage.prompt_time !== undefined) {
+            // Convert from seconds to milliseconds
+            usage.promptTime = groqUsage.prompt_time * 1000;
+        }
+        if (groqUsage.completion_time !== undefined) {
+            // Convert from seconds to milliseconds
+            usage.completionTime = groqUsage.completion_time * 1000;
+        }
+        
+        const result = {
             success: true,
             statusText: "OK",
             startTime: startTime,
@@ -147,11 +165,20 @@ export class GroqLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens)
+                usage: usage
             },
             errorMessage: "",
             exception: null,
+        } as ChatResult;
+        
+        // Add model-specific response details
+        result.modelSpecificResponseDetails = {
+            provider: 'groq',
+            model: chatResponse.model,
+            systemFingerprint: (chatResponse as any).system_fingerprint
         };
+        
+        return result;
     }
     
     /**

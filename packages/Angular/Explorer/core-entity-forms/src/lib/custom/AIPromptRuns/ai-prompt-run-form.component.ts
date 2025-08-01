@@ -46,6 +46,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     public formattedData = '';
     public formattedModelSelection = '';
     public formattedErrorDetails = '';
+    public formattedModelSpecificResponseDetails = '';
     
     // Parsed input data
     public chatMessages: ChatMessage[] = [];
@@ -192,6 +193,17 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
                 this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
             } catch (error) {
                 this.formattedErrorDetails = this.record.ErrorDetails;
+            }
+        }
+        
+        // Format ModelSpecificResponseDetails
+        if (this.record.ModelSpecificResponseDetails) {
+            try {
+                const modelDetails = JSON.parse(this.record.ModelSpecificResponseDetails);
+                const parsed = ParseJSONRecursive(modelDetails, parseOptions);
+                this.formattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
             }
         }
     }

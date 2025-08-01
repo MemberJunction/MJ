@@ -3277,6 +3277,22 @@ export class AIPromptRunner {
         if (modelResult.data.usage.costCurrency !== undefined) {
           promptRun.CostCurrency = modelResult.data.usage.costCurrency;
         }
+        
+        // Save timing information if available
+        if (modelResult.data.usage.queueTime !== undefined) {
+          promptRun.QueueTime = modelResult.data.usage.queueTime;
+        }
+        if (modelResult.data.usage.promptTime !== undefined) {
+          promptRun.PromptTime = modelResult.data.usage.promptTime;
+        }
+        if (modelResult.data.usage.completionTime !== undefined) {
+          promptRun.CompletionTime = modelResult.data.usage.completionTime;
+        }
+      }
+      
+      // Save model-specific response details if available
+      if (modelResult.modelSpecificResponseDetails) {
+        promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);
       }
 
       // Populate retry tracking columns
