@@ -34,6 +34,7 @@ const DEFAULT_COMPILER_CONFIG: CompilerConfig = {
 export class ComponentCompiler {
   private config: CompilerConfig;
   private compilationCache: Map<string, CompiledComponent>;
+  private cacheAccessOrder: string[]; // Track access order for LRU
   private babelInstance: any;
 
   /**
@@ -64,7 +65,7 @@ export class ComponentCompiler {
     try {
       // Check cache first if enabled
       if (this.config.cache) {
-        const cached = this.getCachedComponent(options.componentName);
+        const cached = this.getCachedComponent(options.componentName, options.componentCode);
         if (cached) {
           return {
             success: true,
@@ -101,7 +102,7 @@ export class ComponentCompiler {
 
       // Cache if enabled
       if (this.config.cache) {
-        this.cacheComponent(compiledComponent);
+        this.cacheComponent(compiledComponent, options.componentCode);
       }
 
       return {
@@ -227,7 +228,7 @@ export class ComponentCompiler {
         );
 
         // Call createComponent to get the actual component
-        return createComponentFn(
+        const Component = createComponentFn(
           React,
           ReactDOM,
           React.useState,
@@ -242,6 +243,9 @@ export class ComponentCompiler {
           styles,
           console
         );
+
+        // Return the component directly
+        return Component;
       };
     } catch (error: any) {
       throw new Error(`Failed to create component factory: ${error.message}`);
@@ -326,24 +330,38 @@ export class ComponentCompiler {
   /**
    * Gets a cached component if available
    * @param componentName - Name of the component
+   * @param code - Component source code
    * @returns Cached component or undefined
    */
-  private getCachedComponent(componentName: string): CompiledComponent | undefined {
-    // Simple cache lookup by name
-    // In production, might want to include code hash for cache key
-    for (const [key, component] of this.compilationCache) {
-      if (component.name === componentName) {
-        return component;
-      }
+  private getCachedComponent(componentName: string, code: string): CompiledComponent | undefined {
+    // Create cache key based on name AND content hash
+    const cacheKey = this.createCacheKey(componentName, code);
+    return this.compilationCache.get(cacheKey);
+  }
+
+  /**
+   * Creates a cache key based on component name and code content
+   * @param componentName - Name of the component
+   * @param code - Component source code
+   * @returns Cache key
+   */
+  private createCacheKey(componentName: string, code: string): string {
+    // Simple hash function for code content
+    let hash = 0;
+    for (let i = 0; i < code.length; i++) {
+      const char = code.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
     }
-    return undefined;
+    return `${componentName}_${hash.toString(36)}`;
   }
 
   /**
    * Caches a compiled component
    * @param component - Component to cache
+   * @param code - Original source code
    */
-  private cacheComponent(component: CompiledComponent): void {
+  private cacheComponent(component: CompiledComponent, code: string): void {
     // Enforce cache size limit
     if (this.compilationCache.size >= this.config.maxCacheSize) {
       // Remove oldest entry (first in map)
@@ -351,7 +369,8 @@ export class ComponentCompiler {
       this.compilationCache.delete(firstKey);
     }
 
-    this.compilationCache.set(component.id, component);
+    const cacheKey = this.createCacheKey(component.name, code);
+    this.compilationCache.set(cacheKey, component);
   }
 
   /**
