@@ -107,6 +107,9 @@ export class VertexLLM extends BaseLLM {
       
       const endTime = new Date();
       
+      // Create ModelUsage 
+      const usage = new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens);
+      
       // Create the ChatResult
       const choices: ChatResultChoice[] = [{
         message: {
@@ -117,7 +120,7 @@ export class VertexLLM extends BaseLLM {
         index: 0
       }];
       
-      return {
+      const chatResult: ChatResult = {
         success: true,
         statusText: "OK",
         startTime: startTime,
@@ -125,11 +128,23 @@ export class VertexLLM extends BaseLLM {
         timeElapsed: endTime.getTime() - startTime.getTime(),
         data: {
           choices: choices,
-          usage: new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens)
+          usage: usage
         },
         errorMessage: "",
         exception: null,
       };
+      
+      // Add model-specific response details
+      chatResult.modelSpecificResponseDetails = {
+        provider: 'vertex',
+        model: params.model,
+        promptFeedback: result.promptFeedback,
+        safetyRatings: result.candidates?.[0]?.safetyRatings,
+        citationMetadata: result.candidates?.[0]?.citationMetadata,
+        finishReason: result.candidates?.[0]?.finishReason
+      };
+      
+      return chatResult;
     } catch (error) {
       const endTime = new Date();
       return {

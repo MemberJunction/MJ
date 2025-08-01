@@ -130,7 +130,10 @@ export class MistralLLM extends BaseLLM {
             return res;
         });
         
-        return {
+        // Create ModelUsage
+        const usage = new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens);
+        
+        const chatResult: ChatResult = {
             success: true,
             statusText: "OK",
             startTime: startTime,
@@ -138,11 +141,22 @@ export class MistralLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens)
+                usage: usage
             },
             errorMessage: "",
             exception: null,
-        }
+        };
+        
+        // Add model-specific response details
+        chatResult.modelSpecificResponseDetails = {
+            provider: 'mistral',
+            model: chatResponse.model,
+            id: chatResponse.id,
+            object: chatResponse.object,
+            created: chatResponse.created
+        };
+        
+        return chatResult;
     }
     
     /**

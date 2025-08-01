@@ -391,6 +391,37 @@
                                             <div class="metric-currency">{{ record.CostCurrency }}</div>
                                         }
                                     </div>
+                                    
+                                    <!-- Timing Metrics -->
+                                    @if (record.QueueTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-hourglass-start"></i>
+                                                <h4>Queue Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.QueueTime) }}</div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.PromptTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-brain"></i>
+                                                <h4>Prompt Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.PromptTime) }}</div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.CompletionTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-flag-checkered"></i>
+                                                <h4>Completion Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.CompletionTime) }}</div>
+                                        </div>
+                                    }
                                 </div>
                                 
                                 <!-- Additional Metrics -->
@@ -780,6 +811,42 @@
                             </div>
                         </ng-template>
                     </kendo-panelbar-item>
+                    
+                    <!-- Model Specific Response Details Panel -->
+                    @if (record.ModelSpecificResponseDetails) {
+                        <kendo-panelbar-item [expanded]="false">
+                            <ng-template kendoPanelBarItemTitle>
+                                <span class="panel-title">
+                                    <i class="fa-solid fa-microchip"></i>
+                                    Model Specific Response Details
+                                    <span class="panel-badge">JSON</span>
+                                </span>
+                            </ng-template>
+                            <ng-template kendoPanelBarContent>
+                                <div class="panel-content">
+                                    <div class="json-editor-container">
+                                        <div class="json-toolbar">
+                                            <button kendoButton
+                                                fillMode="flat" 
+                                                size="small"
+                                                (click)="copyToClipboard(formattedModelSpecificResponseDetails, 'Model Specific Response Details')"
+                                                title="Copy JSON">
+                                                <i class="fa-solid fa-copy"></i> Copy
+                                            </button>
+                                        </div>
+                                        <mj-code-editor 
+                                            [(ngModel)]="formattedModelSpecificResponseDetails"
+                                            name="formattedModelSpecificResponseDetails"
+                                            [readonly]="true"
+                                            [language]="'json'"
+                                            [lineWrapping]="true"
+                                            style="height: 400px; width: 100%;">
+                                        </mj-code-editor>
+                                    </div>
+                                </div>
+                            </ng-template>
+                        </kendo-panelbar-item>
+                    }
                     
                     <!-- Model Selection & Performance Panel (v2.78 fields) -->
                     <kendo-panelbar-item [expanded]="false">
