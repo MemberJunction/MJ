@@ -9161,6 +9161,26 @@ export const AIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
         * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
+    QueueTime: z.number().nullable().describe(`
+        * * Field Name: QueueTime
+        * * Display Name: Queue Time
+        * * SQL Data Type: int
+        * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
+    PromptTime: z.number().nullable().describe(`
+        * * Field Name: PromptTime
+        * * Display Name: Prompt Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
+    CompletionTime: z.number().nullable().describe(`
+        * * Field Name: CompletionTime
+        * * Display Name: Completion Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
+    ModelSpecificResponseDetails: z.string().nullable().describe(`
+        * * Field Name: ModelSpecificResponseDetails
+        * * Display Name: Model Specific Response Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -37391,6 +37411,58 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set ChildPromptID(value: string | null) {
         this.Set('ChildPromptID', value);
+    }
+
+    /**
+    * * Field Name: QueueTime
+    * * Display Name: Queue Time
+    * * SQL Data Type: int
+    * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
+    */
+    get QueueTime(): number | null {
+        return this.Get('QueueTime');
+    }
+    set QueueTime(value: number | null) {
+        this.Set('QueueTime', value);
+    }
+
+    /**
+    * * Field Name: PromptTime
+    * * Display Name: Prompt Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
+    */
+    get PromptTime(): number | null {
+        return this.Get('PromptTime');
+    }
+    set PromptTime(value: number | null) {
+        this.Set('PromptTime', value);
+    }
+
+    /**
+    * * Field Name: CompletionTime
+    * * Display Name: Completion Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
+    */
+    get CompletionTime(): number | null {
+        return this.Get('CompletionTime');
+    }
+    set CompletionTime(value: number | null) {
+        this.Set('CompletionTime', value);
+    }
+
+    /**
+    * * Field Name: ModelSpecificResponseDetails
+    * * Display Name: Model Specific Response Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
+    */
+    get ModelSpecificResponseDetails(): string | null {
+        return this.Get('ModelSpecificResponseDetails');
+    }
+    set ModelSpecificResponseDetails(value: string | null) {
+        this.Set('ModelSpecificResponseDetails', value);
     }
 
     /**
