@@ -28,6 +28,11 @@ interface Rule {
   test: (ast: t.File, componentName: string) => Violation[];
 }
 
+// Helper function
+function getLineNumber(code: string, index: number): number {
+  return code.substring(0, index).split('\n').length;
+}
+
 export class ComponentLinter {
   // Universal rules that apply to all components with SavedUserSettings pattern
   private static universalComponentRules: Rule[] = [
@@ -105,28 +110,15 @@ export class ComponentLinter {
           }
         });
         
-        // Updated logic: It's OK to have state props if:
-        // 1. Component also has savedUserSettings (for persistence)
-        // 2. Component uses useState (manages state internally)
-        // The pattern is: useState(savedUserSettings?.value ?? propValue ?? defaultValue)
-        
-        if (hasStateFromProps && !hasSavedUserSettings) {
+        // CRITICAL: Components must manage ALL their own state
+        // State props are NOT allowed - each component is generated separately
+        if (hasStateFromProps) {
           violations.push({
             rule: 'full-state-ownership',
             severity: 'error',
             line: 1,
             column: 0,
-            message: `Component "${componentName}" receives state props (${stateProps.join(', ')}) but no savedUserSettings. Add savedUserSettings prop to enable state persistence.`
-          });
-        }
-        
-        if (hasStateFromProps && hasSavedUserSettings && !usesUseState) {
-          violations.push({
-            rule: 'full-state-ownership',
-            severity: 'error',
-            line: 1,
-            column: 0,
-            message: `Component "${componentName}" receives state props but doesn't use useState. Components must manage state internally with useState, using savedUserSettings for persistence and props as fallback defaults.`
+            message: `Component "${componentName}" expects state from props (${stateProps.join(', ')}) instead of managing internally. Each component is generated separately and MUST manage ALL its own state.`
           });
         }
         
@@ -244,7 +236,7 @@ export class ComponentLinter {
                   for (const prop of arg.properties) {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const key = prop.key.name;
-                      const ephemeralPatterns = ['hover', 'dropdown', 'modal', 'loading', 'typing', 'draft'];
+                      const ephemeralPatterns = ['hover', 'dropdown', 'modal', 'loading', 'typing', 'draft', 'expanded', 'collapsed', 'focused'];
                       
                       if (ephemeralPatterns.some(pattern => key.toLowerCase().includes(pattern))) {
                         violations.push({
@@ -791,6 +783,256 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+    
+    // New rules to align with AI linter
+    {
+      name: 'noisy-settings-updates',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for onSaveUserSettings calls
+            if (t.isOptionalCallExpression(path.node) || t.isCallExpression(path.node)) {
+              const callee = path.node.callee;
+              if (t.isIdentifier(callee) && callee.name === 'onSaveUserSettings') {
+                // Check if this is inside an onChange/onInput handler
+                let parent = path.getFunctionParent();
+                if (parent) {
+                  const funcName = ComponentLinter.getFunctionName(parent);
+                  if (funcName && (funcName.includes('Change') || funcName.includes('Input'))) {
+                    // Check if it's not debounced or on blur
+                    const parentBody = parent.node.body;
+                    const hasDebounce = parentBody && parentBody.toString().includes('debounce');
+                    const hasTimeout = parentBody && parentBody.toString().includes('setTimeout');
+                    
+                    if (!hasDebounce && !hasTimeout) {
+                      violations.push({
+                        rule: 'noisy-settings-updates',
+                        severity: 'error',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `Saving settings on every change/keystroke. Save on blur, submit, or after debouncing.`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'prop-state-sync',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {
+              const effectBody = path.node.arguments[0];
+              const deps = path.node.arguments[1];
+              
+              if (effectBody && (t.isArrowFunctionExpression(effectBody) || t.isFunctionExpression(effectBody))) {
+                const bodyString = effectBody.body.toString();
+                
+                // Check if it's setting state based on props
+                const hasSetState = /set[A-Z]\w*\s*\(/.test(bodyString);
+                const depsString = deps ? deps.toString() : '';
+                
+                // Check if deps include prop-like names
+                const propPatterns = ['Prop', 'value', 'data', 'items'];
+                const hasPropDeps = propPatterns.some(p => depsString.includes(p));
+                
+                if (hasSetState && hasPropDeps && !bodyString.includes('async')) {
+                  violations.push({
+                    rule: 'prop-state-sync',
+                    severity: 'error',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: 'Syncing props to internal state with useEffect creates dual state management',
+                    code: path.toString().substring(0, 100)
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'performance-memoization',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        const memoizedValues = new Set<string>();
+        
+        // Collect memoized values
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useMemo') {
+              // Find the variable being assigned
+              if (t.isVariableDeclarator(path.parent) && t.isIdentifier(path.parent.id)) {
+                memoizedValues.add(path.parent.id.name);
+              }
+            }
+          }
+        });
+        
+        // Check for expensive operations without memoization
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property)) {
+              const method = path.node.callee.property.name;
+              
+              // Check for expensive array operations
+              if (['filter', 'sort', 'map', 'reduce'].includes(method)) {
+                // Check if this is inside a variable declaration
+                let parentPath: NodePath | null = path.parentPath;
+                while (parentPath && !t.isVariableDeclarator(parentPath.node)) {
+                  parentPath = parentPath.parentPath;
+                }
+                
+                if (parentPath && t.isVariableDeclarator(parentPath.node) && t.isIdentifier(parentPath.node.id)) {
+                  const varName = parentPath.node.id.name;
+                  
+                  // Check if it's not memoized
+                  if (!memoizedValues.has(varName)) {
+                    // Check if it's in the render method (not in event handlers)
+                    let funcParent = path.getFunctionParent();
+                    if (funcParent) {
+                      const funcName = ComponentLinter.getFunctionName(funcParent);
+                      if (!funcName || funcName === componentName) {
+                        violations.push({
+                          rule: 'performance-memoization',
+                          severity: 'warning',
+                          line: path.node.loc?.start.line || 0,
+                          column: path.node.loc?.start.column || 0,
+                          message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
+                          code: `const ${varName} = ...${method}(...)`
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Check for static arrays/objects
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && 
+                (t.isArrayExpression(path.node.init) || t.isObjectExpression(path.node.init))) {
+              
+              const varName = path.node.id.name;
+              if (!memoizedValues.has(varName)) {
+                // Check if it looks static (no variables referenced)
+                const hasVariables = path.node.init.toString().match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
+                if (!hasVariables || hasVariables.length < 3) { // Allow some property names
+                  violations.push({
+                    rule: 'performance-memoization',
+                    severity: 'warning',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: 'Static array/object recreated on every render. Consider using useMemo.',
+                    code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'child-state-management',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useState') {
+              // Check if the state name suggests child component state
+              if (t.isVariableDeclarator(path.parent) && t.isArrayPattern(path.parent.id)) {
+                const stateNameNode = path.parent.id.elements[0];
+                if (t.isIdentifier(stateNameNode)) {
+                  const stateName = stateNameNode.name;
+                  
+                  // Check for patterns suggesting child state management
+                  const childPatterns = [
+                    /^child/i,
+                    /Table\w*State/,
+                    /Panel\w*State/,
+                    /Modal\w*State/,
+                    /\w+Component\w*/
+                  ];
+                  
+                  if (childPatterns.some(pattern => pattern.test(stateName))) {
+                    violations.push({
+                      rule: 'child-state-management',
+                      severity: 'error',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
+                      code: `const [${stateName}, ...] = useState(...)`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'server-reload-on-client-operation',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Look for data loading functions
+            if (t.isIdentifier(callee) && 
+                (callee.name.includes('load') || callee.name.includes('fetch'))) {
+              
+              // Check if it's called in sort/filter handlers
+              let funcParent = path.getFunctionParent();
+              if (funcParent) {
+                const funcName = ComponentLinter.getFunctionName(funcParent);
+                if (funcName && 
+                    (funcName.includes('Sort') || funcName.includes('Filter') || 
+                     funcName.includes('handleSort') || funcName.includes('handleFilter'))) {
+                  violations.push({
+                    rule: 'server-reload-on-client-operation',
+                    severity: 'error',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: 'Reloading data from server on sort/filter. Use useMemo for client-side operations.',
+                    code: `${funcName} calls ${callee.name}`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -1138,38 +1380,35 @@ export class ComponentLinter {
         case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must own ALL their state - use useState with SavedUserSettings override pattern',
-            example: `// ✅ CORRECT - Full state ownership with fallback pattern:
-function Component({ 
-  items, 
-  customers,
-  selectedId: selectedIdProp,        // Props can provide defaults
-  filters: filtersProp,
-  savedUserSettings,                  // Saved settings override props
-  onSaveUserSettings 
-}) {
-  // Component owns ALL state - savedUserSettings overrides props
+            suggestion: 'Components must manage ALL their own state internally. No state props allowed.',
+            example: `// ❌ WRONG - Expecting state from props:
+function Component({ selectedId, filters, sortBy, onStateChange }) {
+  // This component expects parent to manage its state - WRONG!
+}
+
+// ✅ CORRECT - Component owns ALL its state:
+function Component({ data, savedUserSettings, onSaveUserSettings }) {
+  // Component manages ALL its own state internally
   const [selectedId, setSelectedId] = useState(
-    savedUserSettings?.selectedId ?? selectedIdProp ?? null
+    savedUserSettings?.selectedId || null
   );
   const [filters, setFilters] = useState(
-    savedUserSettings?.filters ?? filtersProp ?? {}
+    savedUserSettings?.filters || {}
   );
-  const [searchDraft, setSearchDraft] = useState(''); // Ephemeral - no prop/save
+  const [sortBy, setSortBy] = useState(
+    savedUserSettings?.sortBy || 'name'
+  );
   
-  // Handle selection and save preference
+  // Handle selection
   const handleSelect = (id) => {
-    setSelectedId(id);
+    setSelectedId(id);  // Update internal state
     onSaveUserSettings?.({
       ...savedUserSettings,
       selectedId: id
     });
   };
   
-  // Priority order:
-  // 1. savedUserSettings (user's saved preference)
-  // 2. props (parent's suggestion/default)
-  // 3. component default
+  // Each component is generated separately - it must be self-contained
 }`
           });
           break;
@@ -1561,6 +1800,137 @@ setAccountData(results.map(item => ({
 // Later in render...
 <td>{account.accountName}</td>        // Use camelCase consistently
 <td>{formatCurrency(account.annualRevenue)}</td> // Works!`
+          });
+          break;
+          
+        case 'noisy-settings-updates':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Save settings sparingly - only on meaningful user actions',
+            example: `// ❌ WRONG - Saving on every keystroke:
+const handleSearchChange = (e) => {
+  setSearchTerm(e.target.value);
+  onSaveUserSettings?.({ searchTerm: e.target.value }); // TOO NOISY!
+};
+
+// ✅ CORRECT - Save on blur or debounced:
+const handleSearchBlur = () => {
+  if (searchTerm !== savedUserSettings?.searchTerm) {
+    onSaveUserSettings?.({ ...savedUserSettings, searchTerm });
+  }
+};
+
+// ✅ CORRECT - Debounced save:
+const saveSearchTerm = useMemo(() => 
+  debounce((term) => {
+    onSaveUserSettings?.({ ...savedUserSettings, searchTerm: term });
+  }, 500),
+  [savedUserSettings]
+);`
+          });
+          break;
+          
+        case 'prop-state-sync':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Initialize state once, don\'t sync from props',
+            example: `// ❌ WRONG - Syncing prop to state:
+const [value, setValue] = useState(propValue);
+useEffect(() => {
+  setValue(propValue); // Creates dual state management!
+}, [propValue]);
+
+// ✅ CORRECT - Initialize once:
+const [value, setValue] = useState(
+  savedUserSettings?.value || defaultValue
+);
+
+// ✅ CORRECT - If you need prop changes, use derived state:
+const displayValue = propOverride || value;`
+          });
+          break;
+          
+        case 'performance-memoization':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use useMemo for expensive operations and static data',
+            example: `// ❌ WRONG - Expensive operation on every render:
+const filteredItems = items.filter(item => 
+  item.name.toLowerCase().includes(searchTerm.toLowerCase())
+);
+
+// ✅ CORRECT - Memoized:
+const filteredItems = useMemo(() => 
+  items.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ),
+  [items, searchTerm]
+);
+
+// ❌ WRONG - Static array recreated:
+const columns = [
+  { field: 'name', header: 'Name' },
+  { field: 'value', header: 'Value' }
+];
+
+// ✅ CORRECT - Memoized static data:
+const columns = useMemo(() => [
+  { field: 'name', header: 'Name' },
+  { field: 'value', header: 'Value' }
+], []); // Empty deps = never changes`
+          });
+          break;
+          
+        case 'child-state-management':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Never manage state for child components',
+            example: `// ❌ WRONG - Managing child state:
+const [childTableSort, setChildTableSort] = useState('name');
+const [modalOpen, setModalOpen] = useState(false);
+
+<ChildTable 
+  sortBy={childTableSort}
+  onSortChange={setChildTableSort}
+/>
+
+// ✅ CORRECT - Let children manage themselves:
+<ChildTable 
+  data={tableData}
+  savedUserSettings={savedUserSettings?.childTable}
+  onSaveUserSettings={handleChildSettings}
+  // Child manages its own sort state!
+/>`
+          });
+          break;
+          
+        case 'server-reload-on-client-operation':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use client-side operations for sorting and filtering',
+            example: `// ❌ WRONG - Reload from server:
+const handleSort = (field) => {
+  setSortBy(field);
+  loadData(); // Unnecessary server call!
+};
+
+// ✅ CORRECT - Client-side sort:
+const handleSort = (field) => {
+  setSortBy(field);
+  setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+};
+
+// Use memoized sorted data:
+const sortedData = useMemo(() => {
+  const sorted = [...data];
+  sorted.sort((a, b) => {
+    const aVal = a[sortBy];
+    const bVal = b[sortBy];
+    const result = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+    return sortDirection === 'asc' ? result : -result;
+  });
+  return sorted;
+}, [data, sortBy, sortDirection]);`
           });
           break;
       }
