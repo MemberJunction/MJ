@@ -10,16 +10,6 @@ export {
   createErrorLogger
 } from './error-boundary';
 
-export {
-  wrapComponent,
-  memoizeComponent,
-  lazyComponent,
-  injectProps,
-  conditionalComponent,
-  withErrorHandler,
-  portalComponent,
-  WrapperOptions
-} from './component-wrapper';
 
 export {
   buildComponentProps,
