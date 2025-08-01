@@ -40,16 +40,6 @@ export {
   createErrorLogger
 } from './runtime';
 
-export {
-  wrapComponent,
-  memoizeComponent,
-  lazyComponent,
-  injectProps,
-  conditionalComponent,
-  withErrorHandler,
-  portalComponent,
-  WrapperOptions
-} from './runtime';
 
 export {
   buildComponentProps,

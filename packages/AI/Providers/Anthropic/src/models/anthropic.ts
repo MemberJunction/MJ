@@ -250,6 +250,9 @@ export class AnthropicLLM extends BaseLLM {
                 content = content.trim();
             }
             
+            // Create ModelUsage with cost information if available
+            const usage = new ModelUsage(result.usage.input_tokens, result.usage.output_tokens);
+            
             const chatResult: ChatResult = {
                 data: {
                     choices: [
@@ -263,7 +266,7 @@ export class AnthropicLLM extends BaseLLM {
                             index: 0
                         }
                     ],
-                    usage: new ModelUsage(result.usage.input_tokens, result.usage.output_tokens)
+                    usage: usage
                 },
                 success: true,
                 statusText: 'success',
@@ -281,6 +284,22 @@ export class AnthropicLLM extends BaseLLM {
                     cachedTokenCount: result.usage.cached_tokens
                 };
             }
+            
+            // Add model-specific response details
+            chatResult.modelSpecificResponseDetails = {
+                provider: 'anthropic',
+                model: result.model,
+                id: result.id,
+                type: result.type,
+                role: result.role,
+                stopReason: result.stop_reason,
+                stopSequence: result.stop_sequence,
+                usage: {
+                    cached_tokens: result.usage.cached_tokens,
+                    thinking_tokens: result.thinking_usage?.output_tokens,
+                    thinking_budget_tokens: result.thinking_usage?.budget_tokens
+                }
+            };
             
             return chatResult;   
         }

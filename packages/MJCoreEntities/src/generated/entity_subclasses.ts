@@ -7864,6 +7864,35 @@ export const AIAgentRunSchema = z.object({
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
 each time the agent processes a prompt step.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
+    OverrideModelID: z.string().nullable().describe(`
+        * * Field Name: OverrideModelID
+        * * Display Name: Override Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
+    OverrideVendorID: z.string().nullable().describe(`
+        * * Field Name: OverrideVendorID
+        * * Display Name: Override Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+        * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
+    Data: z.string().nullable().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
+    Verbose: z.boolean().nullable().describe(`
+        * * Field Name: Verbose
+        * * Display Name: Verbose
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -7876,6 +7905,18 @@ each time the agent processes a prompt step.`),
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+    OverrideModel: z.string().nullable().describe(`
+        * * Field Name: OverrideModel
+        * * Display Name: Override Model
+        * * SQL Data Type: nvarchar(50)`),
+    OverrideVendor: z.string().nullable().describe(`
+        * * Field Name: OverrideVendor
+        * * Display Name: Override Vendor
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -9114,6 +9155,32 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
+    ChildPromptID: z.string().nullable().describe(`
+        * * Field Name: ChildPromptID
+        * * Display Name: Child Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
+    QueueTime: z.number().nullable().describe(`
+        * * Field Name: QueueTime
+        * * Display Name: Queue Time
+        * * SQL Data Type: int
+        * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
+    PromptTime: z.number().nullable().describe(`
+        * * Field Name: PromptTime
+        * * Display Name: Prompt Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
+    CompletionTime: z.number().nullable().describe(`
+        * * Field Name: CompletionTime
+        * * Display Name: Completion Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
+    ModelSpecificResponseDetails: z.string().nullable().describe(`
+        * * Field Name: ModelSpecificResponseDetails
+        * * Display Name: Model Specific Response Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -9141,6 +9208,10 @@ export const AIPromptRunSchema = z.object({
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
         * * Display Name: Judge
+        * * SQL Data Type: nvarchar(255)`),
+    ChildPrompt: z.string().nullable().describe(`
+        * * Field Name: ChildPrompt
+        * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -33758,6 +33829,75 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: OverrideModelID
+    * * Display Name: Override Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
+    */
+    get OverrideModelID(): string | null {
+        return this.Get('OverrideModelID');
+    }
+    set OverrideModelID(value: string | null) {
+        this.Set('OverrideModelID', value);
+    }
+
+    /**
+    * * Field Name: OverrideVendorID
+    * * Display Name: Override Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
+    */
+    get OverrideVendorID(): string | null {
+        return this.Get('OverrideVendorID');
+    }
+    set OverrideVendorID(value: string | null) {
+        this.Set('OverrideVendorID', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
+    */
+    get Data(): string | null {
+        return this.Get('Data');
+    }
+    set Data(value: string | null) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: Verbose
+    * * Display Name: Verbose
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
+    */
+    get Verbose(): boolean | null {
+        return this.Get('Verbose');
+    }
+    set Verbose(value: boolean | null) {
+        this.Set('Verbose', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -33782,6 +33922,33 @@ each time the agent processes a prompt step.
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+
+    /**
+    * * Field Name: OverrideModel
+    * * Display Name: Override Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideModel(): string | null {
+        return this.Get('OverrideModel');
+    }
+
+    /**
+    * * Field Name: OverrideVendor
+    * * Display Name: Override Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideVendor(): string | null {
+        return this.Get('OverrideVendor');
     }
 }
 
@@ -37233,6 +37400,72 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: ChildPromptID
+    * * Display Name: Child Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
+    */
+    get ChildPromptID(): string | null {
+        return this.Get('ChildPromptID');
+    }
+    set ChildPromptID(value: string | null) {
+        this.Set('ChildPromptID', value);
+    }
+
+    /**
+    * * Field Name: QueueTime
+    * * Display Name: Queue Time
+    * * SQL Data Type: int
+    * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
+    */
+    get QueueTime(): number | null {
+        return this.Get('QueueTime');
+    }
+    set QueueTime(value: number | null) {
+        this.Set('QueueTime', value);
+    }
+
+    /**
+    * * Field Name: PromptTime
+    * * Display Name: Prompt Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
+    */
+    get PromptTime(): number | null {
+        return this.Get('PromptTime');
+    }
+    set PromptTime(value: number | null) {
+        this.Set('PromptTime', value);
+    }
+
+    /**
+    * * Field Name: CompletionTime
+    * * Display Name: Completion Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
+    */
+    get CompletionTime(): number | null {
+        return this.Get('CompletionTime');
+    }
+    set CompletionTime(value: number | null) {
+        this.Set('CompletionTime', value);
+    }
+
+    /**
+    * * Field Name: ModelSpecificResponseDetails
+    * * Display Name: Model Specific Response Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
+    */
+    get ModelSpecificResponseDetails(): string | null {
+        return this.Get('ModelSpecificResponseDetails');
+    }
+    set ModelSpecificResponseDetails(value: string | null) {
+        this.Set('ModelSpecificResponseDetails', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -37293,6 +37526,15 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get Judge(): string | null {
         return this.Get('Judge');
+    }
+
+    /**
+    * * Field Name: ChildPrompt
+    * * Display Name: Child Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ChildPrompt(): string | null {
+        return this.Get('ChildPrompt');
     }
 }
 

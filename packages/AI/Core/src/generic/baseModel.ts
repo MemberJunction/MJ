@@ -123,6 +123,24 @@ export class ModelUsage {
     costCurrency?: string
     
     /**
+     * Optional queue time in milliseconds before the model started processing the request.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    queueTime?: number
+    
+    /**
+     * Optional time in milliseconds for the model to ingest and process the prompt.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    promptTime?: number
+    
+    /**
+     * Optional time in milliseconds for the model to generate the completion/response tokens.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    completionTime?: number
+    
+    /**
      * Calculated total number of tokens (prompt + completion).
      * This is useful for tracking overall token usage against limits.
      * 

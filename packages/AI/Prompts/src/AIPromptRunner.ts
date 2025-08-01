@@ -2798,6 +2798,8 @@ export class AIPromptRunner {
         // Type parsing failed
         const validationResult = new ValidationResult();
         validationResult.Success = false;
+        const error = new ValidationErrorInfo('parseAndValidateResultEnhanced', `Invalid OutputExample JSON: ${parseError.message}`, rawOutput, ValidationErrorType.Failure);
+        validationErrors.push(error);
         validationResult.Errors = validationErrors;
         return { result: rawOutput, validationResult, validationErrors };
       }
@@ -3222,7 +3224,33 @@ export class AIPromptRunner {
     try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
-      promptRun.Result = typeof parsedResult.result === 'string' ? parsedResult.result : JSON.stringify(parsedResult.result);
+      
+      // Determine what to save as the result
+      let resultToSave: string;
+      const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
+      
+      if (parsedResult.result === undefined || 
+          parsedResult.result === null || 
+          (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0)) {
+        // Use raw result as fallback when parsed result is undefined, null, or empty string
+        resultToSave = rawResult;
+        
+        // Also set error message when we have to fall back to raw result
+        if (!promptRun.ErrorMessage) {
+          const validationErrors = parsedResult.validationResult?.Errors;
+          if (validationErrors && validationErrors.length > 0) {
+            promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
+          } else {
+            promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
+          }
+        }
+      } else if (typeof parsedResult.result === 'string') {
+        resultToSave = parsedResult.result;
+      } else {
+        resultToSave = JSON.stringify(parsedResult.result);
+      }
+      
+      promptRun.Result = resultToSave;
 
       // Extract token usage and cost - use cumulative if retries occurred
       if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
@@ -3249,6 +3277,22 @@ export class AIPromptRunner {
         if (modelResult.data.usage.costCurrency !== undefined) {
           promptRun.CostCurrency = modelResult.data.usage.costCurrency;
         }
+        
+        // Save timing information if available
+        if (modelResult.data.usage.queueTime !== undefined) {
+          promptRun.QueueTime = modelResult.data.usage.queueTime;
+        }
+        if (modelResult.data.usage.promptTime !== undefined) {
+          promptRun.PromptTime = modelResult.data.usage.promptTime;
+        }
+        if (modelResult.data.usage.completionTime !== undefined) {
+          promptRun.CompletionTime = modelResult.data.usage.completionTime;
+        }
+      }
+      
+      // Save model-specific response details if available
+      if (modelResult.modelSpecificResponseDetails) {
+        promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);
       }
 
       // Populate retry tracking columns

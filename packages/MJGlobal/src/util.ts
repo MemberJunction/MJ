@@ -134,6 +134,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return null;
 
     let processedString = inputString.trim();
+    let originalException = null;
     
     // First, try to parse the string as-is
     // This preserves any embedded JSON or markdown blocks within string values
@@ -142,9 +143,34 @@ export function CleanJSON(inputString: string | null): string | null {
         // If successful, return formatted JSON
         return JSON.stringify(parsed, null, 2);
     } catch (e) {
-        // If direct parsing fails, continue with cleanup logic
-        const x = e; // for breakpoints, does nothing
+        // save the original exception to throw later if we can't find a path to valid JSON
+        originalException = e;
+
+        // common JSON patterns from LLM often have extra } or missing final
+        // } so let's test those two patterns quickly here and if they fail
+        // then we'll continue with the rest of the logic
+        if (processedString.endsWith('}')) {
+            // first try to remove the last }
+            const newString = processedString.slice(0, -1);
+            // now try to parse again
+            const result = SafeJSONParse(newString);
+            if (result) { 
+                return JSON.stringify(result, null, 2);
+            }
+
+            // if we get here the above didn't work so try to add
+            // an extra } at the end and see if that works
+            const nextString = processedString + '}';
+            const nextResult = SafeJSONParse(nextString);
+            if (nextResult) {
+                return JSON.stringify(nextResult, null, 2);
+            }
+        }
     }
+
+    // Now proceed with the extraction logic only as a last resort
+    // Remove formatting newlines/tabs but preserve \n and \t inside strings
+    processedString = processedString.replace(/(?<!\\)\n/g, '').replace(/(?<!\\)\t/g, '');
 
     // Handle double-escaped characters
     // This converts \\n to actual \n, \\" to actual ", etc.
@@ -173,74 +199,33 @@ export function CleanJSON(inputString: string | null): string | null {
         // If direct parsing still fails, continue with extraction logic
     }
 
-    // Now proceed with the extraction logic only as a last resort
-    // replace all \n and \t with nothing for easier pattern matching
-    const jsonString = processedString.replace(/\n/g, "").replace(/\t/g, "");
-
     // Regular expression to match JavaScript code blocks within Markdown fences
-    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
-    const markdownRegex = /```(?:json|JSON)?\s*([\s\S]*?)```/gi;
+    // This regex looks for ``` (including when the ` is escaped like \`)
+    // optionally followed by js or javascript (case-insensitive), then captures until the closing ```
+    const markdownRegex = /(?:```|\\`\\`\\`)(?:json|JSON)?\s*([\s\S]*?)(?:```|\\`\\`\\`)/gi;
 
     // Check if the input contains Markdown code fences for JavaScript
-    const matches = Array.from(jsonString.matchAll(markdownRegex));
+    const matches = Array.from(processedString.matchAll(markdownRegex));
 
     if (matches.length > 0) {
         // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
         const extracted = matches.map(match => match[1].trim()).join('\n');
-        try {
-            // try to parse the extracted content as JSON
-            const parsed = JSON.parse(extracted);
-            return JSON.stringify(parsed, null, 2);
-        }
-        catch (e) {
-            // if we get here, it means the extracted content is not valid JSON so try to clean it 
-            // and return it as a string
-            try {
-                // Clean up any remaining escape sequences in the extracted content
-                const cleaned = extracted
-                    .replace(/\\n/g, '\n')
-                    .replace(/\\t/g, '\t')
-                    .replace(/\\r/g, '\r')
-                    .replace(/\\"/g, '"')
-                    .replace(/\\\\/g, '\\');
-
-                // Try to parse the cleaned JSON
-                const parsed = JSON.parse(cleaned);
-
-                return JSON.stringify(parsed, null, 2);
-            } catch (e) {
-                // If parsing fails, return the original extracted string as we couldn't parse either
-                return extracted;
-            }
-        }
+        return CleanJSON(extracted); // Recursively clean the extracted JSON
     } else {
-        // sometimes LLMs mistakenly add one extra } at the very end of the string so let's 
-        // handle that case and check for an extra closing brace
-        const trim1 = jsonString.trim();
-        if (trim1.endsWith('}')) {
-            const trim2 = trim1.substring(0, trim1.length - 1);
-            try {
-                const parsed = JSON.parse(trim2);
-                return JSON.stringify(parsed, null, 2);
-            } catch (e) {
-                const x = e; // for breakpoints, does nothing
-            }
-        }
-
         // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON
         // Attempt to extract JSON from a mixed string
-        const firstBracketIndex = jsonString.indexOf('[');
-        const firstBraceIndex = jsonString.indexOf('{');
+        const firstBracketIndex = processedString.indexOf('[');
+        const firstBraceIndex = processedString.indexOf('{');
         let startIndex = -1;
         let endIndex = -1;
     
         // Determine the starting index based on the position of the first '[' and '{'
         if ((firstBracketIndex !== -1 && firstBracketIndex < firstBraceIndex) || firstBraceIndex === -1) {
             startIndex = firstBracketIndex;
-            endIndex = jsonString.lastIndexOf(']');
+            endIndex = processedString.lastIndexOf(']');
         } else if (firstBraceIndex !== -1) {
             startIndex = firstBraceIndex;
-            endIndex = jsonString.lastIndexOf('}');
+            endIndex = processedString.lastIndexOf('}');
         }
     
         if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
@@ -248,16 +233,16 @@ export function CleanJSON(inputString: string | null): string | null {
             return processedString; // Return the processed string instead of jsonString
         }
     
-        const potentialJSON = jsonString.substring(startIndex, endIndex + 1);
+        const potentialJSON = processedString.substring(startIndex, endIndex + 1);
         try {
             // Parse and stringify to format the JSON nicely
             // and to validate it's indeed a valid JSON.
             const jsonObject = JSON.parse(potentialJSON);
             return JSON.stringify(jsonObject, null, 2);
         } catch (error) {
-            console.error("Failed to parse extracted string as JSON:", error);
-            // Return null or potentially invalid JSON text as a fallback
-            return null;
+            // that was our last attempt and it failed so we need
+            // to throw an exception here with the orignal exception
+            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`);
         }     
     }
 }

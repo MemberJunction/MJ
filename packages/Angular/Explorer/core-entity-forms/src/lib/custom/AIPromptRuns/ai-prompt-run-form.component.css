@@ -1,3 +1,36 @@
+/* Error Info Styles */
+.error-info {
+    margin-top: 16px;
+    padding: 16px;
+    background-color: #fef3f3;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+}
+
+.finish-reason {
+    margin: 0 0 12px 0;
+    color: #dc2626;
+    font-size: 14px;
+}
+
+.error-details {
+    margin-top: 12px;
+}
+
+.error-details h4 {
+    margin: 0 0 8px 0;
+    color: #991b1b;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.error-hint {
+    margin: 0;
+    color: #7f1d1d;
+    font-size: 14px;
+    font-style: italic;
+}
+
 /* Header Section */
 .prompt-run-header {
     background: #f8f9fa;

@@ -294,6 +294,32 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-inbox"></i>
                                         <p>No result data recorded</p>
+                                        @if (record.Status === 'Failed' || record.Success === false) {
+                                            <div class="error-info">
+                                                @if (record.Status) {
+                                                    <p class="finish-reason">
+                                                        <strong>Status:</strong> {{ record.Status }}
+                                                    </p>
+                                                }
+                                                @if (formattedErrorDetails) {
+                                                    <div class="error-details">
+                                                        <h4>Error Details</h4>
+                                                        <mj-code-editor
+                                                            [ngModel]="formattedErrorDetails"
+                                                            [disabled]="true"
+                                                            [language]="'json'"
+                                                            [lineWrapping]="true"
+                                                            style="height: 200px; width: 100%;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                }
+                                                @if (!formattedErrorDetails) {
+                                                    <p class="error-hint">
+                                                        The prompt execution failed but no additional error information is available.
+                                                    </p>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>
@@ -365,6 +391,37 @@
                                             <div class="metric-currency">{{ record.CostCurrency }}</div>
                                         }
                                     </div>
+                                    
+                                    <!-- Timing Metrics -->
+                                    @if (record.QueueTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-hourglass-start"></i>
+                                                <h4>Queue Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.QueueTime) }}</div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.PromptTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-brain"></i>
+                                                <h4>Prompt Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.PromptTime) }}</div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.CompletionTime != null) {
+                                        <div class="metric-card">
+                                            <div class="metric-header">
+                                                <i class="fa-solid fa-flag-checkered"></i>
+                                                <h4>Completion Time</h4>
+                                            </div>
+                                            <div class="metric-value large">{{ formatDuration(record.CompletionTime) }}</div>
+                                        </div>
+                                    }
                                 </div>
                                 
                                 <!-- Additional Metrics -->
@@ -751,6 +808,210 @@
                                         </div>
                                     }
                                 </div>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                    
+                    <!-- Model Specific Response Details Panel -->
+                    @if (record.ModelSpecificResponseDetails) {
+                        <kendo-panelbar-item [expanded]="false">
+                            <ng-template kendoPanelBarItemTitle>
+                                <span class="panel-title">
+                                    <i class="fa-solid fa-microchip"></i>
+                                    Model Specific Response Details
+                                    <span class="panel-badge">JSON</span>
+                                </span>
+                            </ng-template>
+                            <ng-template kendoPanelBarContent>
+                                <div class="panel-content">
+                                    <div class="json-editor-container">
+                                        <div class="json-toolbar">
+                                            <button kendoButton
+                                                fillMode="flat" 
+                                                size="small"
+                                                (click)="copyToClipboard(formattedModelSpecificResponseDetails, 'Model Specific Response Details')"
+                                                title="Copy JSON">
+                                                <i class="fa-solid fa-copy"></i> Copy
+                                            </button>
+                                        </div>
+                                        <mj-code-editor 
+                                            [(ngModel)]="formattedModelSpecificResponseDetails"
+                                            name="formattedModelSpecificResponseDetails"
+                                            [readonly]="true"
+                                            [language]="'json'"
+                                            [lineWrapping]="true"
+                                            style="height: 400px; width: 100%;">
+                                        </mj-code-editor>
+                                    </div>
+                                </div>
+                            </ng-template>
+                        </kendo-panelbar-item>
+                    }
+                    
+                    <!-- Model Selection & Performance Panel (v2.78 fields) -->
+                    <kendo-panelbar-item [expanded]="false">
+                        <ng-template kendoPanelBarItemTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-microchip"></i>
+                                Model Selection & Performance
+                                @if (record.CacheHit) {
+                                    <span class="panel-badge success">Cached</span>
+                                }
+                                @if (record.WasSelectedResult) {
+                                    <span class="panel-badge success">Selected</span>
+                                }
+                            </span>
+                        </ng-template>
+                        <ng-template kendoPanelBarContent>
+                            <div class="panel-content">
+                                <div class="detail-fields-grid">
+                                    <!-- Model Selection Details -->
+                                    <div class="detail-field">
+                                        <label>Status</label>
+                                        <div class="detail-value">
+                                            <i class="fa-solid fa-info-circle"></i>
+                                            {{ record.Status || 'Unknown' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Selection Strategy</label>
+                                        <div class="detail-value">
+                                            <i class="fa-solid fa-strategy"></i>
+                                            {{ record.SelectionStrategy || '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="detail-field">
+                                        <label>Model Power Rank</label>
+                                        <div class="detail-value" [class.null-value]="record.ModelPowerRank === null">
+                                            <i class="fa-solid fa-ranking-star"></i>
+                                            {{ record.ModelPowerRank !== null ? record.ModelPowerRank : '—' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Cache Information -->
+                                    <div class="detail-field">
+                                        <label>Cache Hit</label>
+                                        <div class="detail-value">
+                                            <i [class]="record.CacheHit ? 'fa-solid fa-check-circle' : 'fa-solid fa-times-circle'"></i>
+                                            {{ record.CacheHit ? 'Yes' : 'No' }}
+                                        </div>
+                                    </div>
+                                    
+                                    @if (record.CacheKey) {
+                                        <div class="detail-field full-width">
+                                            <label>Cache Key</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-key"></i>
+                                                <code>{{ record.CacheKey }}</code>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <!-- Judge Information -->
+                                    @if (record.JudgeID) {
+                                        <div class="detail-field">
+                                            <label>Judge Prompt</label>
+                                            <div class="detail-value clickable" (click)="navigateToEntity('AI Prompts', record.JudgeID)" title="View Judge Prompt">
+                                                <i class="fa-solid fa-gavel"></i>
+                                                {{ record.Judge || 'Unknown' }}
+                                                <i class="fa-solid fa-external-link"></i>
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.JudgeScore !== null) {
+                                        <div class="detail-field">
+                                            <label>Judge Score</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-star"></i>
+                                                {{ record.JudgeScore }}
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <div class="detail-field">
+                                        <label>Was Selected Result</label>
+                                        <div class="detail-value">
+                                            <i [class]="record.WasSelectedResult ? 'fa-solid fa-trophy' : 'fa-solid fa-times'"></i>
+                                            {{ record.WasSelectedResult ? 'Yes' : 'No' }}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Performance Metrics -->
+                                    <div class="detail-field">
+                                        <label>Streaming Enabled</label>
+                                        <div class="detail-value">
+                                            <i [class]="record.StreamingEnabled ? 'fa-solid fa-stream' : 'fa-solid fa-ban'"></i>
+                                            {{ record.StreamingEnabled ? 'Yes' : 'No' }}
+                                        </div>
+                                    </div>
+                                    
+                                    @if (record.FirstTokenTime !== null) {
+                                        <div class="detail-field">
+                                            <label>First Token Time</label>
+                                            <div class="detail-value">
+                                                <i class="fa-solid fa-bolt"></i>
+                                                {{ record.FirstTokenTime }} ms
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    @if (record.Cancelled) {
+                                        <div class="detail-field">
+                                            <label>Cancelled</label>
+                                            <div class="detail-value error">
+                                                <i class="fa-solid fa-ban"></i>
+                                                Yes
+                                            </div>
+                                        </div>
+                                        
+                                        @if (record.CancellationReason) {
+                                            <div class="detail-field full-width">
+                                                <label>Cancellation Reason</label>
+                                                <div class="detail-value">
+                                                    <i class="fa-solid fa-exclamation-circle"></i>
+                                                    {{ record.CancellationReason }}
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                                
+                                <!-- Model Selection JSON -->
+                                @if (record.ModelSelection) {
+                                    <div class="model-selection-json">
+                                        <h4>Model Selection Details</h4>
+                                        <div class="json-viewer-container">
+                                            <mj-code-editor 
+                                                [(ngModel)]="formattedModelSelection"
+                                                name="formattedModelSelection"
+                                                [readonly]="true"
+                                                [language]="'json'"
+                                                [lineWrapping]="true"
+                                                style="height: 300px; width: 100%;">
+                                            </mj-code-editor>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                <!-- Error Details JSON -->
+                                @if (record.ErrorDetails) {
+                                    <div class="error-details-json">
+                                        <h4>Error Details</h4>
+                                        <div class="json-viewer-container">
+                                            <mj-code-editor 
+                                                [(ngModel)]="formattedErrorDetails"
+                                                name="formattedErrorDetails"
+                                                [readonly]="true"
+                                                [language]="'json'"
+                                                [lineWrapping]="true"
+                                                style="height: 200px; width: 100%;">
+                                            </mj-code-editor>
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         </ng-template>
                     </kendo-panelbar-item>

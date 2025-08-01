@@ -1,4 +1,4 @@
-import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef } from '@angular/core';
+import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AIPromptRunEntityExtended, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
@@ -14,9 +14,10 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 @Component({
     selector: 'mj-ai-prompt-run-form',
     templateUrl: './ai-prompt-run-form.component.html',
-    styleUrls: ['./ai-prompt-run-form.component.css']
+    styleUrls: ['./ai-prompt-run-form.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit {
+export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: AIPromptRunEntityExtended;
     
     // Related entities
@@ -43,6 +44,9 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     public formattedValidationSummary = '';
     public formattedValidationAttempts = '';
     public formattedData = '';
+    public formattedModelSelection = '';
+    public formattedErrorDetails = '';
+    public formattedModelSpecificResponseDetails = '';
     
     // Parsed input data
     public chatMessages: ChatMessage[] = [];
@@ -78,6 +82,12 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         setTimeout(() => {
             this.cdr.detectChanges();
         }, 0);
+    }
+    
+    ngOnDestroy() {
+        // Clean up any resources
+        // Currently no subscriptions or timers to clean up
+        // This is here for future use and to complete the lifecycle
     }
     
     onInputPanelToggle() {
@@ -156,6 +166,46 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         
         // Format result using extended entity method
         this.formattedResult = this.record.GetFormattedResult();
+        
+        // Format v2.78 JSON fields
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+        
+        // Format ModelSelection
+        if (this.record.ModelSelection) {
+            try {
+                const modelSelection = JSON.parse(this.record.ModelSelection);
+                const parsed = ParseJSONRecursive(modelSelection, parseOptions);
+                this.formattedModelSelection = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedModelSelection = this.record.ModelSelection;
+            }
+        }
+        
+        // Format ErrorDetails
+        if (this.record.ErrorDetails) {
+            try {
+                const errorDetails = JSON.parse(this.record.ErrorDetails);
+                const parsed = ParseJSONRecursive(errorDetails, parseOptions);
+                this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedErrorDetails = this.record.ErrorDetails;
+            }
+        }
+        
+        // Format ModelSpecificResponseDetails
+        if (this.record.ModelSpecificResponseDetails) {
+            try {
+                const modelDetails = JSON.parse(this.record.ModelSpecificResponseDetails);
+                const parsed = ParseJSONRecursive(modelDetails, parseOptions);
+                this.formattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                this.formattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
+            }
+        }
     }
     
     getStatusColor(): string {
