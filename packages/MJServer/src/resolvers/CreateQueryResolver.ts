@@ -240,23 +240,31 @@ export class QueryResolverExtended extends QueryResolver {
                 currentCategoryID = existingCategory.ID;
                 currentParentID = existingCategory.ID;
             } else {
-                // Create new category
-                const newCategory = await md.GetEntityObject<QueryCategoryEntity>("Query Categories", contextUser);
-                newCategory.Name = categoryName;
-                newCategory.ParentID = currentParentID;
-                newCategory.UserID = contextUser.ID;
-                newCategory.Description = `Auto-created category from path: ${categoryPath}`;
+                try {
+                    // Create new category
+                    const newCategory = await md.GetEntityObject<QueryCategoryEntity>("Query Categories", contextUser);
+                    if (!newCategory) {
+                        throw new Error(`Failed to create entity object for Query Categories`);
+                    }
+                    
+                    newCategory.Name = categoryName;
+                    newCategory.ParentID = currentParentID;
+                    newCategory.UserID = contextUser.ID;
+                    newCategory.Description = `Auto-created category from path: ${categoryPath}`;
 
-                const saveResult = await newCategory.Save();
-                if (!saveResult) {
-                    throw new Error(`Failed to create category '${categoryName}': ${newCategory.LatestResult?.Message || 'Unknown error'}`);
+                    const saveResult = await newCategory.Save();
+                    if (!saveResult) {
+                        throw new Error(`Failed to create category '${categoryName}': ${newCategory.LatestResult?.Message || 'Unknown error'}`);
+                    }
+
+                    currentCategoryID = newCategory.ID;
+                    currentParentID = newCategory.ID;
+
+                    // Refresh metadata after each category creation to ensure it's available for subsequent lookups
+                    await md.Refresh();
+                } catch (error) {
+                    throw new Error(`Failed to create category '${categoryName}': ${error instanceof Error ? error.message : String(error)}`);
                 }
-
-                currentCategoryID = newCategory.ID;
-                currentParentID = newCategory.ID;
-
-                // Refresh metadata after each category creation to ensure it's available for subsequent lookups
-                await md.Refresh();
             }
         }
 
