@@ -482,9 +482,11 @@ export class FlowAgentType extends BaseAgentType {
                 });
                 
                 // Store the mapping config in a special property for later use
+                // Always set stepId for action steps so PreProcessActionStep can access step entity
+                (baseStep as Record<string, unknown>).stepId = node.ID;
+                
                 if (node.ActionOutputMapping) {
                     (baseStep as Record<string, unknown>).actionOutputMapping = node.ActionOutputMapping;
-                    (baseStep as Record<string, unknown>).stepId = node.ID;
                 }
                 
                 return baseStep;
@@ -639,7 +641,20 @@ export class FlowAgentType extends BaseAgentType {
         try {
             // Parse the input mapping configuration
             // Expected format: { "paramName": "payload.path.to.value" | "static:value" | 123 | true }
-            const inputMapping: Record<string, unknown> = JSON.parse(stepEntity.ActionInputMapping);
+            let inputMapping: Record<string, unknown>;
+            
+            if (typeof stepEntity.ActionInputMapping === 'string') {
+                // ActionInputMapping is a JSON string - parse it
+                inputMapping = JSON.parse(stepEntity.ActionInputMapping);
+            } else if (typeof stepEntity.ActionInputMapping === 'object' && stepEntity.ActionInputMapping !== null) {
+                // ActionInputMapping is already an object - use it directly
+                inputMapping = stepEntity.ActionInputMapping as Record<string, unknown>;
+            } else {
+                // ActionInputMapping is null or invalid
+                LogError(`Invalid ActionInputMapping format for step ${stepEntity.Name}: ${stepEntity.ActionInputMapping}`);
+                return;
+            }
+            
             const action = actions[0];
             
             // Initialize params if not present
@@ -649,24 +664,8 @@ export class FlowAgentType extends BaseAgentType {
             
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
-                let resolvedValue: unknown;
-                
-                if (typeof mappingValue === 'string') {
-                    if (mappingValue.startsWith('static:')) {
-                        // Static string value
-                        resolvedValue = mappingValue.substring(7);
-                    } else if (mappingValue.startsWith('payload.')) {
-                        // Payload path mapping
-                        const path = mappingValue.substring(8); // Remove "payload." prefix
-                        resolvedValue = this.getValueFromPath(currentPayload, path);
-                    } else {
-                        // Treat as literal string value
-                        resolvedValue = mappingValue;
-                    }
-                } else {
-                    // Direct value (number, boolean, object, etc.)
-                    resolvedValue = mappingValue;
-                }
+                // Use recursive resolution to handle nested objects, arrays, and primitive values
+                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -698,6 +697,38 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         return current;
+    }
+    
+    /**
+     * Recursively resolves payload and static references in nested objects
+     * 
+     * @private
+     */
+    private resolveNestedValue(value: unknown, currentPayload: any): unknown {
+        if (typeof value === 'string') {
+            // Handle string values with payload/static resolution
+            if (value.startsWith('static:')) {
+                return value.substring(7);
+            } else if (value.startsWith('payload.')) {
+                const path = value.substring(8);
+                return this.getValueFromPath(currentPayload, path);
+            } else {
+                return value;
+            }
+        } else if (Array.isArray(value)) {
+            // Handle arrays - recursively resolve each element
+            return value.map(item => this.resolveNestedValue(item, currentPayload));
+        } else if (value && typeof value === 'object') {
+            // Handle objects - recursively resolve each property
+            const resolvedObj: Record<string, unknown> = {};
+            for (const [key, val] of Object.entries(value)) {
+                resolvedObj[key] = this.resolveNestedValue(val, currentPayload);
+            }
+            return resolvedObj;
+        } else {
+            // Handle primitives (numbers, booleans, null, undefined)
+            return value;
+        }
     }
     
     /**
