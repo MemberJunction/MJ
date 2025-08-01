@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.79.0
+
+### Patch Changes
+
+- 907e73f: correct handling in CleanJSON
+
 ## 2.78.0
 
 ## 2.77.0

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.79.0
+
+### Minor Changes
+
+- 4bf2634: migrations
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/core@2.79.0
+
 ## 2.78.0
 
 ### Minor Changes

@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 2.79.0
+
+### Minor Changes
+
+- 4bf2634: migrations
+
+### Patch Changes
+
+- db0e5ed: Nested object handling in flow agent's action input mapping.
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/ai-prompts@2.79.0
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/ai-core-plus@2.79.0
+  - @memberjunction/actions@2.79.0
+  - @memberjunction/aiengine@2.79.0
+  - @memberjunction/actions-base@2.79.0
+  - @memberjunction/core@2.79.0
+
 ## 2.78.0
 
 ### Minor Changes

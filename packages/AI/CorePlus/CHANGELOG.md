@@ -1,5 +1,22 @@
 # @memberjunction/ai-core-plus
 
+## 2.79.0
+
+### Minor Changes
+
+- bad1a60: migration
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/actions-base@2.79.0
+  - @memberjunction/core@2.79.0
+
 ## 2.78.0
 
 ### Patch Changes

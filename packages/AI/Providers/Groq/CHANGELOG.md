@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.79.0
+
+### Minor Changes
+
+- bad1a60: migration
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+
 ## 2.78.0
 
 ### Patch Changes
