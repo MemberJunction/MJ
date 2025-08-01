@@ -10,10 +10,14 @@ export type ProcessPersonRecordGroupParams = {
     EmailField: string;
     FirstNameField: string;
     LastNameField: string;
-    AccountNameField: string;
+    TitleField: string;
     EnrichedAtField: string;
+    ProfilePictureURLField?: string;
+    AccountNameField?: string;
     DomainField?: string;  
     LinkedInField?: string;
+    TwitterField?: string;
+    FacebookField?: string;
     EmploymentHistoryEntityName?: string;
     EmploymentHistoryContactIDFieldName?: string;
     EmploymentHistoryOrganizationFieldName?: string;
@@ -24,7 +28,7 @@ export type ProcessPersonRecordGroupParams = {
     EducationHistoryDegreeFieldName?: string;
 };
 
-export type ApollowBulkPeopleRequest = {
+export type ApolloBulkPeopleRequest = {
 
     /**
      * The API key for the Apollo.io request (required)
@@ -34,7 +38,7 @@ export type ApollowBulkPeopleRequest = {
     /**
      * The list of people to enrich (required)
      */
-    details: ApollowBulkPeopleRequestDetail[];
+    details: ApolloBulkPeopleRequestDetail[];
 
     /**
      * Flag to reveal personal emails (optional) 
@@ -62,7 +66,7 @@ export type ApollowBulkPeopleRequest = {
     webhook_url?: string;
 };
 
-export type ApollowBulkPeopleRequestDetail = {
+export type ApolloBulkPeopleRequestDetail = {
     /**
     * The person's first name (optional)
     */
@@ -109,7 +113,7 @@ export type ApollowBulkPeopleRequestDetail = {
     linkedin_url?: string;
 };
 
-export type ApollowBulkPeopleResponse = {
+export type ApolloBulkPeopleResponse = {
     status: string;
     error_code: number,
     error_message: string,
@@ -120,74 +124,74 @@ export type ApollowBulkPeopleResponse = {
     matches: Array<SearchPeopleResponsePerson | null>;
 };
 
-export type ContactEntityFieldNames = {
+export type ContactEntityFields = {
     EntityName: string;
-    EmailFieldName: string;
-    AccountIDFieldName: string;
-    FirstNameFieldName: string;
-    ActivityCountFieldName: string;
-    EmailSourceFieldName: string;
-    LastNameFieldName: string;
-    TitleFieldName: string;
-    FacebookFieldName: string;
-    LinkedInFieldName: string;
-    TwitterFieldName: string;
-    PhotoFieldName: string;
-    LastEnrichedAtFieldName: string;
-};
-
-export type ContactEducationHistoryEntityFieldNames = {
-    EntityName: string;
-    ContactIDFieldName: string;
-    InstitutionFieldName: string;
-    DegreeFieldName: string;
-    GradeLevelFieldName: string;
-    StartDateFieldName: string;
-    EndDateFieldName: string;
-    IsCurrentFieldName: string;
-};
-
-export type TechnologyCategoryEntityFieldNames = {
-    EntityName: string;
-    NameFieldName: string;
-    IDFieldName: string;
-};
-
-export type AccountTechnologyEntityFieldNames = {
-    EntityName: string;
-    AccountIDFieldName: string;
-    TechnologyIDFieldName: string;
-    MatchFoundFieldName: string;
-    MatchConfidenceFieldName: string;
-    EndedUseAtFieldName: string;
-};
-
-export type AccountEntityFieldNames = {
-    EntityName: string;
-    DomainParamName: string;
-    AccountIDName: string;
+    EmailField: string;
+    AccountIDField: string;
     EnrichedAtField: string;
-    CityFieldNameName?: string;
-    StateProvinceFieldName?: string;
-    PostalCodeFieldName?: string;
-    DescriptionFieldName?: string;
-    PhoneNumberFieldName?: string;
-    CountryFieldName?: string;
-    LinkedInFieldName?: string;
-    LogoURLFieldName?: string;
-    FacebookFieldName?: string;
-    TwitterFieldName?: string;
-    AddressFieldName?: string;
-    ExtraFilter?: string;
+    FirstNameField: string;
+    LastNameField: string;
+    TitleField: string;
+    EmailSourceField: string;
+    ActivityCountField: string;
+    FacebookField?: string;
+    LinkedInField?: string;
+    TwitterField?: string;
+    ProfilePictureURLField?: string;
+};
+
+export type ContactEducationHistoryEntityFields = {
+    EntityName: string;
+    ContactIDField: string;
+    InstitutionField: string;
+    DegreeField: string;
+    GradeLevelField: string;
+    StartDateField: string;
+    EndDateField: string;
+    IsCurrentField: string;
+};
+
+export type TechnologyCategoryEntityFields = {
+    EntityName: string;
+    NameField: string;
+    IDField: string;
+};
+
+export type AccountTechnologyEntityFields = {
+    EntityName: string;
+    AccountIDField: string;
+    TechnologyIDField: string;
+    TechnologyField: string;
+    CategoryField: string;
+    EndedUseAtField: string;
+};
+
+export type AccountEntityFields = {
+    EntityName: string;
+    DomainField: string;
+    AccountIDField: string;
+    EnrichedAtField: string;
+    Filter: string;
+    CityField?: string;
+    StateProvinceField?: string;
+    PostalCodeField?: string;
+    DescriptionField?: string;
+    PhoneNumberField?: string;
+    CountryField?: string;
+    LinkedInField?: string;
+    LogoURLField?: string;
+    FacebookField?: string;
+    TwitterField?: string;
+    AddressField?: string;
 }
 
 export type ProcessSingleDomainParams = {
     Record: Record<string, any>;
-    AccountEntity: AccountEntityFieldNames;
-    AccountTechnologyEntity: AccountTechnologyEntityFieldNames | null;
-    TechnologyCategoryEntity: TechnologyCategoryEntityFieldNames | null;
-    ContactEntity: ContactEntityFieldNames | null;
-    ContactEducationHistoryEntity: ContactEducationHistoryEntityFieldNames | null;
+    AccountEntity: AccountEntityFields;
+    AccountTechnologyEntity: AccountTechnologyEntityFields | null;
+    TechnologyCategoryEntity: TechnologyCategoryEntityFields | null;
+    ContactEntity: ContactEntityFields | null;
+    ContactEducationHistoryEntity: ContactEducationHistoryEntityFields | null;
 };
 
 export type OrganizationEnrichmentRequest = {
@@ -203,10 +207,10 @@ export type OrganizationEnrichmentResponse = {
      * The company domain
      * @example "apollo.io"
      */
-    organization: OrganizationEnrichmentOrgainzation
+    organization: OrganizationEnrichmentOrganization
 };
 
-export type OrganizationEnrichmentOrgainzation = {
+export type OrganizationEnrichmentOrganization = {
     id: string, 
     name: string,
     website_url: string,
@@ -257,7 +261,7 @@ export type OrganizationEnrichmentOrgainzation = {
     departmental_head_count: Record<string, number>
 };
 
-export type OrganizationEnrichmentOrgainzationAccount = {
+export type OrganizationEnrichmentOrganizationAccount = {
     id: string,
     domain: string,
     name: string,
@@ -325,9 +329,9 @@ export type SearchPeopleResponsePerson = {
     city: string;
     country: string;
     organization_id: string;
-    organization: OrganizationEnrichmentOrgainzation;
+    organization: OrganizationEnrichmentOrganization;
     account_id: string;
-    account: OrganizationEnrichmentOrgainzationAccount;
+    account: OrganizationEnrichmentOrganizationAccount;
     departments: string[];
     subdepartments: string[];
     functions: string[];
