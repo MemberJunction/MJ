@@ -246,7 +246,25 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
       // Get runtime context and execute component factory
       const context = this.adapter.getRuntimeContext();
-      this.compiledComponent = result.component!.component(context, this.styles);
+      
+      // Call the factory function to get the component wrapper
+      // result.component is a CompiledComponent object with a 'component' property that's the factory
+      const componentWrapper = result.component!.component(context, this.styles);
+      
+      // Validate the component wrapper structure
+      if (!componentWrapper || typeof componentWrapper !== 'object') {
+        throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
+      }
+      
+      if (!componentWrapper.component) {
+        throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
+      }
+      
+      if (typeof componentWrapper.component !== 'function') {
+        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+      }
+      
+      this.compiledComponent = componentWrapper;
       this.currentState = { ...this._state };
       
       // Create managed React root
@@ -358,6 +376,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       savedUserSettings: this._savedUserSettings,
       onSaveUserSettings: this.handleSaveUserSettings.bind(this)
     };
+
+    // Validate component before creating element
+    if (!this.compiledComponent.component) {
+      LogError(`Component is undefined for ${this.component.name} during render`);
+      return;
+    }
 
     // Create error boundary
     const ErrorBoundary = createErrorBoundary(React, {

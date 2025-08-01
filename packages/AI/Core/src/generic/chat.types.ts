@@ -344,5 +344,12 @@ export class ChatResult extends BaseResult {
      * Cache-related metadata if available from the provider
      */
     cacheInfo?: CacheMetadata;
+    
+    /**
+     * Optional provider-specific response metadata and details not captured in standard fields.
+     * This is a flexible field that can contain any additional information the AI provider returns.
+     * Structure varies by AI provider.
+     */
+    modelSpecificResponseDetails?: Record<string, any>;
 }
  

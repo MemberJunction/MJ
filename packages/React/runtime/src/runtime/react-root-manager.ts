@@ -138,9 +138,8 @@ export class ReactRootManager {
           if (managedRoot.container) {
             // Clear React's internal references
             delete (managedRoot.container as any)._reactRootContainer;
-            // Clear all event listeners
-            const newContainer = managedRoot.container.cloneNode(false) as HTMLElement;
-            managedRoot.container.parentNode?.replaceChild(newContainer, managedRoot.container);
+            // Clear the container content without replacing the node
+            managedRoot.container.innerHTML = '';
           }
           
           resolve();

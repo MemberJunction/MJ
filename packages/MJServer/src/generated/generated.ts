@@ -41107,6 +41107,18 @@ export class AIPromptRun_ {
     @MaxLength(16)
     ChildPromptID?: string;
         
+    @Field(() => Int, {nullable: true, description: `Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`}) 
+    QueueTime?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`}) 
+    PromptTime?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`}) 
+    CompletionTime?: number;
+        
+    @Field({nullable: true, description: `JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`}) 
+    ModelSpecificResponseDetails?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41373,6 +41385,18 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     ChildPromptID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QueueTime: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PromptTime: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CompletionTime: number | null;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseDetails: string | null;
 }
     
 
@@ -41602,6 +41626,18 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     ChildPromptID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QueueTime?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PromptTime?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CompletionTime?: number | null;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseDetails?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
