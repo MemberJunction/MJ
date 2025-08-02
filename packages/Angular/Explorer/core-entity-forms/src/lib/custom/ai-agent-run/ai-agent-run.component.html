@@ -61,6 +61,21 @@
           <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
       </div>
+      
+      <!-- Configuration Bar (shown below header stats when ConfigurationID exists) -->
+      <div class="configuration-bar" *ngIf="record.ConfigurationID">
+        <div class="config-item">
+          <i class="fas fa-cog"></i>
+          <div class="config-content">
+            <div class="config-label">Configuration</div>
+            <div class="config-value">
+              <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Configurations', record.ConfigurationID)">
+                {{ record.Configuration || 'Unknown' }}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -183,15 +198,6 @@
           <kendo-panelbar-item title="Execution Settings">
             <ng-template kendoPanelBarContent>
               <div class="details-grid">
-                <div class="detail-item">
-                  <label>Configuration</label>
-                  <span>
-                    <a *ngIf="record.ConfigurationID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Configurations', record.ConfigurationID)">
-                      {{ record.Configuration || 'N/A' }}
-                    </a>
-                    <span *ngIf="!record.ConfigurationID">N/A</span>
-                  </span>
-                </div>
                 <div class="detail-item">
                   <label>Override Model</label>
                   <span>

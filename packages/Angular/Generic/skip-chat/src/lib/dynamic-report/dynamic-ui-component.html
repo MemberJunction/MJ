@@ -1,10 +1,10 @@
-@if (reportOptions.length > 1) {
+@if (componentOptions.length > 1) {
   <!-- Multiple options: show tabs -->
   <kendo-tabstrip 
     (tabSelect)="onTabSelect($event)"
     [keepTabContent]="true"
     style="height: 100%; display: flex; flex-direction: column;">
-    @for (option of reportOptions; track option; let i = $index) {
+    @for (option of componentOptions; track option; let i = $index) {
       <kendo-tabstrip-tab [selected]="i === selectedReportOptionIndex">
         <ng-template kendoTabTitle>
           @if (isTopRanked(i)) {
@@ -140,10 +140,8 @@
               <div [attr.data-tab-index]="i" 
                    style="flex: 1; position: relative; min-height: 0; overflow: auto;">
                 <mj-react-component
-                  *ngIf="!currentError && reportOptions[i] && i === selectedReportOptionIndex"
-                  [component]="reportOptions[i].option"
-                  [data]="getFlattenedDataContext()"
-                  [state]="userStates.get(i) || {}"
+                  *ngIf="!currentError && componentOptions[i] && i === selectedReportOptionIndex"
+                  [component]="componentOptions[i].option"
                   [utilities]="utilities"
                   [styles]="componentStyles || undefined"
                   (stateChange)="onStateChange(i, $event)"
@@ -283,43 +281,43 @@
         <!-- Details panel -->
         <div class="details-panel" [style.height]="detailsPanelHeight">
           <kendo-tabstrip style="height: 100%;">
-            @if (showFunctionalRequirements && reportOptions[0]) {
+            @if (showFunctionalRequirements && componentOptions[0]) {
               <kendo-tabstrip-tab [selected]="true">
                 <ng-template kendoTabTitle>
                   <i class="fa-solid fa-list-check"></i> Functional Requirements
                 </ng-template>
                 <ng-template kendoTabContent>
                   <div class="details-content">
-                    <div [innerHTML]="getFormattedFunctionalRequirements(reportOptions[0])"></div>
+                    <div [innerHTML]="getFormattedFunctionalRequirements(componentOptions[0])"></div>
                   </div>
                 </ng-template>
               </kendo-tabstrip-tab>
             }
-            @if (showDataRequirements && reportOptions[0]) {
+            @if (showDataRequirements && componentOptions[0]) {
               <kendo-tabstrip-tab [selected]="!showFunctionalRequirements">
                 <ng-template kendoTabTitle>
                   <i class="fa-solid fa-database"></i> Data Requirements
                 </ng-template>
                 <ng-template kendoTabContent>
                   <div class="details-content">
-                    <div [innerHTML]="getFormattedDataRequirements(reportOptions[0])"></div>
+                    <div [innerHTML]="getFormattedDataRequirements(componentOptions[0])"></div>
                   </div>
                 </ng-template>
               </kendo-tabstrip-tab>
             }
-            @if (showTechnicalDesign && reportOptions[0]) {
+            @if (showTechnicalDesign && componentOptions[0]) {
               <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements">
                 <ng-template kendoTabTitle>
                   <i class="fa-solid fa-cogs"></i> Technical Design
                 </ng-template>
                 <ng-template kendoTabContent>
                   <div class="details-content">
-                    <div [innerHTML]="getFormattedTechnicalDesign(reportOptions[0])"></div>
+                    <div [innerHTML]="getFormattedTechnicalDesign(componentOptions[0])"></div>
                   </div>
                 </ng-template>
               </kendo-tabstrip-tab>
             }
-            @if (showCode && reportOptions[0]) {
+            @if (showCode && componentOptions[0]) {
               <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements && !showTechnicalDesign">
                 <ng-template kendoTabTitle>
                   <i class="fa-solid fa-code"></i> Code
@@ -328,7 +326,7 @@
                   <div class="details-content code-content">
                     <mj-code-editor
                       [language]="'javascript'"
-                      [value]="getComponentCode(reportOptions[0])"
+                      [value]="getComponentCode(componentOptions[0])"
                       [autoFocus]="false"
                       [indentWithTab]="true"
                       [readonly]="true"
@@ -406,10 +404,8 @@
         <!-- React component container (only shown when no error) -->
         <div style="flex: 1; position: relative; min-height: 0; overflow: auto;">
           <mj-react-component
-            *ngIf="reportOptions[0]"
-            [component]="reportOptions[0].option"
-            [data]="getFlattenedDataContext()"
-            [state]="userStates.get(0) || {}"
+            *ngIf="componentOptions[0]"
+            [component]="componentOptions[0].option"
             [utilities]="utilities"
             [styles]="componentStyles || undefined"
             (stateChange)="onStateChange(0, $event)"

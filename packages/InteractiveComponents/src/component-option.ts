@@ -10,6 +10,11 @@ export type ComponentOption = {
     option: ComponentSpec;
 
     /**
+     * Optional, name of the option the AI gave it
+     */
+    name?: string;
+
+    /**
      * If multiple component options are provided a "judge" AI will evaluate all the functional
      * responses and will rank order them with an explanation of why they were each ranked that way. Rankings are not absolute, they are relative to the
      * # of components contained within an array of ComponentOption types.  

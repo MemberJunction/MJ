@@ -173,7 +173,7 @@ export class AnthropicLLM extends BaseLLM {
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens || 64000, // large default for max_tokens if not provided
+                max_tokens: params.maxOutputTokens || 32000, // large default for max_tokens if not provided
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
