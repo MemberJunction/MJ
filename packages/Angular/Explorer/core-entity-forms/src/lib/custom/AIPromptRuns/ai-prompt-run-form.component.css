@@ -210,6 +210,18 @@
     color: #2c3e50;
 }
 
+.config-link {
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.config-link:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
 /* Panels */
 .form-content {
     padding: 16px;

@@ -85,6 +85,9 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         if (!option) 
             return `Report ${index + 1}`;
 
+        if (option.AIRankExplanation && option.name)
+            return option.name + " (" + option.AIRankExplanation + ")";
+
         if (option.name)
             return option.name;
         

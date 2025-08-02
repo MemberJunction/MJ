@@ -76,7 +76,11 @@
                             <i class="fa-solid fa-cog"></i>
                             <div class="metric-content">
                                 <div class="metric-label">Configuration</div>
-                                <div class="metric-value">{{ record.Configuration || 'Unknown' }}</div>
+                                <div class="metric-value">
+                                    <a href="javascript:void(0)" class="config-link" (click)="navigateToEntity('MJ: AI Configurations', record.ConfigurationID)">
+                                        {{ record.Configuration || 'Unknown' }}
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         @if (record.Temperature !== null && record.Temperature !== undefined) {
