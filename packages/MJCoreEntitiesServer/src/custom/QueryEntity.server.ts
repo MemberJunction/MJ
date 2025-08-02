@@ -220,7 +220,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             // Get existing query parameters
             const rv = new RunView();
-            const existingParams = [];
+            const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
@@ -482,7 +482,7 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query entities
-            const existingEntities = [];
+            const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
                 const rv = new RunView();
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
@@ -643,7 +643,12 @@ export class QueryEntityExtended extends QueryEntity {
     public async RefreshRelatedMetadata(refreshFromDB: boolean) {
         const md = this.ProviderToUse as any as IMetadataProvider;
         if (refreshFromDB) {
-            await md.Refresh();
+            const globalMetadataProvider = Metadata.Provider;
+            await globalMetadataProvider.Refresh();
+            if (globalMetadataProvider !== md) {
+                // If the global metadata provider is different, we need to refresh it
+                await md.Refresh(); // will refresh from the global provider
+            }
         }
         this._queryPermissions = md.QueryPermissions.filter(p => p.QueryID === this.ID);
         this._queryEntities = md.QueryEntities.filter(e => e.QueryID === this.ID);

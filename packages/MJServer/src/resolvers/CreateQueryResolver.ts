@@ -310,7 +310,7 @@ export class QueryResolverExtended extends QueryResolver {
             // Remove Permissions from the fields to set since we handle them separately
             delete (fieldsToSet as any).Permissions;
             
-            record.SetMany(fieldsToSet);
+            record.SetMany(fieldsToSet, true);
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
 
             // Pass the transactionScopeId from the user payload to the save operation
