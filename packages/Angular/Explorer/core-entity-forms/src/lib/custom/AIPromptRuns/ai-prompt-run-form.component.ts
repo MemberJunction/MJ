@@ -28,15 +28,21 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     
     // UI state
     public isLoadingRelatedData = false;
-    public isParsingMessages = true; // Add loading state for message parsing
-    public inputExpanded = true;
+    public isParsingMessages = false; // Will be set to true in ngOnInit if there are messages
+    public inputExpanded = true; // Start open as users want to see this
     public messagesExpanded = true;
     public dataExpanded = false; // Changed to false - often blank
     public rawExpanded = false;
-    public resultExpanded = true;
+    public resultExpanded = false; // Start closed for lazy loading
     public metricsExpanded = false;
     public hierarchyExpanded = false;
-    public validationExpanded = true; // Expand validation panel by default if there are retries
+    public validationExpanded = false; // Start closed for lazy loading
+    
+    // Track what has been loaded
+    private hasLoadedInput = false;
+    private hasLoadedResult = false;
+    private hasLoadedValidation = false;
+    private hasLoadedMetrics = false;
     
     // Formatted values
     public formattedMessages = '';
@@ -71,9 +77,33 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     async ngOnInit() {
         await super.ngOnInit();
         if (this.record?.ID) {
+            // Set loading state immediately if input panel will be loaded
+            if (this.inputExpanded && this.record.Messages && this.record.Messages.trim() !== '') {
+                this.isParsingMessages = true;
+                this.cdr.detectChanges(); // Force immediate update to show spinner
+            }
+            
+            // Load related entities
             await this.loadRelatedData();
-            this.formatJsonFields();
-            this.loadValidationData();
+            
+            // Load input panel data since it's open by default
+            if (this.inputExpanded) {
+                this.hasLoadedInput = true;
+                // Only show parsing state if there are messages to parse
+                if (this.record.Messages && this.record.Messages.trim() !== '') {
+                    // Use Promise.resolve to ensure async execution
+                    Promise.resolve().then(() => {
+                        this.formatJsonFields();
+                        this.isParsingMessages = false;
+                        this.cdr.detectChanges();
+                    });
+                } else {
+                    // No messages to parse
+                    this.isParsingMessages = false;
+                    this.chatMessages = [];
+                    this.cdr.detectChanges();
+                }
+            }
         }
     }
     
@@ -90,12 +120,71 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         // This is here for future use and to complete the lifecycle
     }
     
-    onInputPanelToggle() {
-        // Force change detection when parent panel is toggled
-        // This helps ensure nested expansion panels render correctly
-        setTimeout(() => {
-            this.cdr.detectChanges();
-        }, 100);
+    onInputPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.inputExpanded = expanded;
+        if (expanded && !this.hasLoadedInput) {
+            this.hasLoadedInput = true;
+            
+            // Only show parsing state if there are messages to parse
+            if (this.record?.Messages && this.record.Messages.trim() !== '') {
+                this.isParsingMessages = true;
+                
+                // Use Promise to ensure async operation
+                Promise.resolve().then(() => {
+                    this.formatJsonFields();
+                    this.isParsingMessages = false;
+                    this.cdr.detectChanges();
+                });
+            } else {
+                // No messages to parse
+                this.chatMessages = [];
+                this.cdr.detectChanges();
+            }
+        }
+    }
+    
+    onResultPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.resultExpanded = expanded;
+        if (expanded && !this.hasLoadedResult) {
+            this.hasLoadedResult = true;
+            
+            Promise.resolve().then(() => {
+                // Format result only when needed
+                if (this.record) {
+                    this.formattedResult = this.record.GetFormattedResult();
+                    this.cdr.detectChanges();
+                }
+            });
+        }
+    }
+    
+    onValidationPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.validationExpanded = expanded;
+        if (expanded && !this.hasLoadedValidation) {
+            this.hasLoadedValidation = true;
+            
+            Promise.resolve().then(() => {
+                this.loadValidationData();
+                this.cdr.detectChanges();
+            });
+        }
+    }
+    
+    onMetricsPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.metricsExpanded = expanded;
+        if (expanded && !this.hasLoadedMetrics) {
+            this.hasLoadedMetrics = true;
+            
+            Promise.resolve().then(() => {
+                // Format metrics-related JSON fields
+                this.formatMetricsData();
+                this.cdr.detectChanges();
+            });
+        }
     }
     
     private async loadRelatedData() {
@@ -153,21 +242,21 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     }
     
     private formatJsonFields() {
-        this.isParsingMessages = true; // Start parsing
+        if (!this.record) {
+            console.warn('formatJsonFields called but record is not available');
+            return;
+        }
         
-        // Use the extended entity methods to parse messages
+        // Only parse messages/input data for the Input panel
         const messageData = this.record.ParseMessagesData();
         this.chatMessages = messageData.chatMessages;
         this.inputData = messageData.inputData;
         this.formattedMessages = messageData.formattedMessages;
         this.formattedData = messageData.formattedData;
-        
-        this.isParsingMessages = false; // Done parsing
-        
-        // Format result using extended entity method
-        this.formattedResult = this.record.GetFormattedResult();
-        
-        // Format v2.78 JSON fields
+    }
+    
+    private formatMetricsData() {
+        // Format v2.78 JSON fields related to metrics
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
             maxDepth: 100,
@@ -363,10 +452,30 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     
     async refreshData() {
         if (this.record?.ID) {
+            // Reset loading flags
+            this.hasLoadedInput = false;
+            this.hasLoadedResult = false;
+            this.hasLoadedValidation = false;
+            this.hasLoadedMetrics = false;
+            
             await this.record.Load(this.record.ID);
             await this.loadRelatedData();
-            this.formatJsonFields();
-            this.loadValidationData();
+            
+            // Only reload data for currently expanded panels
+            if (this.inputExpanded) {
+                this.formatJsonFields();
+            }
+            if (this.resultExpanded) {
+                this.formattedResult = this.record.GetFormattedResult();
+            }
+            if (this.validationExpanded) {
+                this.loadValidationData();
+            }
+            if (this.metricsExpanded) {
+                this.formatMetricsData();
+            }
+            
+            this.cdr.detectChanges();
         }
     }
     
@@ -409,7 +518,6 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             this.formattedValidationSummary = '';
         }
         
-        // Set validation panel expansion based on whether there were retries
-        this.validationExpanded = (this.record.ValidationAttemptCount || 0) > 1;
+        // Don't auto-expand validation panel anymore - let user expand when needed
     }
 }

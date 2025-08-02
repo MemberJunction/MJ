@@ -108,7 +108,7 @@
                 <kendo-panelbar [keepItemContent]="true">
                     
                     <!-- Input Panel with nested sub-panels -->
-                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle()">
+                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-comment-dots"></i>
@@ -245,7 +245,7 @@
                     </kendo-panelbar-item>
                     
                     <!-- Result Panel -->
-                    <kendo-panelbar-item [expanded]="resultExpanded">
+                    <kendo-panelbar-item [expanded]="resultExpanded" (stateChange)="onResultPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-square-check"></i>
@@ -327,7 +327,7 @@
                     </kendo-panelbar-item>
                     
                     <!-- Token Usage & Metrics Panel -->
-                    <kendo-panelbar-item [expanded]="metricsExpanded">
+                    <kendo-panelbar-item [expanded]="metricsExpanded" (stateChange)="onMetricsPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-chart-line"></i>
@@ -454,7 +454,7 @@
                     
                     <!-- Validation & Retry Panel -->
                     @if (record && ((record.ValidationAttemptCount && record.ValidationAttemptCount > 0) || record.ValidationBehavior)) {
-                        <kendo-panelbar-item [expanded]="validationExpanded">
+                        <kendo-panelbar-item [expanded]="validationExpanded" (stateChange)="onValidationPanelToggle($event)">
                             <ng-template kendoPanelBarItemTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-shield-check"></i>
