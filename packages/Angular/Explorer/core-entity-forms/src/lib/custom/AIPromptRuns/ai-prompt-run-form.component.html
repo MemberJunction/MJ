@@ -116,8 +116,42 @@
                             </div>
                         }
                     </div>
+                    
+                    <!-- Execution Metrics Bar (always show when configuration exists) -->
+                    <div class="metrics-bar">
+                        <div class="metric-item">
+                            <i class="fa-solid fa-clock"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Duration</div>
+                                <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-coins"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Total Tokens</div>
+                                <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-dollar-sign"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Cost</div>
+                                <div class="metric-value">{{ formatCost(record.TotalCost || record.Cost) }}</div>
+                            </div>
+                        </div>
+                        @if (record.RunAt) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-calendar"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Started</div>
+                                    <div class="metric-value">{{ record.RunAt | date:'short' }}</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 } @else {
-                    <!-- Execution Metrics Bar -->
+                    <!-- Execution Metrics Bar (original behavior when no configuration) -->
                     <div class="metrics-bar">
                         <div class="metric-item">
                             <i class="fa-solid fa-clock"></i>
@@ -482,12 +516,6 @@
                                             <span class="metric-value">{{ record.ExecutionOrder }}</span>
                                         </div>
                                     }
-                                    @if (record.ConfigurationID) {
-                                        <div class="metric-row">
-                                            <span class="metric-label">Configuration:</span>
-                                            <span class="metric-value">{{ record.Configuration }}</span>
-                                        </div>
-                                    }
                                     @if (record.AgentID) {
                                         <div class="metric-row">
                                             <span class="metric-label">Agent:</span>
@@ -752,15 +780,6 @@
                                         </div>
                                     }
                                     
-                                    @if (record.ConfigurationID) {
-                                        <div class="detail-field">
-                                            <label>Configuration</label>
-                                            <div class="detail-value">
-                                                <i class="fa-solid fa-cog"></i>
-                                                {{ record.Configuration || 'Unknown' }}
-                                            </div>
-                                        </div>
-                                    }
                                     
                                     @if (record.RunType) {
                                         <div class="detail-field">
