@@ -1,11 +1,12 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
-import { AppContext, UserPayload } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo, CompositeKey, EntitySaveOptions } from '@memberjunction/core';
+import { AppContext } from '../types.js';
+import { LogError, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { QueryCategoryEntity, QueryFieldEntity, QueryParameterEntity, QueryEntityEntity, QueryPermissionEntity, QueryEntity } from '@memberjunction/core-entities';
+import { QueryCategoryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
 import { QueryResolver } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
+import { QueryEntityExtended } from '@memberjunction/core-entities-server';
 
 /**
  * Query status enumeration for GraphQL
@@ -150,9 +151,6 @@ export class QueryFieldType {
     @Field(() => Boolean)
     IsComputed!: boolean;
 
-    @Field(() => Boolean)
-    ComputationEnabled!: boolean;
-
     @Field(() => String, { nullable: true })
     ComputationDescription?: string;
 }
@@ -296,137 +294,85 @@ export class QueryResolverExtended extends QueryResolver {
                 const md = new Metadata();
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
             }
-
-            // Create input for the inherited CreateRecord method
-            const createInput = {
-                Name: input.Name,
-                CategoryID: finalCategoryID,
-                UserQuestion: input.UserQuestion,
-                Description: input.Description,
-                SQL: input.SQL,
-                TechnicalDescription: input.TechnicalDescription,
-                OriginalSQL: input.OriginalSQL,
-                Feedback: input.Feedback,
+            
+            // Use QueryEntityExtended which handles AI processing
+            const provider = GetReadWriteProvider(context.providers); 
+            const record = await provider.GetEntityObject<QueryEntityExtended>("Queries", context.userPayload.userRecord);
+            
+            // Set the fields from input, handling CategoryPath resolution
+            const fieldsToSet = {
+                ...input,
+                CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
                 QualityRank: input.QualityRank || 0,
-                ExecutionCostRank: input.ExecutionCostRank,
                 UsesTemplate: input.UsesTemplate || false
             };
+            // Remove Permissions from the fields to set since we handle them separately
+            delete (fieldsToSet as any).Permissions;
             
-            // Use inherited CreateRecord method which bypasses AI processing
-            const provider = GetReadWriteProvider(context.providers);    
-            const createdQuery = await this.CreateRecord('Queries', createInput, provider, context.userPayload, pubSub);
-            
-            if (createdQuery) {
-                const queryID = createdQuery.ID;
+            record.SetMany(fieldsToSet);
+            this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+
+            // Pass the transactionScopeId from the user payload to the save operation
+            if (await record.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(provider, input); // fire event
+                const queryID = record.ID;
                 
-                // Create permissions if provided
-                let createdPermissions: QueryPermissionType[] = [];
                 if (input.Permissions && input.Permissions.length > 0) {
-                    const md = new Metadata();
-                    for (const perm of input.Permissions) {
-                        const permissionEntity = await md.GetEntityObject<QueryPermissionEntity>('Query Permissions', context.userPayload.userRecord);
-                        if (permissionEntity) {
-                            permissionEntity.QueryID = queryID;
-                            permissionEntity.RoleID = perm.RoleID;
-                            
-                            const saveResult = await permissionEntity.Save();
-                            if (saveResult) {
-                                createdPermissions.push({
-                                    ID: permissionEntity.ID,
-                                    QueryID: permissionEntity.QueryID,
-                                    RoleID: permissionEntity.RoleID,
-                                    RoleName: permissionEntity.Role // The view includes the Role name
-                                });
-                            }
-                        }
-                    }
-                }
-                
-                // Load the related data that was auto-discovered
-                const rv = new RunView();
-                
-                // Load fields
-                const fieldsResult = await rv.RunView<QueryFieldEntity>({
-                    EntityName: 'Query Fields',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    OrderBy: 'Sequence',
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
-                
-                const fields: QueryFieldType[] = fieldsResult.Success && fieldsResult.Results ? 
-                    fieldsResult.Results.map(f => ({
-                        ID: f.ID,
-                        QueryID: f.QueryID,
-                        Name: f.Name,
-                        Description: f.Description,
-                        Type: f.SQLBaseType, // Using SQLBaseType as Type
-                        Sequence: f.Sequence,
-                        SQLBaseType: f.SQLBaseType,
-                        SQLFullType: f.SQLFullType,
-                        IsComputed: f.IsComputed,
-                        ComputationEnabled: true, // Default to true since it's not in the entity
-                        ComputationDescription: f.ComputationDescription
-                    })) : [];
-                
-                // Load parameters
-                const paramsResult = await rv.RunView<QueryParameterEntity>({
-                    EntityName: 'MJ: Query Parameters',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    OrderBy: 'Name',
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
-                
-                const parameters: QueryParameterType[] = paramsResult.Success && paramsResult.Results ?
-                    paramsResult.Results.map(p => ({
-                        ID: p.ID,
-                        QueryID: p.QueryID,
-                        Name: p.Name,
-                        Type: p.Type,
-                        DefaultValue: p.DefaultValue,
-                        Comments: '', // Comments field doesn't exist on QueryParameterEntity
-                        IsRequired: p.IsRequired || false
-                    })) : [];
-                
-                // Load entities
-                const entitiesResult = await rv.RunView<QueryEntityEntity>({
-                    EntityName: 'Query Entities',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    OrderBy: 'Sequence',
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
-                
-                const entities: QueryEntityType[] = entitiesResult.Success && entitiesResult.Results ?
-                    entitiesResult.Results.map(e => ({
-                        ID: e.ID,
-                        QueryID: e.QueryID,
-                        EntityID: e.EntityID,
-                        EntityName: e.Entity, // The view includes the Entity name
-                        Sequence: 0 // Sequence field doesn't exist on QueryEntityEntity, using default
-                    })) : [];
+                    await this.createPermissions(input.Permissions, queryID, context.userPayload.userRecord);
+                    await record.RefreshRelatedMetadata(true); // force DB update since we just created new permissions
+                }                
 
                 return {
                     Success: true,
-                    QueryData: JSON.stringify(createdQuery),
-                    Fields: fields,
-                    Parameters: parameters,
-                    Entities: entities,
-                    Permissions: createdPermissions
+                    QueryData: JSON.stringify(record.GetAll()),
+                    Fields: record.QueryFields,
+                    Parameters: record.QueryParameters,
+                    Entities: record.QueryEntities,
+                    Permissions: record.QueryPermissions
                 };
-            } else {
+            } 
+            else {
                 return {
                     Success: false,
                     ErrorMessage: 'Failed to create query using CreateRecord method'
                 };
             }
-
-        } catch (err) {
+        } 
+        catch (err) {
             LogError(err);
             return {
                 Success: false,
                 ErrorMessage: `QueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
+    }
+
+    protected async createPermissions(permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<QueryPermissionType[]> {
+        // Create permissions if provided
+        const createdPermissions: QueryPermissionType[] = [];
+        if (permissions && permissions.length > 0) {
+            const md = new Metadata();
+            for (const perm of permissions) {
+                const permissionEntity = await md.GetEntityObject<QueryPermissionEntity>('Query Permissions', contextUser);
+                if (permissionEntity) {
+                    permissionEntity.QueryID = queryID;
+                    permissionEntity.RoleID = perm.RoleID;
+                    
+                    const saveResult = await permissionEntity.Save();
+                    if (saveResult) {
+                        createdPermissions.push({
+                            ID: permissionEntity.ID,
+                            QueryID: permissionEntity.QueryID,
+                            RoleID: permissionEntity.RoleID,
+                            RoleName: permissionEntity.Role // The view includes the Role name
+                        });
+                    }
+                }
+            }
+        }
+        return createdPermissions;
     }
 
     /**
@@ -443,9 +389,9 @@ export class QueryResolverExtended extends QueryResolver {
         @PubSub() pubSub: PubSubEngine
     ): Promise<UpdateQueryResultType> {
         try {
-            // Load the existing query
-            const md = new Metadata();
-            const queryEntity = await md.GetEntityObject<QueryEntity>('Queries', context.userPayload.userRecord);
+            // Load the existing query using QueryEntityExtended
+            const provider = GetReadWriteProvider(context.providers);
+            const queryEntity = await provider.GetEntityObject<QueryEntityExtended>('Queries', context.userPayload.userRecord);
             if (!queryEntity || !await queryEntity.Load(input.ID)) {
                 return {
                     Success: false,
@@ -456,6 +402,7 @@ export class QueryResolverExtended extends QueryResolver {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
             if (input.CategoryPath) {
+                const md = new Metadata();
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
             }
 
@@ -485,7 +432,6 @@ export class QueryResolverExtended extends QueryResolver {
             const queryID = queryEntity.ID;
 
             // Handle permissions update if provided
-            let updatedPermissions: QueryPermissionType[] = [];
             if (input.Permissions !== undefined) {
                 // Delete existing permissions
                 const rv = new RunView();
@@ -502,103 +448,51 @@ export class QueryResolverExtended extends QueryResolver {
                 }
 
                 // Create new permissions
-                for (const perm of input.Permissions) {
-                    const permissionEntity = await md.GetEntityObject<QueryPermissionEntity>('Query Permissions', context.userPayload.userRecord);
-                    if (permissionEntity) {
-                        permissionEntity.QueryID = queryID;
-                        permissionEntity.RoleID = perm.RoleID;
-                        
-                        const permSaveResult = await permissionEntity.Save();
-                        if (permSaveResult) {
-                            updatedPermissions.push({
-                                ID: permissionEntity.ID,
-                                QueryID: permissionEntity.QueryID,
-                                RoleID: permissionEntity.RoleID,
-                                RoleName: permissionEntity.Role // The view includes the Role name
-                            });
-                        }
-                    }
-                }
-            }
-
-            // Load the related data
-            const rv = new RunView();
-            
-            // Load fields
-            const fieldsResult = await rv.RunView<QueryFieldEntity>({
-                EntityName: 'Query Fields',
-                ExtraFilter: `QueryID='${queryID}'`,
-                OrderBy: 'Sequence',
-                ResultType: 'entity_object'
-            }, context.userPayload.userRecord);
-            
-            const fields: QueryFieldType[] = fieldsResult.Success && fieldsResult.Results ? 
-                fieldsResult.Results.map(f => ({
-                    ID: f.ID,
-                    QueryID: f.QueryID,
-                    Name: f.Name,
-                    Description: f.Description,
-                    Type: f.SQLBaseType,
-                    Sequence: f.Sequence,
-                    SQLBaseType: f.SQLBaseType,
-                    SQLFullType: f.SQLFullType,
-                    IsComputed: f.IsComputed,
-                    ComputationEnabled: true,
-                    ComputationDescription: f.ComputationDescription
-                })) : [];
-            
-            // Load parameters
-            const paramsResult = await rv.RunView<QueryParameterEntity>({
-                EntityName: 'MJ: Query Parameters',
-                ExtraFilter: `QueryID='${queryID}'`,
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            }, context.userPayload.userRecord);
-            
-            const parameters: QueryParameterType[] = paramsResult.Success && paramsResult.Results ?
-                paramsResult.Results.map(p => ({
-                    ID: p.ID,
-                    QueryID: p.QueryID,
-                    Name: p.Name,
-                    Type: p.Type,
-                    DefaultValue: p.DefaultValue,
-                    Comments: '',
-                    IsRequired: p.IsRequired || false
-                })) : [];
-            
-            // Load entities
-            const entitiesResult = await rv.RunView<QueryEntityEntity>({
-                EntityName: 'Query Entities',
-                ExtraFilter: `QueryID='${queryID}'`,
-                OrderBy: 'Sequence',
-                ResultType: 'entity_object'
-            }, context.userPayload.userRecord);
-            
-            const entities: QueryEntityType[] = entitiesResult.Success && entitiesResult.Results ?
-                entitiesResult.Results.map(e => ({
-                    ID: e.ID,
-                    QueryID: e.QueryID,
-                    EntityID: e.EntityID,
-                    EntityName: e.Entity, // The view includes the Entity name
-                    Sequence: 0
-                })) : [];
-
-            // If permissions weren't updated, load existing ones
-            if (input.Permissions === undefined) {
-                const permsResult = await rv.RunView<QueryPermissionEntity>({
-                    EntityName: 'Query Permissions',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
+                await this.createPermissions(input.Permissions, queryID, context.userPayload.userRecord);
                 
-                updatedPermissions = permsResult.Success && permsResult.Results ?
-                    permsResult.Results.map(p => ({
-                        ID: p.ID,
-                        QueryID: p.QueryID,
-                        RoleID: p.RoleID,
-                        RoleName: p.Role // The view includes the Role name
-                    })) : [];
+                // Refresh the metadata to get updated permissions
+                await queryEntity.RefreshRelatedMetadata(true);
             }
+
+            // Use the properties from QueryEntityExtended instead of manual loading
+            const fields: QueryFieldType[] = queryEntity.QueryFields.map(f => ({
+                ID: f.ID,
+                QueryID: f.QueryID,
+                Name: f.Name,
+                Description: f.Description || undefined,
+                Type: f.SQLBaseType || undefined,
+                Sequence: f.Sequence,
+                SQLBaseType: f.SQLBaseType || undefined,
+                SQLFullType: f.SQLFullType || undefined,
+                IsComputed: f.IsComputed,
+                ComputationEnabled: true, // Default to true as it's not in QueryFieldInfo
+                ComputationDescription: f.ComputationDescription || undefined
+            }));
+            
+            const parameters: QueryParameterType[] = queryEntity.QueryParameters.map(p => ({
+                ID: p.ID,
+                QueryID: p.QueryID,
+                Name: p.Name,
+                Type: p.Type,
+                DefaultValue: p.DefaultValue || undefined,
+                Comments: '', // Not available in QueryParameterInfo
+                IsRequired: p.IsRequired
+            }));
+            
+            const entities: QueryEntityType[] = queryEntity.QueryEntities.map(e => ({
+                ID: e.ID,
+                QueryID: e.QueryID,
+                EntityID: e.EntityID,
+                EntityName: e.Entity || undefined, // Property is called Entity, not EntityName
+                Sequence: e.Sequence || 0
+            }));
+            
+            const permissions: QueryPermissionType[] = queryEntity.QueryPermissions.map(p => ({
+                ID: p.ID,
+                QueryID: p.QueryID,
+                RoleID: p.RoleID,
+                RoleName: p.Role || undefined // Property is called Role, not RoleName
+            }));
 
             return {
                 Success: true,
@@ -606,7 +500,7 @@ export class QueryResolverExtended extends QueryResolver {
                 Fields: fields,
                 Parameters: parameters,
                 Entities: entities,
-                Permissions: updatedPermissions
+                Permissions: permissions
             };
 
         } catch (err) {
