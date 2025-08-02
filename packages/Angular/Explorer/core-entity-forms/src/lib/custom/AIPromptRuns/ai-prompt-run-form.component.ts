@@ -79,7 +79,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     async ngOnInit() {
         await super.ngOnInit();
         if (this.record?.ID) {
-            // Set loading state immediately if input panel will be loaded
+            // Set loading state immediately if input panel will be loaded and has messages
             if (this.inputExpanded && this.record.Messages && this.record.Messages.trim() !== '') {
                 this.isParsingMessages = true;
                 this.cdr.detectChanges(); // Force immediate update to show spinner
@@ -88,24 +88,19 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             // Load related entities
             await this.loadRelatedData();
             
-            // Load input panel data since it's open by default
-            if (this.inputExpanded) {
-                this.hasLoadedInput = true;
-                // Only show parsing state if there are messages to parse
-                if (this.record.Messages && this.record.Messages.trim() !== '') {
-                    // Use Promise.resolve to ensure async execution
-                    Promise.resolve().then(() => {
-                        this.formatJsonFields();
-                        this.isParsingMessages = false;
-                        this.cdr.detectChanges();
-                    });
-                } else {
-                    // No messages to parse
-                    this.isParsingMessages = false;
-                    this.chatMessages = [];
-                    this.cdr.detectChanges();
-                }
-            }
+            // Format ALL JSON fields immediately on load - it's inexpensive
+            console.log('🚀 Formatting all JSON fields on init...');
+            this.formatAllJsonFields();
+            
+            // Mark all data as loaded since we're doing it all upfront
+            this.hasLoadedInput = true;
+            this.hasLoadedResult = true;
+            this.hasLoadedValidation = true;
+            this.hasLoadedMetrics = true;
+            this.hasLoadedModelSpecific = true;
+            
+            this.isParsingMessages = false;
+            this.cdr.detectChanges();
         }
     }
     
@@ -125,86 +120,36 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     onInputPanelToggle(event: any) {
         const expanded = event as boolean;
         this.inputExpanded = expanded;
-        if (expanded && !this.hasLoadedInput) {
-            this.hasLoadedInput = true;
-            
-            // Only show parsing state if there are messages to parse
-            if (this.record?.Messages && this.record.Messages.trim() !== '') {
-                this.isParsingMessages = true;
-                
-                // Use Promise to ensure async operation
-                Promise.resolve().then(() => {
-                    this.formatJsonFields();
-                    this.isParsingMessages = false;
-                    this.cdr.detectChanges();
-                });
-            } else {
-                // No messages to parse
-                this.chatMessages = [];
-                this.cdr.detectChanges();
-            }
-        }
+        // Data is already formatted on init, no need to do anything
     }
     
     onResultPanelToggle(event: any) {
         const expanded = event as boolean;
         this.resultExpanded = expanded;
-        if (expanded && !this.hasLoadedResult) {
-            this.hasLoadedResult = true;
-            
-            Promise.resolve().then(() => {
-                // Format result only when needed
-                if (this.record) {
-                    this.formattedResult = this.record.GetFormattedResult();
-                    // Also format ErrorDetails here if it exists and hasn't been formatted yet
-                    if (this.record.ErrorDetails && !this.formattedErrorDetails) {
-                        this.formatErrorDetails();
-                    }
-                    this.cdr.detectChanges();
-                }
-            });
-        }
+        // Data is already formatted on init, no need to do anything
     }
     
     onValidationPanelToggle(event: any) {
         const expanded = event as boolean;
         this.validationExpanded = expanded;
-        if (expanded && !this.hasLoadedValidation) {
-            this.hasLoadedValidation = true;
-            
-            Promise.resolve().then(() => {
-                this.loadValidationData();
-                this.cdr.detectChanges();
-            });
-        }
+        // Data is already formatted on init, no need to do anything
     }
     
     onMetricsPanelToggle(event: any) {
         const expanded = event as boolean;
         this.metricsExpanded = expanded;
-        if (expanded && !this.hasLoadedMetrics) {
-            this.hasLoadedMetrics = true;
-            
-            Promise.resolve().then(() => {
-                // Format metrics-related JSON fields
-                this.formatMetricsData();
-                this.cdr.detectChanges();
-            });
-        }
+        // Data is already formatted on init, no need to do anything
     }
     
     onModelSpecificPanelToggle(event: any) {
         const expanded = event as boolean;
         this.modelSpecificExpanded = expanded;
-        if (expanded && !this.hasLoadedModelSpecific) {
-            this.hasLoadedModelSpecific = true;
-            
-            Promise.resolve().then(() => {
-                // Format model specific response details
-                this.formatModelSpecificResponseDetails();
-                this.cdr.detectChanges();
-            });
-        }
+        // Data is already formatted on init, no need to do anything
+    }
+    
+    onModelSelectionPanelToggle(event: any) {
+        const expanded = event as boolean;
+        // Data is already formatted on init, no need to do anything
     }
     
     private async loadRelatedData() {
@@ -261,19 +206,47 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
         }
     }
     
-    private formatJsonFields() {
+    private formatAllJsonFields() {
         if (!this.record) {
-            console.warn('formatJsonFields called but record is not available');
+            console.warn('formatAllJsonFields called but record is not available');
             return;
         }
         
-        // Only parse messages/input data for the Input panel
+        console.log('📄 Formatting input data...');
+        // Format input/messages data
         const messageData = this.record.ParseMessagesData();
         this.chatMessages = messageData.chatMessages;
         this.inputData = messageData.inputData;
         this.formattedMessages = messageData.formattedMessages;
         this.formattedData = messageData.formattedData;
+        console.log('📄 Input data formatted. Chat messages:', this.chatMessages.length, 'Input data exists:', !!this.inputData);
+        
+        console.log('📊 Formatting result data...');
+        // Format result data
+        this.formattedResult = this.record.GetFormattedResult();
+        console.log('📊 Result formatted:', !!this.formattedResult, 'Length:', this.formattedResult?.length);
+        
+        console.log('🔍 Formatting validation data...');
+        // Format validation data
+        this.loadValidationData();
+        
+        console.log('📈 Formatting metrics data...');
+        // Format metrics data (ModelSelection, ErrorDetails)
+        this.formatMetricsData();
+        
+        console.log('🔧 Formatting model specific data...');
+        // Format model specific response details
+        this.formatModelSpecificResponseDetails();
+        
+        // Format error details if available
+        if (this.record.ErrorDetails && !this.formattedErrorDetails) {
+            console.log('⚠️ Formatting error details...');
+            this.formatErrorDetails();
+        }
+        
+        console.log('✅ All JSON fields formatted');
     }
+    
     
     private formatMetricsData() {
         // Format v2.78 JSON fields related to metrics
@@ -504,33 +477,16 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     }
     
     async refreshData() {
+        console.log('🔄 refreshData called');
         if (this.record?.ID) {
-            // Reset loading flags
-            this.hasLoadedInput = false;
-            this.hasLoadedResult = false;
-            this.hasLoadedValidation = false;
-            this.hasLoadedMetrics = false;
-            this.hasLoadedModelSpecific = false;
+            console.log('🔄 Reloading record and formatting all data...');
             
             await this.record.Load(this.record.ID);
             await this.loadRelatedData();
+            console.log('🔄 Record reloaded. Result field exists:', !!this.record.Result);
             
-            // Only reload data for currently expanded panels
-            if (this.inputExpanded) {
-                this.formatJsonFields();
-            }
-            if (this.resultExpanded) {
-                this.formattedResult = this.record.GetFormattedResult();
-            }
-            if (this.validationExpanded) {
-                this.loadValidationData();
-            }
-            if (this.metricsExpanded) {
-                this.formatMetricsData();
-            }
-            if (this.modelSpecificExpanded) {
-                this.formatModelSpecificResponseDetails();
-            }
+            // Format all JSON fields again
+            this.formatAllJsonFields();
             
             this.cdr.detectChanges();
         }
