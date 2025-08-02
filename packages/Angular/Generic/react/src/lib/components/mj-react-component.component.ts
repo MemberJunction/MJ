@@ -123,38 +123,6 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
-  
-  private _data: any = {};
-  @Input() 
-  set data(value: any) {
-    const oldData = this._data;
-    this._data = value;
-    
-    // Only re-render if data actually changed and component is initialized
-    if (this.isInitialized && !this.isEqual(oldData, value)) {
-      this.renderComponent();
-    }
-  }
-  get data(): any {
-    return this._data;
-  }
-  
-  private _state: any = {};
-  @Input() 
-  set state(value: any) {
-    const oldState = this._state;
-    this._state = value;
-    
-    // Only update state and re-render if it actually changed
-    if (this.isInitialized && !this.isEqual(oldState, value)) {
-      this.currentState = { ...value };
-      this.renderComponent();
-    }
-  }
-  get state(): any {
-    return this._state;
-  }
-  
   @Input() utilities: any = {};
   @Input() styles?: Partial<ComponentStyles>;
   
@@ -183,7 +151,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private compiledComponent: any = null;
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
-  private currentState: any = {};
   isInitialized = false;
   private isRendering = false;
   private pendingRender = false;
@@ -265,7 +232,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       }
       
       this.compiledComponent = componentWrapper;
-      this.currentState = { ...this._state };
       
       // Create managed React root
       const reactContext = this.reactBridge.getCurrentContext();
@@ -368,7 +334,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Build props with savedUserSettings pattern
     const props = {
-      ...this._data, // Spread data properties directly
       utilities: this.utilities || {},
       callbacks: this.currentCallbacks,
       components,
@@ -489,20 +454,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * This implements the SavedUserSettings pattern
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Check if there are actual changes
-    const hasChanges = !this.isEqual(this._savedUserSettings, newSettings);
-    
-    if (!hasChanges) {
-      // No actual changes, skip update to prevent infinite loop
-      return;
-    }
-    
-    // Update saved settings in memory
-    this._savedUserSettings = { ...newSettings };
-    
-    // Emit user settings changed event for parent containers to handle persistence
+    // Just bubble the event up to parent containers for persistence
+    // We don't need to store anything here
     this.userSettingsChanged.emit({
-      settings: this._savedUserSettings,
+      settings: newSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
@@ -537,7 +492,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
     // Clear references
     this.compiledComponent = null;
-    this.currentState = {};
     this.isInitialized = false;
 
     // Trigger registry cleanup
@@ -546,44 +500,22 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
   /**
    * Public method to refresh the component
-   * @param newData - Optional new data to merge
+   * @deprecated Components manage their own state and data now
    */
-  refresh(newData?: any) {
-    if (newData) {
-      // Use the setter to trigger change detection
-      this.data = { ...this._data, ...newData };
-    } else {
-      this.renderComponent();
-    }
+  refresh() {
+    // Just trigger a re-render if needed
+    this.renderComponent();
   }
 
   /**
    * Public method to update state programmatically
    * @param path - State path to update
    * @param value - New value
+   * @deprecated Components manage their own state now
    */
   updateState(path: string, value: any) {
-    this.currentState = {
-      ...this.currentState,
-      [path]: value
-    };
+    // Just emit the event, don't manage state here
     this.stateChange.emit({ path, value });
-    this.renderComponent();
   }
 
-  /**
-   * Deep equality check that handles null/undefined properly
-   */
-  private isEqual(a: any, b: any): boolean {
-    // Handle null/undefined cases
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    
-    // For objects/arrays, use JSON comparison
-    if (typeof a === 'object' && typeof b === 'object') {
-      return JSON.stringify(a) === JSON.stringify(b);
-    }
-    
-    return a === b;
-  }
 }
