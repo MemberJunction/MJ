@@ -497,18 +497,19 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
     
-    // Update saved settings
+    // Update saved settings in memory
     this._savedUserSettings = { ...newSettings };
     
-    // Emit user settings changed event
+    // Emit user settings changed event for parent containers to handle persistence
     this.userSettingsChanged.emit({
       settings: this._savedUserSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
     
-    // Schedule re-render
-    this.renderComponent();
+    // DO NOT re-render the component!
+    // The component already has the correct state - it's the one that told us about the change.
+    // Re-rendering would cause unnecessary DOM updates and visual flashing.
   }
 
   /**

@@ -37,12 +37,14 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     public metricsExpanded = false;
     public hierarchyExpanded = false;
     public validationExpanded = false; // Start closed for lazy loading
+    public modelSpecificExpanded = false; // Start closed for lazy loading
     
     // Track what has been loaded
     private hasLoadedInput = false;
     private hasLoadedResult = false;
     private hasLoadedValidation = false;
     private hasLoadedMetrics = false;
+    private hasLoadedModelSpecific = false;
     
     // Formatted values
     public formattedMessages = '';
@@ -154,6 +156,10 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
                 // Format result only when needed
                 if (this.record) {
                     this.formattedResult = this.record.GetFormattedResult();
+                    // Also format ErrorDetails here if it exists and hasn't been formatted yet
+                    if (this.record.ErrorDetails && !this.formattedErrorDetails) {
+                        this.formatErrorDetails();
+                    }
                     this.cdr.detectChanges();
                 }
             });
@@ -182,6 +188,20 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             Promise.resolve().then(() => {
                 // Format metrics-related JSON fields
                 this.formatMetricsData();
+                this.cdr.detectChanges();
+            });
+        }
+    }
+    
+    onModelSpecificPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.modelSpecificExpanded = expanded;
+        if (expanded && !this.hasLoadedModelSpecific) {
+            this.hasLoadedModelSpecific = true;
+            
+            Promise.resolve().then(() => {
+                // Format model specific response details
+                this.formatModelSpecificResponseDetails();
                 this.cdr.detectChanges();
             });
         }
@@ -285,15 +305,48 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             }
         }
         
-        // Format ModelSpecificResponseDetails
-        if (this.record.ModelSpecificResponseDetails) {
-            try {
-                const modelDetails = JSON.parse(this.record.ModelSpecificResponseDetails);
-                const parsed = ParseJSONRecursive(modelDetails, parseOptions);
-                this.formattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
-            } catch (error) {
-                this.formattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
-            }
+        // Note: ModelSpecificResponseDetails is now formatted in its own panel toggle method
+    }
+    
+    private formatErrorDetails() {
+        if (!this.record.ErrorDetails) {
+            this.formattedErrorDetails = '';
+            return;
+        }
+        
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+        
+        try {
+            const errorDetails = JSON.parse(this.record.ErrorDetails);
+            const parsed = ParseJSONRecursive(errorDetails, parseOptions);
+            this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
+        } catch (error) {
+            this.formattedErrorDetails = this.record.ErrorDetails;
+        }
+    }
+    
+    private formatModelSpecificResponseDetails() {
+        if (!this.record.ModelSpecificResponseDetails) {
+            this.formattedModelSpecificResponseDetails = '';
+            return;
+        }
+        
+        const parseOptions: ParseJSONOptions = {
+            extractInlineJson: true,
+            maxDepth: 100,
+            debug: false
+        };
+        
+        try {
+            const modelDetails = JSON.parse(this.record.ModelSpecificResponseDetails);
+            const parsed = ParseJSONRecursive(modelDetails, parseOptions);
+            this.formattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
+        } catch (error) {
+            this.formattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
         }
     }
     
@@ -457,6 +510,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             this.hasLoadedResult = false;
             this.hasLoadedValidation = false;
             this.hasLoadedMetrics = false;
+            this.hasLoadedModelSpecific = false;
             
             await this.record.Load(this.record.ID);
             await this.loadRelatedData();
@@ -473,6 +527,9 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             }
             if (this.metricsExpanded) {
                 this.formatMetricsData();
+            }
+            if (this.modelSpecificExpanded) {
+                this.formatModelSpecificResponseDetails();
             }
             
             this.cdr.detectChanges();

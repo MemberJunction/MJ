@@ -814,7 +814,7 @@
                     
                     <!-- Model Specific Response Details Panel -->
                     @if (record.ModelSpecificResponseDetails) {
-                        <kendo-panelbar-item [expanded]="false">
+                        <kendo-panelbar-item [expanded]="modelSpecificExpanded" (stateChange)="onModelSpecificPanelToggle($event)">
                             <ng-template kendoPanelBarItemTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-microchip"></i>
