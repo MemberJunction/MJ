@@ -28,7 +28,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
     // Properties for handling multiple report options
-    public reportOptions: ComponentOption[] = [];
+    public componentOptions: ComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
     
@@ -72,8 +72,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
      * Gets the currently selected report option
      */
     public get selectedReportOption(): ComponentOption | null {
-        return this.reportOptions.length > this.selectedReportOptionIndex 
-            ? this.reportOptions[this.selectedReportOptionIndex] 
+        return this.componentOptions.length > this.selectedReportOptionIndex 
+            ? this.componentOptions[this.selectedReportOptionIndex] 
             : null;
     }
 
@@ -81,10 +81,14 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
      * Get tab title for a specific option index
      */
     public getTabTitle(index: number): string {
-        const option = this.reportOptions[index];
-        if (!option) return `report ${index + 1}`;
+        const option = this.componentOptions[index];
+        if (!option) 
+            return `Report ${index + 1}`;
+
+        if (option.name)
+            return option.name;
         
-        const componentType = option.option.type || 'report';
+        const componentType = option.option.type || 'Report';
         
         return `${componentType} ${index + 1}`;
     }
@@ -93,7 +97,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
      * Check if this option is the AI's top recommendation
      */
     public isTopRanked(index: number): boolean {
-        const option = this.reportOptions[index];
+        const option = this.componentOptions[index];
         return option?.AIRank === 1;
     }
 
@@ -109,7 +113,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
      * Handles when the user changes the selected report option
      */
     public onReportOptionChange(selectedIndex: number): void {
-        if (selectedIndex >= 0 && selectedIndex < this.reportOptions.length) {
+        if (selectedIndex >= 0 && selectedIndex < this.componentOptions.length) {
             this.selectedReportOptionIndex = selectedIndex;
             this.updateCurrentReport();
         }
@@ -186,7 +190,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             return null;
         }
         
-        if (this.reportOptions.length === 1) {
+        if (this.componentOptions.length === 1) {
             // Single option - use the only component
             return this.reactComponents.first || null;
         } else {
@@ -203,7 +207,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.currentError = null;
         
         // Just clear the error and re-render
-        // Component spec comes from reportOptions data
+        // Component spec comes from componentOptions data
         
         // Trigger change detection
         this.cdr.detectChanges();
@@ -433,9 +437,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         
         // Initialize user states for all options
         // Use Promise.resolve to avoid ExpressionChangedAfterItHasBeenCheckedError
-        if (this.reportOptions.length > 0) {
+        if (this.componentOptions.length > 0) {
             Promise.resolve().then(() => {
-                this.reportOptions.forEach((_, index) => {
+                this.componentOptions.forEach((_, index) => {
                     if (!this.userStates.has(index)) {
                         this.userStates.set(index, {});
                     }
@@ -511,7 +515,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // Check if we have the new componentOptions array
         if (data.componentOptions && data.componentOptions.length > 0) {
             // Sort by AIRank (lower numbers = better ranking)
-            this.reportOptions = [...data.componentOptions].sort((a, b) => {
+            this.componentOptions = [...data.componentOptions].sort((a, b) => {
                 const rankA = a.AIRank ?? Number.MAX_SAFE_INTEGER;
                 const rankB = b.AIRank ?? Number.MAX_SAFE_INTEGER;
                 return rankA - rankB;
@@ -519,7 +523,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
-            const bestOption = this.reportOptions[0];
+            const bestOption = this.componentOptions[0];
             this.UIComponentCode = BuildComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.name;
             
@@ -662,7 +666,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     public async refreshReport(data?: any): Promise<void> {
         const currentComponent = this.getCurrentReactComponent();
         if (currentComponent) {
-            currentComponent.refresh(data);
+            currentComponent.refresh();
         }
     }
 
