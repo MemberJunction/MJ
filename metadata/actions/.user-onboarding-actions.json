@@ -1,0 +1,1093 @@
+[
+  {
+    "fields": {
+      "Name": "Check User Permission",
+      "Description": "Verifies if the current user has a specific role or permission to perform administrative tasks",
+      "DriverClass": "CheckUserPermissionAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Security",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PermissionType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of permission to check (Role, Authorization, or EntityPermission)",
+            "IsRequired": true,
+            "DefaultValue": "Role"
+          },
+          "primaryKey": {
+            "ID": "5F7F9008-5C8B-4157-AFC8-8356B902F406"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.606Z",
+            "checksum": "5cb8a420d7c328b648794a6d3811db2b36d192f55170c82fc71dfda337447610"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PermissionName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the role, authorization, or entity to check",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A173F9B6-1F69-4B5D-864F-4A3439790274"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.616Z",
+            "checksum": "fa1e6605a72443ab2d03b9081dac5566fc4e249664859adb2aba97c046a40e19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasPermission",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if user has the specified permission",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DD7E9132-B31E-406E-8A98-F79A08B8AE32"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.624Z",
+            "checksum": "fe52115af3d232c875ecc96b278b72527b628d390f9a6644abfef469df2286e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserRoles",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "List of current user's roles",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5D8B4D41-C66C-49F7-9861-506BFEE4F1B3"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.630Z",
+            "checksum": "e0baba56c95b742a3f6c8e736734bcf80e8be3d1161079bfe35fc1111a8d0ec6"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Permission check completed successfully"
+          },
+          "primaryKey": {
+            "ID": "723A787A-AFA6-441A-B133-653BDC3A1657"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.637Z",
+            "checksum": "0f136c788bf99746c3f4822747b4826ebfda2819fbdc1989587cb3f40f543887"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "User does not have the required permission"
+          },
+          "primaryKey": {
+            "ID": "B9DB2B28-8CE7-4ACE-90DE-75E6724BA332"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.643Z",
+            "checksum": "8770cadeb176271a42a3edc571f06510514ad212d722296e95b10e871ceb8ed5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PERMISSION_TYPE",
+            "IsSuccess": false,
+            "Description": "Invalid permission type specified"
+          },
+          "primaryKey": {
+            "ID": "BDF194DC-113C-43E2-BEEC-03E9D6FA7138"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.650Z",
+            "checksum": "48bf000d5ec062498762361c71e7c59e853085de4d1dbb4efb05412b2ddc0350"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C8094D90-1194-4C81-AE0F-77E85FD54169"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.594Z",
+      "checksum": "56bc34215b5b4f645331062647bf2556b756ab99acbe90e132a8f61671f5e02a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create User",
+      "Description": "Creates a new user in the MemberJunction system with validation and optional employee linking",
+      "DriverClass": "CreateUserAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "ParentID": "@lookup:Actions.Name=Create Record",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User's first name",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "47570E42-3076-43E7-A0A6-8F77B407193C"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.668Z",
+            "checksum": "49f73d873b0fa2ee7dba900eeee370faba2a0b5a1e532bc48cc60592e79f9fab"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User's last name",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F64CD9EA-27B2-4463-9088-6A99AA75B0BB"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.676Z",
+            "checksum": "a987ff2be649afe09391a726501997e7812b13df4eddd4b77f4eb10f85351eaf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User's email address (must be unique)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "4A84CB4D-D0DD-4C3C-8CB2-55583C19DE2B"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.688Z",
+            "checksum": "19883bf0d9adfbf082ce2b42e35240b443b23bbc534b75d24a8cb23221e90bc9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User's professional title",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "87F5A4A3-0AA2-41EF-97AA-5B540FD85795"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.697Z",
+            "checksum": "f6a2f2fa67000c4a5d535b380b2b5acdfaa9887f77e792fb5790a11b09090c0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Type",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "User type (User or Owner)",
+            "IsRequired": false,
+            "DefaultValue": "User"
+          },
+          "primaryKey": {
+            "ID": "C6F62A88-0388-4D27-91A1-2AB3A3A9749A"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.707Z",
+            "checksum": "0b911deefb7ccb5331694cf8aae123a9eda601f58d78ca48bb079780a16de463"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsActive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the user account should be active",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "BB0071AB-EA49-48F2-BFDE-A45E7A735006"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.716Z",
+            "checksum": "f2b3e30d38b6fb2c3e2cbb9fbe1d45ab39430d51f4c2acbbe065a6e485a984ef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmployeeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of linked employee record",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A437DF5-DD22-47EC-ADB8-010AA6E2AA6F"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.723Z",
+            "checksum": "88fe299fd30abc6026f1ab347e73eb0449c92c61faab93c8a39af116117a341e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created user",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7BE32625-CEBA-414A-8A9A-8496620F45AC"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.730Z",
+            "checksum": "5ec753366f0e51561f2c0971c982fb29fc7cc70389aa00a758fcea0a1345ba99"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Display name of the created user",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A63A0740-02F7-471B-92AB-B4CBB28EE26D"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.736Z",
+            "checksum": "a816b3a9311cc3eb6d3c5470883e940c79c39d0f106e89e01452fc153a70a12c"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "User created successfully"
+          },
+          "primaryKey": {
+            "ID": "DC8413FE-3A3A-4979-9C71-DC3E87224810"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.741Z",
+            "checksum": "b109c64f7af87b1ee963e9b2f0b8f603ead1f501644b1514c257464cb82b4e85"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMAIL_EXISTS",
+            "IsSuccess": false,
+            "Description": "Email address already exists in the system"
+          },
+          "primaryKey": {
+            "ID": "99A8CB36-196C-42E6-9AC9-9D657CECF5C9"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.746Z",
+            "checksum": "c81ef69aff8d1bf7a7e6452a0740f500e6299034a0589ba9a288e4edafedd312"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_EMPLOYEE",
+            "IsSuccess": false,
+            "Description": "Specified employee ID does not exist"
+          },
+          "primaryKey": {
+            "ID": "D63BB773-A239-41A2-ABBB-4518BCBC76D1"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.752Z",
+            "checksum": "cfd002d3c0053745af3727beb644d8e1330d2bcbec43d740174dfba327cb207c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Input validation failed"
+          },
+          "primaryKey": {
+            "ID": "D2F4A583-DDEA-48C1-9DD4-9A838FEF11E1"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.757Z",
+            "checksum": "bb16847b1f22425cdfb67ec393246845a0b5ef1b39cde23a274107877a4055f7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.661Z",
+      "checksum": "fe90c220d208918b48c80e96c0bc0a5d6c4edaea304c5c013c242b9efdf42ba6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Employee",
+      "Description": "Creates a new employee record in the MemberJunction system",
+      "DriverClass": "CreateEmployeeAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "ParentID": "@lookup:Actions.Name=Create Record",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Employee's first name",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9F6498E3-53DB-42A6-9BEA-4FD71C72AEAD"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.774Z",
+            "checksum": "bf27cbe642606ccc66f81e49b8f1691ee6d5781a2be1774a7b5f85a3f234def6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Employee's last name",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "AF7DF8D7-1968-41C8-96E8-6DEC8A6B6790"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.781Z",
+            "checksum": "d1cbc72ea2e0a5f54d039d9605cb53ce390b81720e41f69d906cf32024dd577a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Employee's email address (must be unique)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "EA01F918-0B66-417A-AA84-FC791982A2F6"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.788Z",
+            "checksum": "1e2b1332c1906073869ca990e0a8b8a770719c86c55e0db36023beaeef192952"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Employee's job title",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5C672151-4B4A-42FD-BD3C-BF7727D23567"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.794Z",
+            "checksum": "0feaa3c8aa34eed1ab48b7f62527db82c457a0da850222e6f56e5f92cabe9f6b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Phone",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Employee's phone number",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F9462D49-E1C1-4E55-862A-9394B09CC39D"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.800Z",
+            "checksum": "3bb03b6d1699e3996e2288c29f7e851c35cd06140f9939262019f12fd790a80a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company the employee belongs to",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "298BF25B-312B-48E9-803D-5258DFE46394"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.806Z",
+            "checksum": "8da4ad4aad2448dfbcf717a6bcfb4ed9da99763865cf3c9458da3480685f1149"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SupervisorID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the employee's supervisor",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47D96BB6-C561-4D3D-96CA-E8FCEFD6569F"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.812Z",
+            "checksum": "cf18d3d3aa5a2ff135786cd759089ea77be633079a57d769c8736155f5e7edd9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Active",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the employee is active",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "DB10B67C-ED6B-4CEE-8535-81B48AE4E3D7"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.819Z",
+            "checksum": "e49380ae3c65121743d454820a2aa0ebb3f24b0b91f95d5ebe2ef94a1e39c04a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmployeeID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created employee",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8CDBA16E-42F6-4DA5-B42A-76866F6637D1"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.825Z",
+            "checksum": "e963f871369ae3d7f57538be767708d85a7dcd415740a9630cb34cbfd189b098"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Employee created successfully"
+          },
+          "primaryKey": {
+            "ID": "AAC6F5BD-9408-42D3-872E-25A818D847D0"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.830Z",
+            "checksum": "14e6a061f3b729dc049b1693dc06194067f524d109ce192b9fcbd25b2d35a937"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMAIL_EXISTS",
+            "IsSuccess": false,
+            "Description": "Email address already exists for another employee"
+          },
+          "primaryKey": {
+            "ID": "1F6D5FCC-50C6-431A-B46F-2307FF20247D"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.837Z",
+            "checksum": "64b3c3c0c43246488ba2514bb512663f8903dd4a96118b393fa2979bbc87506c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_COMPANY",
+            "IsSuccess": false,
+            "Description": "Specified company ID does not exist"
+          },
+          "primaryKey": {
+            "ID": "6EEF5C95-3F08-484C-850C-12A88546C2C6"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.843Z",
+            "checksum": "a28283fe44b36c1eb13bcb9a2e79288aa02bde220b88e9c3649da9c5fc324943"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_SUPERVISOR",
+            "IsSuccess": false,
+            "Description": "Specified supervisor ID does not exist"
+          },
+          "primaryKey": {
+            "ID": "ED781DCB-4BB6-49F2-9A5B-42BCBC4D21BE"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.849Z",
+            "checksum": "8049dd63eb844ad695a9f691e81d30b6cb8873d1392050d393f2d66782c02cab"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.768Z",
+      "checksum": "a5daa462051e0976f63e9d18d87ce8cf2e6e10895372fbba205bfc8c01732f3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assign User Role",
+      "Description": "Assigns a role to a user by creating a UserRole association",
+      "DriverClass": "AssignUserRoleAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "ParentID": "@lookup:Actions.Name=Create Record",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the user to assign the role to",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D9F84EFA-DBE6-42FA-9BB9-08695FBE794B"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.866Z",
+            "checksum": "94d0221aa7582f2dec3017428b1770055fa27267683a758ba1c0d989c4c87f0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoleName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the role to assign",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "EF90C483-ADF5-4FD1-94CE-59BFC5CACF11"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.873Z",
+            "checksum": "a3afe16f35dd695c3991a985851cdd2410020e563e9f3da0caecf8384cf82569"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserRoleID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created UserRole association",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "12958087-C89A-4E3C-9F0E-57994E0F67DA"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.880Z",
+            "checksum": "606880ef504ff23ca475a58fd815138019032f7909fc74a60f75487eaa96a8ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoleID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the assigned role",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "89C07DFF-53A3-46E8-B179-764EC7E6173E"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.886Z",
+            "checksum": "a1a2ca7123e425603c69da180375a4ebad3868a3c019606a11e3aa94be27a15e"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Role assigned successfully"
+          },
+          "primaryKey": {
+            "ID": "7597062B-9693-4762-8295-3DC987E3445F"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.891Z",
+            "checksum": "a96069edeed410d3fc3bda52620dff259fe1fa9d16329f6fe7747dbd6c25f6e4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "USER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified user ID does not exist"
+          },
+          "primaryKey": {
+            "ID": "D1972C6D-A17B-4CC3-8F8D-3686EBB4DCD0"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.897Z",
+            "checksum": "cee7f68921b3f4261ae18fad36ddfe07b86ead402e6f8a560145654d10c1ae32"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ROLE_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified role name does not exist"
+          },
+          "primaryKey": {
+            "ID": "EC738289-8068-4911-8724-8964F7BD19F3"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.902Z",
+            "checksum": "7d90e7a815c25455efbef6a40fd74c5236420f4257d0c160ee5cf59b5310dbcb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ALREADY_ASSIGNED",
+            "IsSuccess": false,
+            "Description": "User already has this role assigned"
+          },
+          "primaryKey": {
+            "ID": "28FCBB6C-0ECA-4714-BE6F-64D56B7EC8DD"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.907Z",
+            "checksum": "d6b2d117aa098413fabbfabec94fd2be9c8dbaacd17724451db29e56f7a264d5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8261179F-4541-4E63-8073-27834C6E552A"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.860Z",
+      "checksum": "96ddbdf0e3642b8c0723ac878b9803e3a73d0a225361573c85fa7f6bb8f0d372"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Send Welcome Email",
+      "Description": "Sends a welcome email to a newly created user with login instructions",
+      "DriverClass": "SendWelcomeEmailAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Communication",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the user to send the email to",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "73ABD08E-4F33-4066-96B7-39F50A932310"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.924Z",
+            "checksum": "b8d953ca463d6d35710dcb72ed5a1e0f75899ef0f0434c6539e7a13f22e4ad3b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TemporaryPassword",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Temporary password for first login",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "75F6D61C-FA95-4632-9285-B919FCCBA057"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.930Z",
+            "checksum": "bce3bc7678bac612fb01950ed19b2a718f348088578e7bb76df41e09a4c3e888"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LoginURL",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "URL for the user to login",
+            "IsRequired": false,
+            "DefaultValue": "https://app.memberjunction.com"
+          },
+          "primaryKey": {
+            "ID": "2182CE07-CC20-49C5-B09B-327FEA31BC7C"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.936Z",
+            "checksum": "c1b3dae4861c8cf3196d0cb99ca082a1ad06ffb902ab35b02dff7f66ec46eaad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmailSent",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if email was sent successfully",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A44EC271-9913-4C08-99E6-B2CFB80FA80B"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.941Z",
+            "checksum": "30f107692f1c1da9d8b985c00f86f220b5baa2cc3423a0a3d79ccd412aae7a1e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MessageID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the sent email message",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D11ED469-EB21-4009-AE55-4DB093CEA4BD"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.948Z",
+            "checksum": "f89dcf912cdbb092eb79569f0968ae2b9c720f1898edb9fb3c26e4d2e47b53c8"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Welcome email sent successfully"
+          },
+          "primaryKey": {
+            "ID": "E2CA66C3-3D06-42E8-A190-2481253C255D"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.954Z",
+            "checksum": "bd41181e76faf2413aa3ef6736b3b845668484e3f7fca7669500c4986e2b5014"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "USER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified user ID does not exist"
+          },
+          "primaryKey": {
+            "ID": "2073C74C-DA23-44CE-967F-8FE76B52106C"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.959Z",
+            "checksum": "cee7f68921b3f4261ae18fad36ddfe07b86ead402e6f8a560145654d10c1ae32"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_EMAIL",
+            "IsSuccess": false,
+            "Description": "User does not have an email address"
+          },
+          "primaryKey": {
+            "ID": "6BAEE59F-61A4-489A-84E1-895A2A05D4D1"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.965Z",
+            "checksum": "e5e2b9ff5729b6e53897d84e2a5233a8e552d2003d0ed5a286c60461e54d0318"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMAIL_PROVIDER_ERROR",
+            "IsSuccess": false,
+            "Description": "Email provider returned an error"
+          },
+          "primaryKey": {
+            "ID": "04489440-2384-47E1-8C44-E0CF55FBBED8"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.970Z",
+            "checksum": "221f834a05cc9ba0cb4547a500a820e7b070c475955fa97d45a3cd5280cefe7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3A28C11B-EBE3-4F6F-B279-F1BA6D0C1912"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.917Z",
+      "checksum": "ca4b5de145094eecb03e943ccb90d493a546635ff69c1eba7b493142d4022650"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Email Unique",
+      "Description": "Validates that an email address is not already in use by another user in the system",
+      "DriverClass": "ValidateEmailUniqueAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email address to validate",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B53CFBF3-0AC2-4302-B950-8C24EACAF73C"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.987Z",
+            "checksum": "1ad4e4c2bf8ee08830e750c2565104a0235bca2ee729ff39de39d896226e75af"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsUnique",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if email is unique",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7DA96F6A-FB6F-4F26-9383-F25FD63C7ACB"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:19.994Z",
+            "checksum": "beaf923730fd33c6dfbeb96aa25c81248ecf46dadb76aecab4092d4fef6f5144"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExistingUserID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of existing user if email is not unique",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "563E51B9-0C29-4A93-80F8-A82C485F610E"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:20.000Z",
+            "checksum": "5e765c4b4ffb127f4baa4978b6ad72be99cbb7cdeb78056ee0c9edc720595dcc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExistingUserName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of existing user if email is not unique",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BF6189DE-AAF8-43DD-9A0C-0DE2FA53E073"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:20.006Z",
+            "checksum": "7f4e0681427c3de00e38d5e5dce3e4acdeeff6ac7ee8e9aa5ec63aba9a6d7a32"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Email validation completed"
+          },
+          "primaryKey": {
+            "ID": "6FCCF724-192F-4AFF-BC6C-919FE9E99D42"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:20.011Z",
+            "checksum": "442dfe52f71e73046730c47bf7b2105761a08272cca0b62d5527b7c071f20d04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_EMAIL_FORMAT",
+            "IsSuccess": false,
+            "Description": "Email address format is invalid"
+          },
+          "primaryKey": {
+            "ID": "6623C659-731B-4910-9C85-CDEB2F13E440"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:20.016Z",
+            "checksum": "2d49468523541cc759a0928d245a52c0c625ccd3fa1e9c616b69c9d277974fdf"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "540BFDE1-02B5-432C-9490-BD34AF853FE8"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:19.980Z",
+      "checksum": "727ebe8344d9d1febbf7269670ad69a6afc30695a799d98f3823536c8e993fef"
+    }
+  }
+]

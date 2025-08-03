@@ -1,0 +1,39 @@
+{
+  "currentStep": "Collect User Information",
+  "status": "in_progress",
+  "message": "Collecting user information from administrator",
+  "payload": {
+    "hasAdminPermission": true,
+    "currentUserRoles": ["Administrator", "User"],
+    "userData": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "john.doe@example.com",
+      "title": "Senior Developer",
+      "type": "User",
+      "isEmployee": true,
+      "employeeData": {
+        "companyID": "123e4567-e89b-12d3-a456-426614174000",
+        "supervisorID": "987f6543-e21b-12d3-a456-426614174000",
+        "phone": "+1-555-123-4567"
+      },
+      "roles": ["Developer", "User"]
+    },
+    "emailIsUnique": true,
+    "createdEmployeeID": "456e7890-e89b-12d3-a456-426614174000",
+    "createdUserID": "789a1234-e89b-12d3-a456-426614174000",
+    "createdUserName": "John Doe",
+    "welcomeEmailSent": true,
+    "emailMessageID": "msg_abc123def456"
+  },
+  "completedSteps": [
+    "Check Admin Permissions",
+    "Collect User Information",
+    "Validate User Data",
+    "Create Employee Record",
+    "Create User Record",
+    "Assign User Roles",
+    "Send Welcome Email"
+  ],
+  "errors": []
+}

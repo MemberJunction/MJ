@@ -1,0 +1,18 @@
+{
+  "userData": {
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "email": "jane.smith@company.com",
+    "title": "Product Manager",
+    "type": "User",
+    "isEmployee": true,
+    "employeeData": {
+      "companyID": "123e4567-e89b-12d3-a456-426614174000",
+      "supervisorID": "987f6543-e21b-12d3-a456-426614174000",
+      "phone": "+1-555-987-6543"
+    },
+    "roles": ["Manager", "User"]
+  },
+  "confirmed": true,
+  "nextStepName": "Validate User Data"
+}

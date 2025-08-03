@@ -1,0 +1,370 @@
+[
+  {
+    "fields": {
+      "Name": "User Onboarding Flow Agent",
+      "Description": "Automated flow agent for onboarding new users into MemberJunction. Handles permission verification, user creation, role assignment, and welcome email delivery through a deterministic workflow.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-user-plus"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=User Onboarding Flow Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0C2220BB-8477-4AB5-B72B-EA61D9E9D2CA"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.217Z",
+            "checksum": "659059f35d1177bcea528e30fa2372987c7392e23cd3625bfa89ece0d84097dd"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C28DF6B0-CACF-4CDD-B9B6-C1377F836375"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.225Z",
+            "checksum": "19d6a1158c53276725a422517c048419e2a9d0857cfb93be02a27234fda83e5e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create User",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D92309DC-A212-4729-A502-4984CF90A8E6"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.232Z",
+            "checksum": "560391e0b02085758df56f7345e3d8a1dd80c8f0307500396d790816a37a31b3"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Employee",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A6C93359-1CA8-41EE-9010-56BDA1EFC8B2"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.239Z",
+            "checksum": "694f09c4459a03fa368b10b7fe08e1e581942d13739a0f555d5ed2c489b69ad9"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Assign User Role",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2BF42A0C-DAE4-494E-BE51-0AC9EF094F3E"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.245Z",
+            "checksum": "9d2aa130244e924bc5084769c1a6e60c61df9ecffd41ce940912396230338350"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Send Welcome Email",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0274F2D6-DD12-46BF-969A-982CB585AE62"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.252Z",
+            "checksum": "303d3d5fd863659925b91dad80603c546fa9ddb3bda410d083e1ab3228fd4864"
+          }
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Collect User Information",
+            "StepType": "Prompt",
+            "StartingStep": true,
+            "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
+            "Status": "Active",
+            "PositionX": 300,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.263Z",
+            "checksum": "fffba512e60cd07d4d368ed95cdd4576b5bf83f43cecf4015e2a85b800c66300"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Validate User Data",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Validate Email Unique",
+            "ActionInputMapping": "{\"Email\": \"payload.userData.email\"}",
+            "ActionOutputMapping": "{\"IsUnique\": \"payload.emailIsUnique\", \"ExistingUserID\": \"payload.existingUserID\"}",
+            "Status": "Active",
+            "PositionX": 500,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.272Z",
+            "checksum": "de1b1e4b31526b380371cbc8a467770d530aa84bd27a3797378a744e24fa55ce"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Create Employee Record",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create Employee",
+            "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Phone\": \"payload.userData.employeeData.phone\", \"CompanyID\": \"payload.userData.employeeData.companyID\", \"SupervisorID\": \"payload.userData.employeeData.supervisorID\"}",
+            "ActionOutputMapping": "{\"EmployeeID\": \"payload.createdEmployeeID\"}",
+            "Status": "Active",
+            "PositionX": 700,
+            "PositionY": 50
+          },
+          "primaryKey": {
+            "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.281Z",
+            "checksum": "396126a033686f00687c8b461e9763a5afc6cf5e0ba41e93f8c40490e09d4daa"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Create User Record",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create User",
+            "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Type\": \"payload.userData.type\", \"IsActive\": \"true\", \"EmployeeID\": \"payload.createdEmployeeID\"}",
+            "ActionOutputMapping": "{\"UserID\": \"payload.createdUserID\", \"Name\": \"payload.createdUserName\"}",
+            "Status": "Active",
+            "PositionX": 700,
+            "PositionY": 150
+          },
+          "primaryKey": {
+            "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.291Z",
+            "checksum": "f348c68be4da5fd9310118cad3f40b2a8a39d998e3265316d264618284365528"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Assign User Roles",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Assign User Role",
+            "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"RoleName\": \"payload.currentRole\"}",
+            "ActionOutputMapping": "{\"UserRoleID\": \"payload.lastAssignedUserRoleID\", \"RoleID\": \"payload.lastAssignedRoleID\"}",
+            "Status": "Active",
+            "PositionX": 900,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "5A977380-2AA5-4119-A329-4450FC603025"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.299Z",
+            "checksum": "50009a0a4696c40c4ba206890cf9ad4a1034f007061cfa2a0a37eba5f8a3a3b1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Send Welcome Email",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Send Welcome Email",
+            "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"LoginURL\": \"https://app.memberjunction.com\"}",
+            "ActionOutputMapping": "{\"EmailSent\": \"payload.welcomeEmailSent\", \"MessageID\": \"payload.emailMessageID\"}",
+            "Status": "Active",
+            "PositionX": 1100,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.307Z",
+            "checksum": "e2d54676175c2ada17106f613b56dc21b9d41fd9037c8ed57dc59ea4e340c867"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Email Already Exists",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Generic Error Message",
+            "Status": "Active",
+            "PositionX": 500,
+            "PositionY": 250
+          },
+          "primaryKey": {
+            "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.315Z",
+            "checksum": "0d1a3b735b94dd28fd6dcb2d9403a8195296bd82b5e890adcd44f165513b98e3"
+          }
+        }
+      ],
+      "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Collect User Information&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
+            "Condition": "payload.userData.confirmed == true",
+            "Priority": 1,
+            "Description": "Proceed to validation after collecting info"
+          },
+          "primaryKey": {
+            "ID": "CA2BC3FA-6688-46A9-90DE-D92925EB76C1"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.323Z",
+            "checksum": "c89b5d5d7308c5e0cc065ee5ee433040b75ce17c1b5ef674b532b45864f3e07a"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create Employee Record&AgentID=@parent:ID",
+            "Condition": "payload.emailIsUnique == true && payload.userData.isEmployee == true",
+            "Priority": 1,
+            "Description": "Create employee if requested and email is unique"
+          },
+          "primaryKey": {
+            "ID": "80E2D6D5-D2F8-41DF-A169-3E2383416916"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.330Z",
+            "checksum": "96c16fa4a5f52b5a218e4fc54aca9c9f47a3bcd82a9b7286bff916b60b1cfc91"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
+            "Condition": "payload.emailIsUnique == true && payload.userData.isEmployee != true",
+            "Priority": 2,
+            "Description": "Create user directly if not employee"
+          },
+          "primaryKey": {
+            "ID": "48CBE3C2-B9D1-49DC-AF70-61767F464B21"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.337Z",
+            "checksum": "cfc8ea210895f1d72fa9fb77ab06bbfe40b7b746f2ba4a7b1b8f64c2e093e7aa"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Validate User Data&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Email Already Exists&AgentID=@parent:ID",
+            "Condition": "payload.emailIsUnique == false",
+            "Priority": 3,
+            "Description": "Show error if email already exists"
+          },
+          "primaryKey": {
+            "ID": "81CABE7B-2917-475E-A125-6D9DBFEBCE94"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.345Z",
+            "checksum": "fbfa2f756ef6684134a4223b893cef067c69dee24970a35731a83c0ef66c7d33"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Employee Record&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
+            "Condition": "true",
+            "Priority": 1,
+            "Description": "Always create user after employee"
+          },
+          "primaryKey": {
+            "ID": "71865532-8C3E-438D-9273-10F05FD241C3"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.353Z",
+            "checksum": "b75cd60d3bf331bf22938f7f176c7fd16d4df0ed206f78ea20d6ddf63c3a25ac"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create User Record&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Assign User Roles&AgentID=@parent:ID",
+            "Condition": "payload.createdUserID != null",
+            "Priority": 1,
+            "Description": "Assign roles after user creation"
+          },
+          "primaryKey": {
+            "ID": "7D146602-75C0-40BA-8768-BDAFAFA8D906"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.361Z",
+            "checksum": "afec7ceab91a93b8d7302988d932516a57d354bac0b54ab5fddc4f1577a5095b"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Assign User Roles&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Send Welcome Email&AgentID=@parent:ID",
+            "Condition": "payload.lastAssignedUserRoleID != null",
+            "Priority": 1,
+            "Description": "Send email after roles assigned"
+          },
+          "primaryKey": {
+            "ID": "5A6B3110-6D40-408D-9EC9-25E03057B158"
+          },
+          "sync": {
+            "lastModified": "2025-08-03T22:14:23.368Z",
+            "checksum": "5e07f343d2d22d425139391be0d94b67d93daef19bd66f45ce1e4bf33c54d0d8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
+    },
+    "sync": {
+      "lastModified": "2025-08-03T22:14:23.209Z",
+      "checksum": "35a0b8972e43ca4686f41c59e7e4b170960308e9fc9dd4e5b7fe330f50d0cc6d"
+    }
+  }
+]
