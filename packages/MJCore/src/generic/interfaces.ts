@@ -283,7 +283,7 @@ export interface IMetadataProvider {
 
     get DatabaseConnection(): any
 
-    Config(configData: ProviderConfigDataBase): Promise<boolean>
+    Config(configData: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean>
 
     get Entities(): EntityInfo[]
 
@@ -406,15 +406,15 @@ export interface IMetadataProvider {
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 
-    Refresh(): Promise<boolean>
+    Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    RefreshIfNeeded(): Promise<boolean>
+    RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    CheckToSeeIfRefreshNeeded(): Promise<boolean>
+    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 
-    RefreshRemoteMetadataTimestamps(): Promise<boolean>
+    RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean>
 
     SaveLocalMetadataToStorage(): Promise<void>
     
@@ -425,13 +425,13 @@ export interface IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
+    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific

@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
 import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -219,7 +219,7 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query parameters
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
@@ -331,7 +331,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (this.IsSaved) {
                 // Get all existing query parameters
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -364,7 +364,7 @@ export class QueryEntityExtended extends QueryEntity {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                     EntityName: 'Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -484,7 +484,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get existing query entities
             const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -564,7 +564,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -592,7 +592,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -644,10 +644,10 @@ export class QueryEntityExtended extends QueryEntity {
         const md = this.ProviderToUse as any as IMetadataProvider;
         if (refreshFromDB) {
             const globalMetadataProvider = Metadata.Provider;
-            await globalMetadataProvider.Refresh();
+            await globalMetadataProvider.Refresh(md); // we pass in our metadata provider because that is the connection we want to use if we are in the midst of a transaction
             if (globalMetadataProvider !== md) {
                 // If the global metadata provider is different, we need to refresh it
-                await md.Refresh(); // will refresh from the global provider
+                await md.Refresh(); // will refresh FROM the global provider, meaning we do NOT hit the DB again, we just copy the data into our MD instance that is part of our trans scope
             }
         }
         this._queryPermissions = md.QueryPermissions.filter(p => p.QueryID === this.ID);
