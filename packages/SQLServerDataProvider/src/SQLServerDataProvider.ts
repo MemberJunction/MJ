@@ -264,7 +264,7 @@ export class SQLServerDataProvider
   // Transaction state management
   private _transactionState$ = new BehaviorSubject<boolean>(false);
   private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
-  
+
 
   /**
    * Observable that emits the current transaction state (true when active, false when not)
@@ -332,14 +332,14 @@ export class SQLServerDataProvider
    * @param configData - Configuration data including connection string and options
    * @returns Promise<boolean> - True if configuration succeeded
    */
-  public async Config(configData: SQLServerProviderConfigData): Promise<boolean> {
+  public async Config(configData: SQLServerProviderConfigData, providerToUse?: IMetadataProvider): Promise<boolean> {
     try {
       this._pool = configData.ConnectionPool; // Now expects a ConnectionPool instead of DataSource
 
       // Initialize the instance queue processor
       this.initializeQueueProcessor();
 
-      return super.Config(configData); // now parent class can do it's config
+      return super.Config(configData, providerToUse); // now parent class can do it's config
     } catch (e) {
       LogError(e);
       throw e;
@@ -351,25 +351,28 @@ export class SQLServerDataProvider
    * This ensures all queries within a transaction execute sequentially
    */
   private initializeQueueProcessor(): void {
-    // Each instance gets its own queue processor
-    this._queueSubscription = this._sqlQueue$.pipe(
-      concatMap(item => 
-        from(executeSQLCore(
-          item.query,
-          item.parameters,
-          item.context,
-          item.options
-        )).pipe(
-          // Handle success
-          tap(result => item.resolve(result)),
-          // Handle errors
-          catchError(error => {
-            item.reject(error);
-            return of(null); // Continue processing queue even on errors
-          })
+    // Each instance gets its own queue processor, but only do this ONCE if we get this method called more than once we don't need to reinit
+    // the sub, taht would cause duplicate rprocessing.
+    if (!this._queueSubscription) {
+      this._queueSubscription = this._sqlQueue$.pipe(
+        concatMap(item => 
+          from(executeSQLCore(
+            item.query,
+            item.parameters,
+            item.context,
+            item.options
+          )).pipe(
+            // Handle success
+            tap(result => item.resolve(result)),
+            // Handle errors
+            catchError(error => {
+              item.reject(error);
+              return of(null); // Continue processing queue even on errors
+            })
+          )
         )
-      )
-    ).subscribe();
+      ).subscribe();
+    }
   }
 
   /**
@@ -2762,7 +2765,7 @@ export class SQLServerDataProvider
   // START ---- IMetadataProvider
   /**************************************************************************/
 
-  public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
+  public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
     const sSQL = `SELECT
                         di.*,
                         e.BaseView EntityBaseView,
@@ -2782,7 +2785,9 @@ export class SQLServerDataProvider
                     WHERE
                         d.Name = @p0`;
 
-    const items = await this.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
+    let items: any[] = [];
+    const useThisProvider: SQLServerDataProvider = providerToUse ? (providerToUse as SQLServerDataProvider) : this;
+    items = await useThisProvider.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
     if (items && items.length > 0) {
@@ -2792,7 +2797,7 @@ export class SQLServerDataProvider
       const itemsWithSQL: any[] = [];
 
       for (const item of items) {
-        const itemSQL = this.GetDatasetItemSQL(item, itemFilters, datasetName);
+        const itemSQL = useThisProvider.GetDatasetItemSQL(item, itemFilters, datasetName);
         if (itemSQL) {
           queries.push(itemSQL);
           itemsWithSQL.push(item);
@@ -2803,7 +2808,7 @@ export class SQLServerDataProvider
       }
 
       // Execute all queries in a single batch
-      const batchResults = await this.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+      const batchResults = await useThisProvider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
 
       // Process results for each item
       const results: DatasetItemResultType[] = [];
@@ -3011,7 +3016,7 @@ export class SQLServerDataProvider
     return specifiedColumns.length > 0 ? specifiedColumns.map((colName) => `[${colName.trim()}]`).join(',') : '*';
   }
 
-  public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType> {
+  public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType> {
     const sSQL = `
             SELECT
                 di.*,
@@ -3032,7 +3037,9 @@ export class SQLServerDataProvider
             WHERE
                 d.Name = @p0`;
 
-    const items = await this.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
+    let items: any[] = [];
+    const useThisProvider: SQLServerDataProvider = providerToUse ? (providerToUse as SQLServerDataProvider) : this;
+    items = await useThisProvider.ExecuteSQL(sSQL, [datasetName], undefined, contextUser);
 
     // now we have the dataset and the items, we need to get the update date from the items underlying entities
     if (items && items.length > 0) {
@@ -3065,7 +3072,7 @@ export class SQLServerDataProvider
           combinedSQL += ' UNION ALL ';
         }
       });
-      const itemUpdateDates = await this.ExecuteSQL(combinedSQL, null, undefined, contextUser);
+      const itemUpdateDates = await useThisProvider.ExecuteSQL(combinedSQL, null, undefined, contextUser);
 
       if (itemUpdateDates && itemUpdateDates.length > 0) {
         let latestUpdateDate = new Date(1900, 1, 1);
