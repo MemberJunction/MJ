@@ -92,11 +92,6 @@
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content execution-history-panel">
-                                <div class="section-header">
-                                    <div class="section-description">
-                                        Review execution history, requests, and performance metrics for this agent.
-                                    </div>
-                                </div>
                                 
                                 @if (executionHistoryCount === 0) {
                                     <div class="empty-state">
@@ -105,84 +100,167 @@
                                         <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
                                     </div>
                                 } @else {
-                                    <div class="timeline-list">
+                                    <div class="execution-history-list">
                                         @for (execution of recentExecutions; track execution.ID) {
-                                            <div class="timeline-item" [class.expanded]="expandedExecutions[execution.ID]">
-                                                <div>
-                                                    <div class="timeline-marker" [style.background-color]="getExecutionStatusColor(execution.Status)">
-                                                        <i [class]="getExecutionStatusIcon(execution.Status)"></i>
-                                                    </div>
-                                                    <div class="timeline-content">
-                                                    <div class="timeline-header" (click)="toggleExecutionExpanded(execution.ID)">
-                                                        <div>
-                                                            <div class="timeline-title">
-                                                                <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="expandedExecutions[execution.ID]"></i>
-                                                                Execution #{{ execution.ID.substring(0, 8) }}
-                                                                <span class="timeline-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
+                                            <div class="execution-card" [class.expanded]="expandedExecutions[execution.ID]">
+                                                <div class="execution-header" (click)="toggleExecutionExpanded(execution.ID)">
+                                                    <div class="execution-left-section">
+                                                        <div class="execution-status">
+                                                            <div class="status-indicator" [style.background-color]="getExecutionStatusColor(execution.Status)">
+                                                                <i [class]="getExecutionStatusIcon(execution.Status)"></i>
                                                             </div>
-                                                            <div class="timeline-meta">
-                                                                <span class="status-badge" [style.background-color]="getExecutionStatusColor(execution.Status)">
-                                                                    {{ execution.Status || 'Unknown' }}
-                                                                </span>
-                                                                @if (execution.CompletedAt) {
-                                                                    <span class="execution-time">
-                                                                        <i class="fa-solid fa-stopwatch"></i>
-                                                                        {{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}
-                                                                    </span>
-                                                                }
-                                                                <div class="timeline-actions">
-                                                                    <button class="btn-primary" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()">
-                                                                        <i class="fa-solid fa-external-link-alt"></i>
-                                                                    </button>
+                                                            <div class="execution-info">
+                                                                <div class="execution-title">
+                                                                    <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="expandedExecutions[execution.ID]"></i>
+                                                                    Execution #{{ execution.ID.substring(0, 8) }}
                                                                 </div>
-                                                            </div>
-                                                            @if (execution.Result && !expandedExecutions[execution.ID]) {
-                                                                <div class="timeline-preview">{{ getExecutionResultPreview(execution, true) }}</div>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                    @if (expandedExecutions[execution.ID]) {
-                                                        <div class="timeline-expanded-content">
-                                                            @if (execution.Result) {
-                                                                <div class="result-section">
-                                                                    <h5>Result</h5>
-                                                                    <mj-code-editor 
-                                                                        [value]="getExecutionResultPreview(execution, false)"
-                                                                        [readonly]="true"
-                                                                        language="json"
-                                                                        [lineWrapping]="true"
-                                                                        style="max-height: 200px; width: 100%;">
-                                                                    </mj-code-editor>
-                                                                </div>
-                                                            }
-                                                            @if (execution.ErrorMessage) {
-                                                                <div class="error-section">
-                                                                    <h5><i class="fa-solid fa-exclamation-triangle"></i> Error</h5>
-                                                                    <div class="error-content">{{ execution.ErrorMessage }}</div>
-                                                                </div>
-                                                            }
-                                                            <div class="execution-details">
-                                                                <div class="detail-row">
-                                                                    <span class="detail-label">Started:</span>
-                                                                    <span class="detail-value">{{ execution.StartedAt | date:'medium' }}</span>
-                                                                </div>
-                                                                @if (execution.CompletedAt) {
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Completed:</span>
-                                                                        <span class="detail-value">{{ execution.CompletedAt | date:'medium' }}</span>
-                                                                    </div>
-                                                                }
-                                                                @if (execution.ConversationID) {
-                                                                    <div class="detail-row">
-                                                                        <span class="detail-label">Conversation:</span>
-                                                                        <span class="detail-value">{{ execution.ConversationID }}</span>
-                                                                    </div>
-                                                                }
+                                                                <div class="execution-date">{{ execution.__mj_CreatedAt | date:'MMM d, h:mm a' }}</div>
                                                             </div>
                                                         </div>
-                                                    }
+                                                        
+                                                        <div class="execution-metrics">
+                                                        @if (execution.Configuration) {
+                                                            <div class="metric-item">
+                                                                <i class="fa-solid fa-cog"></i>
+                                                                <span class="metric-label">Config:</span>
+                                                                <span class="metric-value">{{ execution.Configuration }}</span>
+                                                            </div>
+                                                        }
+                                                        
+                                                        @if (execution.CompletedAt) {
+                                                            <div class="metric-item">
+                                                                <i class="fa-solid fa-stopwatch"></i>
+                                                                <span class="metric-label">Duration:</span>
+                                                                <span class="metric-value">{{ formatExecutionTimeFromDates(execution.StartedAt, execution.CompletedAt) }}</span>
+                                                            </div>
+                                                        } @else if (execution.Status === 'Running') {
+                                                            <div class="metric-item">
+                                                                <i class="fa-solid fa-clock"></i>
+                                                                <span class="metric-label">Running:</span>
+                                                                <span class="metric-value">{{ getRunningTime(execution.StartedAt) }}</span>
+                                                            </div>
+                                                        }
+                                                        
+                                                        @if (execution.TotalTokensUsedRollup || execution.TotalTokensUsed) {
+                                                            <div class="metric-item">
+                                                                <i class="fa-solid fa-microchip"></i>
+                                                                <span class="metric-label">Tokens:</span>
+                                                                <span class="metric-value">{{ formatTokenCount(execution.TotalTokensUsedRollup || execution.TotalTokensUsed) }}</span>
+                                                            </div>
+                                                        }
+                                                        
+                                                        @if (execution.TotalCostRollup || execution.TotalCost) {
+                                                            <div class="metric-item">
+                                                                <i class="fa-solid fa-dollar-sign"></i>
+                                                                <span class="metric-label">Cost:</span>
+                                                                <span class="metric-value">${{ formatCost(execution.TotalCostRollup || execution.TotalCost) }}</span>
+                                                            </div>
+                                                        }
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="execution-actions">
+                                                        <button class="action-btn" (click)="openExecutionRecord(execution.ID); $event.stopPropagation()" title="View details">
+                                                            <i class="fa-solid fa-external-link-alt"></i>
+                                                        </button>
                                                     </div>
                                                 </div>
+                                                @if (expandedExecutions[execution.ID]) {
+                                                    <div class="execution-expanded-content">
+                                                        <!-- Detailed Metrics -->
+                                                        <div class="detailed-metrics">
+                                                            <div class="metrics-grid">
+                                                                <div class="metric-detail">
+                                                                    <i class="fa-solid fa-clock"></i>
+                                                                    <div class="metric-info">
+                                                                        <span class="metric-title">Started</span>
+                                                                        <span class="metric-data">{{ execution.StartedAt | date:'medium' }}</span>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                @if (execution.CompletedAt) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-check-circle"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Completed</span>
+                                                                            <span class="metric-data">{{ execution.CompletedAt | date:'medium' }}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                                
+                                                                @if (execution.TotalTokensUsed) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-microchip"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Direct Tokens</span>
+                                                                            <span class="metric-data">{{ formatTokenCount(execution.TotalTokensUsed) }}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                                
+                                                                @if (execution.TotalTokensUsedRollup && execution.TotalTokensUsedRollup !== execution.TotalTokensUsed) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-sitemap"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Total + Sub-agents</span>
+                                                                            <span class="metric-data">{{ formatTokenCount(execution.TotalTokensUsedRollup) }}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                                
+                                                                @if (execution.TotalCost) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-dollar-sign"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Direct Cost</span>
+                                                                            <span class="metric-data">${{ formatCost(execution.TotalCost) }}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                                
+                                                                @if (execution.TotalCostRollup && execution.TotalCostRollup !== execution.TotalCost) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-calculator"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Total + Sub-agents</span>
+                                                                            <span class="metric-data">${{ formatCost(execution.TotalCostRollup) }}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                                
+                                                                @if (execution.ConversationID) {
+                                                                    <div class="metric-detail">
+                                                                        <i class="fa-solid fa-comments"></i>
+                                                                        <div class="metric-info">
+                                                                            <span class="metric-title">Conversation</span>
+                                                                            <span class="metric-data">{{ execution.ConversationID.substring(0, 8) }}...</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        @if (execution.Result) {
+                                                            <div class="result-section">
+                                                                <h5><i class="fa-solid fa-file-text"></i> Result</h5>
+                                                                <mj-code-editor 
+                                                                    [value]="getExecutionResultPreview(execution, false)"
+                                                                    [readonly]="true"
+                                                                    language="json"
+                                                                    [lineWrapping]="true"
+                                                                    style="max-height: 200px; width: 100%;">
+                                                                </mj-code-editor>
+                                                            </div>
+                                                        }
+                                                        
+                                                        @if (execution.ErrorMessage) {
+                                                            <div class="error-section">
+                                                                <h5><i class="fa-solid fa-exclamation-triangle"></i> Error</h5>
+                                                                <div class="error-content">{{ execution.ErrorMessage }}</div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
                                             </div>
                                         }
                                         @if (executionHistoryCount > recentExecutions.length) {
