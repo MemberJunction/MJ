@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.80.1
+- @memberjunction/ng-shared@2.80.1
+- @memberjunction/ng-find-record@2.80.1
+- @memberjunction/ng-resource-permissions@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/global@2.80.1
+
 ## 2.80.0
 
 ### Patch Changes
