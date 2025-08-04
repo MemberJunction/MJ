@@ -16,7 +16,7 @@
       "ID": "7D231A18-11CB-48E2-881F-6CC12DD9CD2D"
     },
     "sync": {
-      "lastModified": "2025-08-04T04:56:31.538Z",
+      "lastModified": "2025-08-04T06:57:56.601Z",
       "checksum": "b9b5ccca96ae413d6085e8d7de12580863869bf93e713a8022e77deb87efa513"
     }
   },
@@ -37,7 +37,7 @@
       "ID": "003C2419-899C-48BB-B184-0A5CDEAAC4A9"
     },
     "sync": {
-      "lastModified": "2025-08-04T05:17:22.517Z",
+      "lastModified": "2025-08-04T06:57:57.364Z",
       "checksum": "c7b976f2545010e1032ba2044f5f82166e13bd473a26613e69043adf4b2ddbfc"
     }
   },
@@ -57,8 +57,29 @@
       "ID": "566D0D19-C986-4847-8EB0-1A1E59FAC06B"
     },
     "sync": {
-      "lastModified": "2025-08-04T04:56:32.728Z",
+      "lastModified": "2025-08-04T06:57:57.888Z",
       "checksum": "1c25dc7cf28d7d52d4dbb9c55e2b4dc44418ba1e9e4726782bea4e0094173eec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prepare Welcome Email - User Onboarding",
+      "Description": "Prepares personalized welcome email content for newly created users",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/user-onboarding/prepare-welcome-email-prompt.template.md",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "User",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DA7216B1-C842-4CE5-AEC7-6160E14F0C95"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T06:57:58.476Z",
+      "checksum": "454636421727039a526ed3ddb993bfae31ee5972779615ca48a1666d9a86891d"
     }
   }
 ]

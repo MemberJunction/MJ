@@ -72,7 +72,6 @@ export * from './custom/user-management/create-user.action';
 export * from './custom/user-management/create-employee.action';
 export * from './custom/user-management/assign-user-roles.action';
 export * from './custom/user-management/validate-email-unique.action';
-export * from './custom/user-management/send-welcome-email.action';
 
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
@@ -124,7 +123,6 @@ import { LoadCreateUserAction } from './custom/user-management/create-user.actio
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
 import { LoadAssignUserRolesAction } from './custom/user-management/assign-user-roles.action';
 import { LoadValidateEmailUniqueAction } from './custom/user-management/validate-email-unique.action';
-import { LoadSendWelcomeEmailAction } from './custom/user-management/send-welcome-email.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -181,7 +179,6 @@ export function LoadAllCoreActions() {
     LoadCreateEmployeeAction();
     LoadAssignUserRolesAction();
     LoadValidateEmailUniqueAction();
-    LoadSendWelcomeEmailAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out
