@@ -219,7 +219,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param separateConnection 
      * @returns 
      */
-    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
+    public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
             if (separateConnection) {
                 this._configData = configData;
