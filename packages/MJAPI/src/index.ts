@@ -7,11 +7,6 @@ import { LoadGeneratedActions } from 'mj_generatedactions';
 LoadGeneratedActions();
 import { LoadProvider } from '@memberjunction/communication-sendgrid';
 LoadProvider();
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
-LoadApolloAccountsEnrichmentAction();
-LoadApolloContactsEnrichmentAction();
-
-
 
 //import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
  

@@ -37,6 +37,7 @@
     "@memberjunction/ai-vectors-pinecone": "2.80.0",
     "@memberjunction/core": "2.80.0",
     "@memberjunction/core-actions": "2.80.0",
+    "@memberjunction/actions-apollo": "2.80.0",
     "@memberjunction/actions-bizapps-accounting": "2.80.0",
     "@memberjunction/actions-bizapps-crm": "2.80.0",
     "@memberjunction/actions-bizapps-lms": "2.80.0",
