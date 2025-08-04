@@ -814,7 +814,8 @@ export class SQLServerDataProvider
         TotalRowCount: totalRowCount,
         ExecutionTime: executionTime,
         ErrorMessage: '',
-        AppliedParameters: appliedParameters
+        AppliedParameters: appliedParameters,
+        CacheHit: false
       };
     } catch (e) {
       LogError(e);
@@ -964,7 +965,7 @@ export class SQLServerDataProvider
       return;
     }
     
-    // Fire and forget - we do NOT await this
+    // Fire and forget - we do NOT await this but catch errors
     this.CreateAuditLogRecord(
       contextUser,
       'Run Query',
@@ -981,11 +982,13 @@ export class SQLServerDataProvider
         ExecutionTime: executionTime,
         SQL: finalSQL // After parameter substitution
       }),
-      null, // No specific entity for queries
-      query.ID,
+      null, // entityId - No specific entity for queries
+      query.ID, // recordId
       params.AuditLogDescription,
-      null
-    );
+      { IgnoreDirtyState: true } // saveOptions
+    ).catch(error => {
+      console.error('Error creating audit log:', error);
+    });
   }
 
   /**
@@ -1505,7 +1508,9 @@ export class SQLServerDataProvider
       const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
 
       if (!user) throw new Error(`User is a required parameter`);
-      if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
+      if (!auditLogType) {
+        throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
+      }
 
       const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
@@ -1523,7 +1528,9 @@ export class SQLServerDataProvider
 
       if (auditLogDescription) auditLog.Description = auditLogDescription;
 
-      if (await auditLog.Save(saveOptions)) return auditLog;
+      if (await auditLog.Save(saveOptions)) {
+        return auditLog;
+      }
       else throw new Error(`Error saving audit log record`);
     } catch (err) {
       LogError(err);
