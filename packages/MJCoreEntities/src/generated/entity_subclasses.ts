@@ -8603,7 +8603,7 @@ export const AIModelVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TypeID: z.string().nullable().describe(`
+    TypeID: z.string().describe(`
         * * Field Name: TypeID
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
@@ -8617,7 +8617,7 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().nullable().describe(`
+    Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -10046,6 +10046,28 @@ export const QuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`),
+    AuditQueryRuns: z.boolean().describe(`
+        * * Field Name: AuditQueryRuns
+        * * Display Name: Audit Query Runs
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`),
+    CacheEnabled: z.boolean().describe(`
+        * * Field Name: CacheEnabled
+        * * Display Name: Cache Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, query results will be cached in memory with TTL expiration`),
+    CacheTTLMinutes: z.number().nullable().describe(`
+        * * Field Name: CacheTTLMinutes
+        * * Display Name: Cache TTL Minutes
+        * * SQL Data Type: int
+        * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.`),
+    CacheMaxSize: z.number().nullable().describe(`
+        * * Field Name: CacheMaxSize
+        * * Display Name: Cache Max Size
+        * * SQL Data Type: int
+        * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -10091,6 +10113,28 @@ export const QueryCategorySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultCacheEnabled: z.boolean().describe(`
+        * * Field Name: DefaultCacheEnabled
+        * * Display Name: Default Cache Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Default cache setting for queries in this category`),
+    DefaultCacheTTLMinutes: z.number().nullable().describe(`
+        * * Field Name: DefaultCacheTTLMinutes
+        * * Display Name: Default Cache TTL Minutes
+        * * SQL Data Type: int
+        * * Description: Default TTL in minutes for cached results of queries in this category`),
+    DefaultCacheMaxSize: z.number().nullable().describe(`
+        * * Field Name: DefaultCacheMaxSize
+        * * Display Name: Default Cache Max Size
+        * * SQL Data Type: int
+        * * Description: Default maximum cache size for queries in this category`),
+    CacheInheritanceEnabled: z.boolean().describe(`
+        * * Field Name: CacheInheritanceEnabled
+        * * Display Name: Cache Inheritance Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, queries without cache config will inherit from this category`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -35932,10 +35976,10 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
     */
-    get TypeID(): string | null {
+    get TypeID(): string {
         return this.Get('TypeID');
     }
-    set TypeID(value: string | null) {
+    set TypeID(value: string) {
         this.Set('TypeID', value);
     }
 
@@ -35962,7 +36006,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string | null {
+    get Type(): string {
         return this.Get('Type');
     }
 }
@@ -39909,6 +39953,60 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
+    * * Field Name: AuditQueryRuns
+    * * Display Name: Audit Query Runs
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance
+    */
+    get AuditQueryRuns(): boolean {
+        return this.Get('AuditQueryRuns');
+    }
+    set AuditQueryRuns(value: boolean) {
+        this.Set('AuditQueryRuns', value);
+    }
+
+    /**
+    * * Field Name: CacheEnabled
+    * * Display Name: Cache Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, query results will be cached in memory with TTL expiration
+    */
+    get CacheEnabled(): boolean {
+        return this.Get('CacheEnabled');
+    }
+    set CacheEnabled(value: boolean) {
+        this.Set('CacheEnabled', value);
+    }
+
+    /**
+    * * Field Name: CacheTTLMinutes
+    * * Display Name: Cache TTL Minutes
+    * * SQL Data Type: int
+    * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.
+    */
+    get CacheTTLMinutes(): number | null {
+        return this.Get('CacheTTLMinutes');
+    }
+    set CacheTTLMinutes(value: number | null) {
+        this.Set('CacheTTLMinutes', value);
+    }
+
+    /**
+    * * Field Name: CacheMaxSize
+    * * Display Name: Cache Max Size
+    * * SQL Data Type: int
+    * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.
+    */
+    get CacheMaxSize(): number | null {
+        return this.Get('CacheMaxSize');
+    }
+    set CacheMaxSize(value: number | null) {
+        this.Set('CacheMaxSize', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(50)
@@ -40030,6 +40128,60 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DefaultCacheEnabled
+    * * Display Name: Default Cache Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Default cache setting for queries in this category
+    */
+    get DefaultCacheEnabled(): boolean {
+        return this.Get('DefaultCacheEnabled');
+    }
+    set DefaultCacheEnabled(value: boolean) {
+        this.Set('DefaultCacheEnabled', value);
+    }
+
+    /**
+    * * Field Name: DefaultCacheTTLMinutes
+    * * Display Name: Default Cache TTL Minutes
+    * * SQL Data Type: int
+    * * Description: Default TTL in minutes for cached results of queries in this category
+    */
+    get DefaultCacheTTLMinutes(): number | null {
+        return this.Get('DefaultCacheTTLMinutes');
+    }
+    set DefaultCacheTTLMinutes(value: number | null) {
+        this.Set('DefaultCacheTTLMinutes', value);
+    }
+
+    /**
+    * * Field Name: DefaultCacheMaxSize
+    * * Display Name: Default Cache Max Size
+    * * SQL Data Type: int
+    * * Description: Default maximum cache size for queries in this category
+    */
+    get DefaultCacheMaxSize(): number | null {
+        return this.Get('DefaultCacheMaxSize');
+    }
+    set DefaultCacheMaxSize(value: number | null) {
+        this.Set('DefaultCacheMaxSize', value);
+    }
+
+    /**
+    * * Field Name: CacheInheritanceEnabled
+    * * Display Name: Cache Inheritance Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, queries without cache config will inherit from this category
+    */
+    get CacheInheritanceEnabled(): boolean {
+        return this.Get('CacheInheritanceEnabled');
+    }
+    set CacheInheritanceEnabled(value: boolean) {
+        this.Set('CacheInheritanceEnabled', value);
     }
 
     /**
