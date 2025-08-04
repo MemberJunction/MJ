@@ -110,7 +110,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     
     try {
       this.costMetrics = await this.costService.getAgentRunCostMetrics(this.record.ID);
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading cost metrics:', error);
       this.costMetrics = {
@@ -130,14 +130,14 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     // Lazy load visualization when the tab is first accessed
     if (tab === 'visualization' && !this.visualizationLoaded) {
       this.visualizationLoaded = true;
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
     
     // Lazy load analytics when the tab is first accessed
     if (tab === 'analytics' && !this.analyticsLoaded) {
       this.analyticsLoaded = true;
       // The component will load data in its ngOnInit
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
   }
   
@@ -155,12 +155,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   selectTimelineItem(item: TimelineItem) {
     this.selectedTimelineItem = item;
     this.jsonPanelExpanded = true;
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
   
   closeJsonPanel() {
     this.selectedTimelineItem = null;
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
   
   navigateToSubRun(runId: string) {
@@ -230,7 +230,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   onAgentRunCompleted(status: string) {
     // Update the record status
     this.record.Status = status as 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Paused';
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
     
     // Reload the full record to get updated data
     this.refreshData();

@@ -557,8 +557,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 // Mark as loaded
                 this.customSectionLoaded = true;
                 
-                // Trigger change detection
-                this.cdr.detectChanges();
+                // Mark for check instead of forcing immediate detection
+                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
@@ -607,8 +607,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             
             console.log('UI restored - Prompts:', this.promptCount, 'Actions:', this.actionCount, 'SubAgents:', this.subAgentCount);
             
-            // Force change detection to update the UI
-            this.cdr.detectChanges();
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
         } else {
             console.warn('No snapshots available to restore from');
         }
@@ -850,8 +850,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                             this.subAgentCount = this.subAgents.length;
                             this.hasUnsavedChanges = true;
 
-                            // Trigger change detection
-                            this.cdr.detectChanges();
+                            // Mark for check instead of forcing immediate detection
+                            this.cdr.markForCheck();
 
                             MJNotificationService.Instance.CreateSimpleNotification(
                                 `Sub-agent "${result.subAgent.Name}" created and will be saved when you save the parent agent`,
@@ -945,8 +945,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
                         this.promptCount = this.agentPrompts.length;
                         
-                        // Trigger change detection to update UI
-                        this.cdr.detectChanges();
+                        // Mark for check instead of forcing immediate detection
+                        this.cdr.markForCheck();
                         
                         // Show success notification
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -989,8 +989,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.record.ContextCompressionPromptID = null;
             this.record.ContextCompressionMessageRetentionCount = null;
             
-            // Trigger change detection to update the UI
-            this.cdr.detectChanges();
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
         }
     }
 
@@ -1048,8 +1048,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     this.agentActions.push(...newActions);
                     this.actionCount = this.agentActions.length;
                     
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
                     
                     // Show success notification
                     MJNotificationService.Instance.CreateSimpleNotification(
@@ -1215,7 +1215,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Schedule a change detection after the current cycle completes
             Promise.resolve().then(() => {
                 if (!this.destroy$.closed) {
-                    this.cdr.detectChanges();
+                    this.cdr.markForCheck();
                 }
             });
             
@@ -1546,8 +1546,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                     this.hasUnsavedChanges = true;
 
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
 
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Prompt "${prompt.Name}" will be removed when you save the agent`,
@@ -1637,8 +1637,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         this.subAgents.push(...newAgents);
                         this.subAgentCount = this.subAgents.length;
                         
-                        // Trigger change detection to update UI
-                        this.cdr.detectChanges();
+                        // Mark for check instead of forcing immediate detection
+                        this.cdr.markForCheck();
                         
                         // Show success notification
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -1724,8 +1724,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                     this.hasUnsavedChanges = true;
 
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
 
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `"${subAgent.Name}" will be removed as a sub-agent when you save`,
@@ -1808,8 +1808,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                 this.hasUnsavedChanges = true;
 
-                // Trigger change detection to update UI
-                this.cdr.detectChanges();
+                // Mark for check instead of forcing immediate detection
+                this.cdr.markForCheck();
 
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Action "${action.Name}" will be removed when you save the agent`,
@@ -1985,8 +1985,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                                     localSubAgent.ExposeAsAction = formData.exposeAsAction;
                                 }
 
-                                // Trigger change detection to update UI
-                                this.cdr.detectChanges();
+                                // Mark for check instead of forcing immediate detection
+                                this.cdr.markForCheck();
                             } else {
                                 MJNotificationService.Instance.CreateSimpleNotification(
                                     'Failed to save sub-agent settings. Please try again.',
