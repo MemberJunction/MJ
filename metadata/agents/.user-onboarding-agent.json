@@ -22,7 +22,7 @@
             "ID": "0C2220BB-8477-4AB5-B72B-EA61D9E9D2CA"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.353Z",
+            "lastModified": "2025-08-04T20:38:35.323Z",
             "checksum": "659059f35d1177bcea528e30fa2372987c7392e23cd3625bfa89ece0d84097dd"
           }
         }
@@ -38,7 +38,7 @@
             "ID": "C28DF6B0-CACF-4CDD-B9B6-C1377F836375"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.371Z",
+            "lastModified": "2025-08-04T20:38:35.332Z",
             "checksum": "19d6a1158c53276725a422517c048419e2a9d0857cfb93be02a27234fda83e5e"
           }
         },
@@ -52,7 +52,7 @@
             "ID": "B5A7C8E9-4D2F-11EE-9E3B-0242AC120002"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.383Z",
+            "lastModified": "2025-08-04T20:38:35.341Z",
             "checksum": "5ec0ed0bf51f284c3cbbeb49de9baf8e8e410fc4e51caf5a9d8af55efc792a10"
           }
         },
@@ -66,7 +66,7 @@
             "ID": "D92309DC-A212-4729-A502-4984CF90A8E6"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.397Z",
+            "lastModified": "2025-08-04T20:38:35.350Z",
             "checksum": "560391e0b02085758df56f7345e3d8a1dd80c8f0307500396d790816a37a31b3"
           }
         },
@@ -80,7 +80,7 @@
             "ID": "A6C93359-1CA8-41EE-9010-56BDA1EFC8B2"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.409Z",
+            "lastModified": "2025-08-04T20:38:35.359Z",
             "checksum": "694f09c4459a03fa368b10b7fe08e1e581942d13739a0f555d5ed2c489b69ad9"
           }
         },
@@ -94,7 +94,7 @@
             "ID": "2BF42A0C-DAE4-494E-BE51-0AC9EF094F3E"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.419Z",
+            "lastModified": "2025-08-04T20:38:35.370Z",
             "checksum": "a7e18d87090d41904507c568627dc2e6d53358f17e2fb9c03c6a24123327757a"
           }
         },
@@ -108,7 +108,7 @@
             "ID": "0274F2D6-DD12-46BF-969A-982CB585AE62"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.430Z",
+            "lastModified": "2025-08-04T20:38:35.379Z",
             "checksum": "4fe3e09a002bcae5c775d55874e0d0b66b05554433795c99eaff828dbd4e40d8"
           }
         }
@@ -117,20 +117,140 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Collect User Information",
-            "StepType": "Prompt",
+            "Name": "Check Users Permission",
+            "StepType": "Action",
             "StartingStep": true,
-            "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
+            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Users\"}",
+            "ActionOutputMapping": "{\"CanCreate\": \"permissions.users.canCreate\", \"CanUpdate\": \"permissions.users.canUpdate\"}",
+            "Status": "Active",
+            "PositionX": 100,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "AF1A0DE4-E0DB-4290-A316-FB1CB35FEF11"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.402Z",
+            "checksum": "34197554ebe92087c48a0bf6cef2bd492d6d50dae405dea3a2b612378f2ab79c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Check User Roles Permission",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:User Roles\"}",
+            "ActionOutputMapping": "{\"CanCreate\": \"permissions.userRoles.canCreate\"}",
+            "Status": "Active",
+            "PositionX": 200,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "AE444D5A-0CDC-41B2-A369-3BA12A7E1AAA"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.422Z",
+            "checksum": "c57eec84c481c3c5a71f661fe9046d5561ee80868ace9a9f335949d93f94ff4b"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Check Employees Permission",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "ActionInputMapping": "{\"PermissionType\": \"static:EntityPermission\", \"PermissionName\": \"static:Employees\"}",
+            "ActionOutputMapping": "{\"CanCreate\": \"permissions.employees.canCreate\"}",
             "Status": "Active",
             "PositionX": 300,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "B6431F43-41DA-4405-9EF5-C98F21409FA6"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.440Z",
+            "checksum": "fc4565430994790eed06f1cf6db7af59895deb477450827cac84668cbb460d9f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Permission Denied - Users",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Users",
+            "Status": "Active",
+            "PositionX": 100,
+            "PositionY": 250
+          },
+          "primaryKey": {
+            "ID": "620AD7B8-8BA8-4615-AF66-6BB38F1B5DDB"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.458Z",
+            "checksum": "da2b7bb521b3fe924da548a0226d236e3953d7298a1cf292e1392315ef30a549"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Permission Denied - Roles",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - User Roles",
+            "Status": "Active",
+            "PositionX": 200,
+            "PositionY": 250
+          },
+          "primaryKey": {
+            "ID": "8DE19F37-02DF-4717-A8FA-98085F62FE2D"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.475Z",
+            "checksum": "4222fa44381f4b7e5057af10fc298d9356dc5a06763ac91c40fa93c185ab0255"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Permission Denied - Employees",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Permission Denied - Employees",
+            "Status": "Active",
+            "PositionX": 300,
+            "PositionY": 250
+          },
+          "primaryKey": {
+            "ID": "CB7B4615-1CCB-403F-B406-25F51130D703"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.492Z",
+            "checksum": "e8297449a8fb9a1f80ad3a3bce9eba9050ae795d903e59ba37853ab8b2cfe3ef"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Collect User Information",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Collect User Information - Prompt Step",
+            "Status": "Active",
+            "PositionX": 400,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "3DB38E5E-FB94-401C-94AB-0B2D7E18302C"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.454Z",
-            "checksum": "fffba512e60cd07d4d368ed95cdd4576b5bf83f43cecf4015e2a85b800c66300"
+            "lastModified": "2025-08-04T20:38:35.502Z",
+            "checksum": "847aa77e103be1b3ee39e68a85d2cf0756cc14467392e23bd85925a58972faa1"
           }
         },
         {
@@ -143,15 +263,15 @@
             "ActionInputMapping": "{\"Email\": \"payload.userData.email\"}",
             "ActionOutputMapping": "{\"IsUnique\": \"emailIsUnique\", \"ExistingUserID\": \"existingUserID\"}",
             "Status": "Active",
-            "PositionX": 500,
+            "PositionX": 600,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "286C4DE2-133C-42CD-9BA9-96F46156AF95"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.465Z",
-            "checksum": "b8d5f22e31f845d5132f1b01763b355a9558d760eb3680c32c5d4e29662d7d5a"
+            "lastModified": "2025-08-04T20:38:35.512Z",
+            "checksum": "37bf073f45a2613cc95ee6594bbad5958f36deade3f7b593cef7e9010a1215c9"
           }
         },
         {
@@ -164,15 +284,15 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Phone\": \"payload.userData.employeeData.phone\", \"CompanyID\": \"payload.userData.employeeData.companyID\", \"SupervisorID\": \"payload.userData.employeeData.supervisorID\"}",
             "ActionOutputMapping": "{\"EmployeeID\": \"createdEmployeeID\"}",
             "Status": "Active",
-            "PositionX": 700,
+            "PositionX": 800,
             "PositionY": 50
           },
           "primaryKey": {
             "ID": "5A421648-5261-4A49-862D-465C71F5A87E"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:57:59.782Z",
-            "checksum": "21e277b2441fa7081bd4975096693ef506747bbd283cddfee8fd23b6ff3c51e8"
+            "lastModified": "2025-08-04T20:38:35.524Z",
+            "checksum": "a7afdfa2f1c153dc027358a61f71cc30a1af039bb59f4596533fe28f877a71a7"
           }
         },
         {
@@ -185,15 +305,15 @@
             "ActionInputMapping": "{\"FirstName\": \"payload.userData.firstName\", \"LastName\": \"payload.userData.lastName\", \"Email\": \"payload.userData.email\", \"Title\": \"payload.userData.title\", \"Type\": \"payload.userData.type\", \"IsActive\": \"true\", \"EmployeeID\": \"payload.createdEmployeeID\"}",
             "ActionOutputMapping": "{\"UserID\": \"createdUserID\", \"Name\": \"createdUserName\"}",
             "Status": "Active",
-            "PositionX": 700,
+            "PositionX": 800,
             "PositionY": 150
           },
           "primaryKey": {
             "ID": "8297F22F-76CC-4C2F-B3E7-3650CC25AFDE"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.149Z",
-            "checksum": "54cb5b3a53e8dcb4d59f36ffe739440f1deb169023d28c386d2a4964ac51441a"
+            "lastModified": "2025-08-04T20:38:35.535Z",
+            "checksum": "782b44c27c119d20daf4d55266eba4fd635a6c4e096c3f502e4cd62076cd37d0"
           }
         },
         {
@@ -206,15 +326,15 @@
             "ActionInputMapping": "{\"UserID\": \"payload.createdUserID\", \"RoleNames\": \"payload.userData.roles\"}",
             "ActionOutputMapping": "{\"AssignedUserRoleIDs\": \"assignedUserRoleIDs\", \"AssignedCount\": \"assignedRoleCount\"}",
             "Status": "Active",
-            "PositionX": 900,
+            "PositionX": 1000,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "5A977380-2AA5-4119-A329-4450FC603025"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.169Z",
-            "checksum": "7d63d853e8f70bf015b0a9cf8416b8e7f23c52436550bf64d0ffa2adcd16a05d"
+            "lastModified": "2025-08-04T20:38:35.544Z",
+            "checksum": "d989bce0c4fab8cc3f7a2d405ec66109bf2bca2184cee7b14c6f889f7e61fc83"
           }
         },
         {
@@ -225,15 +345,15 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Prepare Welcome Email - User Onboarding",
             "Status": "Active",
-            "PositionX": 1100,
+            "PositionX": 1200,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "D4F0E61E-9E0C-420D-9F92-6CECF0884C81"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.194Z",
-            "checksum": "2ed5db50f49746e00994a320362cfdf69666ac52962a9f1499e24adc8bcd71b9"
+            "lastModified": "2025-08-04T20:38:35.553Z",
+            "checksum": "470d44676ddc5deaf0718af4c7364fc10b78f742ee6961b1435b597e16d2119a"
           }
         },
         {
@@ -246,15 +366,15 @@
             "ActionInputMapping": "{\"Subject\": \"payload.emailSubject\", \"Body\": \"payload.emailBody\", \"To\": \"payload.userData.email\", \"From\": \"static:noreply@memberjunction.com\", \"Provider\": \"static:SendGrid\", \"MessageType\": \"static:Email\"}",
             "ActionOutputMapping": "{}",
             "Status": "Active",
-            "PositionX": 1300,
+            "PositionX": 1400,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "EA96D877-DEDB-4C7F-9ADC-CB74E6C2A291"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.215Z",
-            "checksum": "96775869418eed9de36360181d7b4877058097a60323598c464d3ff5a7c6fc62"
+            "lastModified": "2025-08-04T20:38:35.562Z",
+            "checksum": "5be4b4cbcc20faf586fa03f0f0417b99a22ee8e008dd65c3e4dd3401518439b3"
           }
         },
         {
@@ -265,19 +385,99 @@
             "StartingStep": false,
             "PromptID": "@lookup:AI Prompts.Name=Generic Error Message",
             "Status": "Active",
-            "PositionX": 500,
+            "PositionX": 600,
             "PositionY": 250
           },
           "primaryKey": {
             "ID": "23157416-28D0-422A-AF69-6E4D46E0E212"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.235Z",
-            "checksum": "0d1a3b735b94dd28fd6dcb2d9403a8195296bd82b5e890adcd44f165513b98e3"
+            "lastModified": "2025-08-04T20:38:35.571Z",
+            "checksum": "1613fceb7f1e1ebda21cc22d0987a7faca9b871b657c6e134a838fe4f395700a"
           }
         }
       ],
       "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check Users Permission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
+            "Condition": "payload.permissions.users.canCreate == true && payload.permissions.users.canUpdate == true",
+            "Priority": 1,
+            "Description": "Continue if user has permissions for Users entity"
+          },
+          "primaryKey": {
+            "ID": "7B8F1886-2D38-45A8-A7C6-AF0034F9CABE"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.586Z",
+            "checksum": "5c40d3c89d4e22cf59eccd56531f7f54da78257dbd14a89811d8bd03ea7ee053"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check Users Permission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Permission Denied - Users&AgentID=@parent:ID",
+            "Condition": "payload.permissions.users.canCreate != true || payload.permissions.users.canUpdate != true",
+            "Priority": 2,
+            "Description": "Show error if lacking Users permissions"
+          },
+          "primaryKey": {
+            "ID": "E74798B9-6059-4095-B0CD-372179DA94DF"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.600Z",
+            "checksum": "117e55d82e847620ae291112d72a44674b9ae36444b5ca3632978450d7a93d2a"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Check Employees Permission&AgentID=@parent:ID",
+            "Condition": "payload.permissions.userRoles.canCreate == true",
+            "Priority": 1,
+            "Description": "Continue if user has permissions for User Roles"
+          },
+          "primaryKey": {
+            "ID": "D82281A7-A7D6-4E31-B651-0FC125027EF2"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.614Z",
+            "checksum": "a780a8614632f655d262bbeb6d69b4b554cca95e8d89698ccffda86d09d911e1"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check User Roles Permission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Permission Denied - Roles&AgentID=@parent:ID",
+            "Condition": "payload.permissions.userRoles.canCreate != true",
+            "Priority": 2,
+            "Description": "Show error if lacking User Roles permissions"
+          },
+          "primaryKey": {
+            "ID": "7168F0F1-EBBD-43CA-9A3A-7708D487899B"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.627Z",
+            "checksum": "10a206d381f074d4575d599b10b38b6476656036549d70ac90b3e3e883d4f34d"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Check Employees Permission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Collect User Information&AgentID=@parent:ID",
+            "Condition": "true",
+            "Priority": 1,
+            "Description": "Always proceed after checking all permissions"
+          },
+          "primaryKey": {
+            "ID": "46D56803-999B-4800-8161-434F59204D40"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T20:38:35.641Z",
+            "checksum": "fdf33e0eeecfe0a07ec8f3c471e5684ad94c1b9250b8f965fbeb2fb1a52c2552"
+          }
+        },
         {
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Collect User Information&AgentID=@parent:ID",
@@ -290,7 +490,7 @@
             "ID": "CA2BC3FA-6688-46A9-90DE-D92925EB76C1"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.262Z",
+            "lastModified": "2025-08-04T20:38:35.651Z",
             "checksum": "2cd0d7a4a6fc3661f20276e5abb3856af96f1086c9da68796ad07083b5e1931b"
           }
         },
@@ -306,7 +506,7 @@
             "ID": "80E2D6D5-D2F8-41DF-A169-3E2383416916"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.277Z",
+            "lastModified": "2025-08-04T20:38:35.659Z",
             "checksum": "96c16fa4a5f52b5a218e4fc54aca9c9f47a3bcd82a9b7286bff916b60b1cfc91"
           }
         },
@@ -322,7 +522,7 @@
             "ID": "48CBE3C2-B9D1-49DC-AF70-61767F464B21"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.289Z",
+            "lastModified": "2025-08-04T20:38:35.666Z",
             "checksum": "cfc8ea210895f1d72fa9fb77ab06bbfe40b7b746f2ba4a7b1b8f64c2e093e7aa"
           }
         },
@@ -338,7 +538,7 @@
             "ID": "81CABE7B-2917-475E-A125-6D9DBFEBCE94"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.304Z",
+            "lastModified": "2025-08-04T20:38:35.674Z",
             "checksum": "fbfa2f756ef6684134a4223b893cef067c69dee24970a35731a83c0ef66c7d33"
           }
         },
@@ -354,7 +554,7 @@
             "ID": "71865532-8C3E-438D-9273-10F05FD241C3"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.313Z",
+            "lastModified": "2025-08-04T20:38:35.681Z",
             "checksum": "b75cd60d3bf331bf22938f7f176c7fd16d4df0ed206f78ea20d6ddf63c3a25ac"
           }
         },
@@ -370,7 +570,7 @@
             "ID": "7D146602-75C0-40BA-8768-BDAFAFA8D906"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.326Z",
+            "lastModified": "2025-08-04T20:38:35.689Z",
             "checksum": "afec7ceab91a93b8d7302988d932516a57d354bac0b54ab5fddc4f1577a5095b"
           }
         },
@@ -386,7 +586,7 @@
             "ID": "5A6B3110-6D40-408D-9EC9-25E03057B158"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.344Z",
+            "lastModified": "2025-08-04T20:38:35.696Z",
             "checksum": "ac1f882db43e7d4d6231e0af5f91126144cc707f908eb6150d4e3e26cc92e217"
           }
         },
@@ -402,7 +602,7 @@
             "ID": "CB3A4C77-30C9-44FE-A31F-BF18FB889229"
           },
           "sync": {
-            "lastModified": "2025-08-04T06:58:00.357Z",
+            "lastModified": "2025-08-04T20:38:35.703Z",
             "checksum": "95954d9a8d064fccf051af3208840032589ea67acb384dbfc4dc8bb8feaffebc"
           }
         }
@@ -412,7 +612,7 @@
       "ID": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
     },
     "sync": {
-      "lastModified": "2025-08-04T06:57:59.328Z",
+      "lastModified": "2025-08-04T20:38:35.312Z",
       "checksum": "35a0b8972e43ca4686f41c59e7e4b170960308e9fc9dd4e5b7fe330f50d0cc6d"
     }
   }

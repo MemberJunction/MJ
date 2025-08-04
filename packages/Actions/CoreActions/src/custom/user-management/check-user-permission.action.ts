@@ -15,6 +15,8 @@ export class CheckUserPermissionAction extends BaseAction {
             // Extract parameters
             const permissionType = params.Params.find(p => p.Name === 'PermissionType')?.Value as string || 'Role';
             const permissionName = params.Params.find(p => p.Name === 'PermissionName')?.Value as string;
+            const userID = params.Params.find(p => p.Name === 'UserID')?.Value as string || params.ContextUser?.ID;
+
 
             if (!permissionName) {
                 return {
@@ -35,11 +37,11 @@ export class CheckUserPermissionAction extends BaseAction {
             }
 
             const currentUser = params.ContextUser;
-            if (!currentUser) {
+            if (!currentUser && !userID) {
                 return {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
-                    Message: 'No authenticated user context found'
+                    Message: 'No authenticated user context found and no UserID provided'
                 };
             }
 
@@ -53,13 +55,14 @@ export class CheckUserPermissionAction extends BaseAction {
                     const rv = new RunView();
                     const rolesResult = await rv.RunView<UserRoleEntity>({
                         EntityName: 'User Roles',
-                        ExtraFilter: `UserID='${currentUser.ID}'`,
+                        ExtraFilter: `UserID='${userID}'`,
                         ResultType: 'entity_object'
                     }, currentUser);
 
                     if (rolesResult.Success && rolesResult.Results) {
                         rolesResult.Results.forEach(ur => userRoles.push(ur.Role));
                         hasPermission = rolesResult.Results.some(ur => ur.Role === permissionName);
+                        
                     }
                     break;
 
@@ -68,11 +71,12 @@ export class CheckUserPermissionAction extends BaseAction {
                     const authRv = new RunView();
                     const authResult = await authRv.RunView({
                         EntityName: 'Authorization Roles',
-                        ExtraFilter: `RoleID IN (SELECT RoleID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${currentUser.ID}') AND AuthorizationID IN (SELECT ID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
+                        ExtraFilter: `RoleID IN (SELECT RoleID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${userID}') AND AuthorizationID IN (SELECT ID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
                         ResultType: 'simple'
                     }, currentUser);
 
                     hasPermission = authResult.Success && authResult.Results && authResult.Results.length > 0;
+                    
                     break;
 
                 case 'EntityPermission':
@@ -88,9 +92,37 @@ export class CheckUserPermissionAction extends BaseAction {
                         };
                     }
                     
-                    // Get user permissions for this entity
+                    // Get user permissions for this entity - Note: MJCore has typo in method name
                     const userPermissions = entityInfo.GetUserPermisions(currentUser);
-                    hasPermission = userPermissions.CanCreate;
+                    
+                    
+                    // For EntityPermission, check if user has any permission (for HasPermission output)
+                    hasPermission = userPermissions.CanCreate || userPermissions.CanRead || 
+                                  userPermissions.CanUpdate || userPermissions.CanDelete;
+                    
+                    // Add all CRUD permissions as output parameters
+                    params.Params.push(
+                        {
+                            Name: 'CanCreate',
+                            Value: userPermissions.CanCreate,
+                            Type: 'Output'
+                        },
+                        {
+                            Name: 'CanUpdate',
+                            Value: userPermissions.CanUpdate,
+                            Type: 'Output'
+                        },
+                        {
+                            Name: 'CanRead',
+                            Value: userPermissions.CanRead,
+                            Type: 'Output'
+                        },
+                        {
+                            Name: 'CanDelete',
+                            Value: userPermissions.CanDelete,
+                            Type: 'Output'
+                        }
+                    );
                     break;
             }
 
