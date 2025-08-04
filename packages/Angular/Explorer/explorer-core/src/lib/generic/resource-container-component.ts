@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges,  Output,  SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ComponentRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseEntity, LogError } from '@memberjunction/core';
@@ -10,7 +10,7 @@ import { ResourceData } from '@memberjunction/core-entities';
   selector: 'mj-resource',
   template: `<div [style.display]="!isVisible ? 'none' : 'block'" ><ng-template mjContainer ></ng-template></div>`,
 })
-export class ResourceContainerComponent implements OnChanges {
+export class ResourceContainerComponent implements OnChanges, OnDestroy {
   @Input() public Data!: ResourceData;
   @Input() public isVisible: boolean = false;
   @Output() public ResourceRecordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
@@ -29,7 +29,8 @@ export class ResourceContainerComponent implements OnChanges {
 
   @ViewChild(Container, { static: true }) resourceContainer!: Container;
 
-  private _loaded: boolean = false; 
+  private _loaded: boolean = false;
+  private _componentRef: ComponentRef<any> | null = null; 
 
   constructor(public sharedService: SharedService) { }
 
@@ -63,6 +64,9 @@ export class ResourceContainerComponent implements OnChanges {
 
       viewContainerRef.clear();
       const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(resourceReg.SubClass);
+      
+      // Track the component reference for cleanup
+      this._componentRef = componentRef;
 
       componentRef.instance.LoadCompleteEvent = () => {
         this._loadComplete = true;
@@ -87,5 +91,23 @@ export class ResourceContainerComponent implements OnChanges {
     catch (e) {
       LogError(e);
     }
+  }
+
+  ngOnDestroy(): void {
+    // CRITICAL: Destroy the dynamically created component to prevent zombie components
+    if (this._componentRef) {
+      this._componentRef.destroy();
+      this._componentRef = null;
+    }
+    
+    // Clear the view container to ensure no lingering references
+    if (this.resourceContainer?.viewContainerRef) {
+      this.resourceContainer.viewContainerRef.clear();
+    }
+    
+    // Reset state
+    this._loaded = false;
+    this._loadStarted = false;
+    this._loadComplete = false;
   }
 }

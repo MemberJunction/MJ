@@ -317,6 +317,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
+    
+    // Emergency circuit breaker to prevent infinite loops
+    private _changeDetectionCount = 0;
+    private static readonly MAX_CHANGE_DETECTIONS = 50;
 
     // === Original State for Cancel/Revert ===
     /** Snapshots of original data for reverting UI changes */
@@ -350,18 +354,30 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * After view initialization, load any custom form section if defined
      */
     async ngAfterViewInit() {
+        const performanceStart = performance.now();
+        console.log(`[PERF] AIAgentForm: ngAfterViewInit starting for agent ID: ${this.record?.ID}`);
+        
         // Use Promise to defer loading to avoid change detection issues
         if (this.record?.ID) {
+            console.log(`[PERF] AIAgentForm: Loading related counts`);
+            const countsStart = performance.now();
             await this.loadRelatedCounts();
-            await this.loadAgentType();
+            console.log(`[PERF] AIAgentForm: Related counts loaded in ${(performance.now() - countsStart).toFixed(2)}ms`);
             
-            // Force change detection to render the panel bar item
-            this.cdr.detectChanges();
+            console.log(`[PERF] AIAgentForm: Loading agent type`);
+            const typeStart = performance.now();
+            await this.loadAgentType();
+            console.log(`[PERF] AIAgentForm: Agent type loaded in ${(performance.now() - typeStart).toFixed(2)}ms`);
+            
+            // Schedule change detection - safer than manual detectChanges()
+            this.cdr.markForCheck();
             
             // Defer custom section loading to next tick after DOM updates
             this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
+            
+            console.log(`[PERF] AIAgentForm: ngAfterViewInit completed in ${(performance.now() - performanceStart).toFixed(2)}ms`);
         }
     }
 
@@ -377,10 +393,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     private async loadRelatedCounts(): Promise<void> {
         if (!this.record?.ID) return;
         
+        console.log(`[PERF] AIAgentForm.loadRelatedCounts: Starting for agent ID: ${this.record.ID}`);
+        const batchStart = performance.now();
+        
         try {
             const rv = new RunView();
             
             // Execute all queries in a single batch for better performance
+            console.log(`[PERF] AIAgentForm.loadRelatedCounts: Executing batch RunViews`);
             const results = await rv.RunViews([
                 // Sub-agents
                 {
@@ -417,6 +437,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     OrderBy: '__mj_CreatedAt DESC'
                 }
             ]);
+            
+            console.log(`[PERF] AIAgentForm.loadRelatedCounts: Batch queries completed in ${(performance.now() - batchStart).toFixed(2)}ms`);
             
             // Process results in the same order as queries
             if (results.length >= 6) {
@@ -2210,17 +2232,23 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Component cleanup - critical for preventing memory leaks
      */
     ngOnDestroy(): void {
+        const cleanupStart = performance.now();
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Starting cleanup for agent ID: ${this.record?.ID}`);
+        
         // Signal all subscriptions to complete
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Completing observables`);
         this.destroy$.next();
         this.destroy$.complete();
         
         // Clear all active timeouts
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Clearing ${this.activeTimeouts.length} active timeouts`);
         this.activeTimeouts.forEach(timeoutId => {
             clearTimeout(timeoutId);
         });
         this.activeTimeouts.length = 0;
         
         // Clear all data arrays to release memory
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Clearing data arrays - subAgents: ${this.subAgents.length}, prompts: ${this.agentPrompts.length}, actions: ${this.agentActions.length}, executions: ${this.recentExecutions.length}`);
         this.subAgents.length = 0;
         this.agentPrompts.length = 0;
         this.agentActions.length = 0;
@@ -2229,12 +2257,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.agentNotes.length = 0;
         
         // Clear maps and objects
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Clearing caches - permission cache: ${this._permissionCache.size}, running time cache: ${this._runningTimeCache.size}`);
         this._permissionCache.clear();
         this._runningTimeCache.clear();
         this.expandedExecutions = {};
         this.originalSnapshots = null as any;
         
         // Clean up component references
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Cleaning up component references`);
         if (this.customSectionComponentRef) {
             this.customSectionComponentRef.destroy();
             this.customSectionComponentRef = null;
@@ -2242,7 +2272,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this.customSectionComponent = null;
         this.agentType = null;
         
-        console.log('AI Agent Form component destroyed and cleaned up');
+        console.log(`[PERF] AIAgentForm.ngOnDestroy: Cleanup completed in ${(performance.now() - cleanupStart).toFixed(2)}ms`);
     }
     
 }

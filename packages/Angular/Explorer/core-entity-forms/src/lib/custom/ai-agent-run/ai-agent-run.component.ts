@@ -56,14 +56,32 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   async ngOnInit() {
+    const performanceStart = performance.now();
+    console.log(`[PERF] AIAgentRunForm: ngOnInit starting for run ID: ${this.record?.ID}`);
+    
+    console.log(`[PERF] AIAgentRunForm: Calling super.ngOnInit()`);
+    const superStart = performance.now();
     await super.ngOnInit();
+    console.log(`[PERF] AIAgentRunForm: super.ngOnInit() completed in ${(performance.now() - superStart).toFixed(2)}ms`);
     
     if (this.record && this.record.ID) {
-      // Load all data through the service
+      console.log(`[PERF] AIAgentRunForm: Loading agent run data`);
+      const dataStart = performance.now();
       await this.dataService.loadAgentRunData(this.record.ID);
+      console.log(`[PERF] AIAgentRunForm: Agent run data loaded in ${(performance.now() - dataStart).toFixed(2)}ms`);
+      
+      console.log(`[PERF] AIAgentRunForm: Loading agent`);
+      const agentStart = performance.now();
       await this.loadAgent();
+      console.log(`[PERF] AIAgentRunForm: Agent loaded in ${(performance.now() - agentStart).toFixed(2)}ms`);
+      
+      console.log(`[PERF] AIAgentRunForm: Loading cost metrics`);
+      const costStart = performance.now();
       await this.loadCostMetrics();
+      console.log(`[PERF] AIAgentRunForm: Cost metrics loaded in ${(performance.now() - costStart).toFixed(2)}ms`);
     }
+    
+    console.log(`[PERF] AIAgentRunForm: ngOnInit completed in ${(performance.now() - performanceStart).toFixed(2)}ms`);
   }
   
   ngOnDestroy() {

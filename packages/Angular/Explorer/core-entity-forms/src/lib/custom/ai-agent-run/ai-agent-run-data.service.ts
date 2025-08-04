@@ -51,14 +51,18 @@ export class AIAgentRunDataService {
    * Load all data for an agent run
    */
   async loadAgentRunData(agentRunId: string): Promise<void> {
+    const loadStart = performance.now();
+    console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Starting for agent run ID: ${agentRunId}`);
+    
     if (!agentRunId) {
+      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: ABORTED - no agent run ID provided`);
       this.errorSubject$.next('No agent run ID provided');
       return;
     }
     
     // If already loaded for this run, don't reload
     if (this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
-      console.log('AgentRunDataService: Data already loaded for', agentRunId);
+      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Using cached data for ${agentRunId}`);
       return;
     }
     
@@ -70,24 +74,32 @@ export class AIAgentRunDataService {
     this.subAgentDataCache.clear();
     
     try {
+      console.log(`[PERF] AIAgentRunDataService: Starting loadStepsAndSubRuns`);
+      const dataLoadStart = performance.now();
       await this.loadStepsAndSubRuns(agentRunId);
+      console.log(`[PERF] AIAgentRunDataService: Data loading completed in ${(performance.now() - dataLoadStart).toFixed(2)}ms`);
     } catch (error) {
       this.errorSubject$.next('Failed to load agent run data');
       console.error('Error loading agent run data:', error);
     } finally {
       this.loadingSubject$.next(false);
+      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Total time ${(performance.now() - loadStart).toFixed(2)}ms`);
     }
   }
   
   private async loadStepsAndSubRuns(agentRunId: string) {
+    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Starting queries for ${agentRunId}`);
     const rv = new RunView();
     
     // First, get all steps to determine what additional data we need
+    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Querying agent run steps`);
+    const stepsStart = performance.now();
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
       OrderBy: 'StepNumber'
     });
+    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Steps query completed in ${(performance.now() - stepsStart).toFixed(2)}ms, found ${stepsResult.Results?.length || 0} steps`);
     
     if (!stepsResult.Success) {
       throw new Error('Failed to load agent run steps');
