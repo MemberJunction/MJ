@@ -1,9 +1,8 @@
 import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from '../Misc/util';
-import { RegisterClass } from '@memberjunction/global';
-import { logError, logStatus } from './status_logging';
+import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
+import { logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
@@ -43,7 +42,7 @@ export class EntitySubClassGeneratorBase {
   }
 
   public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -64,7 +63,10 @@ export const loadModule = () => {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
     } else {
-      const fields: string = entity.Fields.map((e) => {
+      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      
+      const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
@@ -133,9 +135,10 @@ export const loadModule = () => {
         ${entity.PrimaryKeys.map((f) => `compositeKey.KeyValuePairs.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
     }`;
-      const deleteFunction: string = entity.AllowDeleteAPI
-        ? ''
-        : `    /**
+      let deleteFunction: string = '';
+      if (!entity.AllowDeleteAPI) {
+        // Entity doesn't allow delete at all
+        deleteFunction = `    /**
     * ${entity.Name} - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
     * @public
     * @method
@@ -146,6 +149,43 @@ export const loadModule = () => {
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
+      } else if (entity.CascadeDeletes) {
+        // Entity has cascading deletes, wrap in transaction
+        deleteFunction = `    /**
+    * ${entity.Name} - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof ${sClassName}
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }`;
+      }
 
       const saveFunction: string =
         entity.AllowCreateAPI || entity.AllowUpdateAPI
@@ -310,7 +350,10 @@ ${validationFunctions}`
     if (entity.PrimaryKeys.length === 0) {
       logStatus(`Entity ${entity.Name} has no primary keys.  Skipping.`);
     } else {
-      const fields: string = entity.Fields.map((e) => {
+      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      
+      const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {

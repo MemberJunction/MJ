@@ -1,10 +1,11 @@
-import { UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { UserViewEntity } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import { PubSubEngine } from 'type-graphql';
 import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export type UserPayload = {
   email: string;
@@ -28,7 +29,17 @@ export type AppContext = {
    * Array of connection pools that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
    */
   dataSources: DataSourceInfo[];
+
+  /**
+   * Per-request DatabaseProviderBase instances  
+   */
+  providers: Array<ProviderInfo>;
 };
+
+export class ProviderInfo {
+  provider: DatabaseProviderBase;
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
+}
 
 export class DataSourceInfo  {
   dataSource: sql.ConnectionPool;
@@ -56,7 +67,7 @@ export type DirectiveBuilder = {
 
 export type RunViewGenericParams = {
   viewInfo: UserViewEntity;
-  dataSource: sql.ConnectionPool;
+  provider: DatabaseProviderBase;
   extraFilter: string;
   orderBy: string;
   userSearchString: string;
@@ -69,8 +80,7 @@ export type RunViewGenericParams = {
   forceAuditLog?: boolean;
   auditLogDescription?: string;
   resultType?: string;
-  userPayload?: UserPayload;
-  pubSub: PubSubEngine;
+  userPayload?: UserPayload; 
 };
 
 

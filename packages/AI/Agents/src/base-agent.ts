@@ -795,6 +795,7 @@ export class BaseAgent {
         }
         
         promptParams.data = promptTemplateData;
+        promptParams.agentRunId = this.AgentRun?.ID;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
@@ -819,7 +820,8 @@ export class BaseAgent {
                 contextUser: params.contextUser,
                 conversationMessages: params.conversationMessages,
                 templateMessageRole: 'user',
-                verbose: params.verbose
+                verbose: params.verbose,
+                agentRunId: this.AgentRun?.ID
             };
             
             // Pass through API keys to child prompt if provided
@@ -883,7 +885,7 @@ export class BaseAgent {
     protected async executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
         const newParams = {
             ...promptParams,
-            attemptJSONRepair: true
+            attemptJSONRepair: true 
         }
         return await this._promptRunner.ExecutePrompt(newParams);
     }
@@ -2076,6 +2078,21 @@ export class BaseAgent {
             this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
         }
         
+        // Set new fields from ExecuteAgentParams
+        if (params.configurationId) {
+            this._agentRun.ConfigurationID = params.configurationId;
+        }
+        if (params.override?.modelId) {
+            this._agentRun.OverrideModelID = params.override.modelId;
+        }
+        if (params.override?.vendorId) {
+            this._agentRun.OverrideVendorID = params.override.vendorId;
+        }
+        if (params.data) {
+            this._agentRun.Data = JSON.stringify(params.data);
+        }
+        this._agentRun.Verbose = params.verbose || false;
+        
         // Save the agent run
         if (!await this._agentRun.Save()) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
@@ -2156,7 +2173,7 @@ export class BaseAgent {
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any): Promise<AIAgentRunStepEntityExtended> {
+    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -2177,6 +2194,7 @@ export class BaseAgent {
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
         stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
+        stepEntity.PayloadAtEnd = payloadAtEnd ? JSON.stringify(payloadAtEnd) : null;
         
         // Populate InputData if provided
         if (inputData) {
@@ -3071,7 +3089,7 @@ export class BaseAgent {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload);
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload, currentPayload);
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;

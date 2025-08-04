@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/ai-mistral@2.79.0
+  - @memberjunction/ai-openai@2.79.0
+  - @memberjunction/aiengine@2.79.0
+  - @memberjunction/ai-vectors@2.79.0
+  - @memberjunction/templates-base-types@2.79.0
+  - @memberjunction/templates@2.79.0
+  - @memberjunction/ai-vectors-pinecone@2.79.0
+  - @memberjunction/ai-vectordb@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [ef7c014]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/ai-mistral@2.78.0
+  - @memberjunction/ai-openai@2.78.0
+  - @memberjunction/ai-vectors@2.78.0
+  - @memberjunction/templates@2.78.0
+  - @memberjunction/templates-base-types@2.78.0
+  - @memberjunction/ai-vectors-pinecone@2.78.0
+  - @memberjunction/ai-vectordb@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/ai-vectors-pinecone@2.77.0
+  - @memberjunction/ai-vectors@2.77.0
+  - @memberjunction/ai-vectordb@2.77.0
+  - @memberjunction/templates-base-types@2.77.0
+  - @memberjunction/templates@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/ai-mistral@2.77.0
+  - @memberjunction/ai-openai@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

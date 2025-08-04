@@ -705,9 +705,21 @@ Group multiple operations in a transaction:
 ```typescript
 import { TransactionGroupBase } from '@memberjunction/core';
 
-// Transaction management is provider-specific
-// Consult your provider documentation for implementation details
+// Transaction groups allow you to execute multiple entity operations atomically
+// See your specific provider documentation for implementation details
+
+// Example using SQLServerDataProvider:
+const transaction = new TransactionGroupBase('MyTransaction');
+
+// Add entities to the transaction
+await transaction.AddTransaction(entity1);
+await transaction.AddTransaction(entity2);
+
+// Submit all operations as a single transaction
+const results = await transaction.Submit();
 ```
+
+For instance-level transactions in multi-user environments, each provider instance maintains its own transaction state, providing automatic isolation between concurrent requests.
 
 ## Entity Relationships
 
@@ -907,6 +919,30 @@ import { SetProvider } from '@memberjunction/core';
 // The provider determines how data is accessed (direct database, API, etc.)
 SetProvider(myProvider);
 ```
+
+### Metadata Caching Optimization
+
+Starting in v2.0, providers support intelligent metadata caching for improved performance in multi-user environments:
+
+```typescript
+// First provider instance loads metadata from the database
+const provider1 = new SQLServerDataProvider(connectionPool);
+await provider1.Config(config); // Loads metadata from database
+
+// Subsequent instances can reuse cached metadata
+const config2 = new SQLServerProviderConfigData(
+  connectionPool, 
+  '__mj', 
+  0, 
+  undefined, 
+  undefined, 
+  false // ignoreExistingMetadata = false to reuse cached metadata
+);
+const provider2 = new SQLServerDataProvider(connectionPool);
+await provider2.Config(config2); // Reuses metadata from provider1
+```
+
+This optimization is particularly beneficial in server environments where each request gets its own provider instance.
 
 ## Breaking Changes
 

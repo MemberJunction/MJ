@@ -77,12 +77,12 @@ export interface ExecuteSQLBatchOptions {
 /**
  * Configuration data specific to SQL Server provider
  */
-export class SQLServerProviderConfigData extends ProviderConfigDataBase {
+export class SQLServerProviderConfigData extends ProviderConfigDataBase<SQLServerProviderConfigOptions> {
   /**
-   * Gets the SQL Server data source configuration
+   * Gets the SQL Server connection pool configuration
    */
-  get DataSource(): any {
-    return this.Data.DataSource;
+  get ConnectionPool(): sql.ConnectionPool {
+    return this.Data.ConnectionPool;
   }
   
   /**
@@ -93,22 +93,29 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
   }
 
   constructor(
-    dataSource: any,
+    connectionPool: sql.ConnectionPool,
     MJCoreSchemaName?: string,
     checkRefreshIntervalSeconds: number = 0 /*default to disabling auto refresh */,
     includeSchemas?: string[],
     excludeSchemas?: string[],
+    ignoreExistingMetadata: boolean = true
   ) {
     super(
       {
-        DataSource: dataSource,
+        ConnectionPool: connectionPool,
         CheckRefreshIntervalSeconds: checkRefreshIntervalSeconds,
       },
       MJCoreSchemaName,
       includeSchemas,
       excludeSchemas,
+      ignoreExistingMetadata
     );
   }
+}
+
+export interface SQLServerProviderConfigOptions {
+  ConnectionPool: sql.ConnectionPool;
+  CheckRefreshIntervalSeconds: number;
 }
 
 /**

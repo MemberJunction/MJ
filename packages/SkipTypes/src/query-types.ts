@@ -80,6 +80,16 @@ export class SkipQueryFieldInfo {
     sourceEntity: string;
 }
 
+export class SkipQueryParamInfo {
+    name: string;
+    description: string;
+    type: string;
+    isRequired: boolean;
+    defaultValue: string;
+    createdAt: Date;
+    updatedAt: Date;        
+}
+
 /**
  * Complete metadata about a stored query, including its SQL, approval status, quality ranking,
  * and field definitions. This information allows Skip to understand and utilize pre-built
@@ -100,6 +110,7 @@ export class SkipQueryInfo {
     category: string;
     categoryPath: string;
     fields: SkipQueryFieldInfo[];
+    params: SkipQueryParamInfo[];
 }
 
 /**

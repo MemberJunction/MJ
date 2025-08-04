@@ -1,29 +1,33 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Metadata } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
 import { UserView_, UserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
 import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { GetReadOnlyProvider } from '../util.js';
 
 @Resolver(UserView_)
 export class UserViewResolver extends UserViewResolverBase {
   @Query(() => [UserView_])
-  async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource, userPayload }: AppContext) {
-    return await this.findBy(dataSource, 'User Views', { UserID }, userPayload.userRecord);
+  async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    return await this.findBy(provider, 'User Views', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [UserView_])
   async DefaultViewByUserAndEntity(
     @Arg('UserID', () => Int) UserID: number,
     @Arg('EntityID', () => Int) EntityID: number,
-    @Ctx() { dataSource, userPayload }: AppContext
+    @Ctx() { providers, userPayload }: AppContext
   ) {
-    return await this.findBy(dataSource, 'User Views', { UserID, EntityID, IsDefault: true }, userPayload.userRecord);
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    return await this.findBy(provider, 'User Views', { UserID, EntityID, IsDefault: true }, userPayload.userRecord);
   }
 
   @Query(() => [UserView_])
   async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
-    return await this.findBy(context.dataSource, 'User Views', {
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
+    return await this.findBy(provider, 'User Views', {
       UserID: await this.getCurrentUserID(context),
       EntityID,
       IsDefault: true,
@@ -38,7 +42,8 @@ export class UserViewResolver extends UserViewResolverBase {
 
   @Query(() => [UserView_])
   async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
-    return this.findBy(context.dataSource, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID}, context.userPayload.userRecord);
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
+    return this.findBy(provider, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID}, context.userPayload.userRecord);
   }
 
   @Query(() => [UserView_])
@@ -52,6 +57,7 @@ export class UserViewResolver extends UserViewResolverBase {
     const viewEntity = <UserViewEntityExtended>await md.GetEntityObject('User Views', u);
     await viewEntity.Load(ID);
     viewEntity.UpdateWhereClause();
+
     if (await viewEntity.Save()) {
       return viewEntity.GetAll();
     } else {

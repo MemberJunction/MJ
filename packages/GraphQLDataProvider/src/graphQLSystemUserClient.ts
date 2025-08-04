@@ -427,6 +427,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
@@ -491,6 +496,11 @@ export class GraphQLSystemUserClient {
      */
     public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
+            // Validate that Parameters is a JSON object, not an array
+            if (input.Parameters !== undefined && Array.isArray(input.Parameters)) {
+                throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
+            }
+
             const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
                 GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
@@ -560,6 +570,41 @@ export class GraphQLSystemUserClient {
                     Success
                     ErrorMessage
                     QueryData
+                    Fields {
+                        ID
+                        QueryID
+                        Name
+                        Description
+                        Type
+                        Sequence
+                        SQLBaseType
+                        SQLFullType
+                        IsComputed
+                        ComputationEnabled
+                        ComputationDescription
+                    }
+                    Parameters {
+                        ID
+                        QueryID
+                        Name
+                        Type
+                        DefaultValue
+                        Comments
+                        IsRequired
+                    }
+                    Entities {
+                        ID
+                        QueryID
+                        EntityID
+                        EntityName
+                        Sequence
+                    }
+                    Permissions {
+                        ID
+                        QueryID
+                        RoleID
+                        RoleName
+                    }
                 }
             }`
 
@@ -590,12 +635,98 @@ export class GraphQLSystemUserClient {
     }
 
     /**
+     * Updates an existing query with the provided attributes. This method is restricted to system users only.
+     * @param input - UpdateQueryInput containing the query ID and fields to update
+     * @returns Promise containing the result of the query update including updated fields, parameters, entities, and permissions
+     */
+    public async UpdateQuery(input: UpdateQueryInput): Promise<UpdateQueryResult> {
+        try {
+            const query = `mutation UpdateQuerySystemUser($input: UpdateQuerySystemUserInput!) {
+                UpdateQuerySystemUser(input: $input) {
+                    Success
+                    ErrorMessage
+                    QueryData
+                    Fields {
+                        ID
+                        QueryID
+                        Name
+                        Description
+                        Type
+                        Sequence
+                        SQLBaseType
+                        SQLFullType
+                        IsComputed
+                        ComputationEnabled
+                        ComputationDescription
+                    }
+                    Parameters {
+                        ID
+                        QueryID
+                        Name
+                        Type
+                        DefaultValue
+                        Comments
+                        IsRequired
+                    }
+                    Entities {
+                        ID
+                        QueryID
+                        EntityID
+                        EntityName
+                        Sequence
+                    }
+                    Permissions {
+                        ID
+                        QueryID
+                        RoleID
+                        RoleName
+                    }
+                }
+            }`
+
+            const result = await this.Client.request(query, { input }) as { UpdateQuerySystemUser: UpdateQueryResult };
+            if (result && result.UpdateQuerySystemUser) {
+                // Parse the QueryData JSON if it exists and was successful
+                if (result.UpdateQuerySystemUser.Success && result.UpdateQuerySystemUser.QueryData) {
+                    return {
+                        ...result.UpdateQuerySystemUser,
+                        QueryData: result.UpdateQuerySystemUser.QueryData // Already JSON string from resolver
+                    };
+                }
+                return result.UpdateQuerySystemUser;
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to update query'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::UpdateQuery - Error updating query - ${e}`);
+            return {
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
      * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
-     * @param input - DeleteQueryInput containing the query ID and delete options
+     * @param ID - The ID of the query to delete
+     * @param options - Optional delete options controlling action execution
      * @returns Promise containing the result of the query deletion
      */
     public async DeleteQuery(ID: string, options?: DeleteQueryOptionsInput): Promise<DeleteQueryResult> {
         try {
+            // Validate ID is not null/undefined/empty
+            if (!ID || ID.trim() === '') {
+                LogError('GraphQLSystemUserClient::DeleteQuery - Invalid query ID: ID cannot be null or empty');
+                return {
+                    Success: false,
+                    ErrorMessage: 'Invalid query ID: ID cannot be null or empty'
+                };
+            }
+
             const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
                 DeleteQuerySystemResolver(ID: $ID, options: $options) {
                     Success
@@ -1146,6 +1277,16 @@ export interface GetQueryDataByNameSystemUserInput {
 }
 
 /**
+ * Input type for query permissions to be created with a new query
+ */
+export interface QueryPermissionInput {
+    /**
+     * Role ID to grant access to
+     */
+    RoleID: string;
+}
+
+/**
  * Input type for CreateQuery mutation calls - creates a new query with optional hierarchical category path
  */
 export interface CreateQueryInput {
@@ -1201,6 +1342,61 @@ export interface CreateQueryInput {
      * Optional flag indicating if the query uses Nunjucks template syntax (auto-detected if not specified)
      */
     UsesTemplate?: boolean;
+    /**
+     * Optional array of permissions to create for the query
+     */
+    Permissions?: QueryPermissionInput[];
+}
+
+/**
+ * Type for query field information
+ */
+export interface QueryField {
+    ID: string;
+    QueryID: string;
+    Name: string;
+    Description?: string;
+    Type?: string;
+    Sequence: number;
+    SQLBaseType?: string;
+    SQLFullType?: string;
+    IsComputed: boolean;
+    ComputationEnabled: boolean;
+    ComputationDescription?: string;
+}
+
+/**
+ * Type for query parameter information
+ */
+export interface QueryParameter {
+    ID: string;
+    QueryID: string;
+    Name: string;
+    Type: string;
+    DefaultValue?: string;
+    Comments?: string;
+    IsRequired: boolean;
+}
+
+/**
+ * Type for query entity information
+ */
+export interface QueryEntity {
+    ID: string;
+    QueryID: string;
+    EntityID: string;
+    EntityName?: string;
+    Sequence: number;
+}
+
+/**
+ * Type for query permission information
+ */
+export interface QueryPermission {
+    ID: string;
+    QueryID: string;
+    RoleID: string;
+    RoleName?: string;
 }
 
 /**
@@ -1219,6 +1415,122 @@ export interface CreateQueryResult {
      * JSON string containing the complete created query data if successful (optional)
      */
     QueryData?: string;
+    /**
+     * Array of fields discovered in the query (optional)
+     */
+    Fields?: QueryField[];
+    /**
+     * Array of parameters found in the query template (optional)
+     */
+    Parameters?: QueryParameter[];
+    /**
+     * Array of entities referenced by the query (optional)
+     */
+    Entities?: QueryEntity[];
+    /**
+     * Array of permissions created for the query (optional)
+     */
+    Permissions?: QueryPermission[];
+}
+
+/**
+ * Input type for UpdateQuery mutation calls - updates an existing query
+ */
+export interface UpdateQueryInput {
+    /**
+     * Required ID of the query to update
+     */
+    ID: string;
+    /**
+     * Optional name for the query (must be unique within category)
+     */
+    Name?: string;
+    /**
+     * Optional category ID to move the query to
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path for automatic hierarchy creation (e.g., "Reports/Sales/Monthly") - takes precedence over CategoryID
+     */
+    CategoryPath?: string;
+    /**
+     * Optional natural language question this query answers
+     */
+    UserQuestion?: string;
+    /**
+     * Optional general description of what the query does
+     */
+    Description?: string;
+    /**
+     * Optional SQL query text to execute (can contain Nunjucks template syntax)
+     */
+    SQL?: string;
+    /**
+     * Optional technical documentation for developers
+     */
+    TechnicalDescription?: string;
+    /**
+     * Optional original SQL before optimization or modification
+     */
+    OriginalSQL?: string;
+    /**
+     * Optional user feedback about the query
+     */
+    Feedback?: string;
+    /**
+     * Optional query approval status
+     */
+    Status?: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
+    /**
+     * Optional quality indicator (higher = better quality)
+     */
+    QualityRank?: number;
+    /**
+     * Optional execution cost indicator (higher = more expensive to run)
+     */
+    ExecutionCostRank?: number;
+    /**
+     * Optional flag indicating if the query uses Nunjucks template syntax
+     */
+    UsesTemplate?: boolean;
+    /**
+     * Optional array of permissions to update for the query (replaces existing permissions)
+     */
+    Permissions?: QueryPermissionInput[];
+}
+
+/**
+ * Result type for UpdateQuery mutation calls - contains update success status and query data
+ */
+export interface UpdateQueryResult {
+    /**
+     * Whether the query update was successful
+     */
+    Success: boolean;
+    /**
+     * Error message if the update failed (optional)
+     */
+    ErrorMessage?: string;
+    /**
+     * JSON string containing the complete updated query data if successful (optional)
+     */
+    QueryData?: string;
+    /**
+     * Array of fields discovered in the query (optional)
+     */
+    Fields?: QueryField[];
+    /**
+     * Array of parameters found in the query template (optional)
+     */
+    Parameters?: QueryParameter[];
+    /**
+     * Array of entities referenced by the query (optional)
+     */
+    Entities?: QueryEntity[];
+    /**
+     * Array of permissions for the query (optional)
+     */
+    Permissions?: QueryPermission[];
 }
 
 /**

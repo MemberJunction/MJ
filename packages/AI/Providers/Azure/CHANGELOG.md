@@ -1,5 +1,29 @@
 # @memberjunction/ai-azure
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [ef7c014]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.77.0
+- @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

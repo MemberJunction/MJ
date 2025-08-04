@@ -46,6 +46,21 @@
             "lastModified": "2025-07-20T17:15:22.679Z",
             "checksum": "11b69338b8e7ad6ad5dab8bdb2505ba6c310729dcf56faf5481cb26cad3fd18e"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Kimi K2",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "1AE94A70-6159-4983-8112-7093572D69D9"
+          },
+          "sync": {
+            "lastModified": "2025-08-02T11:43:26.874Z",
+            "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          }
         }
       ]
     },

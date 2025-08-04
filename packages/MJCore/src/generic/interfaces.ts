@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -16,12 +16,14 @@ import { ExplorerNavigationItem } from "./explorerNavigationItem";
  * Contains schema inclusion/exclusion rules and configuration data.
  * Used to configure which database schemas should be included or excluded from metadata scanning.
  */
-export class ProviderConfigDataBase {
+export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
-    private _data: any;
-    public get Data(): any {
+    private _data: D;
+    private _ignoreExistingMetadata: boolean = false;
+
+    public get Data(): D {
         return this._data;
     }
     public get IncludeSchemas(): string[] {
@@ -33,13 +35,26 @@ export class ProviderConfigDataBase {
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: any, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
+    public get IgnoreExistingMetadata(): boolean {
+        return this._ignoreExistingMetadata;
+    }
+
+    /**
+     * Constructor for ProviderConfigDataBase
+     * @param data 
+     * @param MJCoreSchemaName 
+     * @param includeSchemas 
+     * @param excludeSchemas 
+     * @param ignoreExistingMetadata if set to true, even if a global provider is already registered for the Metadata static Provider member, this class will still load up fresh metadata for itself. By default this is off and a class will use existing loaded metadata if it exists
+     */
+    constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreScemaName;
+        this._MJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
             this._excludeSchemas = excludeSchemas;
+        this._ignoreExistingMetadata = ignoreExistingMetadata;
     }
 }
 
@@ -218,6 +233,14 @@ export class EntityDeleteOptions {
 }
 
 /**
+ * Options used when merging entity records.
+ * Controls transaction isolation and other merge-specific behaviors.
+ */
+export class EntityMergeOptions {
+    // nothing here yet, define for future use
+}
+
+/**
  * Input parameters for retrieving entity record names.
  * Used for batch operations to get display names for multiple records.
  */
@@ -260,7 +283,7 @@ export interface IMetadataProvider {
 
     get DatabaseConnection(): any
 
-    Config(configData: ProviderConfigDataBase): Promise<boolean>
+    Config(configData: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean>
 
     get Entities(): EntityInfo[]
 
@@ -297,6 +320,8 @@ export interface IMetadataProvider {
     get LatestRemoteMetadata(): MetadataInfo[]
 
     get LatestLocalMetadata(): MetadataInfo[]
+
+    get AllMetadata(): AllMetadata
 
     LocalMetadataObsolete(type?: string): boolean
 
@@ -355,7 +380,7 @@ export interface IMetadataProvider {
      * @param request 
      * @returns 
      */
-    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> 
+    MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> 
 
 
     /**
@@ -381,15 +406,15 @@ export interface IMetadataProvider {
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 
-    Refresh(): Promise<boolean>
+    Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    RefreshIfNeeded(): Promise<boolean>
+    RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    CheckToSeeIfRefreshNeeded(): Promise<boolean>
+    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 
-    RefreshRemoteMetadataTimestamps(): Promise<boolean>
+    RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean>
 
     SaveLocalMetadataToStorage(): Promise<void>
     
@@ -400,13 +425,13 @@ export interface IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
+    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -654,3 +679,30 @@ export type DatasetStatusEntityUpdateDateType = {
     UpdateDate: Date;
     RowCount: number;
 }   
+
+
+/**
+ * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
+ * Contains all system metadata collections including entities, applications, security, and queries.
+ * This class provides a centralized way to access all MemberJunction metadata.
+ */
+export class AllMetadata {
+    CurrentUser: UserInfo = null;
+
+    // Arrays of Metadata below
+    AllEntities: EntityInfo[] = [];
+    AllApplications: ApplicationInfo[] = [];
+    AllRoles: RoleInfo[] = [];
+    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
+    AllAuditLogTypes: AuditLogTypeInfo[] = [];
+    AllAuthorizations: AuthorizationInfo[] = [];
+    AllQueryCategories: QueryCategoryInfo[] = [];
+    AllQueries: QueryInfo[] = [];
+    AllQueryFields: QueryFieldInfo[] = [];
+    AllQueryPermissions: QueryPermissionInfo[] = [];
+    AllQueryEntities: QueryEntityInfo[] = [];
+    AllQueryParameters: QueryParameterInfo[] = [];
+    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    AllLibraries: LibraryInfo[] = [];
+    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
+}

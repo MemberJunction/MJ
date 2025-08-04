@@ -130,9 +130,9 @@ export class QueryInfo extends BaseInfo {
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Field Values
-            this._fields = [];
             const f = initData.Fields || initData._Fields;
             if (f) {
+                this._fields = []; // only set to blank array on constructor if we have fields provided, otherwise leave blank because we can later lazy load in the Fields() accessor getter method!
                 for (let j = 0; j < f.length; j++) {
                     this._fields.push(new QueryFieldInfo(f));
                 }
@@ -187,7 +187,7 @@ export class QueryInfo extends BaseInfo {
         // Check if user has any of the required roles
         if (user && user.UserRoles) {
             for (const userRole of user.UserRoles) {
-                if (permissions.some(p => p.RoleName === userRole.Role)) {
+                if (permissions.some(p => p.Role.trim().toLowerCase() === userRole.Role.trim().toLowerCase())) {
                     return true;
                 }
             }
@@ -335,6 +335,14 @@ export class QueryFieldInfo extends BaseInfo {
      * Date and time when this field was last updated
      */
     __mj_UpdatedAt: Date = null
+    /**
+     * How this field was detected: AI (automatic) or Manual (user-specified)
+     */
+    DetectionMethod: 'AI' | 'Manual' = 'Manual'
+    /**
+     * Confidence score (0.00-1.00) when AI detection was used for this field
+     */
+    AutoDetectConfidenceScore: number = null
 
     // virtual fields - returned by the database VIEW
     /**
@@ -376,15 +384,19 @@ export class QueryPermissionInfo extends BaseInfo {
      */
     public QueryID: string = null
     /**
-     * Name of the role that has permission to run this query
+     * 
      */
-    public RoleName: string = null
+    public RoleID: string = null
 
     // virtual fields - returned by the database VIEW
     /**
+     * Name of the role that has permission to run this query
+     */
+    public Role: string = null
+    /**
      * Query name from the related query
      */
-    Query: string = null
+    public Query: string = null
 
     constructor(initData: any = null) {
         super();

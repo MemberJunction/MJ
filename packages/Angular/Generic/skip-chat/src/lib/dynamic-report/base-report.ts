@@ -8,6 +8,7 @@ import { BaseAngularComponent } from "@memberjunction/ng-base-types";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
 import { SkipConversationReportCache } from "../report-cache";
 import { DrillDownInfo } from "../drill-down-info";
+import { CacheManager } from '@memberjunction/react-runtime';
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
 export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
@@ -49,7 +50,12 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
   
   public matchingReportID: string | null = null;
   public matchingReportName: string | null = null;
-  private static _reportCache: { reportId: string; conversationId: string; reportName: string; conversationDetailId: string }[] = [];
+  // Use CacheManager with TTL and size limits instead of unbounded static array
+  private static _reportCache = new CacheManager<{ reportId: string; conversationId: string; reportName: string; conversationDetailId: string }>({
+    maxSize: 100,  // Maximum 100 report entries
+    defaultTTL: 30 * 60 * 1000,  // 30 minute TTL
+    maxMemory: 1 * 1024 * 1024   // 1MB max memory
+  });
   private _loaded: boolean = false;
   public async RefreshMatchingReport() {
     if (this.SkipData && !this._loaded && this.ConversationDetailID && this.ConversationID) {
@@ -57,9 +63,9 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       if (this.ShowCreateReportButton) {
         // check to see if a report has been created that is linked to this ConvoID/ConvoDetailID
         // if so don't allow the user to create another report, show a link to the existing one
-        const cachedItem = SkipDynamicReportBase._reportCache.find(
-          (x) => x.conversationId === this.ConversationID && x.conversationDetailId === this.ConversationDetailID
-        );
+        // Create cache key from conversation and detail IDs
+        const cacheKey = `${this.ConversationID}_${this.ConversationDetailID}`;
+        const cachedItem = SkipDynamicReportBase._reportCache.get(cacheKey);
         if (cachedItem) {
           this.matchingReportID = cachedItem.reportId;
           this.matchingReportName = cachedItem.reportName;
@@ -73,7 +79,8 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
             this.matchingReportID = item.ID;
             this.matchingReportName = item.Name;
             // cache for future to avoid db call
-            SkipDynamicReportBase._reportCache.push({
+            const cacheKey = `${this.ConversationID}_${this.ConversationDetailID}`;
+            SkipDynamicReportBase._reportCache.set(cacheKey, {
               reportId: item.ID,
               conversationId: this.ConversationID,
               reportName: item.Name,

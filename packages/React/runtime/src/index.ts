@@ -40,16 +40,6 @@ export {
   createErrorLogger
 } from './runtime';
 
-export {
-  wrapComponent,
-  memoizeComponent,
-  lazyComponent,
-  injectProps,
-  conditionalComponent,
-  withErrorHandler,
-  portalComponent,
-  WrapperOptions
-} from './runtime';
 
 export {
   buildComponentProps,
@@ -72,6 +62,12 @@ export {
   HierarchyRegistrationResult,
   ComponentRegistrationError,
   HierarchyRegistrationOptions
+} from './runtime';
+
+export {
+  ReactRootManager,
+  reactRootManager,
+  ManagedReactRoot
 } from './runtime';
 
 // Export utilities
@@ -101,6 +97,18 @@ export {
   ComponentErrorAnalyzer,
   FailedComponentInfo
 } from './utilities/component-error-analyzer';
+
+export {
+  ResourceManager,
+  resourceManager,
+  ManagedResource
+} from './utilities/resource-manager';
+
+export {
+  CacheManager,
+  CacheEntry,
+  CacheOptions
+} from './utilities/cache-manager';
 
 // Version information
 export const VERSION = '2.69.1';

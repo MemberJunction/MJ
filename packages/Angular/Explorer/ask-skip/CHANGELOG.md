@@ -1,5 +1,62 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ng-shared@2.79.0
+  - @memberjunction/ng-user-view-grid@2.79.0
+  - @memberjunction/ng-data-context@2.79.0
+  - @memberjunction/ng-skip-chat@2.79.0
+  - @memberjunction/graphql-dataprovider@2.79.0
+  - @memberjunction/ng-container-directives@2.79.0
+  - @memberjunction/core@2.79.0
+  - @memberjunction/skip-types@2.79.0
+  - @memberjunction/ng-chat@2.79.0
+  - @memberjunction/ng-tabstrip@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [06088e5]
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/ng-shared@2.78.0
+  - @memberjunction/ng-user-view-grid@2.78.0
+  - @memberjunction/ng-data-context@2.78.0
+  - @memberjunction/ng-skip-chat@2.78.0
+  - @memberjunction/graphql-dataprovider@2.78.0
+  - @memberjunction/skip-types@2.78.0
+  - @memberjunction/ng-chat@2.78.0
+  - @memberjunction/ng-container-directives@2.78.0
+  - @memberjunction/ng-tabstrip@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/graphql-dataprovider@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/ng-shared@2.77.0
+  - @memberjunction/ng-user-view-grid@2.77.0
+  - @memberjunction/ng-chat@2.77.0
+  - @memberjunction/ng-container-directives@2.77.0
+  - @memberjunction/ng-data-context@2.77.0
+  - @memberjunction/ng-skip-chat@2.77.0
+  - @memberjunction/skip-types@2.77.0
+  - @memberjunction/ng-tabstrip@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

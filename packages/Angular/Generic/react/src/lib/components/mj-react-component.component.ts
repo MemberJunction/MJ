@@ -24,7 +24,9 @@ import {
   buildComponentProps,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
-  HierarchyRegistrationResult
+  HierarchyRegistrationResult,
+  resourceManager,
+  reactRootManager
 } from '@memberjunction/react-runtime';
 import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 
@@ -121,38 +123,6 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
-  
-  private _data: any = {};
-  @Input() 
-  set data(value: any) {
-    const oldData = this._data;
-    this._data = value;
-    
-    // Only re-render if data actually changed and component is initialized
-    if (this.isInitialized && !this.isEqual(oldData, value)) {
-      this.renderComponent();
-    }
-  }
-  get data(): any {
-    return this._data;
-  }
-  
-  private _state: any = {};
-  @Input() 
-  set state(value: any) {
-    const oldState = this._state;
-    this._state = value;
-    
-    // Only update state and re-render if it actually changed
-    if (this.isInitialized && !this.isEqual(oldState, value)) {
-      this.currentState = { ...value };
-      this.renderComponent();
-    }
-  }
-  get state(): any {
-    return this._state;
-  }
-  
   @Input() utilities: any = {};
   @Input() styles?: Partial<ComponentStyles>;
   
@@ -177,23 +147,25 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
-  private reactRoot: any = null;
+  private reactRootId: string | null = null;
   private compiledComponent: any = null;
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
-  private currentState: any = {};
   isInitialized = false;
   private isRendering = false;
   private pendingRender = false;
   private isDestroying = false;
-  private renderTimeout: any = null;
+  private componentId: string;
   hasError = false;
 
   constructor(
     private reactBridge: ReactBridgeService,
     private adapter: AngularAdapterService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    // Generate unique component ID for resource tracking
+    this.componentId = `mj-react-component-${Date.now()}-${Math.random()}`;
+  }
 
   async ngAfterViewInit() {
     // Trigger change detection to show loading state
@@ -241,11 +213,37 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
       // Get runtime context and execute component factory
       const context = this.adapter.getRuntimeContext();
-      this.compiledComponent = result.component!.component(context, this.styles);
-      this.currentState = { ...this._state };
       
-      // Create React root
-      this.reactRoot = this.reactBridge.createRoot(this.container.nativeElement);
+      // Call the factory function to get the component wrapper
+      // result.component is a CompiledComponent object with a 'component' property that's the factory
+      const componentWrapper = result.component!.component(context, this.styles);
+      
+      // Validate the component wrapper structure
+      if (!componentWrapper || typeof componentWrapper !== 'object') {
+        throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
+      }
+      
+      if (!componentWrapper.component) {
+        throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
+      }
+      
+      if (typeof componentWrapper.component !== 'function') {
+        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+      }
+      
+      this.compiledComponent = componentWrapper;
+      
+      // Create managed React root
+      const reactContext = this.reactBridge.getCurrentContext();
+      if (!reactContext) {
+        throw new Error('React context not available');
+      }
+      
+      this.reactRootId = reactRootManager.createRoot(
+        this.container.nativeElement,
+        (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
+        this.componentId
+      );
       
       // Initial render
       this.renderComponent();
@@ -308,7 +306,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
     
-    if (!this.compiledComponent || !this.reactRoot) {
+    if (!this.compiledComponent || !this.reactRootId) {
       return;
     }
 
@@ -336,7 +334,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Build props with savedUserSettings pattern
     const props = {
-      ...this._data, // Spread data properties directly
       utilities: this.utilities || {},
       callbacks: this.currentCallbacks,
       components,
@@ -344,6 +341,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       savedUserSettings: this._savedUserSettings,
       onSaveUserSettings: this.handleSaveUserSettings.bind(this)
     };
+
+    // Validate component before creating element
+    if (!this.compiledComponent.component) {
+      LogError(`Component is undefined for ${this.component.name} during render`);
+      return;
+    }
 
     // Create error boundary
     const ErrorBoundary = createErrorBoundary(React, {
@@ -359,32 +362,33 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       React.createElement(this.compiledComponent.component, props)
     );
 
-    // Clear any existing render timeout
-    if (this.renderTimeout) {
-      clearTimeout(this.renderTimeout);
-    }
-    
-    // Render with timeout protection
-    this.renderTimeout = setTimeout(() => {
-      // Check if still rendering and not destroyed
-      if (this.isRendering && !this.isDestroying) {
-        this.componentEvent.emit({
-          type: 'error',
-          payload: {
-            error: 'Component render timeout - possible infinite loop detected',
-            source: 'render'
-          }
-        });
-      }
-    }, 5000);
+    // Render with timeout protection using resource manager
+    const timeoutId = resourceManager.setTimeout(
+      this.componentId,
+      () => {
+        // Check if still rendering and not destroyed
+        if (this.isRendering && !this.isDestroying) {
+          this.componentEvent.emit({
+            type: 'error',
+            payload: {
+              error: 'Component render timeout - possible infinite loop detected',
+              source: 'render'
+            }
+          });
+        }
+      },
+      5000,
+      { purpose: 'render-timeout-protection' }
+    );
 
-    try {
-      this.reactRoot.render(element);
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-      
-      // Reset rendering flag after a microtask to allow React to complete
-      Promise.resolve().then(() => {
+    // Use managed React root for rendering
+    reactRootManager.render(
+      this.reactRootId,
+      element,
+      () => {
+        // Clear the timeout as render completed
+        resourceManager.clearTimeout(this.componentId, timeoutId);
+        
         // Don't update state if component is destroyed
         if (this.isDestroying) {
           return;
@@ -397,13 +401,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           this.pendingRender = false;
           this.renderComponent();
         }
-      });
-    } catch (error) {
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-      this.isRendering = false;
-      this.handleReactError(error);
-    }
+      }
+    );
   }
 
   /**
@@ -455,59 +454,44 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * This implements the SavedUserSettings pattern
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Check if there are actual changes
-    const hasChanges = !this.isEqual(this._savedUserSettings, newSettings);
-    
-    if (!hasChanges) {
-      // No actual changes, skip update to prevent infinite loop
-      return;
-    }
-    
-    // Update saved settings
-    this._savedUserSettings = { ...newSettings };
-    
-    // Emit user settings changed event
+    // Just bubble the event up to parent containers for persistence
+    // We don't need to store anything here
     this.userSettingsChanged.emit({
-      settings: this._savedUserSettings,
+      settings: newSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
     
-    // Schedule re-render
-    this.renderComponent();
+    // DO NOT re-render the component!
+    // The component already has the correct state - it's the one that told us about the change.
+    // Re-rendering would cause unnecessary DOM updates and visual flashing.
   }
 
   /**
    * Clean up resources
    */
   private cleanup() {
-    // Clear any pending render timeout
-    if (this.renderTimeout) {
-      clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
-    }
+    // Clean up all resources managed by resource manager
+    resourceManager.cleanupComponent(this.componentId);
     
     // Clean up prop builder subscriptions
     if (this.currentCallbacks) {
       this.currentCallbacks = null;
     }
     
-    // Unmount React root only if not currently rendering
-    if (this.reactRoot) {
-      // If still rendering, wait for completion before unmounting
-      if (this.isRendering) {
-        // Force stop rendering
-        this.isRendering = false;
-        this.pendingRender = false;
-      }
+    // Unmount React root using managed unmount
+    if (this.reactRootId) {
+      // Force stop rendering flags
+      this.isRendering = false;
+      this.pendingRender = false;
       
-      this.reactBridge.unmountRoot(this.reactRoot);
-      this.reactRoot = null;
+      // This will handle waiting for render completion if needed
+      reactRootManager.unmountRoot(this.reactRootId);
+      this.reactRootId = null;
     }
 
     // Clear references
     this.compiledComponent = null;
-    this.currentState = {};
     this.isInitialized = false;
 
     // Trigger registry cleanup
@@ -516,44 +500,22 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
   /**
    * Public method to refresh the component
-   * @param newData - Optional new data to merge
+   * @deprecated Components manage their own state and data now
    */
-  refresh(newData?: any) {
-    if (newData) {
-      // Use the setter to trigger change detection
-      this.data = { ...this._data, ...newData };
-    } else {
-      this.renderComponent();
-    }
+  refresh() {
+    // Just trigger a re-render if needed
+    this.renderComponent();
   }
 
   /**
    * Public method to update state programmatically
    * @param path - State path to update
    * @param value - New value
+   * @deprecated Components manage their own state now
    */
   updateState(path: string, value: any) {
-    this.currentState = {
-      ...this.currentState,
-      [path]: value
-    };
+    // Just emit the event, don't manage state here
     this.stateChange.emit({ path, value });
-    this.renderComponent();
   }
 
-  /**
-   * Deep equality check that handles null/undefined properly
-   */
-  private isEqual(a: any, b: any): boolean {
-    // Handle null/undefined cases
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    
-    // For objects/arrays, use JSON comparison
-    if (typeof a === 'object' && typeof b === 'object') {
-      return JSON.stringify(a) === JSON.stringify(b);
-    }
-    
-    return a === b;
-  }
 }

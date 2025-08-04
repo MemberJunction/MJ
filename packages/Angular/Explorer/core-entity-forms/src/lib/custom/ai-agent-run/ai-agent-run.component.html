@@ -61,6 +61,21 @@
           <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
       </div>
+      
+      <!-- Configuration Bar (shown below header stats when ConfigurationID exists) -->
+      <div class="configuration-bar" *ngIf="record.ConfigurationID">
+        <div class="config-item">
+          <i class="fas fa-cog"></i>
+          <div class="config-content">
+            <div class="config-label">Configuration</div>
+            <div class="config-value">
+              <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Configurations', record.ConfigurationID)">
+                {{ record.Configuration || 'Unknown' }}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -89,9 +104,10 @@
             <mj-ai-agent-run-timeline
               [aiAgentRunId]="record.ID"
               [autoRefresh]="record.Status === 'Running'"
-              [refreshInterval]="3000"
+              [refreshInterval]="30000"
               (itemSelected)="selectTimelineItem($event)"
-              (navigateToEntity)="navigateToEntityRecord($event)">
+              (navigateToEntity)="navigateToEntityRecord($event)"
+              (agentRunCompleted)="onAgentRunCompleted($event)">
             </mj-ai-agent-run-timeline>
           </kendo-splitter-pane>
           
@@ -179,6 +195,35 @@
             </ng-template>
           </kendo-panelbar-item>
           
+          <kendo-panelbar-item title="Execution Settings">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Override Model</label>
+                  <span>
+                    <a *ngIf="record.OverrideModelID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Models', record.OverrideModelID)">
+                      {{ record.OverrideModel || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideModelID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Override Vendor</label>
+                  <span>
+                    <a *ngIf="record.OverrideVendorID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
+                      {{ record.OverrideVendor || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideVendorID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Verbose Logging</label>
+                  <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
           <kendo-panelbar-item title="Execution Status">
             <ng-template kendoPanelBarContent>
               <div class="details-grid">
@@ -247,6 +292,19 @@
               <div class="result-viewer">
                 <mj-code-editor
                   [ngModel]="parsedStartingPayload"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="height: 300px; width: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Data" *ngIf="record.Data">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                <mj-code-editor
+                  [ngModel]="parsedData"
                   [language]="'json'"
                   [readonly]="true"
                   style="height: 300px; width: 100%;">

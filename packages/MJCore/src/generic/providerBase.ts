@@ -1,41 +1,18 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { Metadata } from "./metadata";
 
-/**
- * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
- * Contains all system metadata collections including entities, applications, security, and queries.
- * This class provides a centralized way to access all MemberJunction metadata.
- */
-export class AllMetadata {
-    CurrentUser: UserInfo = null;
 
-    // Arrays of Metadata below
-    AllEntities: EntityInfo[] = [];
-    AllApplications: ApplicationInfo[] = [];
-    AllRoles: RoleInfo[] = [];
-    AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
-    AllAuditLogTypes: AuditLogTypeInfo[] = [];
-    AllAuthorizations: AuthorizationInfo[] = [];
-    AllQueryCategories: QueryCategoryInfo[] = [];
-    AllQueries: QueryInfo[] = [];
-    AllQueryFields: QueryFieldInfo[] = [];
-    AllQueryPermissions: QueryPermissionInfo[] = [];
-    AllQueryEntities: QueryEntityInfo[] = [];
-    AllQueryParameters: QueryParameterInfo[] = [];
-    AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
-    AllLibraries: LibraryInfo[] = [];
-    AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
-}
 
 /**
  * Creates a new instance of AllMetadata from a simple object.
@@ -164,15 +141,32 @@ export abstract class ProviderBase implements IMetadataProvider {
 
 
     /**
+     * Returns the currently loaded local metadata from within the instance
+     */
+    public get AllMetadata(): AllMetadata {
+        return this._localMetadata;
+    }
+
+    /**
      * Configures the provider with the specified configuration data.
      * Handles metadata refresh if needed and initializes the provider.
      * @param data - Configuration including schema filters and connection info
      * @returns True if configuration was successful
      */
-    public async Config(data: ProviderConfigDataBase): Promise<boolean> {
+    public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
 
-        if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
+        // first, let's check to see if we have an existing Metadata.Provider registered, if so
+        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
+        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+            // we have an existing globally registered provider AND we are not
+            // requested to ignore the existing metadata, so we will not refresh it
+            if (this.CopyMetadataFromGlobalProvider()) {
+                return true; // we're done, if we fail here, we keep going and do normal logic
+            }
+        }
+
+        if (this._refresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -185,7 +179,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
 
             const start = new Date().getTime();
-            const res = await this.GetAllMetadata();
+            const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
             LogStatus(`GetAllMetadata() took ${end - start} ms`);
             if (res) {
@@ -196,6 +190,25 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
 
         return true;
+    }
+
+    /**
+     * Copies metadata from the global provider to the local instance.
+     * This is used to ensure that the local instance has the latest metadata
+     * information available without having to reload it from the server.
+     */
+    protected CopyMetadataFromGlobalProvider(): boolean {
+        try {
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
+                this._localMetadata = Metadata.Provider.AllMetadata
+                return true;
+            }
+            return false;
+        }
+        catch (e) {
+            LogError(`Failed to copy metadata from global provider: ${e.message}`);
+            return false; // if we fail to copy the metadata, we will return false
+        }
     }
 
     /**
@@ -245,14 +258,14 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Uses the MJ_Metadata dataset for efficient bulk loading.
      * @returns Complete metadata collection with all relationships
      */
-    protected async GetAllMetadata(): Promise<AllMetadata> {
+    protected async GetAllMetadata(providerToUse?: IMetadataProvider): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             //const start1 = new Date().getTime();
             const f = this.BuildDatasetFilterFromConfig();
 
             // Get the dataset and cache it for anyone else who wants to use it
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null);            
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse);            
             if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, d);
@@ -474,11 +487,11 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Respects the AllowRefresh flag from subclasses.
      * @returns True if refresh was initiated or allowed
      */
-    public async Refresh(): Promise<boolean> {
+    public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
         if (this.AllowRefresh) {
             this._refresh = true;
-            return this.Config(this._ConfigData);
+            return this.Config(this._ConfigData, providerToUse);
         }
         else
             return true; // subclass is telling us not to do any refresh ops right now
@@ -489,9 +502,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Compares local timestamps with server timestamps.
      * @returns True if refresh is needed, false otherwise
      */
-    public async CheckToSeeIfRefreshNeeded(): Promise<boolean> {
+    public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
         if (this.AllowRefresh) {
-            await this.RefreshRemoteMetadataTimestamps(); // get the latest timestamps from the server first
+            await this.RefreshRemoteMetadataTimestamps(providerToUse); // get the latest timestamps from the server first
             await this.LoadLocalMetadataFromStorage(); // then, attempt to load before we check to see if it is obsolete
             return this.LocalMetadataObsolete()
         }
@@ -504,9 +517,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Combines check and refresh into a single operation.
      * @returns True if refresh was successful or not needed
      */
-    public async RefreshIfNeeded(): Promise<boolean> {
-        if (await this.CheckToSeeIfRefreshNeeded()) 
-            return this.Refresh();
+    public async RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
+        if (await this.CheckToSeeIfRefreshNeeded(providerToUse)) 
+            return this.Refresh(providerToUse);
         else
             return true;
     }
@@ -655,7 +668,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param request 
      * @returns 
      */
-    public abstract MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult>  
+    public abstract MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult>  
 
 
     /**
@@ -663,13 +676,13 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
+    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
+    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -677,7 +690,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
+    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
             // compare the local version, if exists to the server version dates
@@ -687,7 +700,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
             else {
                 // we're out of date, so get the dataset from the server
-                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
+                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
                 // cache it
                 await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -696,7 +709,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
         else {
             // get the dataset from the server
-            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
+            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
             // cache it
             await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -895,9 +908,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Retrieves the latest metadata update timestamps from the server.
      * @returns Array of metadata update information
      */
-    protected async GetLatestMetadataUpdates(): Promise<MetadataInfo[]> {
+    protected async GetLatestMetadataUpdates(providerToUse?: IMetadataProvider): Promise<MetadataInfo[]> {
         const f = this.BuildDatasetFilterFromConfig();
-        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null)
+        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse)
         if (d && d.Success) {
             const ret = d.EntityUpdateDates.map(e => {
                 return {
@@ -924,8 +937,8 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Updates the internal cache of remote timestamps.
      * @returns True if timestamps were successfully refreshed
      */
-    public async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
-        const mdTimeStamps = await this.GetLatestMetadataUpdates();  
+    public async RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const mdTimeStamps = await this.GetLatestMetadataUpdates(providerToUse);  
         if (mdTimeStamps) {
             this._latestRemoteMetadataTimestamps = mdTimeStamps;
             return true;

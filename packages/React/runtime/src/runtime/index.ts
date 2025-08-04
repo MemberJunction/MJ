@@ -10,16 +10,6 @@ export {
   createErrorLogger
 } from './error-boundary';
 
-export {
-  wrapComponent,
-  memoizeComponent,
-  lazyComponent,
-  injectProps,
-  conditionalComponent,
-  withErrorHandler,
-  portalComponent,
-  WrapperOptions
-} from './component-wrapper';
 
 export {
   buildComponentProps,
@@ -43,3 +33,9 @@ export {
   ComponentRegistrationError,
   HierarchyRegistrationOptions
 } from './component-hierarchy';
+
+export {
+  ReactRootManager,
+  reactRootManager,
+  ManagedReactRoot
+} from './react-root-manager';

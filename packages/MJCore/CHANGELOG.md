@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/core
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+- c91269e: migration file for permissions driving minor bump
+
+### Patch Changes
+
+- @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

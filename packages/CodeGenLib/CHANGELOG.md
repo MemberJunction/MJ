@@ -1,5 +1,95 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/core-entities-server@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/ai-anthropic@2.79.0
+  - @memberjunction/ai-groq@2.79.0
+  - @memberjunction/ai-mistral@2.79.0
+  - @memberjunction/ai-openai@2.79.0
+  - @memberjunction/actions@2.79.0
+  - @memberjunction/aiengine@2.79.0
+  - @memberjunction/sqlserver-dataprovider@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- d9abd67: feat(codegen-lib): Add cascade delete dependency tracking for
+  stored procedures
+
+  When an entity's schema changes (e.g., new columns added), any
+  delete stored procedures that reference its update SP via cascade
+  operations need to be regenerated to include the new parameters.
+  This prevents runtime failures when cascade delete operations
+  reference outdated stored procedure signatures.
+
+  - Track cascade delete dependencies during SQL generation
+  - Detect entities with schema changes from metadata management
+    phase
+  - Automatically mark dependent delete SPs for regeneration
+  - Ensure SQL logging captures cascade dependency regenerations
+  - Respect spDeleteGenerated flag - never modify custom stored
+    procedures
+
+- Updated dependencies [ef7c014]
+- Updated dependencies [06088e5]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/ai-anthropic@2.78.0
+  - @memberjunction/ai-groq@2.78.0
+  - @memberjunction/ai-mistral@2.78.0
+  - @memberjunction/ai-openai@2.78.0
+  - @memberjunction/actions@2.78.0
+  - @memberjunction/sqlserver-dataprovider@2.78.0
+  - @memberjunction/core-entities-server@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+
+### Patch Changes
+
+- 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
+
+  - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
+  - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
+  - For database providers (server-side), delete operations are wrapped in
+    BeginTransaction/CommitTransaction/RollbackTransaction
+  - For network providers (client-side), deletes pass through as cascade handling occurs server-side
+  - Ensures atomicity of cascade delete operations
+
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/core-entities-server@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/actions@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/ai-anthropic@2.77.0
+  - @memberjunction/ai-groq@2.77.0
+  - @memberjunction/ai-mistral@2.77.0
+  - @memberjunction/ai-openai@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes

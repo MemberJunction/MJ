@@ -1,5 +1,32 @@
 # @memberjunction/react-runtime
 
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/core@2.79.0
+  - @memberjunction/interactive-component-types@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.78.0
+- @memberjunction/core@2.78.0
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/interactive-component-types@2.77.0
+  - @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Minor Changes

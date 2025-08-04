@@ -30,11 +30,18 @@ export class AIAgentRunDataService {
   loading$ = this.loadingSubject$.asObservable();
   error$ = this.errorSubject$.asObservable();
   
-  // Cache for sub-agent data
+  // Cache for sub-agent data with size limit
+  private readonly MAX_CACHE_SIZE = 100; // Maximum 100 sub-agent entries
+  private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minute TTL
+  
   private subAgentDataCache = new Map<string, {
     steps: AIAgentRunStepEntity[];
     promptRuns: AIPromptRunEntity[];
+    timestamp: number;
   }>();
+  
+  // Track cache access order for LRU eviction
+  private cacheAccessOrder: string[] = [];
   
   private currentAgentRunId: string | null = null;
   
@@ -179,7 +186,16 @@ export class AIAgentRunDataService {
     // Check cache first
     const cachedData = this.subAgentDataCache.get(subAgentRunId);
     if (cachedData) {
-      return cachedData;
+      // Check if cache is still valid
+      const now = Date.now();
+      if (now - cachedData.timestamp < this.CACHE_TTL_MS) {
+        // Update access order for LRU
+        this.updateCacheAccessOrder(subAgentRunId);
+        return { steps: cachedData.steps, promptRuns: cachedData.promptRuns };
+      } else {
+        // Cache expired, remove it
+        this.removeCacheEntry(subAgentRunId);
+      }
     }
     
     const rv = new RunView();
@@ -218,9 +234,20 @@ export class AIAgentRunDataService {
       }
     }
     
-    // Cache the data
-    const data = { steps, promptRuns };
+    // Cache the data with timestamp
+    const data = { steps, promptRuns, timestamp: Date.now() };
+    
+    // Enforce cache size limit
+    if (this.subAgentDataCache.size >= this.MAX_CACHE_SIZE) {
+      // Remove least recently used entry
+      const lruKey = this.cacheAccessOrder[0];
+      if (lruKey && lruKey !== subAgentRunId) {
+        this.removeCacheEntry(lruKey);
+      }
+    }
+    
     this.subAgentDataCache.set(subAgentRunId, data);
+    this.updateCacheAccessOrder(subAgentRunId);
     
     return data;
   }
@@ -233,8 +260,66 @@ export class AIAgentRunDataService {
     this.subRunsSubject$.next([]);
     this.actionLogsSubject$.next([]);
     this.promptRunsSubject$.next([]);
-    this.subAgentDataCache.clear();
+    this.clearCache();
     this.currentAgentRunId = null;
+  }
+  
+  /**
+   * Clear just the cache for the current agent run
+   */
+  clearCurrentRunCache() {
+    // Clear all cache entries related to current run
+    if (this.currentAgentRunId) {
+      const keysToRemove: string[] = [];
+      for (const [key, value] of this.subAgentDataCache.entries()) {
+        // You might want to add logic here to identify related entries
+        keysToRemove.push(key);
+      }
+      keysToRemove.forEach(key => this.removeCacheEntry(key));
+    }
+  }
+  
+  /**
+   * Clear entire cache
+   */
+  private clearCache() {
+    this.subAgentDataCache.clear();
+    this.cacheAccessOrder = [];
+    console.log('Agent run data cache cleared');
+  }
+  
+  /**
+   * Update cache access order for LRU eviction
+   */
+  private updateCacheAccessOrder(key: string) {
+    const index = this.cacheAccessOrder.indexOf(key);
+    if (index > -1) {
+      this.cacheAccessOrder.splice(index, 1);
+    }
+    this.cacheAccessOrder.push(key);
+  }
+  
+  /**
+   * Remove a cache entry
+   */
+  private removeCacheEntry(key: string) {
+    this.subAgentDataCache.delete(key);
+    const index = this.cacheAccessOrder.indexOf(key);
+    if (index > -1) {
+      this.cacheAccessOrder.splice(index, 1);
+    }
+  }
+  
+  /**
+   * Get cache statistics for monitoring
+   */
+  getCacheStats() {
+    return {
+      size: this.subAgentDataCache.size,
+      maxSize: this.MAX_CACHE_SIZE,
+      ttlMs: this.CACHE_TTL_MS,
+      accessOrder: [...this.cacheAccessOrder]
+    };
   }
   
   /**

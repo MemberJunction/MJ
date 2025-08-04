@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/ai
 
+## 2.79.0
+
+### Minor Changes
+
+- bad1a60: migration
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+
+## 2.78.0
+
+### Minor Changes
+
+- ef7c014: migration file
+
+### Patch Changes
+
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- @memberjunction/global@2.77.0
+
 ## 2.76.0
 
 ### Patch Changes
