@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.80.0
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+- 44a749c: updated system client
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/actions-base@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

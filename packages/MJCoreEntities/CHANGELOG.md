@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.80.0
+
+### Minor Changes
+
+- d03dfae: migration
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+- Updated dependencies [7c5f844]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Minor Changes

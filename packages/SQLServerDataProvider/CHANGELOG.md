@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.80.0
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/ai-vector-dupe@2.80.0
+  - @memberjunction/actions@2.80.0
+  - @memberjunction/queue@2.80.0
+  - @memberjunction/ai@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

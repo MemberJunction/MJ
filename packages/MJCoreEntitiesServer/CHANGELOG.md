@@ -1,5 +1,26 @@
 # @memberjunction/core-entities-server
 
+## 2.80.0
+
+### Minor Changes
+
+- 3073dc3: migration
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/sqlserver-dataprovider@2.80.0
+  - @memberjunction/ai-core-plus@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/ai-prompts@2.80.0
+  - @memberjunction/ai-vector-dupe@2.80.0
+  - @memberjunction/skip-types@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Minor Changes

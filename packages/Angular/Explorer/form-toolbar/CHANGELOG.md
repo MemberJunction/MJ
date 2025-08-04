@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [7c5f844]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/ng-ask-skip@2.80.0
+  - @memberjunction/ng-shared@2.80.0
+  - @memberjunction/ng-base-forms@2.80.0
+  - @memberjunction/ng-record-changes@2.80.0
+  - @memberjunction/ng-container-directives@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

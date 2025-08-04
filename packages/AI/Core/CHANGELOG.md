@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ai
 
+## 2.80.0
+
+### Patch Changes
+
+- @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Minor Changes

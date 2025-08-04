@@ -1,5 +1,22 @@
 # @memberjunction/ng-dashboards
 
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+- Updated dependencies [536ad6e]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/ng-core-entity-forms@2.80.0
+  - @memberjunction/ng-shared@2.80.0
+  - @memberjunction/ng-ai-test-harness@2.80.0
+  - @memberjunction/ng-notifications@2.80.0
+  - @memberjunction/ng-action-gallery@2.80.0
+  - @memberjunction/ng-container-directives@2.80.0
+  - @memberjunction/templates-base-types@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes
