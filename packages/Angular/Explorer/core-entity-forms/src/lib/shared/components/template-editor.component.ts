@@ -52,6 +52,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
     private _metadata = new Metadata();
+    private activeTimeouts: number[] = [];
     
     constructor(private notificationService: MJNotificationService) {}
 
@@ -129,6 +130,10 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+        
+        // Clean up any active timeouts
+        this.activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.activeTimeouts.length = 0;
     }
 
     ngAfterViewInit() {
@@ -361,13 +366,29 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     }
 
     /**
+     * Helper method to track setTimeout calls for cleanup
+     */
+    private setTrackedTimeout(callback: () => void, delay: number): number {
+        const timeoutId = setTimeout(() => {
+            // Remove from tracking when it executes
+            const index = this.activeTimeouts.indexOf(timeoutId);
+            if (index > -1) {
+                this.activeTimeouts.splice(index, 1);
+            }
+            callback();
+        }, delay) as any as number;
+        this.activeTimeouts.push(timeoutId);
+        return timeoutId;
+    }
+
+    /**
      * Manually sync the editor value without triggering change events
      */
     private syncEditorValue() {
         // Use Promise.resolve() to wait for the next microtask after any pending changes
         Promise.resolve().then(() => {
-            // Then setTimeout for the next macrotask to ensure DOM is updated
-            setTimeout(() => {
+            // Then tracked setTimeout for the next macrotask to ensure DOM is updated
+            this.setTrackedTimeout(() => {
                 if (!this.codeEditor) {
                     return;
                 }

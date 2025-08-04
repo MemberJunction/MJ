@@ -38,6 +38,17 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   
   private destroy$ = new Subject<void>();
   private viewInitialized = false;
+  
+  /** Track active timeouts for cleanup */
+  private activeTimeouts: number[] = [];
+  
+  /** Remove timeout from tracking array */
+  private removeTimeoutFromTracking(timeoutId: number): void {
+    const index = this.activeTimeouts.indexOf(timeoutId);
+    if (index > -1) {
+      this.activeTimeouts.splice(index, 1);
+    }
+  }
   private pendingData: { steps: AIAgentRunStepEntity[], subRuns: AIAgentRunEntity[], actionLogs: ActionExecutionLogEntity[], promptRuns: AIPromptRunEntity[] } | null = null;
   
   loading = false;  // Start with false so the container renders
@@ -178,8 +189,15 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   }
   
   ngOnDestroy() {
+    // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
+    
+    // Clear all active timeouts
+    this.activeTimeouts.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    this.activeTimeouts.length = 0;
     
     // Clean up document-level event listeners
     document.removeEventListener('mousemove', this.onMouseMove);
@@ -322,7 +340,13 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     try {
       // Wait a tick for the view to be fully ready
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => {
+        const timeoutId = setTimeout(() => {
+          this.removeTimeoutFromTracking(timeoutId);
+          resolve(undefined);
+        }, 0) as any as number;
+        this.activeTimeouts.push(timeoutId);
+      });
       
       // Clear existing elements
       this.clearVisualization();

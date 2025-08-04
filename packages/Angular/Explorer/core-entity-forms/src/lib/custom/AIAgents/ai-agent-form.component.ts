@@ -1,4 +1,4 @@
-import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
@@ -10,7 +10,8 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 
 /**
@@ -49,9 +50,35 @@ import { firstValueFrom } from 'rxjs';
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit {
+export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit, OnDestroy {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntity;
+    
+    /** Subject for managing component lifecycle and cleaning up subscriptions */
+    private destroy$ = new Subject<void>();
+    
+    /** Track active timeouts for cleanup */
+    private activeTimeouts: number[] = [];
+    
+    /** Helper method to create tracked setTimeout calls */
+    private setTrackedTimeout(callback: () => void, delay: number): number {
+        const timeoutId = setTimeout(() => {
+            // Remove from tracking array when timeout executes
+            this.removeTimeoutFromTracking(timeoutId);
+            callback();
+        }, delay) as any as number;
+        
+        this.activeTimeouts.push(timeoutId);
+        return timeoutId;
+    }
+    
+    /** Remove timeout from tracking array */
+    private removeTimeoutFromTracking(timeoutId: number): void {
+        const index = this.activeTimeouts.indexOf(timeoutId);
+        if (index > -1) {
+            this.activeTimeouts.splice(index, 1);
+        }
+    }
     
     /** ViewChild for dynamic custom section container */
     private _customSectionContainer!: ViewContainerRef;
@@ -60,7 +87,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this._customSectionContainer = container;
         // When the container becomes available, load the custom section if needed
         if (container && this.agentType?.UIFormSectionKey && !this.customSectionLoaded) {
-            setTimeout(() => this.loadCustomFormSection(), 0);
+            this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
         }
     }
     get customSectionContainer(): ViewContainerRef {
@@ -332,7 +359,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.cdr.detectChanges();
             
             // Defer custom section loading to next tick after DOM updates
-            setTimeout(() => {
+            this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
         }
@@ -526,7 +553,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // When panel is expanded, check if we need to load or reload the custom section
         if (event.expanded && this.agentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
-            setTimeout(() => {
+            this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
         }
@@ -730,7 +757,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 parentAgentId: this.record.ID,
                 parentAgentName: this.record.Name || 'Agent',
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.subAgent) {
                         try {
@@ -857,7 +884,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 showCreateNew: true,
                 linkedPromptIds: allLinkedIds,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.selectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
@@ -961,7 +988,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             agentName: this.record.Name || 'Agent',
             existingActionIds: allLinkedIds,
             viewContainerRef: this.viewContainerRef
-        }).subscribe({
+        }).pipe(takeUntil(this.destroy$)).subscribe({
             next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
@@ -1143,18 +1170,37 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /**
      * Gets the running time for an execution that hasn't completed yet
+     * Uses a cached timestamp to avoid ExpressionChangedAfterItHasBeenCheckedError
      */
+    private _runningTimeCache = new Map<string, { time: string, timestamp: number }>();
+    
     public getRunningTime(startDate: Date): string {
         if (!startDate) return 'N/A';
         
-        const now = new Date();
         const startTime = new Date(startDate).getTime();
-        const currentTime = now.getTime();
-        
         if (isNaN(startTime)) return 'N/A';
         
-        const milliseconds = currentTime - startTime;
-        return this.formatExecutionTime(milliseconds);
+        const cacheKey = startTime.toString();
+        const now = Date.now();
+        const cached = this._runningTimeCache.get(cacheKey);
+        
+        // Update cache every second to avoid constant changes
+        if (!cached || now - cached.timestamp > 1000) {
+            const milliseconds = now - startTime;
+            const timeString = this.formatExecutionTime(milliseconds);
+            this._runningTimeCache.set(cacheKey, { time: timeString, timestamp: now });
+            
+            // Schedule a change detection after the current cycle completes
+            Promise.resolve().then(() => {
+                if (!this.destroy$.closed) {
+                    this.cdr.detectChanges();
+                }
+            });
+            
+            return timeString;
+        }
+        
+        return cached.time;
     }
 
     /**
@@ -1323,7 +1369,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 title: `Create New Prompt for ${this.record.Name || 'Agent'}`,
                 initialName: '',
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.prompt) {
                         try {
@@ -1531,7 +1577,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 parentAgentId: this.record.ID,
                 showCreateNew: true,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.selectedAgents && result.selectedAgents.length > 0) {
                         // Filter out already linked or pending agents
@@ -1801,7 +1847,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 agentPrompt: agentPrompt,
                 allAgentPrompts: allAgentPrompts,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (formData) => {
                     if (formData) {
                         try {
@@ -1887,7 +1933,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 subAgent: subAgentEntity,
                 allSubAgents: allSubAgents,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (formData) => {
                     if (formData) {
                         try {
@@ -2158,6 +2204,45 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             return false;
         }
+    }
+    
+    /**
+     * Component cleanup - critical for preventing memory leaks
+     */
+    ngOnDestroy(): void {
+        // Signal all subscriptions to complete
+        this.destroy$.next();
+        this.destroy$.complete();
+        
+        // Clear all active timeouts
+        this.activeTimeouts.forEach(timeoutId => {
+            clearTimeout(timeoutId);
+        });
+        this.activeTimeouts.length = 0;
+        
+        // Clear all data arrays to release memory
+        this.subAgents.length = 0;
+        this.agentPrompts.length = 0;
+        this.agentActions.length = 0;
+        this.recentExecutions.length = 0;
+        this.learningCycles.length = 0;
+        this.agentNotes.length = 0;
+        
+        // Clear maps and objects
+        this._permissionCache.clear();
+        this._runningTimeCache.clear();
+        this.expandedExecutions = {};
+        this.originalSnapshots = null as any;
+        
+        // Clean up component references
+        if (this.customSectionComponentRef) {
+            this.customSectionComponentRef.destroy();
+            this.customSectionComponentRef = null;
+        }
+        this.customSectionComponent = null;
+        this.agentType = null;
+        
+        console.log('AI Agent Form component destroyed and cleaned up');
     }
     
 }

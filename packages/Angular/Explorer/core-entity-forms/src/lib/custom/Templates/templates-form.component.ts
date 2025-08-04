@@ -50,6 +50,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     };
     
     private destroy$ = new Subject<void>();
+    private activeTimeouts: number[] = [];
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -61,6 +62,10 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+        
+        // Clean up any active timeouts
+        this.activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.activeTimeouts.length = 0;
     }
 
     ngAfterViewInit() {
@@ -363,13 +368,29 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
     /**
+     * Helper method to track setTimeout calls for cleanup
+     */
+    private setTrackedTimeout(callback: () => void, delay: number): number {
+        const timeoutId = setTimeout(() => {
+            // Remove from tracking when it executes
+            const index = this.activeTimeouts.indexOf(timeoutId);
+            if (index > -1) {
+                this.activeTimeouts.splice(index, 1);
+            }
+            callback();
+        }, delay) as any as number;
+        this.activeTimeouts.push(timeoutId);
+        return timeoutId;
+    }
+
+    /**
      * Manually sync the editor value without triggering change events
      */
     private syncEditorValue() {
         // Use Promise.resolve() to wait for the next microtask after any pending changes
         Promise.resolve().then(() => {
-            // Then setTimeout for the next macrotask to ensure DOM is updated
-            setTimeout(() => {
+            // Then tracked setTimeout for the next macrotask to ensure DOM is updated
+            this.setTrackedTimeout(() => {
                 if (!this.codeEditor) {
                     console.log('Code editor ViewChild is null - element may not be rendered yet');
                     console.log('currentTemplateContent exists:', !!this.currentTemplateContent);
