@@ -1723,13 +1723,6 @@ export class BaseAgent {
      */
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
-        console.log('BASE AGENT - ExecuteSingleAction called:', {
-            actionName: action.name,
-            actionEntityId: actionEntity?.ID,
-            actionEntityName: actionEntity?.Name,
-            actionParams: action.params,
-            contextUser: contextUser?.Email
-        });
         
         try {
             const actionEngine = ActionEngineServer.Instance;
@@ -3029,13 +3022,6 @@ export class BaseAgent {
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        console.log('BASE AGENT - executeActionsStep called:', {
-            actionCount: previousDecision.actions?.length || 0,
-            actions: previousDecision.actions?.map(a => ({ name: a.name, params: a.params })),
-            stepType: previousDecision.step,
-            hasNewPayload: !!previousDecision.newPayload,
-            hasPreviousPayload: !!previousDecision.previousPayload
-        });
         
         try {
             const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
@@ -3110,13 +3096,6 @@ export class BaseAgent {
                 const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
                 const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
                 
-                console.log('BASE AGENT - About to call PreProcessActionStep:', {
-                    hasNewPayload: !!previousDecision?.newPayload,
-                    hasPreviousPayload: !!previousDecision?.previousPayload,
-                    hasParamsPayload: !!params.payload,
-                    currentPayloadKeys: Object.keys(currentPayload || {}),
-                    currentPayload: currentPayload
-                });
                 
                 // Pre-process actions - this may modify the actions array in place
                 await agentTypeInstance.PreProcessActionStep(
