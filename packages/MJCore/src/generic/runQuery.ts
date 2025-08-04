@@ -41,6 +41,16 @@ export type RunQueryParams = {
      * Used for pagination in conjunction with MaxRows.
      */
     StartRow?: number
+    /**
+     * optional - if set to true, the query run will ALWAYS be logged to the Audit Log, 
+     * regardless of the query's property settings for logging query runs.
+     */
+    ForceAuditLog?: boolean
+    /**
+     * optional - if provided and either ForceAuditLog is set, or the query's property 
+     * settings for logging query runs are set to true, this will be used as the Audit Log Description.
+     */
+    AuditLogDescription?: string
 }
 
 /**
