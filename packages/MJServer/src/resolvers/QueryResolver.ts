@@ -38,7 +38,7 @@ export class RunQueryResultType {
 
 @Resolver()
 export class RunQueryResolver {
-  private async findQuery(QueryID: string, QueryName?: string, CategoryID?: string, CategoryName?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
+  private async findQuery(QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
     const md = new Metadata();
     
     // Filter queries based on provided criteria
@@ -50,8 +50,8 @@ export class RunQueryResolver {
         if (CategoryID) {
           matches = matches && q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase();
         }
-        if (CategoryName) {
-          matches = matches && q.Category?.trim().toLowerCase() === CategoryName.trim().toLowerCase();
+        if (CategoryPath) {
+          matches = matches && q.Category?.trim().toLowerCase() === CategoryPath.trim().toLowerCase();
         }
         return matches;
       }
@@ -62,7 +62,7 @@ export class RunQueryResolver {
       if (refreshMetadataIfNotFound) {
         // If we didn't find the query, refresh metadata and try again
         await md.Refresh();
-        return this.findQuery(QueryID, QueryName, CategoryID, CategoryName, false); // change the refresh flag to false so we don't loop infinitely
+        return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
       } 
       else {
         return null; // No query found and not refreshing metadata
@@ -76,7 +76,7 @@ export class RunQueryResolver {
   async GetQueryData(@Arg('QueryID', () => String) QueryID: string, 
                      @Ctx() context: AppContext,
                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                     @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                      @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
@@ -86,7 +86,7 @@ export class RunQueryResolver {
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
-        CategoryName: CategoryName,
+        CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
         StartRow: StartRow
@@ -102,7 +102,7 @@ export class RunQueryResolver {
     let queryName = result.QueryName;
     if (!queryName) {
       try {
-        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryName, true);
+        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryPath, true);
         if (queryInfo) {
           queryName = queryInfo.Name;
         }
@@ -128,7 +128,7 @@ export class RunQueryResolver {
   async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string, 
                            @Ctx() context: AppContext,
                            @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                           @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                           @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                            @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                            @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                            @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
@@ -137,7 +137,7 @@ export class RunQueryResolver {
       { 
         QueryName: QueryName, 
         CategoryID: CategoryID,
-        CategoryName: CategoryName,
+        CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
         StartRow: StartRow
@@ -162,7 +162,7 @@ export class RunQueryResolver {
   async GetQueryDataSystemUser(@Arg('QueryID', () => String) QueryID: string, 
                                @Ctx() context: AppContext,
                                @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                               @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                               @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                                @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                                @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                                @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
@@ -171,7 +171,7 @@ export class RunQueryResolver {
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
-        CategoryName: CategoryName,
+        CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
         StartRow: StartRow
@@ -182,7 +182,7 @@ export class RunQueryResolver {
     let queryName = result.QueryName;
     if (!queryName) {
       try {
-        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryName, true);
+        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryPath, true);
         if (queryInfo) {
           queryName = queryInfo.Name;
         }
@@ -209,7 +209,7 @@ export class RunQueryResolver {
   async GetQueryDataByNameSystemUser(@Arg('QueryName', () => String) QueryName: string, 
                                      @Ctx() context: AppContext,
                                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
-                                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string,
+                                     @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                                      @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
@@ -218,7 +218,7 @@ export class RunQueryResolver {
       { 
         QueryName: QueryName,
         CategoryID: CategoryID,
-        CategoryName: CategoryName,
+        CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
         StartRow: StartRow

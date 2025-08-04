@@ -276,9 +276,9 @@ console.log('User permissions:', spResult);
 // Using RunQuery for pre-defined queries
 const queryParams: RunQueryParams = {
   QueryID: 'query-id-here', // or use QueryName + Category identification
-  // Alternative: use QueryName with hierarchical CategoryName path
+  // Alternative: use QueryName with hierarchical CategoryPath
   // QueryName: 'CalculateCost',
-  // CategoryName: '/MJ/AI/Agents/'  // Hierarchical path notation
+  // CategoryPath: '/MJ/AI/Agents/'  // Hierarchical path notation
   // CategoryID: 'optional-direct-category-id',
 };
 
@@ -293,10 +293,10 @@ if (queryResult.Success) {
 // Example: Query with name "CalculateCost" in category hierarchy "MJ" -> "AI" -> "Agents"
 const hierarchicalQueryParams: RunQueryParams = {
   QueryName: 'CalculateCost',
-  CategoryName: '/MJ/AI/Agents/'  // Full hierarchical path with leading/trailing slashes
+  CategoryPath: '/MJ/AI/Agents/'  // Full hierarchical path with leading/trailing slashes
 };
 
-// The CategoryName is parsed as a path where:
+// The CategoryPath is parsed as a path where:
 // - "/" separates category levels
 // - Each segment is matched case-insensitively against category names
 // - The path walks from root to leaf through the ParentID relationships

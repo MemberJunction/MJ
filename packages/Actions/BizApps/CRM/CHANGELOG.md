@@ -1,5 +1,14 @@
 # @memberjunction/actions-bizapps-crm
 
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/actions@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/data-context-server
 
+## 2.76.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.76.0
+- @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Patch Changes

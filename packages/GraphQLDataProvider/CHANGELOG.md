@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.76.0
+
+### Patch Changes
+
+- f1e5990: bug fix
+- 087595d: feat: make DeleteQuery options parameter optional and refactor
+  GraphQLSystemUserClient methods
+
+  - Made options parameter optional in DeleteQuerySystemResolver with
+    sensible defaults (SkipEntityAIActions: false, SkipEntityActions: false)
+  - Refactored GraphQLSystemUserClient method names for better usability by
+    removing redundant "SystemUser" suffix
+  - Updated method signatures to use proper input types instead of
+    individual parameters for better type safety
+  - Added DeleteQuery method and missing TypeScript interfaces to
+    GraphQLSystemUserClient
+
+  The changes are marked as minor since they add new functionality
+  (optional parameters, new method) while maintaining backward
+  compatibility with existing method signatures.
+
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/actions-base@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Minor Changes

@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/server
 
+## 2.76.0
+
+### Patch Changes
+
+- 087595d: feat: make DeleteQuery options parameter optional and refactor
+  GraphQLSystemUserClient methods
+
+  - Made options parameter optional in DeleteQuerySystemResolver with
+    sensible defaults (SkipEntityAIActions: false, SkipEntityActions: false)
+  - Refactored GraphQLSystemUserClient method names for better usability by
+    removing redundant "SystemUser" suffix
+  - Updated method signatures to use proper input types instead of
+    individual parameters for better type safety
+  - Added DeleteQuery method and missing TypeScript interfaces to
+    GraphQLSystemUserClient
+
+  The changes are marked as minor since they add new functionality
+  (optional parameters, new method) while maintaining backward
+  compatibility with existing method signatures.
+
+- Updated dependencies [f1e5990]
+- Updated dependencies [b9a94a9]
+- Updated dependencies [4b27b3c]
+- Updated dependencies [087595d]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/graphql-dataprovider@2.76.0
+  - @memberjunction/ai-agents@2.76.0
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core-entities-server@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/sqlserver-dataprovider@2.76.0
+  - @memberjunction/ai-agent-manager-actions@2.76.0
+  - @memberjunction/ai-core-plus@2.76.0
+  - @memberjunction/aiengine@2.76.0
+  - @memberjunction/ai-prompts@2.76.0
+  - @memberjunction/actions-bizapps-accounting@2.76.0
+  - @memberjunction/actions-bizapps-lms@2.76.0
+  - @memberjunction/actions-bizapps-social@2.76.0
+  - @memberjunction/core-actions@2.76.0
+  - @memberjunction/actions@2.76.0
+  - @memberjunction/entity-communications-server@2.76.0
+  - @memberjunction/doc-utils@2.76.0
+  - @memberjunction/external-change-detection@2.76.0
+  - @memberjunction/data-context@2.76.0
+  - @memberjunction/queue@2.76.0
+  - @memberjunction/storage@2.76.0
+  - @memberjunction/templates@2.76.0
+  - @memberjunction/ai-vectors-pinecone@2.76.0
+  - @memberjunction/actions-bizapps-crm@2.76.0
+  - @memberjunction/skip-types@2.76.0
+  - @memberjunction/data-context-server@2.76.0
+  - @memberjunction/ai@2.76.0
+  - @memberjunction/ai-anthropic@2.76.0
+  - @memberjunction/ai-cerebras@2.76.0
+  - @memberjunction/ai-groq@2.76.0
+  - @memberjunction/ai-mistral@2.76.0
+  - @memberjunction/ai-openai@2.76.0
+  - @memberjunction/global@2.76.0
+
 ## 2.75.0
 
 ### Minor Changes

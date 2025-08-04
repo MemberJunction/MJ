@@ -256,7 +256,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for running by name
      * @returns Promise containing the view execution results
      */
-    public async RunViewByNameSystemUser(input: RunViewByNameSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunViewByName(input: RunViewByNameSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunViewByNameSystemUser($input: RunViewByNameInput!) {
                 RunViewByNameSystemUser(input: $input) {
@@ -300,7 +300,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for running by ID
      * @returns Promise containing the view execution results
      */
-    public async RunViewByIDSystemUser(input: RunViewByIDSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunViewByID(input: RunViewByIDSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunViewByIDSystemUser($input: RunViewByIDInput!) {
                 RunViewByIDSystemUser(input: $input) {
@@ -344,7 +344,7 @@ export class GraphQLSystemUserClient {
      * @param input - View input parameters for dynamic view execution
      * @returns Promise containing the view execution results
      */
-    public async RunDynamicViewSystemUser(input: RunDynamicViewSystemUserInput): Promise<RunViewSystemUserResult> {
+    public async RunDynamicView(input: RunDynamicViewSystemUserInput): Promise<RunViewSystemUserResult> {
         try {
             const query = `query RunDynamicViewSystemUser($input: RunDynamicViewInput!) {
                 RunDynamicViewSystemUser(input: $input) {
@@ -389,7 +389,7 @@ export class GraphQLSystemUserClient {
      * @param input - Array of view input parameters
      * @returns Promise containing the results from all view executions
      */
-    public async RunViewsSystemUser(input: RunViewSystemUserInput[]): Promise<RunViewSystemUserResult[]> {
+    public async RunViews(input: RunViewSystemUserInput[]): Promise<RunViewSystemUserResult[]> {
         try {
             const query = `query RunViewsSystemUser($input: [RunViewGenericInput!]!) {
                 RunViewsSystemUser(input: $input) {
@@ -422,18 +422,13 @@ export class GraphQLSystemUserClient {
 
     /**
      * Executes a stored query by ID using the GetQueryDataSystemUser resolver.
-     * @param queryId - The ID of the query to execute
-     * @param categoryId - Optional category ID filter
-     * @param categoryName - Optional category name filter
-     * @param parameters - Optional parameters for templated queries
-     * @param maxRows - Optional maximum number of rows to return
-     * @param startRow - Optional starting row number for pagination
+     * @param input - Query input parameters for execution by ID
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataSystemUser(queryId: string, categoryId?: string, categoryName?: string, parameters?: Record<string, any>, maxRows?: number, startRow?: number): Promise<RunQuerySystemUserResult> {
+    public async GetQueryData(input: GetQueryDataSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
@@ -446,12 +441,12 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const variables: any = { QueryID: queryId };
-            if (categoryId !== undefined) variables.CategoryID = categoryId;
-            if (categoryName !== undefined) variables.CategoryName = categoryName;
-            if (parameters !== undefined) variables.Parameters = parameters;
-            if (maxRows !== undefined) variables.MaxRows = maxRows;
-            if (startRow !== undefined) variables.StartRow = startRow;
+            const variables: any = { QueryID: input.QueryID };
+            if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
+            if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
+            if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
+            if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
@@ -463,7 +458,7 @@ export class GraphQLSystemUserClient {
                 };
             } else {
                 return {
-                    QueryID: queryId,
+                    QueryID: input.QueryID,
                     QueryName: '',
                     Success: false,
                     Results: null,
@@ -477,7 +472,7 @@ export class GraphQLSystemUserClient {
         catch (e) {
             LogError(`GraphQLSystemUserClient::GetQueryDataSystemUser - Error executing query - ${e}`);
             return {
-                QueryID: queryId,
+                QueryID: input.QueryID,
                 QueryName: '',
                 Success: false,
                 Results: null,
@@ -491,18 +486,13 @@ export class GraphQLSystemUserClient {
 
     /**
      * Executes a stored query by name using the GetQueryDataByNameSystemUser resolver.
-     * @param queryName - The name of the query to execute
-     * @param categoryId - Optional category ID filter
-     * @param categoryName - Optional category name filter
-     * @param parameters - Optional parameters for templated queries
-     * @param maxRows - Optional maximum number of rows to return
-     * @param startRow - Optional starting row number for pagination
+     * @param input - Query input parameters for execution by name
      * @returns Promise containing the query execution results
      */
-    public async GetQueryDataByNameSystemUser(queryName: string, categoryId?: string, categoryName?: string, parameters?: Record<string, any>, maxRows?: number, startRow?: number): Promise<RunQuerySystemUserResult> {
+    public async GetQueryDataByName(input: GetQueryDataByNameSystemUserInput): Promise<RunQuerySystemUserResult> {
         try {
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryName: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     QueryID
                     QueryName
                     Success
@@ -515,12 +505,12 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const variables: any = { QueryName: queryName };
-            if (categoryId !== undefined) variables.CategoryID = categoryId;
-            if (categoryName !== undefined) variables.CategoryName = categoryName;
-            if (parameters !== undefined) variables.Parameters = parameters;
-            if (maxRows !== undefined) variables.MaxRows = maxRows;
-            if (startRow !== undefined) variables.StartRow = startRow;
+            const variables: any = { QueryName: input.QueryName };
+            if (input.CategoryID !== undefined) variables.CategoryID = input.CategoryID;
+            if (input.CategoryPath !== undefined) variables.CategoryPath = input.CategoryPath;
+            if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
+            if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
+            if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
@@ -533,7 +523,7 @@ export class GraphQLSystemUserClient {
             } else {
                 return {
                     QueryID: '',
-                    QueryName: queryName,
+                    QueryName: input.QueryName,
                     Success: false,
                     Results: null,
                     RowCount: 0,
@@ -547,7 +537,7 @@ export class GraphQLSystemUserClient {
             LogError(`GraphQLSystemUserClient::GetQueryDataByNameSystemUser - Error executing query - ${e}`);
             return {
                 QueryID: '',
-                QueryName: queryName,
+                QueryName: input.QueryName,
                 Success: false,
                 Results: null,
                 RowCount: 0,
@@ -559,30 +549,30 @@ export class GraphQLSystemUserClient {
     }
 
     /**
-     * Creates a new query using the CreateQuery mutation. This method is restricted to system users only.
-     * @param input - CreateQueryInput containing all the query attributes including optional CategoryPath
+     * Creates a new query using the CreateQuerySystemUser mutation. This method is restricted to system users only.
+     * @param input - CreateQuerySystemUserInput containing all the query attributes including optional CategoryPath
      * @returns Promise containing the result of the query creation
      */
     public async CreateQuery(input: CreateQueryInput): Promise<CreateQueryResult> {
         try {
-            const query = `mutation CreateQuery($input: CreateQueryInputType!) {
-                CreateQuery(input: $input) {
+            const query = `mutation CreateQuerySystemUser($input: CreateQuerySystemUserInput!) {
+                CreateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
                     QueryData
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { CreateQuery: CreateQueryResult };
-            if (result && result.CreateQuery) {
+            const result = await this.Client.request(query, { input }) as { CreateQuerySystemUser: CreateQueryResult };
+            if (result && result.CreateQuerySystemUser) {
                 // Parse the QueryData JSON if it exists and was successful
-                if (result.CreateQuery.Success && result.CreateQuery.QueryData) {
+                if (result.CreateQuerySystemUser.Success && result.CreateQuerySystemUser.QueryData) {
                     return {
-                        ...result.CreateQuery,
-                        QueryData: result.CreateQuery.QueryData // Already JSON string from resolver
+                        ...result.CreateQuerySystemUser,
+                        QueryData: result.CreateQuerySystemUser.QueryData // Already JSON string from resolver
                     };
                 }
-                return result.CreateQuery;
+                return result.CreateQuerySystemUser;
             } else {
                 return {
                     Success: false,
@@ -592,6 +582,46 @@ export class GraphQLSystemUserClient {
         }
         catch (e) {
             LogError(`GraphQLSystemUserClient::CreateQuery - Error creating query - ${e}`);
+            return {
+                Success: false,
+                ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
+     * @param input - DeleteQueryInput containing the query ID and delete options
+     * @returns Promise containing the result of the query deletion
+     */
+    public async DeleteQuery(ID: string, options?: DeleteQueryOptionsInput): Promise<DeleteQueryResult> {
+        try {
+            const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
+                DeleteQuerySystemResolver(ID: $ID, options: $options) {
+                    Success
+                    ErrorMessage
+                    QueryData
+                }
+            }`
+
+            const variables: any = { ID: ID };
+            if (options !== undefined) {
+                variables.options = options;
+            }
+
+            const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
+            
+            if (result && result.DeleteQuerySystemResolver) {
+                return result.DeleteQuerySystemResolver;
+            } else {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Failed to delete query'
+                };
+            }
+        }
+        catch (e) {
+            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${e}`);
             return {
                 Success: false,
                 ErrorMessage: e.toString()
@@ -1056,6 +1086,66 @@ export interface RunQuerySystemUserResult {
 }
 
 /**
+ * Input type for GetQueryDataSystemUser method calls - executes a stored query by ID
+ */
+export interface GetQueryDataSystemUserInput {
+    /**
+     * The ID of the query to execute
+     */
+    QueryID: string;
+    /**
+     * Optional category ID filter
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
+     */
+    CategoryPath?: string;
+    /**
+     * Optional parameters for templated queries
+     */
+    Parameters?: Record<string, any>;
+    /**
+     * Optional maximum number of rows to return
+     */
+    MaxRows?: number;
+    /**
+     * Optional starting row number for pagination
+     */
+    StartRow?: number;
+}
+
+/**
+ * Input type for GetQueryDataByNameSystemUser method calls - executes a stored query by name
+ */
+export interface GetQueryDataByNameSystemUserInput {
+    /**
+     * The name of the query to execute
+     */
+    QueryName: string;
+    /**
+     * Optional category ID filter
+     */
+    CategoryID?: string;
+    /**
+     * Optional category path filter (hierarchical path like "/MJ/AI/Agents/" or simple name)
+     */
+    CategoryPath?: string;
+    /**
+     * Optional parameters for templated queries
+     */
+    Parameters?: Record<string, any>;
+    /**
+     * Optional maximum number of rows to return
+     */
+    MaxRows?: number;
+    /**
+     * Optional starting row number for pagination
+     */
+    StartRow?: number;
+}
+
+/**
  * Input type for CreateQuery mutation calls - creates a new query with optional hierarchical category path
  */
 export interface CreateQueryInput {
@@ -1127,6 +1217,38 @@ export interface CreateQueryResult {
     ErrorMessage?: string;
     /**
      * JSON string containing the complete created query data if successful (optional)
+     */
+    QueryData?: string;
+}
+
+/**
+ * Delete options input type for controlling delete behavior
+ */
+export interface DeleteQueryOptionsInput {
+    /**
+     * Whether to skip AI actions during deletion
+     */
+    SkipEntityAIActions: boolean;
+    /**
+     * Whether to skip regular entity actions during deletion
+     */
+    SkipEntityActions: boolean;
+}
+
+/**
+ * Result type for DeleteQuery mutation calls - contains deletion success status and deleted query data
+ */
+export interface DeleteQueryResult {
+    /**
+     * Whether the query deletion was successful
+     */
+    Success: boolean;
+    /**
+     * Error message if the deletion failed (optional)
+     */
+    ErrorMessage?: string;
+    /**
+     * JSON string containing the deleted query data if successful (optional)
      */
     QueryData?: string;
 }
