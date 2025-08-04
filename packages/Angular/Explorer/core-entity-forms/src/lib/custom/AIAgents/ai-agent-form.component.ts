@@ -1112,6 +1112,52 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
+     * Formats token count with appropriate units (K for thousands, M for millions)
+     */
+    public formatTokenCount(tokens: number | null): string {
+        if (tokens == null || tokens === 0) return '0';
+        
+        if (tokens >= 1000000) {
+            return `${(tokens / 1000000).toFixed(1)}M`;
+        } else if (tokens >= 1000) {
+            return `${(tokens / 1000).toFixed(1)}K`;
+        } else {
+            return tokens.toString();
+        }
+    }
+
+    /**
+     * Formats cost with appropriate precision
+     */
+    public formatCost(cost: number | null): string {
+        if (cost == null || cost === 0) return '0.00';
+        
+        if (cost >= 1) {
+            return cost.toFixed(2);
+        } else if (cost >= 0.01) {
+            return cost.toFixed(3);
+        } else {
+            return cost.toFixed(4);
+        }
+    }
+
+    /**
+     * Gets the running time for an execution that hasn't completed yet
+     */
+    public getRunningTime(startDate: Date): string {
+        if (!startDate) return 'N/A';
+        
+        const now = new Date();
+        const startTime = new Date(startDate).getTime();
+        const currentTime = now.getTime();
+        
+        if (isNaN(startTime)) return 'N/A';
+        
+        const milliseconds = currentTime - startTime;
+        return this.formatExecutionTime(milliseconds);
+    }
+
+    /**
      * Gets the priority badge color
      */
     public getPriorityBadgeColor(priority: number): string {

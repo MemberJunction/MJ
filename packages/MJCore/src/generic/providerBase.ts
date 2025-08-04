@@ -153,7 +153,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param data - Configuration including schema filters and connection info
      * @returns True if configuration was successful
      */
-    public async Config(data: ProviderConfigDataBase): Promise<boolean> {
+    public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
@@ -166,7 +166,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
         }
 
-        if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
+        if (this._refresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -179,7 +179,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
 
             const start = new Date().getTime();
-            const res = await this.GetAllMetadata();
+            const res = await this.GetAllMetadata(providerToUse);
             const end = new Date().getTime();
             LogStatus(`GetAllMetadata() took ${end - start} ms`);
             if (res) {
@@ -258,14 +258,14 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Uses the MJ_Metadata dataset for efficient bulk loading.
      * @returns Complete metadata collection with all relationships
      */
-    protected async GetAllMetadata(): Promise<AllMetadata> {
+    protected async GetAllMetadata(providerToUse?: IMetadataProvider): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             //const start1 = new Date().getTime();
             const f = this.BuildDatasetFilterFromConfig();
 
             // Get the dataset and cache it for anyone else who wants to use it
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null);            
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse);            
             if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, d);
@@ -487,11 +487,11 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Respects the AllowRefresh flag from subclasses.
      * @returns True if refresh was initiated or allowed
      */
-    public async Refresh(): Promise<boolean> {
+    public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
         if (this.AllowRefresh) {
             this._refresh = true;
-            return this.Config(this._ConfigData);
+            return this.Config(this._ConfigData, providerToUse);
         }
         else
             return true; // subclass is telling us not to do any refresh ops right now
@@ -502,9 +502,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Compares local timestamps with server timestamps.
      * @returns True if refresh is needed, false otherwise
      */
-    public async CheckToSeeIfRefreshNeeded(): Promise<boolean> {
+    public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
         if (this.AllowRefresh) {
-            await this.RefreshRemoteMetadataTimestamps(); // get the latest timestamps from the server first
+            await this.RefreshRemoteMetadataTimestamps(providerToUse); // get the latest timestamps from the server first
             await this.LoadLocalMetadataFromStorage(); // then, attempt to load before we check to see if it is obsolete
             return this.LocalMetadataObsolete()
         }
@@ -517,9 +517,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Combines check and refresh into a single operation.
      * @returns True if refresh was successful or not needed
      */
-    public async RefreshIfNeeded(): Promise<boolean> {
-        if (await this.CheckToSeeIfRefreshNeeded()) 
-            return this.Refresh();
+    public async RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean> {
+        if (await this.CheckToSeeIfRefreshNeeded(providerToUse)) 
+            return this.Refresh(providerToUse);
         else
             return true;
     }
@@ -676,13 +676,13 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>;
+    public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
      */
-    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType>;
+    public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -690,7 +690,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
+    public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
             // compare the local version, if exists to the server version dates
@@ -700,7 +700,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
             else {
                 // we're out of date, so get the dataset from the server
-                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
+                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
                 // cache it
                 await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -709,7 +709,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         }
         else {
             // get the dataset from the server
-            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser);
+            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
             // cache it
             await this.CacheDataset(datasetName, itemFilters, dataset);
 
@@ -908,9 +908,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Retrieves the latest metadata update timestamps from the server.
      * @returns Array of metadata update information
      */
-    protected async GetLatestMetadataUpdates(): Promise<MetadataInfo[]> {
+    protected async GetLatestMetadataUpdates(providerToUse?: IMetadataProvider): Promise<MetadataInfo[]> {
         const f = this.BuildDatasetFilterFromConfig();
-        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null)
+        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, this.CurrentUser, providerToUse)
         if (d && d.Success) {
             const ret = d.EntityUpdateDates.map(e => {
                 return {
@@ -937,8 +937,8 @@ export abstract class ProviderBase implements IMetadataProvider {
      * Updates the internal cache of remote timestamps.
      * @returns True if timestamps were successfully refreshed
      */
-    public async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
-        const mdTimeStamps = await this.GetLatestMetadataUpdates();  
+    public async RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const mdTimeStamps = await this.GetLatestMetadataUpdates(providerToUse);  
         if (mdTimeStamps) {
             this._latestRemoteMetadataTimestamps = mdTimeStamps;
             return true;

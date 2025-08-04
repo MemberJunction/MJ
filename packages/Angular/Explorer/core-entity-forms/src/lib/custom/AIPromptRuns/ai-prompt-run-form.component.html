@@ -69,38 +69,126 @@
                 </div>
                 
                 <!-- Key Metrics Bar -->
-                <div class="metrics-bar">
-                    <div class="metric-item">
-                        <i class="fa-solid fa-clock"></i>
-                        <div class="metric-content">
-                            <div class="metric-label">Duration</div>
-                            <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
-                        </div>
-                    </div>
-                    <div class="metric-item">
-                        <i class="fa-solid fa-coins"></i>
-                        <div class="metric-content">
-                            <div class="metric-label">Total Tokens</div>
-                            <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
-                        </div>
-                    </div>
-                    <div class="metric-item">
-                        <i class="fa-solid fa-dollar-sign"></i>
-                        <div class="metric-content">
-                            <div class="metric-label">Cost</div>
-                            <div class="metric-value">{{ formatCost(record.TotalCost || record.Cost) }}</div>
-                        </div>
-                    </div>
-                    @if (record.RunAt) {
+                @if (record.ConfigurationID) {
+                    <!-- Configuration Bar -->
+                    <div class="metrics-bar">
                         <div class="metric-item">
-                            <i class="fa-solid fa-calendar"></i>
+                            <i class="fa-solid fa-cog"></i>
                             <div class="metric-content">
-                                <div class="metric-label">Started</div>
-                                <div class="metric-value">{{ record.RunAt | date:'short' }}</div>
+                                <div class="metric-label">Configuration</div>
+                                <div class="metric-value">
+                                    <a href="javascript:void(0)" class="config-link" (click)="navigateToEntity('MJ: AI Configurations', record.ConfigurationID)">
+                                        {{ record.Configuration || 'Unknown' }}
+                                    </a>
+                                </div>
                             </div>
                         </div>
-                    }
-                </div>
+                        @if (record.Temperature !== null && record.Temperature !== undefined) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-temperature-high"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Temperature</div>
+                                    <div class="metric-value">{{ record.Temperature }}</div>
+                                </div>
+                            </div>
+                        }
+                        @if (record.TopP !== null && record.TopP !== undefined) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-percentage"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Top P</div>
+                                    <div class="metric-value">{{ record.TopP }}</div>
+                                </div>
+                            </div>
+                        }
+                        @if (record.TopK !== null && record.TopK !== undefined) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-list-ol"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Top K</div>
+                                    <div class="metric-value">{{ record.TopK }}</div>
+                                </div>
+                            </div>
+                        }
+                        @if (record.ResponseFormat) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-code"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Response Format</div>
+                                    <div class="metric-value">{{ record.ResponseFormat }}</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    <!-- Execution Metrics Bar (always show when configuration exists) -->
+                    <div class="metrics-bar">
+                        <div class="metric-item">
+                            <i class="fa-solid fa-clock"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Duration</div>
+                                <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-coins"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Total Tokens</div>
+                                <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-dollar-sign"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Cost</div>
+                                <div class="metric-value">{{ formatCost(record.TotalCost || record.Cost) }}</div>
+                            </div>
+                        </div>
+                        @if (record.RunAt) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-calendar"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Started</div>
+                                    <div class="metric-value">{{ record.RunAt | date:'short' }}</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                } @else {
+                    <!-- Execution Metrics Bar (original behavior when no configuration) -->
+                    <div class="metrics-bar">
+                        <div class="metric-item">
+                            <i class="fa-solid fa-clock"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Duration</div>
+                                <div class="metric-value">{{ formatDuration(record.ExecutionTimeMS) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-coins"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Total Tokens</div>
+                                <div class="metric-value">{{ formatTokens(record.TokensUsed) }}</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <i class="fa-solid fa-dollar-sign"></i>
+                            <div class="metric-content">
+                                <div class="metric-label">Cost</div>
+                                <div class="metric-value">{{ formatCost(record.TotalCost || record.Cost) }}</div>
+                            </div>
+                        </div>
+                        @if (record.RunAt) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-calendar"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Started</div>
+                                    <div class="metric-value">{{ record.RunAt | date:'short' }}</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
 
             <!-- Main Content with Expansion Panels -->
@@ -108,7 +196,7 @@
                 <kendo-panelbar [keepItemContent]="true">
                     
                     <!-- Input Panel with nested sub-panels -->
-                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle()">
+                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-comment-dots"></i>
@@ -245,7 +333,7 @@
                     </kendo-panelbar-item>
                     
                     <!-- Result Panel -->
-                    <kendo-panelbar-item [expanded]="resultExpanded">
+                    <kendo-panelbar-item [expanded]="resultExpanded" (stateChange)="onResultPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-square-check"></i>
@@ -327,7 +415,7 @@
                     </kendo-panelbar-item>
                     
                     <!-- Token Usage & Metrics Panel -->
-                    <kendo-panelbar-item [expanded]="metricsExpanded">
+                    <kendo-panelbar-item [expanded]="metricsExpanded" (stateChange)="onMetricsPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-chart-line"></i>
@@ -432,12 +520,6 @@
                                             <span class="metric-value">{{ record.ExecutionOrder }}</span>
                                         </div>
                                     }
-                                    @if (record.ConfigurationID) {
-                                        <div class="metric-row">
-                                            <span class="metric-label">Configuration:</span>
-                                            <span class="metric-value">{{ record.Configuration }}</span>
-                                        </div>
-                                    }
                                     @if (record.AgentID) {
                                         <div class="metric-row">
                                             <span class="metric-label">Agent:</span>
@@ -454,7 +536,7 @@
                     
                     <!-- Validation & Retry Panel -->
                     @if (record && ((record.ValidationAttemptCount && record.ValidationAttemptCount > 0) || record.ValidationBehavior)) {
-                        <kendo-panelbar-item [expanded]="validationExpanded">
+                        <kendo-panelbar-item [expanded]="validationExpanded" (stateChange)="onValidationPanelToggle($event)">
                             <ng-template kendoPanelBarItemTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-shield-check"></i>
@@ -702,15 +784,6 @@
                                         </div>
                                     }
                                     
-                                    @if (record.ConfigurationID) {
-                                        <div class="detail-field">
-                                            <label>Configuration</label>
-                                            <div class="detail-value">
-                                                <i class="fa-solid fa-cog"></i>
-                                                {{ record.Configuration || 'Unknown' }}
-                                            </div>
-                                        </div>
-                                    }
                                     
                                     @if (record.RunType) {
                                         <div class="detail-field">
@@ -814,7 +887,7 @@
                     
                     <!-- Model Specific Response Details Panel -->
                     @if (record.ModelSpecificResponseDetails) {
-                        <kendo-panelbar-item [expanded]="false">
+                        <kendo-panelbar-item [expanded]="modelSpecificExpanded" (stateChange)="onModelSpecificPanelToggle($event)">
                             <ng-template kendoPanelBarItemTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-microchip"></i>
@@ -849,7 +922,7 @@
                     }
                     
                     <!-- Model Selection & Performance Panel (v2.78 fields) -->
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" (stateChange)="onModelSelectionPanelToggle($event)">
                         <ng-template kendoPanelBarItemTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-microchip"></i>

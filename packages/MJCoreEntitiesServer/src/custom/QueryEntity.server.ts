@@ -1,5 +1,5 @@
-import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
+import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
@@ -37,6 +37,27 @@ interface ParameterExtractionResult {
 
 @RegisterClass(BaseEntity, 'Queries')
 export class QueryEntityExtended extends QueryEntity {
+    private _queryEntities: QueryEntityInfo[] = [];
+    private _queryFields: QueryFieldInfo[] = [];
+    private _queryParameters: QueryParameterInfo[] = [];
+    private _queryPermissions: QueryPermissionInfo[] = [];
+
+    public get QueryEntities(): QueryEntityInfo[] {
+        return this._queryEntities;
+    }
+
+    public get QueryFields(): QueryFieldInfo[] {
+        return this._queryFields;
+    }
+
+    public get QueryParameters(): QueryParameterInfo[] {
+        return this._queryParameters;
+    }
+
+    public get QueryPermissions(): QueryPermissionInfo[] {
+        return this._queryPermissions;
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
             // Check if this is a new record or if SQL has changed
@@ -71,7 +92,9 @@ export class QueryEntityExtended extends QueryEntity {
                 //     });
                 // });
             }
-            
+
+            await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
+
             return true;
         } catch (e) {
             LogError('Failed to save query:', e);
@@ -196,8 +219,8 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query parameters
-            const rv = new RunView();
-            const existingParams = [];
+            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
@@ -308,7 +331,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (this.IsSaved) {
                 // Get all existing query parameters
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -341,7 +364,7 @@ export class QueryEntityExtended extends QueryEntity {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                     EntityName: 'Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -459,9 +482,9 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query entities
-            const existingEntities = [];
+            const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -541,7 +564,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -569,7 +592,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -592,6 +615,47 @@ export class QueryEntityExtended extends QueryEntity {
             throw e;
         }
     }
+
+    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {                
+        const result = await super.Load(ID, EntityRelationshipsToLoad);        
+        await this.RefreshRelatedMetadata(false);
+        return result;
+    }
+
+    override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+        const result = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);
+        await this.RefreshRelatedMetadata(false);
+        return result;
+    }
+
+    override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
+        const result = await super.LoadFromData(data, _replaceOldValues);
+        await this.RefreshRelatedMetadata(false);
+        return result;
+    }
+
+    /**
+     * Refreshes this record's related metadata from the provider, refreshing
+     * all the way up from the database if refreshFromDB is true, otherwise from
+     * cache.
+     * @param refreshFromDB 
+     */
+    public async RefreshRelatedMetadata(refreshFromDB: boolean) {
+        const md = this.ProviderToUse as any as IMetadataProvider;
+        if (refreshFromDB) {
+            const globalMetadataProvider = Metadata.Provider;
+            await globalMetadataProvider.Refresh(md); // we pass in our metadata provider because that is the connection we want to use if we are in the midst of a transaction
+            if (globalMetadataProvider !== md) {
+                // If the global metadata provider is different, we need to refresh it
+                await md.Refresh(); // will refresh FROM the global provider, meaning we do NOT hit the DB again, we just copy the data into our MD instance that is part of our trans scope
+            }
+        }
+        this._queryPermissions = md.QueryPermissions.filter(p => p.QueryID === this.ID);
+        this._queryEntities = md.QueryEntities.filter(e => e.QueryID === this.ID);
+        this._queryFields = md.QueryFields.filter(f => f.QueryID === this.ID);
+        this._queryParameters = md.QueryParameters.filter(p => p.QueryID === this.ID);
+    }
+
 }
 
 export function LoadQueryEntityServerSubClass() {}
