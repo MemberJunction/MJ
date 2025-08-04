@@ -1723,6 +1723,14 @@ export class BaseAgent {
      */
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
+        console.log('BASE AGENT - ExecuteSingleAction called:', {
+            actionName: action.name,
+            actionEntityId: actionEntity?.ID,
+            actionEntityName: actionEntity?.Name,
+            actionParams: action.params,
+            contextUser: contextUser?.Email
+        });
+        
         try {
             const actionEngine = ActionEngineServer.Instance;
 
@@ -2434,10 +2442,31 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         
         
+        // Check if this is a flow prompt step with a specific prompt ID
+        let promptId = config.childPrompt?.ID;
+        let promptName = config.childPrompt?.Name;
+        let flowPromptOverride: AIPromptEntity | undefined;
+        
+        // For Flow Agent Type, check if a specific prompt ID was provided
+        if (previousDecision && (previousDecision as any).flowPromptStepId) {
+            promptId = (previousDecision as any).flowPromptStepId;
+            
+            // Load the specific prompt for this flow step
+            const metadata = new Metadata();
+            const promptEntity = await metadata.GetEntityObject<AIPromptEntity>('AI Prompts', params.contextUser);
+            if (await promptEntity.Load(promptId)) {
+                flowPromptOverride = promptEntity;
+                promptName = promptEntity.Name;
+            } else {
+                LogError(`Failed to load flow prompt with ID: ${promptId}`);
+                promptName = 'Flow Prompt Step';
+            }
+        }
+        
         // Prepare input data for the step
         const inputData = {
-            promptId: config.childPrompt?.ID,
-            promptName: config.childPrompt?.Name,
+            promptId: promptId,
+            promptName: promptName,
             isRetry: !!previousDecision,
             retryContext: previousDecision ? {
                 reason: previousDecision.retryReason,
@@ -2448,7 +2477,7 @@ export class BaseAgent {
         
         // Prepare prompt parameters
         const payload = previousDecision?.newPayload || params.payload;
-        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData, undefined, payload);
+        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, promptId, inputData, undefined, payload);
         
         try {
             // Report prompt execution progress with context
@@ -2462,9 +2491,9 @@ export class BaseAgent {
                 percentage: 30,
                 message: this.formatHierarchicalMessage(promptMessage),
                 metadata: { 
-                    promptId: config.childPrompt?.ID,
+                    promptId: promptId,
                     isRetry,
-                    promptName: config.childPrompt?.Name
+                    promptName: promptName
                 },
                 displayMode: 'live' // Only show in live mode
             });
@@ -2487,7 +2516,15 @@ export class BaseAgent {
             // now prep the params using the downstream payload - which is often the full
             // payload but the above allows us to narrow the scope of what we send back to the
             // main prompt if desired in some prompting cases.
-            const promptParams = await this.preparePromptParams(config, downstreamPayload, params);
+            
+            // If we have a flow prompt override, create a modified config for this execution
+            const promptConfig = flowPromptOverride ? {
+                ...config,
+                childPrompt: flowPromptOverride,
+                systemPrompt: null // Flow prompts don't use system prompts
+            } : config;
+            
+            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
@@ -2992,6 +3029,14 @@ export class BaseAgent {
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
+        console.log('BASE AGENT - executeActionsStep called:', {
+            actionCount: previousDecision.actions?.length || 0,
+            actions: previousDecision.actions?.map(a => ({ name: a.name, params: a.params })),
+            stepType: previousDecision.step,
+            hasNewPayload: !!previousDecision.newPayload,
+            hasPreviousPayload: !!previousDecision.previousPayload
+        });
+        
         try {
             const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
             const actions: AgentAction[] = previousDecision.actions || [];
@@ -3064,6 +3109,14 @@ export class BaseAgent {
             try {
                 const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
                 const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+                
+                console.log('BASE AGENT - About to call PreProcessActionStep:', {
+                    hasNewPayload: !!previousDecision?.newPayload,
+                    hasPreviousPayload: !!previousDecision?.previousPayload,
+                    hasParamsPayload: !!params.payload,
+                    currentPayloadKeys: Object.keys(currentPayload || {}),
+                    currentPayload: currentPayload
+                });
                 
                 // Pre-process actions - this may modify the actions array in place
                 await agentTypeInstance.PreProcessActionStep(

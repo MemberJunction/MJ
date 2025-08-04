@@ -40,6 +40,9 @@ export class FlowExecutionState {
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
     
+    /** The current payload state - CRITICAL for maintaining state across steps */
+    currentPayload?: unknown;
+    
     constructor(agentId: string) {
         this.agentId = agentId;
     }
@@ -152,7 +155,18 @@ export class FlowAgentType extends BaseAgentType {
             // Get agent run ID from parent run or generate a temporary one
             const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
             const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
-            const currentPayload = params.payload || {} as P;
+            
+            // CRITICAL FIX: Use stored payload from flow state to maintain state across steps
+            let currentPayload = (flowState.currentPayload as P) || params.payload || {} as P;
+            
+            //FLOW AGENT DEBUGGING - Log entry to DetermineNextStep
+            console.log('FLOW AGENT DEBUGGING - DetermineNextStep called:', {
+                agentId: params.agent.ID,
+                agentName: params.agent.Name,
+                currentStepId: flowState.currentStepId,
+                completedSteps: Array.from(flowState.completedStepIds),
+                payload: currentPayload
+            });
             
             // If no current step, this should have been handled by DetermineInitialStep
             if (!flowState.currentStepId) {
@@ -172,38 +186,50 @@ export class FlowAgentType extends BaseAgentType {
             // Get current step to check if it was a Prompt step
             const currentStep = await this.getStepById(flowState.currentStepId);
             
-            // If current step was a Prompt, use the prompt result to determine next step
+            // If current step was a Prompt, update payload with the prompt result
             if (currentStep?.StepType === 'Prompt' && promptResult) {
-                const promptResponse = this.parseJSONResponse<FlowAgentPromptResponse>(promptResult);
+                //FLOW AGENT DEBUGGING - Log raw prompt result
+                console.log('FLOW AGENT DEBUGGING - Raw prompt result:', {
+                    success: promptResult.success,
+                    result: promptResult.result,
+                    resultType: typeof promptResult.result,
+                    firstChars: typeof promptResult.result === 'string' ? promptResult.result.substring(0, 100) : 'not a string'
+                });
                 
-                if (promptResponse?.terminate) {
-                    return this.createSuccessStep({
-                        message: promptResponse.message || 'Flow terminated by prompt decision',
-                        reasoning: promptResponse.reasoning
-                    });
-                }
+                // Parse the prompt result as JSON
+                const promptResponse = this.parseJSONResponse<any>(promptResult);
                 
-                // If prompt specified a next step, try to find it
-                if (promptResponse?.nextStepName) {
-                    const nextStep = await this.getStepByName(
-                        flowState.agentId, 
-                        promptResponse.nextStepName
-                    );
+                if (promptResponse) {
+                    // Update the payload with the prompt result
+                    // Merge the prompt response into the current payload
+                    currentPayload = {
+                        ...currentPayload,
+                        ...promptResponse
+                    } as P;
                     
-                    if (nextStep) {
-                        // Check if the step is active
-                        if (nextStep.Status !== 'Active') {
-                            return this.createNextStep('Failed', {
-                                errorMessage: `Requested step '${nextStep.Name}' is not active. Status: ${nextStep.Status}`
-                            });
-                        }
-                        return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
-                    }
+                    // CRITICAL: Store the updated payload in flow state for subsequent steps
+                    flowState.currentPayload = currentPayload;
+                    
+                    //FLOW AGENT DEBUGGING - Log updated payload
+                    console.log('FLOW AGENT DEBUGGING - Updated payload after prompt:', {
+                        payload: currentPayload
+                    });
                 }
             }
             
             // Find valid paths from current step
             const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
+            
+            //FLOW AGENT DEBUGGING - Log path evaluation
+            console.log('FLOW AGENT DEBUGGING - Valid paths from step:', {
+                currentStepId: flowState.currentStepId,
+                pathCount: paths.length,
+                paths: paths.map(p => ({ 
+                    destinationStepId: p.DestinationStepID,
+                    condition: p.Condition,
+                    priority: p.Priority
+                }))
+            });
             
             if (paths.length === 0) {
                 // No valid paths - flow is complete
@@ -349,7 +375,22 @@ export class FlowAgentType extends BaseAgentType {
                     }
                 };
                 
+                //FLOW AGENT DEBUGGING - Log condition evaluation
+                console.log('FLOW AGENT DEBUGGING - Evaluating path condition:', {
+                    pathId: path.ID,
+                    condition: path.Condition,
+                    context: JSON.stringify(context, null, 2)
+                });
+                
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
+                
+                //FLOW AGENT DEBUGGING - Log evaluation result
+                console.log('FLOW AGENT DEBUGGING - Condition evaluation result:', {
+                    pathId: path.ID,
+                    success: evalResult.success,
+                    value: evalResult.value,
+                    error: evalResult.error
+                });
                 
                 if (evalResult.success && evalResult.value) {
                     validPaths.push(path);
@@ -394,6 +435,13 @@ export class FlowAgentType extends BaseAgentType {
             const mapping: ActionOutputMapping = JSON.parse(mappingConfig);
             const updateObj: Record<string, unknown> = {};
             
+            //FLOW AGENT DEBUGGING - Log output mapping
+            console.log('FLOW AGENT DEBUGGING - Processing action output mapping:', {
+                actionResult: actionResult,
+                mappingConfig: mapping,
+                currentPayload: _payload
+            });
+            
             for (const [outputParam, payloadPath] of Object.entries(mapping)) {
                 let value: unknown;
                 
@@ -428,6 +476,11 @@ export class FlowAgentType extends BaseAgentType {
                 return null;
             }
             
+            //FLOW AGENT DEBUGGING - Log final payload update
+            console.log('FLOW AGENT DEBUGGING - Action output mapping result:', {
+                updateObj: updateObj
+            });
+            
             return {
                 updateElements: updateObj as Partial<P>
             };
@@ -450,6 +503,16 @@ export class FlowAgentType extends BaseAgentType {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
         
+        //FLOW AGENT DEBUGGING - Log step creation
+        console.log('FLOW AGENT DEBUGGING - Creating step for node:', {
+            nodeId: node.ID,
+            nodeName: node.Name,
+            nodeType: node.StepType,
+            actionId: node.ActionID,
+            promptId: node.PromptID,
+            subAgentId: node.SubAgentID
+        });
+        
         switch (node.StepType) {
             case 'Action':
                 if (!node.ActionID) {
@@ -462,6 +525,16 @@ export class FlowAgentType extends BaseAgentType {
                 
                 // Need to get the action name
                 const actionName = await this.getActionName(node.ActionID);
+                
+                //FLOW AGENT DEBUGGING - Log action lookup
+                console.log('FLOW AGENT DEBUGGING - Looking up action:', {
+                    stepName: node.Name,
+                    actionId: node.ActionID,
+                    actionNameFound: actionName,
+                    inputMapping: node.ActionInputMapping,
+                    outputMapping: node.ActionOutputMapping
+                });
+                
                 if (!actionName) {
                     return this.createNextStep('Failed', {
                         errorMessage: `Action not found for step '${node.Name}'`,
@@ -551,6 +624,33 @@ export class FlowAgentType extends BaseAgentType {
     }
     
     /**
+     * Deep merges two objects, with values from source overwriting values in target
+     * 
+     * @private
+     */
+    private deepMergePayloads(target: any, source: any): any {
+        if (!source || typeof source !== 'object') {
+            return target;
+        }
+        
+        const result = { ...target };
+        
+        for (const key in source) {
+            if (source.hasOwnProperty(key)) {
+                if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                    // If the source value is an object (but not an array), recursively merge
+                    result[key] = this.deepMergePayloads(result[key] || {}, source[key]);
+                } else {
+                    // Otherwise, directly assign the value from source
+                    result[key] = source[key];
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
      * Gets action name by ID
      * 
      * @private
@@ -609,9 +709,37 @@ export class FlowAgentType extends BaseAgentType {
         currentPayload: P,
         currentStep: BaseAgentNextStep<P>
     ): Promise<void> {
-        // Check if this step has action input mapping configured
+        // CRITICAL FIX: For Flow agents, we need to use the payload from flow state
+        // because it contains the accumulated state from previous steps
+        let actualPayload = currentPayload;
+        
+        // Try to find the flow state and use its payload if available
         const stepMetadata = currentStep as Record<string, unknown>;
         const stepId = stepMetadata.stepId as string | undefined;
+        
+        if (stepId) {
+            // Find the flow state that has this step as current
+            for (const [agentRunId, flowState] of FlowAgentType._flowStates) {
+                if (flowState.currentStepId === stepId && flowState.currentPayload) {
+                    actualPayload = flowState.currentPayload as P;
+                    console.log('FLOW AGENT DEBUGGING - Using payload from flow state in PreProcessActionStep:', {
+                        agentRunId,
+                        stepId,
+                        flowStatePayloadKeys: Object.keys(flowState.currentPayload as any || {}),
+                        paramPayloadKeys: Object.keys(currentPayload || {})
+                    });
+                    break;
+                }
+            }
+        }
+        
+        //FLOW AGENT DEBUGGING - Log PreProcessActionStep entry
+        console.log('FLOW AGENT DEBUGGING - PreProcessActionStep called:', {
+            actionCount: actions.length,
+            actions: actions.map(a => ({ name: a.name, params: a.params })),
+            payloadKeys: Object.keys(actualPayload || {}),
+            stepType: currentStep.step
+        });
         
         if (!stepId || actions.length === 0) {
             // No step ID or no actions to process
@@ -655,6 +783,13 @@ export class FlowAgentType extends BaseAgentType {
                 return;
             }
             
+            //FLOW AGENT DEBUGGING - Log input mapping details
+            console.log('FLOW AGENT DEBUGGING - Input mapping parsed:', {
+                stepName: stepEntity.Name,
+                inputMapping: inputMapping,
+                currentPayload: actualPayload
+            });
+            
             const action = actions[0];
             
             // Initialize params if not present
@@ -662,10 +797,25 @@ export class FlowAgentType extends BaseAgentType {
                 action.params = {};
             }
             
+            //FLOW AGENT DEBUGGING - Log input mapping
+            console.log('FLOW AGENT DEBUGGING - Processing action input mapping:', {
+                stepName: stepEntity.Name,
+                actionName: action.name,
+                inputMapping: inputMapping,
+                currentPayload: actualPayload
+            });
+            
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
                 // Use recursive resolution to handle nested objects, arrays, and primitive values
-                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
+                const resolvedValue = this.resolveNestedValue(mappingValue, actualPayload);
+                
+                //FLOW AGENT DEBUGGING - Log parameter mapping
+                console.log('FLOW AGENT DEBUGGING - Mapped parameter:', {
+                    paramName: paramName,
+                    mappingValue: mappingValue,
+                    resolvedValue: resolvedValue
+                });
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -784,9 +934,32 @@ export class FlowAgentType extends BaseAgentType {
         // Apply the mapping using our existing method
         const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
         
-        // Note: Flow state is now tracked separately from payload
-        // The action output mapping is still applied to the payload
-        // but flow execution state is maintained in FlowExecutionState
+        // CRITICAL: Update flow state with the modified payload
+        // This ensures the payload persists when DetermineNextStep is called again
+        if (payloadChange && payloadChange.updateElements) {
+            // Try to find the flow state - we need to iterate since we don't have the run ID here
+            // This is a temporary workaround - ideally we'd have the run ID passed through
+            for (const [agentRunId, flowState] of FlowAgentType._flowStates) {
+                if (flowState.currentStepId === stepId) {
+                    // CRITICAL FIX: Merge the payload changes with the existing flow state payload
+                    // Use the flow state's current payload as the base, not the currentPayload parameter
+                    const existingPayload = flowState.currentPayload || currentPayload || {};
+                    
+                    // Deep merge the update elements into the existing payload
+                    flowState.currentPayload = this.deepMergePayloads(
+                        existingPayload,
+                        payloadChange.updateElements
+                    );
+                    
+                    console.log('FLOW AGENT DEBUGGING - Updated flow state payload after action:', {
+                        agentRunId,
+                        stepId,
+                        updatedPayload: flowState.currentPayload
+                    });
+                    break;
+                }
+            }
+        }
         
         return payloadChange;
     }
@@ -806,6 +979,17 @@ export class FlowAgentType extends BaseAgentType {
         const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
         const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
         const payload = params.payload || {} as P;
+        
+        //FLOW AGENT DEBUGGING - Log initial step determination
+        console.log('FLOW AGENT DEBUGGING - DetermineInitialStep called:', {
+            agentId: params.agent.ID,
+            agentName: params.agent.Name,
+            agentRunId: agentRunId,
+            initialPayload: payload
+        });
+        
+        // Store initial payload in flow state
+        flowState.currentPayload = payload;
         
         const startingSteps = await this.getStartingSteps(flowState.agentId);
         
@@ -846,9 +1030,43 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         // Get the updated payload (after action execution)
-        const currentPayload = retryStep.newPayload || params.payload || {} as P;
+        const payloadFromRetryStep = retryStep.newPayload || params.payload || {} as P;
         const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
         const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
+        
+        // CRITICAL FIX: Don't overwrite the flow state's payload if it already has accumulated data
+        // The retry step only contains the action's output mapping result, not the full payload
+        // If flow state already has a payload with more data, keep it
+        let currentPayload = payloadFromRetryStep;
+        
+        if (flowState.currentPayload) {
+            // Check if the flow state has more complete data
+            const flowStateKeys = Object.keys(flowState.currentPayload as any || {});
+            const retryStepKeys = Object.keys(payloadFromRetryStep || {});
+            
+            // If flow state has more keys or different structure, it likely has the accumulated data
+            if (flowStateKeys.length > retryStepKeys.length || 
+                (flowStateKeys.includes('userData') && !retryStepKeys.includes('userData'))) {
+                // Flow state has more complete data - use it as the base
+                currentPayload = flowState.currentPayload as P;
+                console.log('FLOW AGENT DEBUGGING - Keeping flow state payload in PreProcessRetryStep');
+            } else {
+                // Update flow state with the new payload
+                flowState.currentPayload = currentPayload;
+            }
+        } else {
+            // No existing flow state payload, use what we got from retry step
+            flowState.currentPayload = currentPayload;
+        }
+        
+        console.log('FLOW AGENT DEBUGGING - PreProcessRetryStep payload resolution:', {
+            agentRunId,
+            currentStepId: flowState.currentStepId,
+            payloadFromRetryStep: !!retryStep.newPayload,
+            flowStateHasPayload: !!flowState.currentPayload,
+            currentPayloadKeys: Object.keys(currentPayload || {}),
+            currentPayload: currentPayload
+        });
         
         // We should have a current step ID from the flow state
         if (!flowState.currentStepId) {

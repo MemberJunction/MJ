@@ -25,7 +25,7 @@
             "ID": "5F7F9008-5C8B-4157-AFC8-8356B902F406"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.606Z",
+            "lastModified": "2025-08-04T04:56:29.701Z",
             "checksum": "5cb8a420d7c328b648794a6d3811db2b36d192f55170c82fc71dfda337447610"
           }
         },
@@ -43,7 +43,7 @@
             "ID": "A173F9B6-1F69-4B5D-864F-4A3439790274"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.616Z",
+            "lastModified": "2025-08-04T04:56:29.708Z",
             "checksum": "fa1e6605a72443ab2d03b9081dac5566fc4e249664859adb2aba97c046a40e19"
           }
         },
@@ -61,7 +61,7 @@
             "ID": "DD7E9132-B31E-406E-8A98-F79A08B8AE32"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.624Z",
+            "lastModified": "2025-08-04T04:56:29.715Z",
             "checksum": "fe52115af3d232c875ecc96b278b72527b628d390f9a6644abfef469df2286e5"
           }
         },
@@ -79,7 +79,7 @@
             "ID": "5D8B4D41-C66C-49F7-9861-506BFEE4F1B3"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.630Z",
+            "lastModified": "2025-08-04T04:56:29.722Z",
             "checksum": "e0baba56c95b742a3f6c8e736734bcf80e8be3d1161079bfe35fc1111a8d0ec6"
           }
         }
@@ -96,7 +96,7 @@
             "ID": "723A787A-AFA6-441A-B133-653BDC3A1657"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.637Z",
+            "lastModified": "2025-08-04T04:56:29.728Z",
             "checksum": "0f136c788bf99746c3f4822747b4826ebfda2819fbdc1989587cb3f40f543887"
           }
         },
@@ -111,7 +111,7 @@
             "ID": "B9DB2B28-8CE7-4ACE-90DE-75E6724BA332"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.643Z",
+            "lastModified": "2025-08-04T04:56:29.734Z",
             "checksum": "8770cadeb176271a42a3edc571f06510514ad212d722296e95b10e871ceb8ed5"
           }
         },
@@ -126,7 +126,7 @@
             "ID": "BDF194DC-113C-43E2-BEEC-03E9D6FA7138"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.650Z",
+            "lastModified": "2025-08-04T04:56:29.740Z",
             "checksum": "48bf000d5ec062498762361c71e7c59e853085de4d1dbb4efb05412b2ddc0350"
           }
         }
@@ -136,7 +136,7 @@
       "ID": "C8094D90-1194-4C81-AE0F-77E85FD54169"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.594Z",
+      "lastModified": "2025-08-04T04:56:29.694Z",
       "checksum": "56bc34215b5b4f645331062647bf2556b756ab99acbe90e132a8f61671f5e02a"
     }
   },
@@ -166,7 +166,7 @@
             "ID": "47570E42-3076-43E7-A0A6-8F77B407193C"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.668Z",
+            "lastModified": "2025-08-04T04:56:29.761Z",
             "checksum": "49f73d873b0fa2ee7dba900eeee370faba2a0b5a1e532bc48cc60592e79f9fab"
           }
         },
@@ -184,7 +184,7 @@
             "ID": "F64CD9EA-27B2-4463-9088-6A99AA75B0BB"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.676Z",
+            "lastModified": "2025-08-04T04:56:29.768Z",
             "checksum": "a987ff2be649afe09391a726501997e7812b13df4eddd4b77f4eb10f85351eaf"
           }
         },
@@ -202,7 +202,7 @@
             "ID": "4A84CB4D-D0DD-4C3C-8CB2-55583C19DE2B"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.688Z",
+            "lastModified": "2025-08-04T04:56:29.774Z",
             "checksum": "19883bf0d9adfbf082ce2b42e35240b443b23bbc534b75d24a8cb23221e90bc9"
           }
         },
@@ -220,7 +220,7 @@
             "ID": "87F5A4A3-0AA2-41EF-97AA-5B540FD85795"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.697Z",
+            "lastModified": "2025-08-04T04:56:29.782Z",
             "checksum": "f6a2f2fa67000c4a5d535b380b2b5acdfaa9887f77e792fb5790a11b09090c0a"
           }
         },
@@ -239,7 +239,7 @@
             "ID": "C6F62A88-0388-4D27-91A1-2AB3A3A9749A"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.707Z",
+            "lastModified": "2025-08-04T04:56:29.788Z",
             "checksum": "0b911deefb7ccb5331694cf8aae123a9eda601f58d78ca48bb079780a16de463"
           }
         },
@@ -258,7 +258,7 @@
             "ID": "BB0071AB-EA49-48F2-BFDE-A45E7A735006"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.716Z",
+            "lastModified": "2025-08-04T04:56:29.796Z",
             "checksum": "f2b3e30d38b6fb2c3e2cbb9fbe1d45ab39430d51f4c2acbbe065a6e485a984ef"
           }
         },
@@ -276,7 +276,7 @@
             "ID": "5A437DF5-DD22-47EC-ADB8-010AA6E2AA6F"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.723Z",
+            "lastModified": "2025-08-04T04:56:29.803Z",
             "checksum": "88fe299fd30abc6026f1ab347e73eb0449c92c61faab93c8a39af116117a341e"
           }
         },
@@ -294,7 +294,7 @@
             "ID": "7BE32625-CEBA-414A-8A9A-8496620F45AC"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.730Z",
+            "lastModified": "2025-08-04T04:56:29.810Z",
             "checksum": "5ec753366f0e51561f2c0971c982fb29fc7cc70389aa00a758fcea0a1345ba99"
           }
         },
@@ -312,7 +312,7 @@
             "ID": "A63A0740-02F7-471B-92AB-B4CBB28EE26D"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.736Z",
+            "lastModified": "2025-08-04T04:56:29.817Z",
             "checksum": "a816b3a9311cc3eb6d3c5470883e940c79c39d0f106e89e01452fc153a70a12c"
           }
         }
@@ -329,7 +329,7 @@
             "ID": "DC8413FE-3A3A-4979-9C71-DC3E87224810"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.741Z",
+            "lastModified": "2025-08-04T04:56:29.823Z",
             "checksum": "b109c64f7af87b1ee963e9b2f0b8f603ead1f501644b1514c257464cb82b4e85"
           }
         },
@@ -344,7 +344,7 @@
             "ID": "99A8CB36-196C-42E6-9AC9-9D657CECF5C9"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.746Z",
+            "lastModified": "2025-08-04T04:56:29.829Z",
             "checksum": "c81ef69aff8d1bf7a7e6452a0740f500e6299034a0589ba9a288e4edafedd312"
           }
         },
@@ -359,7 +359,7 @@
             "ID": "D63BB773-A239-41A2-ABBB-4518BCBC76D1"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.752Z",
+            "lastModified": "2025-08-04T04:56:29.834Z",
             "checksum": "cfd002d3c0053745af3727beb644d8e1330d2bcbec43d740174dfba327cb207c"
           }
         },
@@ -374,7 +374,7 @@
             "ID": "D2F4A583-DDEA-48C1-9DD4-9A838FEF11E1"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.757Z",
+            "lastModified": "2025-08-04T04:56:29.839Z",
             "checksum": "bb16847b1f22425cdfb67ec393246845a0b5ef1b39cde23a274107877a4055f7"
           }
         }
@@ -384,7 +384,7 @@
       "ID": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.661Z",
+      "lastModified": "2025-08-04T04:56:29.752Z",
       "checksum": "fe90c220d208918b48c80e96c0bc0a5d6c4edaea304c5c013c242b9efdf42ba6"
     }
   },
@@ -414,7 +414,7 @@
             "ID": "9F6498E3-53DB-42A6-9BEA-4FD71C72AEAD"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.774Z",
+            "lastModified": "2025-08-04T04:56:29.855Z",
             "checksum": "bf27cbe642606ccc66f81e49b8f1691ee6d5781a2be1774a7b5f85a3f234def6"
           }
         },
@@ -432,7 +432,7 @@
             "ID": "AF7DF8D7-1968-41C8-96E8-6DEC8A6B6790"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.781Z",
+            "lastModified": "2025-08-04T04:56:29.861Z",
             "checksum": "d1cbc72ea2e0a5f54d039d9605cb53ce390b81720e41f69d906cf32024dd577a"
           }
         },
@@ -450,7 +450,7 @@
             "ID": "EA01F918-0B66-417A-AA84-FC791982A2F6"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.788Z",
+            "lastModified": "2025-08-04T04:56:29.867Z",
             "checksum": "1e2b1332c1906073869ca990e0a8b8a770719c86c55e0db36023beaeef192952"
           }
         },
@@ -468,7 +468,7 @@
             "ID": "5C672151-4B4A-42FD-BD3C-BF7727D23567"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.794Z",
+            "lastModified": "2025-08-04T04:56:29.874Z",
             "checksum": "0feaa3c8aa34eed1ab48b7f62527db82c457a0da850222e6f56e5f92cabe9f6b"
           }
         },
@@ -486,7 +486,7 @@
             "ID": "F9462D49-E1C1-4E55-862A-9394B09CC39D"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.800Z",
+            "lastModified": "2025-08-04T04:56:29.880Z",
             "checksum": "3bb03b6d1699e3996e2288c29f7e851c35cd06140f9939262019f12fd790a80a"
           }
         },
@@ -504,7 +504,7 @@
             "ID": "298BF25B-312B-48E9-803D-5258DFE46394"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.806Z",
+            "lastModified": "2025-08-04T04:56:29.886Z",
             "checksum": "8da4ad4aad2448dfbcf717a6bcfb4ed9da99763865cf3c9458da3480685f1149"
           }
         },
@@ -522,7 +522,7 @@
             "ID": "47D96BB6-C561-4D3D-96CA-E8FCEFD6569F"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.812Z",
+            "lastModified": "2025-08-04T04:56:29.892Z",
             "checksum": "cf18d3d3aa5a2ff135786cd759089ea77be633079a57d769c8736155f5e7edd9"
           }
         },
@@ -541,7 +541,7 @@
             "ID": "DB10B67C-ED6B-4CEE-8535-81B48AE4E3D7"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.819Z",
+            "lastModified": "2025-08-04T04:56:29.898Z",
             "checksum": "e49380ae3c65121743d454820a2aa0ebb3f24b0b91f95d5ebe2ef94a1e39c04a"
           }
         },
@@ -559,7 +559,7 @@
             "ID": "8CDBA16E-42F6-4DA5-B42A-76866F6637D1"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.825Z",
+            "lastModified": "2025-08-04T04:56:29.903Z",
             "checksum": "e963f871369ae3d7f57538be767708d85a7dcd415740a9630cb34cbfd189b098"
           }
         }
@@ -576,7 +576,7 @@
             "ID": "AAC6F5BD-9408-42D3-872E-25A818D847D0"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.830Z",
+            "lastModified": "2025-08-04T04:56:29.908Z",
             "checksum": "14e6a061f3b729dc049b1693dc06194067f524d109ce192b9fcbd25b2d35a937"
           }
         },
@@ -591,7 +591,7 @@
             "ID": "1F6D5FCC-50C6-431A-B46F-2307FF20247D"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.837Z",
+            "lastModified": "2025-08-04T04:56:29.914Z",
             "checksum": "64b3c3c0c43246488ba2514bb512663f8903dd4a96118b393fa2979bbc87506c"
           }
         },
@@ -606,7 +606,7 @@
             "ID": "6EEF5C95-3F08-484C-850C-12A88546C2C6"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.843Z",
+            "lastModified": "2025-08-04T04:56:29.920Z",
             "checksum": "a28283fe44b36c1eb13bcb9a2e79288aa02bde220b88e9c3649da9c5fc324943"
           }
         },
@@ -621,7 +621,7 @@
             "ID": "ED781DCB-4BB6-49F2-9A5B-42BCBC4D21BE"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.849Z",
+            "lastModified": "2025-08-04T04:56:29.927Z",
             "checksum": "8049dd63eb844ad695a9f691e81d30b6cb8873d1392050d393f2d66782c02cab"
           }
         }
@@ -631,15 +631,15 @@
       "ID": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.768Z",
+      "lastModified": "2025-08-04T04:56:29.849Z",
       "checksum": "a5daa462051e0976f63e9d18d87ce8cf2e6e10895372fbba205bfc8c01732f3f"
     }
   },
   {
     "fields": {
-      "Name": "Assign User Role",
-      "Description": "Assigns a role to a user by creating a UserRole association",
-      "DriverClass": "AssignUserRoleAction",
+      "Name": "Assign User Roles",
+      "Description": "Assigns one or more roles to a user by creating UserRole associations. Accepts either a single role name (RoleName) or an array of role names (RoleNames).",
+      "DriverClass": "AssignUserRolesAction",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=User Management",
       "ParentID": "@lookup:Actions.Name=Create Record",
@@ -654,15 +654,33 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the user to assign the role to",
+            "Description": "The ID of the user to assign roles to",
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "D9F84EFA-DBE6-42FA-9BB9-08695FBE794B"
+            "ID": "42A2303C-17AE-4F92-B0CA-67C617DA465C"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.866Z",
-            "checksum": "94d0221aa7582f2dec3017428b1770055fa27267683a758ba1c0d989c4c87f0a"
+            "lastModified": "2025-08-04T04:56:29.951Z",
+            "checksum": "a2eee48e4b997eebbc3685641236745d8d278d9aefb5c31376796a702c94e047"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoleNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of role names to assign to the user",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BF96AF8E-2EC1-4016-85CC-418C0DFE6E7F"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T04:56:29.961Z",
+            "checksum": "49a6a15dfc17af9096c8fcc9409efe3ebd0be60591bc6db2c8ef9edc4cd40957"
           }
         },
         {
@@ -672,51 +690,87 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the role to assign",
-            "IsRequired": true
+            "Description": "Single role name to assign to the user (alternative to RoleNames)",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "EF90C483-ADF5-4FD1-94CE-59BFC5CACF11"
+            "ID": "91281FA4-95D9-4A38-8C5E-32A1ECFE94E8"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.873Z",
-            "checksum": "a3afe16f35dd695c3991a985851cdd2410020e563e9f3da0caecf8384cf82569"
+            "lastModified": "2025-08-04T04:56:29.970Z",
+            "checksum": "f209167b87b0b8d390c69d662777e9ff98865004cb072a77a546057f89fa379e"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "UserRoleID",
+            "Name": "AssignedRoleIDs",
             "Type": "Output",
             "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the created UserRole association",
-            "IsRequired": true
+            "IsArray": true,
+            "Description": "Array of role IDs that were assigned",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "12958087-C89A-4E3C-9F0E-57994E0F67DA"
+            "ID": "8093868D-9FC6-4062-8D03-5064D52DC10B"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.880Z",
-            "checksum": "606880ef504ff23ca475a58fd815138019032f7909fc74a60f75487eaa96a8ff"
+            "lastModified": "2025-08-04T04:56:29.978Z",
+            "checksum": "ba4d723c7830785812994e493f6c279349bce6d4e4061148e5c781df86db080d"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "RoleID",
+            "Name": "AssignedUserRoleIDs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of UserRole record IDs created",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "18ED664F-BC6C-4829-93A2-53540CFDA122"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T04:56:29.987Z",
+            "checksum": "55b29ed29c6f6d9d73a8d4e05e5b3b387111614beae77ff70a01ff4f4460c234"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssignedRoleNames",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of role names that were assigned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "27733050-FFB4-47E6-AE6F-5C6AE7AA6059"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T04:56:29.995Z",
+            "checksum": "de9a9f575b87dfac2ca4b37b548f00b4da76a9541c484c47466833fa37c5f9a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssignedCount",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the assigned role",
-            "IsRequired": true
+            "Description": "Number of roles successfully assigned",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "89C07DFF-53A3-46E8-B179-764EC7E6173E"
+            "ID": "D9C8F1EA-82DE-4924-90BF-7F035CE3EDBB"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.886Z",
-            "checksum": "a1a2ca7123e425603c69da180375a4ebad3868a3c019606a11e3aa94be27a15e"
+            "lastModified": "2025-08-04T04:56:30.004Z",
+            "checksum": "ad1c683f46e9a6d4d8f633403692f6fad592de09c606df55acb03257a31c7f3b"
           }
         }
       ],
@@ -726,14 +780,29 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Role assigned successfully"
+            "Description": "All roles assigned successfully"
           },
           "primaryKey": {
-            "ID": "7597062B-9693-4762-8295-3DC987E3445F"
+            "ID": "5B0A489A-A919-4395-9014-E86D5CDBB76F"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.891Z",
-            "checksum": "a96069edeed410d3fc3bda52620dff259fe1fa9d16329f6fe7747dbd6c25f6e4"
+            "lastModified": "2025-08-04T04:56:30.011Z",
+            "checksum": "4a0a5e7d903747f26d50d072fe934d64c7ae72d71cde879c4d4975e9bf568d02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": true,
+            "Description": "Some roles were assigned, others skipped or failed"
+          },
+          "primaryKey": {
+            "ID": "BCE865A9-0CA6-4713-8017-77F0A87F5D79"
+          },
+          "sync": {
+            "lastModified": "2025-08-04T04:56:30.018Z",
+            "checksum": "f858043088b7fb6214245faa0d962e34b73ea713cfa7289e369dd46b49d83b29"
           }
         },
         {
@@ -744,51 +813,51 @@
             "Description": "Specified user ID does not exist"
           },
           "primaryKey": {
-            "ID": "D1972C6D-A17B-4CC3-8F8D-3686EBB4DCD0"
+            "ID": "80A31E58-974E-4B5C-A78C-F3767AF71322"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.897Z",
+            "lastModified": "2025-08-04T04:56:30.026Z",
             "checksum": "cee7f68921b3f4261ae18fad36ddfe07b86ead402e6f8a560145654d10c1ae32"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "ROLE_NOT_FOUND",
+            "ResultCode": "ROLES_NOT_FOUND",
             "IsSuccess": false,
-            "Description": "Specified role name does not exist"
+            "Description": "One or more specified role names do not exist"
           },
           "primaryKey": {
-            "ID": "EC738289-8068-4911-8724-8964F7BD19F3"
+            "ID": "9E97C597-9EA3-45AC-B843-A4BFEC01B8E3"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.902Z",
-            "checksum": "7d90e7a815c25455efbef6a40fd74c5236420f4257d0c160ee5cf59b5310dbcb"
+            "lastModified": "2025-08-04T04:56:30.034Z",
+            "checksum": "f46d549cdec3e7890d2d7ef90e0c085550067506af7fdef4f2c98b5f9c6ff61d"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "ALREADY_ASSIGNED",
+            "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
-            "Description": "User already has this role assigned"
+            "Description": "Input validation failed"
           },
           "primaryKey": {
-            "ID": "28FCBB6C-0ECA-4714-BE6F-64D56B7EC8DD"
+            "ID": "2054B0FE-8B02-4EAF-9380-D889505F8CF9"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.907Z",
-            "checksum": "d6b2d117aa098413fabbfabec94fd2be9c8dbaacd17724451db29e56f7a264d5"
+            "lastModified": "2025-08-04T04:56:30.042Z",
+            "checksum": "bb16847b1f22425cdfb67ec393246845a0b5ef1b39cde23a274107877a4055f7"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "8261179F-4541-4E63-8073-27834C6E552A"
+      "ID": "873F5441-D1A9-497B-AE32-F9D1A23843C6"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.860Z",
-      "checksum": "96ddbdf0e3642b8c0723ac878b9803e3a73d0a225361573c85fa7f6bb8f0d372"
+      "lastModified": "2025-08-04T04:56:29.941Z",
+      "checksum": "67e4629f6f78bba2c6563f44aedbf5c17f39cbe89b4711f0deb1ed1979f5d441"
     }
   },
   {
@@ -816,7 +885,7 @@
             "ID": "73ABD08E-4F33-4066-96B7-39F50A932310"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.924Z",
+            "lastModified": "2025-08-04T04:56:30.056Z",
             "checksum": "b8d953ca463d6d35710dcb72ed5a1e0f75899ef0f0434c6539e7a13f22e4ad3b"
           }
         },
@@ -834,7 +903,7 @@
             "ID": "75F6D61C-FA95-4632-9285-B919FCCBA057"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.930Z",
+            "lastModified": "2025-08-04T04:56:30.063Z",
             "checksum": "bce3bc7678bac612fb01950ed19b2a718f348088578e7bb76df41e09a4c3e888"
           }
         },
@@ -853,7 +922,7 @@
             "ID": "2182CE07-CC20-49C5-B09B-327FEA31BC7C"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.936Z",
+            "lastModified": "2025-08-04T04:56:30.068Z",
             "checksum": "c1b3dae4861c8cf3196d0cb99ca082a1ad06ffb902ab35b02dff7f66ec46eaad"
           }
         },
@@ -871,7 +940,7 @@
             "ID": "A44EC271-9913-4C08-99E6-B2CFB80FA80B"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.941Z",
+            "lastModified": "2025-08-04T04:56:30.073Z",
             "checksum": "30f107692f1c1da9d8b985c00f86f220b5baa2cc3423a0a3d79ccd412aae7a1e"
           }
         },
@@ -889,7 +958,7 @@
             "ID": "D11ED469-EB21-4009-AE55-4DB093CEA4BD"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.948Z",
+            "lastModified": "2025-08-04T04:56:30.081Z",
             "checksum": "f89dcf912cdbb092eb79569f0968ae2b9c720f1898edb9fb3c26e4d2e47b53c8"
           }
         }
@@ -906,7 +975,7 @@
             "ID": "E2CA66C3-3D06-42E8-A190-2481253C255D"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.954Z",
+            "lastModified": "2025-08-04T04:56:30.086Z",
             "checksum": "bd41181e76faf2413aa3ef6736b3b845668484e3f7fca7669500c4986e2b5014"
           }
         },
@@ -921,7 +990,7 @@
             "ID": "2073C74C-DA23-44CE-967F-8FE76B52106C"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.959Z",
+            "lastModified": "2025-08-04T04:56:30.091Z",
             "checksum": "cee7f68921b3f4261ae18fad36ddfe07b86ead402e6f8a560145654d10c1ae32"
           }
         },
@@ -936,7 +1005,7 @@
             "ID": "6BAEE59F-61A4-489A-84E1-895A2A05D4D1"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.965Z",
+            "lastModified": "2025-08-04T04:56:30.097Z",
             "checksum": "e5e2b9ff5729b6e53897d84e2a5233a8e552d2003d0ed5a286c60461e54d0318"
           }
         },
@@ -951,7 +1020,7 @@
             "ID": "04489440-2384-47E1-8C44-E0CF55FBBED8"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.970Z",
+            "lastModified": "2025-08-04T04:56:30.102Z",
             "checksum": "221f834a05cc9ba0cb4547a500a820e7b070c475955fa97d45a3cd5280cefe7e"
           }
         }
@@ -961,7 +1030,7 @@
       "ID": "3A28C11B-EBE3-4F6F-B279-F1BA6D0C1912"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.917Z",
+      "lastModified": "2025-08-04T04:56:30.050Z",
       "checksum": "ca4b5de145094eecb03e943ccb90d493a546635ff69c1eba7b493142d4022650"
     }
   },
@@ -990,7 +1059,7 @@
             "ID": "B53CFBF3-0AC2-4302-B950-8C24EACAF73C"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.987Z",
+            "lastModified": "2025-08-04T04:56:30.118Z",
             "checksum": "1ad4e4c2bf8ee08830e750c2565104a0235bca2ee729ff39de39d896226e75af"
           }
         },
@@ -1008,7 +1077,7 @@
             "ID": "7DA96F6A-FB6F-4F26-9383-F25FD63C7ACB"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:19.994Z",
+            "lastModified": "2025-08-04T04:56:30.125Z",
             "checksum": "beaf923730fd33c6dfbeb96aa25c81248ecf46dadb76aecab4092d4fef6f5144"
           }
         },
@@ -1026,7 +1095,7 @@
             "ID": "563E51B9-0C29-4A93-80F8-A82C485F610E"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:20.000Z",
+            "lastModified": "2025-08-04T04:56:30.131Z",
             "checksum": "5e765c4b4ffb127f4baa4978b6ad72be99cbb7cdeb78056ee0c9edc720595dcc"
           }
         },
@@ -1044,7 +1113,7 @@
             "ID": "BF6189DE-AAF8-43DD-9A0C-0DE2FA53E073"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:20.006Z",
+            "lastModified": "2025-08-04T04:56:30.136Z",
             "checksum": "7f4e0681427c3de00e38d5e5dce3e4acdeeff6ac7ee8e9aa5ec63aba9a6d7a32"
           }
         }
@@ -1061,7 +1130,7 @@
             "ID": "6FCCF724-192F-4AFF-BC6C-919FE9E99D42"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:20.011Z",
+            "lastModified": "2025-08-04T04:56:30.141Z",
             "checksum": "442dfe52f71e73046730c47bf7b2105761a08272cca0b62d5527b7c071f20d04"
           }
         },
@@ -1076,7 +1145,7 @@
             "ID": "6623C659-731B-4910-9C85-CDEB2F13E440"
           },
           "sync": {
-            "lastModified": "2025-08-03T22:14:20.016Z",
+            "lastModified": "2025-08-04T04:56:30.145Z",
             "checksum": "2d49468523541cc759a0928d245a52c0c625ccd3fa1e9c616b69c9d277974fdf"
           }
         }
@@ -1086,7 +1155,7 @@
       "ID": "540BFDE1-02B5-432C-9490-BD34AF853FE8"
     },
     "sync": {
-      "lastModified": "2025-08-03T22:14:19.980Z",
+      "lastModified": "2025-08-04T04:56:30.112Z",
       "checksum": "727ebe8344d9d1febbf7269670ad69a6afc30695a799d98f3823536c8e993fef"
     }
   }

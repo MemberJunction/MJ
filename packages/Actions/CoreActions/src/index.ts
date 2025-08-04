@@ -70,7 +70,7 @@ export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/user-management/check-user-permission.action';
 export * from './custom/user-management/create-user.action';
 export * from './custom/user-management/create-employee.action';
-export * from './custom/user-management/assign-user-role.action';
+export * from './custom/user-management/assign-user-roles.action';
 export * from './custom/user-management/validate-email-unique.action';
 export * from './custom/user-management/send-welcome-email.action';
 
@@ -122,7 +122,7 @@ import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action'
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
-import { LoadAssignUserRoleAction } from './custom/user-management/assign-user-role.action';
+import { LoadAssignUserRolesAction } from './custom/user-management/assign-user-roles.action';
 import { LoadValidateEmailUniqueAction } from './custom/user-management/validate-email-unique.action';
 import { LoadSendWelcomeEmailAction } from './custom/user-management/send-welcome-email.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
@@ -179,7 +179,7 @@ export function LoadAllCoreActions() {
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();
-    LoadAssignUserRoleAction();
+    LoadAssignUserRolesAction();
     LoadValidateEmailUniqueAction();
     LoadSendWelcomeEmailAction();
 }

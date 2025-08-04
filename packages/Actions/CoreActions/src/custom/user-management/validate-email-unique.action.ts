@@ -10,6 +10,12 @@ import { RunView } from "@memberjunction/core";
 @RegisterClass(BaseAction, "ValidateEmailUniqueAction")
 export class ValidateEmailUniqueAction extends BaseAction {
     async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        console.log('VALIDATE EMAIL UNIQUE ACTION - InternalRunAction called with params:', {
+            paramCount: params.Params.length,
+            params: params.Params.map(p => ({ Name: p.Name, Value: p.Value, Type: p.Type })),
+            contextUser: params.ContextUser?.Email
+        });
+        
         try {
             // Extract email parameter
             const email = params.Params.find(p => p.Name === 'Email')?.Value as string;
