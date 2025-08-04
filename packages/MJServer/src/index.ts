@@ -30,6 +30,9 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
 import { LoadAllCoreActions } from '@memberjunction/core-actions';
 LoadAllCoreActions(); // prevent tree shaking for this dynamic module
+import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
+LoadApolloAccountsEnrichmentAction();
+LoadApolloContactsEnrichmentAction();
 
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
