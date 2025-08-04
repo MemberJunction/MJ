@@ -1,5 +1,9 @@
 # Change Log - @memberjunction/global
 
+## 2.80.1
+
+## 2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

@@ -1,5 +1,33 @@
 # @memberjunction/ai-prompts
 
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.80.1
+- @memberjunction/ai-core-plus@2.80.1
+- @memberjunction/aiengine@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/global@2.80.1
+- @memberjunction/templates-base-types@2.80.1
+- @memberjunction/templates@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/ai-core-plus@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/templates-base-types@2.80.0
+  - @memberjunction/templates@2.80.0
+  - @memberjunction/ai@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Minor Changes

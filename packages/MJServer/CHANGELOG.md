@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/server
 
+## 2.80.1
+
+### Patch Changes
+
+- f049852: Add imports and dependency from @memberjunction/apollo-actions to MJServer
+  - @memberjunction/ai-agent-manager-actions@2.80.1
+  - @memberjunction/ai-agents@2.80.1
+  - @memberjunction/ai@2.80.1
+  - @memberjunction/ai-core-plus@2.80.1
+  - @memberjunction/aiengine@2.80.1
+  - @memberjunction/ai-prompts@2.80.1
+  - @memberjunction/ai-anthropic@2.80.1
+  - @memberjunction/ai-cerebras@2.80.1
+  - @memberjunction/ai-groq@2.80.1
+  - @memberjunction/ai-mistral@2.80.1
+  - @memberjunction/ai-openai@2.80.1
+  - @memberjunction/ai-vectors-pinecone@2.80.1
+  - @memberjunction/actions-apollo@2.80.1
+  - @memberjunction/actions-bizapps-accounting@2.80.1
+  - @memberjunction/actions-bizapps-crm@2.80.1
+  - @memberjunction/actions-bizapps-lms@2.80.1
+  - @memberjunction/actions-bizapps-social@2.80.1
+  - @memberjunction/core-actions@2.80.1
+  - @memberjunction/actions@2.80.1
+  - @memberjunction/entity-communications-server@2.80.1
+  - @memberjunction/doc-utils@2.80.1
+  - @memberjunction/external-change-detection@2.80.1
+  - @memberjunction/graphql-dataprovider@2.80.1
+  - @memberjunction/core@2.80.1
+  - @memberjunction/core-entities@2.80.1
+  - @memberjunction/core-entities-server@2.80.1
+  - @memberjunction/data-context@2.80.1
+  - @memberjunction/data-context-server@2.80.1
+  - @memberjunction/global@2.80.1
+  - @memberjunction/queue@2.80.1
+  - @memberjunction/storage@2.80.1
+  - @memberjunction/sqlserver-dataprovider@2.80.1
+  - @memberjunction/skip-types@2.80.1
+  - @memberjunction/templates@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- 44a749c: updated system client
+- Updated dependencies [3073dc3]
+- Updated dependencies [7c5f844]
+- Updated dependencies [44a749c]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core-entities-server@2.80.0
+  - @memberjunction/graphql-dataprovider@2.80.0
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/sqlserver-dataprovider@2.80.0
+  - @memberjunction/core-actions@2.80.0
+  - @memberjunction/ai-agent-manager-actions@2.80.0
+  - @memberjunction/ai-agents@2.80.0
+  - @memberjunction/ai-core-plus@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/ai-prompts@2.80.0
+  - @memberjunction/ai-vectors-pinecone@2.80.0
+  - @memberjunction/actions-bizapps-accounting@2.80.0
+  - @memberjunction/actions-bizapps-crm@2.80.0
+  - @memberjunction/actions-bizapps-lms@2.80.0
+  - @memberjunction/actions-bizapps-social@2.80.0
+  - @memberjunction/actions@2.80.0
+  - @memberjunction/entity-communications-server@2.80.0
+  - @memberjunction/doc-utils@2.80.0
+  - @memberjunction/external-change-detection@2.80.0
+  - @memberjunction/data-context@2.80.0
+  - @memberjunction/queue@2.80.0
+  - @memberjunction/storage@2.80.0
+  - @memberjunction/skip-types@2.80.0
+  - @memberjunction/templates@2.80.0
+  - @memberjunction/data-context-server@2.80.0
+  - @memberjunction/ai@2.80.0
+  - @memberjunction/ai-anthropic@2.80.0
+  - @memberjunction/ai-cerebras@2.80.0
+  - @memberjunction/ai-groq@2.80.0
+  - @memberjunction/ai-mistral@2.80.0
+  - @memberjunction/ai-openai@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

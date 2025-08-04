@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core
 
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

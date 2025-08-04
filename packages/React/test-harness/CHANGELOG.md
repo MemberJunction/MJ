@@ -1,5 +1,20 @@
 # @memberjunction/react-test-harness
 
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.80.1
+- @memberjunction/react-runtime@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- 01bd43e: fix static linter to align with new component rules
+  - @memberjunction/interactive-component-types@2.80.0
+  - @memberjunction/react-runtime@2.80.0
+
 ## 2.79.0
 
 ### Patch Changes

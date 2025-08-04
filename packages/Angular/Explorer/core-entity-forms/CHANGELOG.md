@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.80.1
+- @memberjunction/ai-core-plus@2.80.1
+- @memberjunction/ng-base-forms@2.80.1
+- @memberjunction/ng-form-toolbar@2.80.1
+- @memberjunction/ng-action-gallery@2.80.1
+- @memberjunction/ng-ai-test-harness@2.80.1
+- @memberjunction/ng-code-editor@2.80.1
+- @memberjunction/ng-container-directives@2.80.1
+- @memberjunction/ng-deep-diff@2.80.1
+- @memberjunction/ng-join-grid@2.80.1
+- @memberjunction/ng-tabstrip@2.80.1
+- @memberjunction/ng-timeline@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- 536ad6e: form improvements for AI Agents form
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/ng-ai-test-harness@2.80.0
+  - @memberjunction/ai-engine-base@2.80.0
+  - @memberjunction/ai-core-plus@2.80.0
+  - @memberjunction/ng-base-forms@2.80.0
+  - @memberjunction/ng-form-toolbar@2.80.0
+  - @memberjunction/ng-action-gallery@2.80.0
+  - @memberjunction/ng-code-editor@2.80.0
+  - @memberjunction/ng-container-directives@2.80.0
+  - @memberjunction/ng-deep-diff@2.80.0
+  - @memberjunction/ng-join-grid@2.80.0
+  - @memberjunction/ng-timeline@2.80.0
+  - @memberjunction/ng-tabstrip@2.80.0
+  - @memberjunction/global@2.80.0
+
 ## 2.79.0
 
 ### Minor Changes
