@@ -13,12 +13,20 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
+
+/**
+ * Extended BaseAgentNextStep for Flow Agent Type with additional prompt step metadata
+ */
+interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
+    /** The ID of the prompt to execute for flow prompt steps */
+    flowPromptStepId?: string;
+}
 
 /**
  * Flow execution state that tracks the progress through the workflow.
@@ -536,14 +544,16 @@ export class FlowAgentType extends BaseAgentType {
                     });
                 }
                 
-                return this.createNextStep('Retry', {
+                const retryStep: FlowAgentNextStep<P> = {
+                    step: 'Retry',
                     message: node.Description || 'Executing prompt step for flow decision',
                     terminate: false,
                     // Special marker for flow prompt steps
                     flowPromptStepId: node.PromptID,
                     newPayload: payload,
                     previousPayload: payload
-                } as any);
+                };
+                return retryStep;
                 
             default:
                 return this.createNextStep('Failed', {
@@ -910,8 +920,8 @@ export class FlowAgentType extends BaseAgentType {
         retryStep: BaseAgentNextStep<P>
     ): Promise<BaseAgentNextStep<P> | null> {
         // Check if this is a special flow prompt step marker
-        const stepMetadata = retryStep as any;
-        if (stepMetadata.flowPromptStepId) {
+        const flowRetryStep = retryStep as FlowAgentNextStep<P>;
+        if (flowRetryStep.flowPromptStepId) {
             // This is a prompt step in the flow, let it execute normally
             return null;
         }
@@ -995,6 +1005,43 @@ export class FlowAgentType extends BaseAgentType {
         
         // Create the next step based on the flow node
         return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
+    }
+
+    /**
+     * Gets the prompt to use for a specific step.
+     * Flow agents may use different prompts for different steps in the flow.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters
+     * @param {AgentConfiguration} config - The loaded agent configuration
+     * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain flow prompt info
+     * @returns {Promise<AIPromptEntity | null>} Custom prompt for flow steps, or default config.childPrompt
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async GetPromptForStep<P = any>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision?: BaseAgentNextStep<P> | null
+    ): Promise<AIPromptEntity | null> {
+        // Check if this is a flow prompt step with a specific prompt ID
+        const flowDecision = previousDecision as FlowAgentNextStep<P> | null;
+        if (flowDecision?.flowPromptStepId) {
+            const promptId = flowDecision.flowPromptStepId;
+            
+            // Get the specific prompt from AIEngine (avoids database hit)
+            const promptEntity = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+            if (promptEntity) {
+                return promptEntity;
+            } else {
+                LogError(`Failed to find flow prompt with ID: ${promptId} in AIEngine`);
+                // Fall back to default
+                return config.childPrompt || null;
+            }
+        }
+        
+        // For non-flow-prompt steps, use the default prompt
+        return config.childPrompt || null;
     }
 }
 

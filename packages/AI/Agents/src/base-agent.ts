@@ -2434,27 +2434,13 @@ export class BaseAgent {
         previousDecision?: BaseAgentNextStep
     ): Promise<BaseAgentNextStep<P>> {
         
+        // Get the agent type instance to check for custom prompt
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
         
-        // Check if this is a flow prompt step with a specific prompt ID
-        let promptId = config.childPrompt?.ID;
-        let promptName = config.childPrompt?.Name;
-        let flowPromptOverride: AIPromptEntity | undefined;
-        
-        // For Flow Agent Type, check if a specific prompt ID was provided
-        if (previousDecision && (previousDecision as any).flowPromptStepId) {
-            promptId = (previousDecision as any).flowPromptStepId;
-            
-            // Load the specific prompt for this flow step
-            const metadata = new Metadata();
-            const promptEntity = await metadata.GetEntityObject<AIPromptEntity>('AI Prompts', params.contextUser);
-            if (await promptEntity.Load(promptId)) {
-                flowPromptOverride = promptEntity;
-                promptName = promptEntity.Name;
-            } else {
-                LogError(`Failed to load flow prompt with ID: ${promptId}`);
-                promptName = 'Flow Prompt Step';
-            }
-        }
+        // Ask the agent type if it has a custom prompt for this step
+        const promptToUse = await agentTypeInstance.GetPromptForStep(params, config, previousDecision);
+        const promptId = promptToUse?.ID;
+        const promptName = promptToUse?.Name;
         
         // Prepare input data for the step
         const inputData = {
@@ -2510,11 +2496,11 @@ export class BaseAgent {
             // payload but the above allows us to narrow the scope of what we send back to the
             // main prompt if desired in some prompting cases.
             
-            // If we have a flow prompt override, create a modified config for this execution
-            const promptConfig = flowPromptOverride ? {
+            // If we have a custom prompt that differs from the default, create a modified config
+            const promptConfig = (promptToUse && promptToUse !== config.childPrompt) ? {
                 ...config,
-                childPrompt: flowPromptOverride,
-                systemPrompt: null // Flow prompts don't use system prompts
+                childPrompt: promptToUse,
+                systemPrompt: null // Custom prompts may not use system prompts
             } : config;
             
             const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
