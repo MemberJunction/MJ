@@ -1751,7 +1751,10 @@ export class ManageMetadataBase {
 
             const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
-            const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix);
+            const newEntityDisplayName = newEntity.Name.trim().substring(0, 4).toLowerCase() === 'mj: ' ? 
+               newEntity.Name.trim().substring(4) : // if it starts with 'mj: ' then remove that prefix
+               null; // otherwise, leave it as null 
+            const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix, newEntityDisplayName);
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
 
             // if we get here we created a new entity safely, otherwise we get exception
@@ -1884,13 +1887,14 @@ export class ManageMetadataBase {
       }
    }
 
-   protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string): string {
+   protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
       const sSQLInsert = `
       INSERT INTO [${mj_core_schema()}].Entity (
          ID,
          Name,
+         DisplayName,
          Description,
          NameSuffix,
          BaseTable,
@@ -1910,6 +1914,7 @@ export class ManageMetadataBase {
       VALUES (
          '${newEntityUUID}',
          '${newEntityName}',
+         ${newEntityDisplayName ? `'${newEntityDisplayName}'` : 'NULL'},
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
          '${newEntity.TableName}',
