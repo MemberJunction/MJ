@@ -1657,6 +1657,29 @@ export class ManageMetadataBase {
       }
    }
 
+   protected createNewEntityDisplayName(newEntity: any): string | null {
+      const rule = this.getNewEntityNameRule(newEntity.SchemaName);
+      if (rule) {
+         // we have a rule, so let's extract the DisplayName from the rule which is done
+         // by removing the rule.EntityNamePrefix and rule.EntityNameSuffix from the newEntity.Name
+         const prefix = rule.EntityNamePrefix.trim();
+         const suffix = rule.EntityNameSuffix.trim();
+         const newEntityName = newEntity.Name.trim();
+         let newEntityDisplayName = newEntityName; // start with the original name
+
+         if (newEntityDisplayName.startsWith(prefix)) {
+            newEntityDisplayName = newEntityDisplayName.substring(prefix.length); // remove the prefix
+         }
+         if (newEntityDisplayName.endsWith(suffix)) {
+            newEntityDisplayName = newEntityDisplayName.substring(0, newEntityDisplayName.length - suffix.length); // remove the suffix
+         }
+         if (newEntityDisplayName.length > 0 && newEntityDisplayName !== newEntity.Name) {
+            return newEntityDisplayName.trim();
+         }
+      }
+      return null; // nothing to do here, the DisplayName can be null as it will just end up being the entity name
+   }
+
    protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any): Promise<string> {
       // get the LLM for this entity
       const chat = ag.LLM;
@@ -1711,14 +1734,7 @@ export class ManageMetadataBase {
     * @param entityName 
     */
    protected markupEntityName(schemaName: string, entityName: string): string {
-      const rule = configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
-         let schemaNameToUse = r.SchemaName;
-         if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
-            // markup for this is to be replaced with the mj_core_schema() config
-            schemaNameToUse = mj_core_schema();
-         }
-         return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
-      });
+      const rule = this.getNewEntityNameRule(schemaName);
       if (rule) {
          // found a matching rule, apply it
          return rule.EntityNamePrefix + entityName + rule.EntityNameSuffix;
@@ -1727,6 +1743,18 @@ export class ManageMetadataBase {
          // no matching rule, just return the entity name as is
          return entityName;
       }
+   }
+
+   protected getNewEntityNameRule(schemaName: string): {SchemaName: string, EntityNamePrefix: string, EntityNameSuffix: string} | undefined {
+      const rule = configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
+         let schemaNameToUse = r.SchemaName;
+         if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
+            // markup for this is to be replaced with the mj_core_schema() config
+            schemaNameToUse = mj_core_schema();
+         }
+         return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      return rule;
    }
 
    protected createNewUUID(): string {
@@ -1739,6 +1767,8 @@ export class ManageMetadataBase {
          if (shouldCreate) {
             // process a single new entity
             let newEntityName: string = await this.createNewEntityName(newEntity);
+            const newEntityDisplayName = this.createNewEntityDisplayName(newEntity);
+
             let suffix = '';
             const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
@@ -1751,9 +1781,6 @@ export class ManageMetadataBase {
 
             const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
-            const newEntityDisplayName = newEntity.Name.trim().substring(0, 4).toLowerCase() === 'mj: ' ? 
-               newEntity.Name.trim().substring(4) : // if it starts with 'mj: ' then remove that prefix
-               null; // otherwise, leave it as null 
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix, newEntityDisplayName);
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
 
@@ -1887,7 +1914,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string): string {
+   protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
       const sSQLInsert = `
