@@ -1723,6 +1723,7 @@ export class BaseAgent {
      */
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: ActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
+        
         try {
             const actionEngine = ActionEngineServer.Instance;
 
@@ -2433,11 +2434,18 @@ export class BaseAgent {
         previousDecision?: BaseAgentNextStep
     ): Promise<BaseAgentNextStep<P>> {
         
+        // Get the agent type instance to check for custom prompt
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+        
+        // Ask the agent type if it has a custom prompt for this step
+        const promptToUse = await agentTypeInstance.GetPromptForStep(params, config, previousDecision);
+        const promptId = promptToUse?.ID;
+        const promptName = promptToUse?.Name;
         
         // Prepare input data for the step
         const inputData = {
-            promptId: config.childPrompt?.ID,
-            promptName: config.childPrompt?.Name,
+            promptId: promptId,
+            promptName: promptName,
             isRetry: !!previousDecision,
             retryContext: previousDecision ? {
                 reason: previousDecision.retryReason,
@@ -2448,7 +2456,7 @@ export class BaseAgent {
         
         // Prepare prompt parameters
         const payload = previousDecision?.newPayload || params.payload;
-        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, config.childPrompt?.ID, inputData, undefined, payload);
+        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, promptId, inputData, undefined, payload);
         
         try {
             // Report prompt execution progress with context
@@ -2462,9 +2470,9 @@ export class BaseAgent {
                 percentage: 30,
                 message: this.formatHierarchicalMessage(promptMessage),
                 metadata: { 
-                    promptId: config.childPrompt?.ID,
+                    promptId: promptId,
                     isRetry,
-                    promptName: config.childPrompt?.Name
+                    promptName: promptName
                 },
                 displayMode: 'live' // Only show in live mode
             });
@@ -2487,7 +2495,15 @@ export class BaseAgent {
             // now prep the params using the downstream payload - which is often the full
             // payload but the above allows us to narrow the scope of what we send back to the
             // main prompt if desired in some prompting cases.
-            const promptParams = await this.preparePromptParams(config, downstreamPayload, params);
+            
+            // If we have a custom prompt that differs from the default, create a modified config
+            const promptConfig = (promptToUse && promptToUse !== config.childPrompt) ? {
+                ...config,
+                childPrompt: promptToUse,
+                systemPrompt: null // Custom prompts may not use system prompts
+            } : config;
+            
+            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
@@ -2992,6 +3008,7 @@ export class BaseAgent {
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
+        
         try {
             const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
             const actions: AgentAction[] = previousDecision.actions || [];
@@ -3064,6 +3081,7 @@ export class BaseAgent {
             try {
                 const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
                 const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+                
                 
                 // Pre-process actions - this may modify the actions array in place
                 await agentTypeInstance.PreProcessActionStep(

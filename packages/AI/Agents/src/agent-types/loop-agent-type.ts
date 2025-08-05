@@ -12,8 +12,9 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
+import { AIPromptEntity } from '@memberjunction/core-entities';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
@@ -342,6 +343,27 @@ export class LoopAgentType extends BaseAgentType {
     ): Promise<BaseAgentNextStep<P> | null> {
         // Loop agents use default retry behavior (execute prompt)
         return null;
+    }
+
+    /**
+     * Gets the prompt to use for a specific step.
+     * Loop agents always use the default prompt from configuration.
+     * 
+     * @param {ExecuteAgentParams} params - The execution parameters (unused)
+     * @param {AgentConfiguration} config - The loaded agent configuration
+     * @param {BaseAgentNextStep | null} previousDecision - The previous step decision (unused)
+     * @returns {Promise<AIPromptEntity | null>} Returns config.childPrompt
+     * 
+     * @override
+     * @since 2.76.0
+     */
+    public async GetPromptForStep<P = any>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision?: BaseAgentNextStep<P> | null
+    ): Promise<AIPromptEntity | null> {
+        // Loop agents always use the default prompt from configuration
+        return config.childPrompt || null;
     }
 }
 

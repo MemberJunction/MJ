@@ -11,8 +11,8 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams} from '@memberjunction/ai-core-plus';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import { AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -155,6 +155,28 @@ export abstract class BaseAgentType {
         prompt: AIPromptParams,
         agentInfo: { agentId: string; agentRunId?: string }
     ): Promise<void>;
+
+    /**
+     * Allows agent types to provide a custom prompt for a specific step.
+     * This is used by agent types that need to override the default prompt
+     * selection logic (e.g., Flow agents that use different prompts for different steps).
+     * 
+     * The base implementation should return the default prompt from configuration.
+     * Agent types can override this to provide custom prompt selection logic.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters for additional context
+     * @param {AgentConfiguration} config - The loaded agent configuration with default prompts
+     * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain context
+     * @returns {Promise<AIPromptEntity | null>} A prompt entity to use (either custom or config.childPrompt)
+     * 
+     * @abstract
+     * @since 2.76.0
+     */
+    public abstract GetPromptForStep<P = any>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision?: BaseAgentNextStep<P> | null
+    ): Promise<AIPromptEntity | null>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.
