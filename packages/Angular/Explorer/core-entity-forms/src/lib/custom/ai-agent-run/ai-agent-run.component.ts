@@ -197,8 +197,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         this.costService.clearCache(this.record.ID);
         this.loadCostMetrics();
         
-        // Reload data through helper - this will update all components
-        this.dataHelper.loadAgentRunData(this.record.ID);
+        // Reload data through helper - this will update all components (force reload for refresh)
+        this.dataHelper.loadAgentRunData(this.record.ID, true);
         
         // Trigger analytics refresh
         if (this.analyticsComponent) {
