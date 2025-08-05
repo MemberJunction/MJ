@@ -38,17 +38,13 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit() {
-    console.log(`[PERF] SingleRecord: ngAfterViewInit starting for entity: ${this.entityName}`);
     this.LoadForm(this.PrimaryKey, <string>this.entityName)
   }
 
   public async LoadForm(primaryKey: CompositeKey, entityName: string) {
-    const performanceStart = performance.now();
-    console.log(`[PERF] SingleRecord.LoadForm: Starting for entity: ${entityName}, PK: ${primaryKey?.ToString()}`);
     
     // Perform any necessary actions with the ViewID, such as fetching data
     if (!entityName || entityName.trim().length === 0) {
-      console.log(`[PERF] SingleRecord.LoadForm: ABORTED - no entity name`);
       return; // not ready to load
     }
 
@@ -62,10 +58,8 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
       this.PrimaryKey = new CompositeKey();
     }
 
-    console.log(`[PERF] SingleRecord: Getting form registration for ${entityName}`);
     const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
     
-    console.log(`[PERF] SingleRecord: Creating metadata and finding entity ${entityName}`);
     const md = new Metadata();
     const entity = md.Entities.find(e => {
       return e.Name === entityName
@@ -73,47 +67,36 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
     const permissions = entity?.GetUserPermisions(md.CurrentUser);
 
     if (formReg) {
-      console.log(`[PERF] SingleRecord: Getting entity object for ${entityName}`);
       const record = await md.GetEntityObject<BaseEntity>(entityName);
       if (record) {
         if (primaryKey.HasValue) {
-          console.log(`[PERF] SingleRecord: Loading existing record with PK: ${primaryKey.ToString()}`);
-          const loadStart = performance.now();
           await record.InnerLoad(primaryKey);
-          console.log(`[PERF] SingleRecord: Record loaded in ${(performance.now() - loadStart).toFixed(2)}ms`);
         }
         else {
-          console.log(`[PERF] SingleRecord: Creating new record`);
           record.NewRecord();
           this.SetNewRecordValues(record);          
         }
 
         // CRITICAL: Track the event handler subscription for cleanup
-        console.log(`[PERF] SingleRecord: Registering event handler`);
         this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
           if (eventType.type === 'save')
             this.recordSaved.emit(record);
         });
         
-        console.log(`[PERF] SingleRecord: Creating form component`);
-        const componentStart = performance.now();
         const viewContainerRef = this.formContainer.viewContainerRef;
         viewContainerRef.clear();
 
         const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
-        console.log(`[PERF] SingleRecord: Form component created in ${(performance.now() - componentStart).toFixed(2)}ms`);
         
         // Track component and record for cleanup
         this._formComponentRef = componentRef;
         this._currentRecord = record;
         
-        console.log(`[PERF] SingleRecord: Setting component properties`);
         componentRef.instance.record = record
         componentRef.instance.userPermissions = permissions
         componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
 
         this.useGenericForm = false;
-        console.log(`[PERF] SingleRecord: Emitting loadComplete, total time: ${(performance.now() - performanceStart).toFixed(2)}ms`);
         this.loadComplete.emit();
       }
       else
@@ -121,7 +104,6 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.loading = false;
-    console.log(`[PERF] SingleRecord: LoadForm completed for ${entityName} in ${(performance.now() - performanceStart).toFixed(2)}ms`);
   }
 
   protected SetNewRecordValues(record: BaseEntity) {

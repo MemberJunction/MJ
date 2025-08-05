@@ -65,60 +65,25 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   async ngOnInit() {
-    const performanceStart = performance.now();
-    console.log(`[PERF] AIAgentRunForm: ngOnInit starting for run ID: ${this.record?.ID}`);
-    
-    console.log(`[PERF] AIAgentRunForm: Calling super.ngOnInit()`);
-    const superStart = performance.now();
     await super.ngOnInit();
-    console.log(`[PERF] AIAgentRunForm: super.ngOnInit() completed in ${(performance.now() - superStart).toFixed(2)}ms`);
     
     if (this.record && this.record.ID) {
-      console.log(`[PERF] AIAgentRunForm: Loading agent run data`);
-      const dataStart = performance.now();
       await this.dataService.loadAgentRunData(this.record.ID);
-      console.log(`[PERF] AIAgentRunForm: Agent run data loaded in ${(performance.now() - dataStart).toFixed(2)}ms`);
-      
-      console.log(`[PERF] AIAgentRunForm: Loading agent`);
-      const agentStart = performance.now();
       await this.loadAgent();
-      console.log(`[PERF] AIAgentRunForm: Agent loaded in ${(performance.now() - agentStart).toFixed(2)}ms`);
-      
-      console.log(`[PERF] AIAgentRunForm: Loading cost metrics`);
-      const costStart = performance.now();
       await this.loadCostMetrics();
-      console.log(`[PERF] AIAgentRunForm: Cost metrics loaded in ${(performance.now() - costStart).toFixed(2)}ms`);
       
       // Parse all JSON fields on form load for instant access later
-      console.log(`[PERF] AIAgentRunForm: Starting JSON parsing for all fields`);
-      const parseStart = performance.now();
       this.parseAllFields();
-      console.log(`[PERF] AIAgentRunForm: All JSON parsing completed in ${(performance.now() - parseStart).toFixed(2)}ms`);
     }
-    
-    console.log(`[PERF] AIAgentRunForm: ngOnInit completed in ${(performance.now() - performanceStart).toFixed(2)}ms`);
   }
   
   ngOnDestroy() {
-    const destroyStart = performance.now();
-    console.log(`[PERF] AIAgentRunForm.ngOnDestroy: Starting cleanup for run ID: ${this.record?.ID}`);
-    
     this.destroy$.next();
     this.destroy$.complete();
-    
-    // Clear parsed cache
-    console.log(`[PERF] AIAgentRunForm.ngOnDestroy: Clearing parsed cache`);
     this.clearParsedCache();
-    
-    // Clear data when component is destroyed
-    console.log(`[PERF] AIAgentRunForm.ngOnDestroy: Clearing data service`);
     this.dataService.clearData();
-    
-    // Clear cost metrics
     this.costMetrics = null;
     this.agent = null;
-    
-    console.log(`[PERF] AIAgentRunForm.ngOnDestroy: Cleanup completed in ${(performance.now() - destroyStart).toFixed(2)}ms`);
   }
   
   private async loadAgent() {
@@ -155,7 +120,6 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   changeTab(tab: string) {
-    console.log(`[CACHE] Switching to '${tab}' tab`);
     this.activeTab = tab;
     
     // Lazy load visualization when the tab is first accessed
@@ -284,8 +248,6 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       return this._cachedParsedResult;
     }
     
-    const parseStart = performance.now();
-    console.log(`[PERF] AIAgentRunForm.parsedResult: Starting parse operation - cache was null`);
     
     try {
       // First, check if Result is a JSON string that needs to be parsed
@@ -303,17 +265,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      // TEMP: Disable ParseJSONRecursive to test performance
-      // // const parsed = ParseJSONRecursive(resultData, parseOptions);
-      const result = JSON.stringify(resultData, null, 2);
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      const parsed = ParseJSONRecursive(resultData, parseOptions);
+      const result = JSON.stringify(parsed, null, 2);
       
       // Cache the result
       this._cachedParsedResult = result;
       
-      console.log(`[PERF] AIAgentRunForm.parsedResult: Parse completed and cached in ${(performance.now() - parseStart).toFixed(2)}ms, result length: ${result.length}`);
       return result;
     } catch (e) {
-      console.log(`[PERF] AIAgentRunForm.parsedResult: Parse failed in ${(performance.now() - parseStart).toFixed(2)}ms, error: ${e}`);
       const fallbackResult = this.record.Result;
       this._cachedParsedResult = fallbackResult;
       return fallbackResult;
@@ -333,8 +293,6 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       return this._cachedParsedStartingPayload;
     }
     
-    const parseStart = performance.now();
-    console.log(`[PERF] AIAgentRunForm.parsedStartingPayload: Starting parse operation - cache was null`);
     
     try {
       // First, check if StartingPayload is a JSON string that needs to be parsed
@@ -352,16 +310,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // const parsed = ParseJSONRecursive(payloadData, parseOptions);
-      const result = JSON.stringify(payloadData, null, 2);
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
+      const result = JSON.stringify(parsed, null, 2);
       
       // Cache the result
       this._cachedParsedStartingPayload = result;
       
-      console.log(`[PERF] AIAgentRunForm.parsedStartingPayload: Parse completed and cached in ${(performance.now() - parseStart).toFixed(2)}ms, result length: ${result.length}`);
       return result;
     } catch (e) {
-      console.log(`[PERF] AIAgentRunForm.parsedStartingPayload: Parse failed in ${(performance.now() - parseStart).toFixed(2)}ms, error: ${e}`);
       const fallbackResult = this.record.StartingPayload;
       this._cachedParsedStartingPayload = fallbackResult;
       return fallbackResult;
@@ -395,8 +352,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
-      // const parsed = ParseJSONRecursive(payloadData, parseOptions);
-      const result = JSON.stringify(payloadData, null, 2);
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      const parsed = ParseJSONRecursive(payloadData, parseOptions);
+      const result = JSON.stringify(parsed, null, 2);
       
       // Cache the result
       this._cachedParsedFinalPayload = result;
@@ -436,8 +394,9 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // const parsed = ParseJSONRecursive(data, parseOptions);
-      const result = JSON.stringify(data, null, 2);
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      const parsed = ParseJSONRecursive(data, parseOptions);
+      const result = JSON.stringify(parsed, null, 2);
       
       // Cache the result
       this._cachedParsedData = result;
@@ -472,8 +431,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // return ParseJSONRecursive(payloadData, parseOptions);
-      return payloadData;
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
     }
@@ -501,8 +460,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // return ParseJSONRecursive(payloadData, parseOptions);
-      return payloadData;
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
     }
@@ -530,29 +489,24 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       if (this.record?.Result) {
         this.parsedResult; // Triggers parsing and caching
         parsedCount++;
-        console.log(`[DEBUG] Cached result set: ${this._cachedParsedResult !== null}`);
       }
       
       if (this.record?.StartingPayload) {
         this.parsedStartingPayload; // Triggers parsing and caching
         parsedCount++;
-        console.log(`[DEBUG] Cached startingPayload set: ${this._cachedParsedStartingPayload !== null}`);
       }
       
       if (this.record?.FinalPayload) {
         this.parsedFinalPayload; // Triggers parsing and caching
         parsedCount++;
-        console.log(`[DEBUG] Cached finalPayload set: ${this._cachedParsedFinalPayload !== null}`);
       }
       
       if (this.record?.Data) {
         this.parsedData; // Triggers parsing and caching
         parsedCount++;
-        console.log(`[DEBUG] Cached data set: ${this._cachedParsedData !== null}`);
       }
       
       this._allParsingComplete = true;
-      console.log(`[PERF] AIAgentRunForm.parseAllFields: Parsed and cached ${parsedCount} fields`);
       
     } catch (error) {
       console.error('Error during JSON parsing:', error);
@@ -617,8 +571,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // return ParseJSONRecursive(payloadData, parseOptions);
-      return payloadData;
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
     }
@@ -650,8 +604,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
-      // return ParseJSONRecursive(payloadData, parseOptions);
-      return payloadData;
+      // Re-enabled ParseJSONRecursive with performance optimizations
+      return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
     }
