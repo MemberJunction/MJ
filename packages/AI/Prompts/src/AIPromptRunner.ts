@@ -1211,7 +1211,11 @@ export class AIPromptRunner {
 
   /**
    * Builds a unified, ordered list of model-vendor candidates based on all selection criteria.
-   * This method consolidates all the various selection strategies into a single ordered list.
+   * Uses a 3-phase approach to properly handle SelectionStrategy='Specific' with AIPromptModel priorities.
+   * 
+   * Phase 1: Handle explicit model ID (highest priority)
+   * Phase 2: Check if SelectionStrategy='Specific' with AIPromptModel entries - use ONLY those with AIPromptModel priorities
+   * Phase 3: Use general selection strategy (fallback) - blended priorities from legacy behavior
    * 
    * @param prompt - The AI prompt with selection criteria
    * @param explicitModelId - Explicitly specified model ID (highest priority)
@@ -1225,11 +1229,10 @@ export class AIPromptRunner {
     configurationId?: string,
     preferredVendorId?: string
   ): ModelVendorCandidate[] {
-    const candidates: ModelVendorCandidate[] = [];
     const preferredVendorName = preferredVendorId ? 
       AIEngine.Instance.Vendors.find(v => v.ID === preferredVendorId)?.Name : undefined;
 
-    // Helper function to create candidates for a model
+    // Helper function to create candidates for a model with AIModelVendor priorities (legacy behavior)
     const createCandidatesForModel = (
       model: AIModelEntityExtended, 
       basePriority: number,
@@ -1288,7 +1291,7 @@ export class AIPromptRunner {
         });
       }
 
-      // Apply prompt model priority if provided
+      // Apply prompt model priority if provided (legacy blended approach)
       if (promptModelPriority !== undefined) {
         modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
       }
@@ -1296,21 +1299,85 @@ export class AIPromptRunner {
       return modelCandidates;
     };
 
-    // 1. Handle explicit model ID (highest priority)
+    // Helper function to create candidates using AIPromptModel priorities as PRIMARY (not AIModelVendor)
+    const createSpecificCandidatesForModel = (
+      model: AIModelEntityExtended,
+      promptModel: AIPromptModelEntity,
+      preferredVendorId?: string
+    ): ModelVendorCandidate[] => {
+      const modelCandidates: ModelVendorCandidate[] = [];
+      const basePriority = 10000 + (promptModel.Priority || 0) * 100; // Use AIPromptModel.Priority as primary
+      
+      // Get all vendors for this model - filter for inference providers only
+      const modelVendors = AIEngine.Instance.ModelVendors
+        .filter(mv => mv.ModelID === model.ID && mv.Status === 'Active' && this.isInferenceProvider(mv));
+
+      // Handle vendor preference from AIPromptModel
+      const pmPreferredVendorId = promptModel.VendorID || preferredVendorId;
+      
+      if (pmPreferredVendorId) {
+        const preferredVendor = modelVendors.find(mv => mv.VendorID === pmPreferredVendorId);
+        if (preferredVendor) {
+          modelCandidates.push({
+            model,
+            vendorId: preferredVendor.VendorID,
+            vendorName: preferredVendor.Vendor,
+            driverClass: preferredVendor.DriverClass || model.DriverClass,
+            apiName: preferredVendor.APIName || model.APIName,
+            isPreferredVendor: true,
+            priority: basePriority + 1000, // Extra boost for vendor preference
+            source: 'prompt-model'
+          });
+        }
+      }
+
+      // Add other vendors for this model (secondary options)
+      for (const vendor of modelVendors) {
+        if (vendor.VendorID !== pmPreferredVendorId) {
+          modelCandidates.push({
+            model,
+            vendorId: vendor.VendorID,
+            vendorName: vendor.Vendor,
+            driverClass: vendor.DriverClass || model.DriverClass,
+            apiName: vendor.APIName || model.APIName,
+            isPreferredVendor: false,
+            priority: basePriority + (vendor.Priority || 0) * 10, // AIModelVendor priority as secondary factor
+            source: 'prompt-model'
+          });
+        }
+      }
+
+      // If no vendors found, add model with its default driver
+      if (modelCandidates.length === 0 && model.DriverClass) {
+        modelCandidates.push({
+          model,
+          driverClass: model.DriverClass,
+          apiName: model.APIName,
+          isPreferredVendor: false,
+          priority: basePriority,
+          source: 'prompt-model'
+        });
+      }
+
+      return modelCandidates;
+    };
+
+    // PHASE 1: Handle explicit model ID (highest priority)
     if (explicitModelId) {
       const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
       if (model && model.IsActive) {
         // Check model type compatibility
         if (!prompt.AIModelTypeID || model.AIModelTypeID === prompt.AIModelTypeID) {
-          candidates.push(...createCandidatesForModel(model, 10000, 'explicit'));
+          const candidates = createCandidatesForModel(model, 20000, 'explicit');
+          candidates.sort((a, b) => b.priority - a.priority);
+          return candidates;
         }
       }
-      // If explicit model specified, only use that model
-      return candidates;
+      // If explicit model specified but not found/compatible, return empty
+      return [];
     }
 
-    // 2. Get prompt-specific models from AIPromptModels
-    // When a configuration is specified, prioritize matching configurations over NULL configs
+    // Get prompt-specific models from AIPromptModels
     let promptModels: AIPromptModelEntity[] = [];
     
     if (configurationId) {
@@ -1339,36 +1406,42 @@ export class AIPromptRunner {
       );
     }
 
-    if (promptModels.length > 0) {
-      // Use prompt-specific models with their configured priorities
+    // PHASE 2: Check if SelectionStrategy='Specific' with AIPromptModel entries
+    if (prompt.SelectionStrategy === 'Specific' && promptModels.length > 0) {
+      const candidates: ModelVendorCandidate[] = [];
+      
+      // Sort prompt models by priority (higher priority first)
+      promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
+      
       for (const pm of promptModels) {
         const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
         if (model && model.IsActive) {
-          // Respect vendor preference from AIPromptModels
-          const pmPreferredVendorId = pm.VendorID || preferredVendorId;
-          if (pmPreferredVendorId && pmPreferredVendorId !== preferredVendorId) {
-            // AIPromptModel has a specific vendor preference
-            const vendor = AIEngine.Instance.ModelVendors.find(
-              mv => mv.ModelID === model.ID && mv.VendorID === pmPreferredVendorId && mv.Status === 'Active' && this.isInferenceProvider(mv)
-            );
-            if (vendor) {
-              candidates.push({
-                model,
-                vendorId: vendor.VendorID,
-                vendorName: vendor.Vendor,
-                driverClass: vendor.DriverClass || model.DriverClass,
-                apiName: vendor.APIName || model.APIName,
-                isPreferredVendor: true,
-                priority: 5000 + (pm.Priority || 0) * 100 + 1000, // Boost for AIPromptModel vendor preference
-                source: 'prompt-model'
-              });
-            }
-          }
-          
-          // Add all other vendor options for this model
-          const otherCandidates = createCandidatesForModel(model, 5000, 'prompt-model', pm.Priority)
-            .filter(c => c.vendorId !== pmPreferredVendorId);
-          candidates.push(...otherCandidates);
+          // Use AIPromptModel priorities as the authoritative source
+          const modelCandidates = createSpecificCandidatesForModel(model, pm, preferredVendorId);
+          candidates.push(...modelCandidates);
+        }
+      }
+      
+      if (candidates.length > 0) {
+        // Sort all candidates by priority (highest first)
+        candidates.sort((a, b) => b.priority - a.priority);
+        LogStatus(`Using SelectionStrategy='Specific' with ${promptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
+        return candidates;
+      }
+      // If no candidates generated from AIPromptModel entries, fall through to Phase 3
+      LogStatus(`SelectionStrategy='Specific' specified but no usable candidates from AIPromptModel entries, falling back to general selection`);
+    }
+
+    // PHASE 3: Use general selection strategy (fallback)
+    const candidates: ModelVendorCandidate[] = [];
+
+    if (promptModels.length > 0 && prompt.SelectionStrategy !== 'Specific') {
+      // Use prompt-specific models with blended priorities (legacy behavior for non-Specific strategies)
+      for (const pm of promptModels) {
+        const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+        if (model && model.IsActive) {
+          const modelCandidates = createCandidatesForModel(model, 5000, 'prompt-model', pm.Priority);
+          candidates.push(...modelCandidates);
         }
       }
     } else {
@@ -1407,6 +1480,7 @@ export class AIPromptRunner {
           }
           break;
           
+        case 'Specific':
         case 'Default':
         default:
           // Filter by minimum power rank
