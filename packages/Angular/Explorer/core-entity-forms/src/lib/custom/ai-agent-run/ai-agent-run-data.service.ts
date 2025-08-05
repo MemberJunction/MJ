@@ -268,12 +268,25 @@ export class AIAgentRunDataService {
    * Clear all data
    */
   clearData() {
+    const clearStart = performance.now();
+    console.log(`[PERF] AIAgentRunDataService.clearData: Starting data cleanup`);
+    
+    const initialCounts = {
+      steps: this.stepsSubject$.value.length,
+      subRuns: this.subRunsSubject$.value.length,
+      actionLogs: this.actionLogsSubject$.value.length,
+      promptRuns: this.promptRunsSubject$.value.length,
+      cacheSize: this.subAgentDataCache.size
+    };
+    
     this.stepsSubject$.next([]);
     this.subRunsSubject$.next([]);
     this.actionLogsSubject$.next([]);
     this.promptRunsSubject$.next([]);
     this.clearCache();
     this.currentAgentRunId = null;
+    
+    console.log(`[PERF] AIAgentRunDataService.clearData: Cleared data in ${(performance.now() - clearStart).toFixed(2)}ms - Steps: ${initialCounts.steps}, SubRuns: ${initialCounts.subRuns}, ActionLogs: ${initialCounts.actionLogs}, PromptRuns: ${initialCounts.promptRuns}, Cache: ${initialCounts.cacheSize}`);
   }
   
   /**
