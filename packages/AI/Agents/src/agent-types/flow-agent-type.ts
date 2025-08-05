@@ -19,6 +19,7 @@ import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntity } from '@membe
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { PayloadManager } from '../PayloadManager';
 
 /**
  * Extended BaseAgentNextStep for Flow Agent Type with additional prompt step metadata
@@ -121,6 +122,7 @@ interface FlowAgentPromptResponse {
 @RegisterClass(BaseAgentType, "FlowAgentType")
 export class FlowAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+    private _payloadManager = new PayloadManager();
     
     /**
      * Static map to store flow execution state by agent run ID.
@@ -564,32 +566,6 @@ export class FlowAgentType extends BaseAgentType {
         }
     }
     
-    /**
-     * Deep merges two objects, with values from source overwriting values in target
-     * 
-     * @private
-     */
-    private deepMergePayloads(target: any, source: any): any {
-        if (!source || typeof source !== 'object') {
-            return target;
-        }
-        
-        const result = { ...target };
-        
-        for (const key in source) {
-            if (source.hasOwnProperty(key)) {
-                if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-                    // If the source value is an object (but not an array), recursively merge
-                    result[key] = this.deepMergePayloads(result[key] || {}, source[key]);
-                } else {
-                    // Otherwise, directly assign the value from source
-                    result[key] = source[key];
-                }
-            }
-        }
-        
-        return result;
-    }
     
     /**
      * Gets action name by ID
@@ -850,15 +826,27 @@ export class FlowAgentType extends BaseAgentType {
             // This is a temporary workaround - ideally we'd have the run ID passed through
             for (const [agentRunId, flowState] of FlowAgentType._flowStates) {
                 if (flowState.currentStepId === stepId) {
-                    // CRITICAL FIX: Merge the payload changes with the existing flow state payload
-                    // Use the flow state's current payload as the base, not the currentPayload parameter
+                    // CRITICAL FIX: Use PayloadManager to properly merge the payload changes
+                    // with the existing flow state payload
                     const existingPayload = flowState.currentPayload || currentPayload || {};
                     
-                    // Deep merge the update elements into the existing payload
-                    flowState.currentPayload = this.deepMergePayloads(
+                    // Apply the payload change using PayloadManager's merge capabilities
+                    const mergeResult = this._payloadManager.applyAgentChangeRequest(
                         existingPayload,
-                        payloadChange.updateElements
+                        payloadChange,
+                        {
+                            logChanges: false,
+                            verbose: IsVerboseLoggingEnabled()
+                        }
                     );
+                    
+                    // Update the flow state with the merged result
+                    flowState.currentPayload = mergeResult.result;
+                    
+                    // Log any warnings if present
+                    if (mergeResult.warnings && mergeResult.warnings.length > 0) {
+                        LogError(`Warnings during payload merge in flow state: ${mergeResult.warnings.join(', ')}`);
+                    }
                     
                     break;
                 }
