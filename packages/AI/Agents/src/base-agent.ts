@@ -437,7 +437,7 @@ export class BaseAgent {
      * - Custom termination conditions
      * - Alternative flow control mechanisms
      * 
-     * @template R - The type of the return value from agent execution
+     * @template P - The type of the return value from agent execution
      * @param {ExecuteAgentParams} params - The execution parameters with wrapped callbacks (includes wrapped onProgress and onStreaming)
      * @param {AgentConfiguration} config - The loaded agent configuration
      * @returns {Promise<{finalPayload: P, stepCount: number}>} The execution result with typed final payload and step count
