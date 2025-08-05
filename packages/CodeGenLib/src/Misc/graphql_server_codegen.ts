@@ -273,7 +273,7 @@ export class ${serverGraphQLTypeName} {`;
       // first add in the base resolver query to lookup by ID for all entities
       const auditAccessCode: string = entity.AuditRecordAccess
         ? `
-        this.createRecordAccessAuditLogRecord(userPayload, '${entity.Name}', ${entity.FirstPrimaryKey.Name})`
+        this.createRecordAccessAuditLogRecord(provider, userPayload, '${entity.Name}', ${entity.FirstPrimaryKey.Name})`
         : '';
 
       sRet = `
