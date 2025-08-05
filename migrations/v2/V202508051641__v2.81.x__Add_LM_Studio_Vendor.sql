@@ -47,7 +47,7 @@ VALUES
         @LMStudioVendorID,
         @InferenceProviderTypeID,
         'gpt-oss-120b', -- LM Studio API name (user configurable)
-        20, -- Priority (lower priority than cloud providers for general use)
+        1, -- Priority (lower priority than cloud providers for general use)
         'Active',
         'Any, JSON',
         0, -- SupportsEffortLevel (local models typically don't support effort levels)
@@ -62,7 +62,7 @@ VALUES
         @LMStudioVendorID,
         @InferenceProviderTypeID,
         'gpt-oss-20b', -- LM Studio API name (user configurable)
-        20, -- Priority (lower priority than cloud providers for general use)
+        1, -- Priority (lower priority than cloud providers for general use)
         'Active',
         'Any, JSON',
         0, -- SupportsEffortLevel (local models typically don't support effort levels)
