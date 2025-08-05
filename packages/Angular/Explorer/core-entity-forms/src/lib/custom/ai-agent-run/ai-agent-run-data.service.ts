@@ -50,14 +50,14 @@ export class AIAgentRunDataHelper {
   /**
    * Load all data for an agent run
    */
-  async loadAgentRunData(agentRunId: string): Promise<void> {
+  async loadAgentRunData(agentRunId: string, forceReload = false): Promise<void> {
     if (!agentRunId) {
       this.errorSubject$.next('No agent run ID provided');
       return;
     }
     
-    // If already loaded for this run, don't reload
-    if (this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
+    // Skip cache check when force reloading
+    if (!forceReload && this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
       return;
     }
     

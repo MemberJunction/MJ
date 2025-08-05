@@ -8973,6 +8973,10 @@ export class Entity_ {
     @MaxLength(50)
     Status: string;
         
+    @Field({nullable: true, description: `Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`}) 
+    @MaxLength(510)
+    DisplayName?: string;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -9267,6 +9271,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
 }
     
 
@@ -9430,6 +9437,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

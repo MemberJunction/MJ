@@ -5050,6 +5050,11 @@ export const EntitySchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -26719,6 +26724,19 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
     set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
     }
 
     /**

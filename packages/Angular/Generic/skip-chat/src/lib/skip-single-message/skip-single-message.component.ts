@@ -173,13 +173,23 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * showing as a string like "5 seconds" or "1:05" which will update every second
      */
     public get ElapsedTimeSinceLoadFormatted(): string {
-      // first time this gets called we invoke the timer to get things going, don't do until then as it's not needed
+      return this._elapsedTimeFormatted;
+    }
+
+    /**
+     * Starts the elapsed time updater interval
+     */
+    private startElapsedTimeUpdater(): void {
+      // Initialize the formatted time immediately
+      this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+      
+      // Start the interval to update every second
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
           this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+          this.cdRef.markForCheck();
         }, 1000);
       }
-      return this._elapsedTimeFormatted;
     }
 
     private _elapsedTimeFormatted: string = "";
@@ -220,6 +230,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
 
         // Set _loadTime to the provided loadTime if available, otherwise use current time
         this._loadTime = this.loadTime !== undefined ? this.loadTime instanceof Date ? this.loadTime.getTime() : this.loadTime : Date.now();
+        
+        // Initialize elapsed time formatting and start the update interval
+        this.startElapsedTimeUpdater();
         
         // Load artifact info if available
         if (this.HasArtifact) {
