@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/a2aserver
 
+## 2.81.0
+
+### Patch Changes
+
+- Updated dependencies [42a6954]
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/ai-agents@2.81.0
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/sqlserver-dataprovider@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

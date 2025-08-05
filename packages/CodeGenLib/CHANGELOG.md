@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.81.0
+
+### Minor Changes
+
+- 76cf3e3: migration associated with this, change itself is just code
+
+### Patch Changes
+
+- 6d2d478: feat: AI Agent UI improvements and server-side context fixes
+
+  - Enhanced AI Agent dialogs with resizable and draggable functionality
+    using Kendo UI Window component
+  - Improved dialog positioning with consistent center placement and proper
+    container context
+  - Fixed prompt selector in AI Agent form for better user experience
+  - Added missing contextUser parameter to GetEntityObject calls in
+    BaseResolver for proper multi-user isolation
+  - Fixed createRecordAccessAuditLogRecord calls in generated resolvers to
+    include provider argument
+  - Added JSDoc documentation to ViewInfo class properties for better code
+    documentation
+  - Applied consistent dialog styling across all AI Agent management
+    components
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/core-entities-server@2.81.0
+  - @memberjunction/sqlserver-dataprovider@2.81.0
+  - @memberjunction/aiengine@2.81.0
+  - @memberjunction/actions@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/ai-anthropic@2.81.0
+  - @memberjunction/ai-groq@2.81.0
+  - @memberjunction/ai-mistral@2.81.0
+  - @memberjunction/ai-openai@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

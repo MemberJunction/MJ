@@ -1,5 +1,7 @@
 # @memberjunction/ai-agent-manager
 
+## 2.81.0
+
 ## 2.80.1
 
 ## 2.80.0

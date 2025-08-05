@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.81.0
+
+### Minor Changes
+
+- e623f99: added DisplayName to Entities entity
+
+### Patch Changes
+
+- 95491fa: bug fixes
+- 6d2d478: feat: AI Agent UI improvements and server-side context fixes
+
+  - Enhanced AI Agent dialogs with resizable and draggable functionality
+    using Kendo UI Window component
+  - Improved dialog positioning with consistent center placement and proper
+    container context
+  - Fixed prompt selector in AI Agent form for better user experience
+  - Added missing contextUser parameter to GetEntityObject calls in
+    BaseResolver for proper multi-user isolation
+  - Fixed createRecordAccessAuditLogRecord calls in generated resolvers to
+    include provider argument
+  - Added JSDoc documentation to ViewInfo class properties for better code
+    documentation
+  - Applied consistent dialog styling across all AI Agent management
+    components
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/ai-engine-base@2.81.0
+  - @memberjunction/ai-core-plus@2.81.0
+  - @memberjunction/ng-base-forms@2.81.0
+  - @memberjunction/ng-form-toolbar@2.81.0
+  - @memberjunction/ng-action-gallery@2.81.0
+  - @memberjunction/ng-ai-test-harness@2.81.0
+  - @memberjunction/ng-code-editor@2.81.0
+  - @memberjunction/ng-container-directives@2.81.0
+  - @memberjunction/ng-deep-diff@2.81.0
+  - @memberjunction/ng-join-grid@2.81.0
+  - @memberjunction/ng-timeline@2.81.0
+  - @memberjunction/ng-tabstrip@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

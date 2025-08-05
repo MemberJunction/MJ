@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.81.0
+
+### Patch Changes
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/aiengine@2.81.0
+  - @memberjunction/ai-vectors-pinecone@2.81.0
+  - @memberjunction/ai-vectors@2.81.0
+  - @memberjunction/ai-vectordb@2.81.0
+  - @memberjunction/templates-base-types@2.81.0
+  - @memberjunction/templates@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/ai-mistral@2.81.0
+  - @memberjunction/ai-openai@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes
