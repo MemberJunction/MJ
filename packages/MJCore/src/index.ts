@@ -23,6 +23,8 @@ export * from "./generic/queryInfo";
 export * from "./generic/querySQLFilters";
 export * from "./generic/runQuerySQLFilterImplementations";
 export * from "./generic/libraryInfo";
+export * from "./generic/QueryCacheConfig";
+export * from "./generic/QueryCache";
 export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";

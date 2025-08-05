@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { AIAgentEntity, AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, AIPromptEntity, ActionEntity } from '@memberjunction/core-entities';
@@ -79,7 +79,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   newlyCreatedTemplateContents: any[] = [];
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private agentManagementService: AIAgentManagementService
   ) {
@@ -131,43 +131,49 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     try {
       const rv = new RunView();
       
-      // Load agent types
-      const typesResult = await rv.RunView<AIAgentTypeEntity>({
-        EntityName: 'MJ: AI Agent Types',
-        OrderBy: 'Name ASC',
-        ResultType: 'entity_object'
-      });
+      // Load all data in a single batch for better performance
+      const results = await rv.RunViews([
+        // Agent types (index 0)
+        {
+          EntityName: 'MJ: AI Agent Types',
+          OrderBy: 'Name ASC',
+          ResultType: 'entity_object'
+        },
+        // Available prompts (index 1)
+        {
+          EntityName: 'AI Prompts',
+          ExtraFilter: `Status = 'Active'`,
+          OrderBy: 'Name ASC',
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        // Available actions (index 2)
+        {
+          EntityName: 'Actions',
+          ExtraFilter: `Status = 'Active'`,
+          OrderBy: 'Name ASC',
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        }
+      ]);
 
-      if (typesResult.Success && typesResult.Results) {
-        this.availableAgentTypes$.next(typesResult.Results);
+      // Process agent types (index 0)
+      if (results[0].Success && results[0].Results) {
+        this.availableAgentTypes$.next(results[0].Results as AIAgentTypeEntity[]);
         
         // Set default type if not specified
-        if (!this.config.initialTypeID && typesResult.Results.length > 0) {
-          this.subAgentForm.patchValue({ typeID: typesResult.Results[0].ID });
+        if (!this.config.initialTypeID && results[0].Results.length > 0) {
+          this.subAgentForm.patchValue({ typeID: results[0].Results[0].ID });
         }
       }
 
-      // Load available prompts
-      const promptsResult = await rv.RunView<AIPromptEntity>({
-        EntityName: 'AI Prompts',
-        ExtraFilter: `Status = 'Active'`,
-        OrderBy: 'Name ASC',
-        MaxRows: 1000,
-        ResultType: 'entity_object'
-      });
-
-      if (promptsResult.Success && promptsResult.Results) {
-        this.availablePrompts$.next(promptsResult.Results);
+      // Process available prompts (index 1)
+      if (results[1].Success && results[1].Results) {
+        this.availablePrompts$.next(results[1].Results as AIPromptEntity[]);
       }
 
-      // Load available actions
-      const actionsResult = await rv.RunView<ActionEntity>({
-        EntityName: 'Actions',
-        ExtraFilter: `Status = 'Active'`,
-        OrderBy: 'Name ASC',
-        MaxRows: 1000,
-        ResultType: 'entity_object'
-      });
+      // Process available actions (index 2)
+      const actionsResult = results[2];
 
       if (actionsResult.Success && actionsResult.Results) {
         this.availableActions$.next(actionsResult.Results);

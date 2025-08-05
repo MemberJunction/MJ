@@ -8973,6 +8973,10 @@ export class Entity_ {
     @MaxLength(50)
     Status: string;
         
+    @Field({nullable: true, description: `Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`}) 
+    @MaxLength(510)
+    DisplayName?: string;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -9267,6 +9271,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
 }
     
 
@@ -9430,6 +9437,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23285,6 +23295,18 @@ export class QueryCategory_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `Default cache setting for queries in this category`}) 
+    DefaultCacheEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Default TTL in minutes for cached results of queries in this category`}) 
+    DefaultCacheTTLMinutes?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Default maximum cache size for queries in this category`}) 
+    DefaultCacheMaxSize?: number;
+        
+    @Field(() => Boolean, {description: `When true, queries without cache config will inherit from this category`}) 
+    CacheInheritanceEnabled: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -23320,6 +23342,18 @@ export class CreateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultCacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLMinutes: number | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheMaxSize: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheInheritanceEnabled?: boolean;
 }
     
 
@@ -23342,6 +23376,18 @@ export class UpdateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultCacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLMinutes?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheMaxSize?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheInheritanceEnabled?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23512,6 +23558,18 @@ export class Query_ {
     @Field(() => Boolean, {nullable: true, description: `Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`}) 
     UsesTemplate?: boolean;
         
+    @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
+    AuditQueryRuns: boolean;
+        
+    @Field(() => Boolean, {description: `When true, query results will be cached in memory with TTL expiration`}) 
+    CacheEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
+    CacheTTLMinutes?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
+    CacheMaxSize?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
@@ -23576,6 +23634,18 @@ export class CreateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLMinutes: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CacheMaxSize: number | null;
 }
     
 
@@ -23622,6 +23692,18 @@ export class UpdateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLMinutes?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CacheMaxSize?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36444,9 +36526,9 @@ export class AIModelVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
+    @Field({description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
     @MaxLength(16)
-    TypeID?: string;
+    TypeID: string;
         
     @Field() 
     @MaxLength(100)
@@ -36456,9 +36538,9 @@ export class AIModelVendor_ {
     @MaxLength(100)
     Vendor: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    Type?: string;
+    Type: string;
         
 }
 
@@ -36507,7 +36589,7 @@ export class CreateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID: string | null;
+    TypeID?: string;
 }
     
 
@@ -36556,7 +36638,7 @@ export class UpdateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID?: string | null;
+    TypeID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37731,11 +37813,11 @@ export class ConversationArtifact_ {
     @MaxLength(200)
     ArtifactType: string;
         
-    @Field(() => [ConversationArtifactPermission_])
-    MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
-    
     @Field(() => [ConversationArtifactVersion_])
     MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
+    
+    @Field(() => [ConversationArtifactPermission_])
+    MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_ArtifactIDArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -37858,17 +37940,6 @@ export class ConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [ConversationArtifactPermission_])
-    async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ConversationArtifactVersion_])
     async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
@@ -37877,6 +37948,17 @@ export class ConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifactPermission_])
+    async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
         return result;
     }
         

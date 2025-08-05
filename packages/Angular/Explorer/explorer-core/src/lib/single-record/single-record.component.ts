@@ -1,6 +1,7 @@
-import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ComponentRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
 import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
+import { Subscription } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -11,7 +12,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent implements OnInit, AfterViewInit {
+export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(Container, {static: true}) formContainer!: Container;
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
@@ -28,6 +29,11 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   public useGenericForm: boolean = false;
   public loading: boolean = true;
 
+  // Track dynamically created components and entities for cleanup
+  private _formComponentRef: ComponentRef<any> | null = null;
+  private _currentRecord: BaseEntity | null = null;
+  private _eventHandlerSubscription: Subscription | null = null;
+
   ngOnInit(): void {
   }
 
@@ -36,9 +42,11 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   }
 
   public async LoadForm(primaryKey: CompositeKey, entityName: string) {
+    
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (!entityName || entityName.trim().length === 0) 
+    if (!entityName || entityName.trim().length === 0) {
       return; // not ready to load
+    }
 
     this.entityName = entityName;
     if (primaryKey.HasValue) {
@@ -51,6 +59,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
     }
 
     const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
+    
     const md = new Metadata();
     const entity = md.Entities.find(e => {
       return e.Name === entityName
@@ -60,21 +69,29 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
     if (formReg) {
       const record = await md.GetEntityObject<BaseEntity>(entityName);
       if (record) {
-        if (primaryKey.HasValue)  
+        if (primaryKey.HasValue) {
           await record.InnerLoad(primaryKey);
+        }
         else {
           record.NewRecord();
           this.SetNewRecordValues(record);          
         }
 
-        record.RegisterEventHandler((eventType: BaseEntityEvent) => {
+        // CRITICAL: Track the event handler subscription for cleanup
+        this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
           if (eventType.type === 'save')
             this.recordSaved.emit(record);
-        })
+        });
+        
         const viewContainerRef = this.formContainer.viewContainerRef;
         viewContainerRef.clear();
 
         const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
+        
+        // Track component and record for cleanup
+        this._formComponentRef = componentRef;
+        this._currentRecord = record;
+        
         componentRef.instance.record = record
         componentRef.instance.userPermissions = permissions
         componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
@@ -85,7 +102,6 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       else
         throw new Error(`Unable to load entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
     }
-
 
     this.loading = false;
   }
@@ -120,5 +136,33 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
         }
       });
     }    
+  }
+
+  ngOnDestroy(): void {
+    // CRITICAL: Clean up dynamically created form component to prevent zombie components
+    if (this._formComponentRef) {
+      this._formComponentRef.destroy();
+      this._formComponentRef = null;
+    }
+    
+    // CRITICAL: Unsubscribe from event handler to prevent memory leaks
+    if (this._eventHandlerSubscription) {
+      this._eventHandlerSubscription.unsubscribe();
+      this._eventHandlerSubscription = null;
+    }
+    
+    // Clean up record reference
+    if (this._currentRecord) {
+      this._currentRecord = null;
+    }
+    
+    // Clear the view container to ensure no lingering references
+    if (this.formContainer?.viewContainerRef) {
+      this.formContainer.viewContainerRef.clear();
+    }
+    
+    // Reset state
+    this.loading = true;
+    this.useGenericForm = false;
   }
 }

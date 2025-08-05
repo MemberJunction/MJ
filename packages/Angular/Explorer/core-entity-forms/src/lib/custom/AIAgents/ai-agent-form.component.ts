@@ -1,4 +1,4 @@
-import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
@@ -10,7 +10,9 @@ import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { PromptSelectorResult } from './prompt-selector-dialog.component';
 
 
 /**
@@ -49,9 +51,35 @@ import { firstValueFrom } from 'rxjs';
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit {
+export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit, OnDestroy {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntity;
+    
+    /** Subject for managing component lifecycle and cleaning up subscriptions */
+    private destroy$ = new Subject<void>();
+    
+    /** Track active timeouts for cleanup */
+    private activeTimeouts: number[] = [];
+    
+    /** Helper method to create tracked setTimeout calls */
+    private setTrackedTimeout(callback: () => void, delay: number): number {
+        const timeoutId = setTimeout(() => {
+            // Remove from tracking array when timeout executes
+            this.removeTimeoutFromTracking(timeoutId);
+            callback();
+        }, delay) as any as number;
+        
+        this.activeTimeouts.push(timeoutId);
+        return timeoutId;
+    }
+    
+    /** Remove timeout from tracking array */
+    private removeTimeoutFromTracking(timeoutId: number): void {
+        const index = this.activeTimeouts.indexOf(timeoutId);
+        if (index > -1) {
+            this.activeTimeouts.splice(index, 1);
+        }
+    }
     
     /** ViewChild for dynamic custom section container */
     private _customSectionContainer!: ViewContainerRef;
@@ -60,7 +88,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         this._customSectionContainer = container;
         // When the container becomes available, load the custom section if needed
         if (container && this.agentType?.UIFormSectionKey && !this.customSectionLoaded) {
-            setTimeout(() => this.loadCustomFormSection(), 0);
+            this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
         }
     }
     get customSectionContainer(): ViewContainerRef {
@@ -137,6 +165,133 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         { text: 'Agent Type', value: 'Agent Type' },
         { text: 'Agent', value: 'Agent' }
     ];
+
+    /** Agent status options for the dropdown */
+    public statusOptions = [
+        { text: 'Active', value: 'Active' },
+        { text: 'Pending', value: 'Pending' },
+        { text: 'Disabled', value: 'Disabled' }
+    ];
+
+    /** Agent types loaded from the database */
+    public agentTypes: any[] = [];
+
+    /** Currently selected context compression prompt */
+    public selectedContextCompressionPrompt: any = null;
+
+    /**
+     * Loads agent types from the database for the dropdown
+     * @private
+     */
+    private async loadAgentTypes(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'MJ: AI Agent Types',
+                ExtraFilter: '',
+                OrderBy: 'Name ASC',
+                ResultType: 'entity_object'
+            });
+            
+            if (result.Success) {
+                this.agentTypes = result.Results || [];
+            } else {
+                console.error('Failed to load agent types:', result.ErrorMessage);
+                this.agentTypes = [];
+            }
+        } catch (error) {
+            console.error('Error loading agent types:', error);
+            this.agentTypes = [];
+        }
+    }
+
+    /**
+     * Loads the context compression prompt details for display
+     * @private
+     */
+    private async loadContextCompressionPrompt(): Promise<void> {
+        if (!this.record?.ContextCompressionPromptID) {
+            this.selectedContextCompressionPrompt = null;
+            return;
+        }
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'AI Prompts',
+                ExtraFilter: `ID = '${this.record.ContextCompressionPromptID}'`,
+                ResultType: 'entity_object',
+                MaxRows: 1
+            });
+
+            if (result.Success && result.Results && result.Results.length > 0) {
+                this.selectedContextCompressionPrompt = result.Results[0];
+            } else {
+                console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
+                this.selectedContextCompressionPrompt = null;
+            }
+        } catch (error) {
+            console.error('Error loading context compression prompt:', error);
+            this.selectedContextCompressionPrompt = null;
+        }
+    }
+
+    /**
+     * Opens the prompt selector dialog for context compression prompt
+     */
+    public async openContextCompressionPromptSelector(): Promise<void> {
+        try {
+            const { PromptSelectorDialogComponent } = await import('./prompt-selector-dialog.component');
+            
+            const dialogRef = this.dialogService.open({
+                title: 'Select Context Compression Prompt',
+                content: PromptSelectorDialogComponent,
+                width: 800,
+                height: 600
+            });
+
+            const promptSelector = dialogRef.content.instance;
+            
+            // Configure the prompt selector for single selection
+            promptSelector.config = {
+                title: 'Select Context Compression Prompt',
+                multiSelect: false,
+                selectedPromptIds: this.record.ContextCompressionPromptID ? [this.record.ContextCompressionPromptID] : [],
+                showCreateNew: false
+            };
+
+            // Subscribe to the result
+            promptSelector.result.subscribe({
+                next: (result: PromptSelectorResult | null) => {
+                    if (result && result.selectedPrompts.length > 0) {
+                        const selectedPrompt = result.selectedPrompts[0];
+                        this.record.ContextCompressionPromptID = selectedPrompt.ID;
+                        this.selectedContextCompressionPrompt = selectedPrompt;
+                        this.cdr.detectChanges();
+                    }
+                },
+                error: (error: any) => {
+                    console.error('Error in prompt selector dialog:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error opening context compression prompt selector:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error opening prompt selector. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Clears the selected context compression prompt
+     */
+    public clearContextCompressionPrompt(): void {
+        this.record.ContextCompressionPromptID = null;
+        this.selectedContextCompressionPrompt = null;
+        this.cdr.detectChanges();
+    }
 
     // === Permission Checks for Related Entities ===
     /** Cache for permission checks to avoid repeated calculations */
@@ -290,6 +445,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
+    
+    // Emergency circuit breaker to prevent infinite loops
+    private _changeDetectionCount = 0;
+    private static readonly MAX_CHANGE_DETECTIONS = 50;
 
     // === Original State for Cancel/Revert ===
     /** Snapshots of original data for reverting UI changes */
@@ -322,19 +481,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * After view initialization, load any custom form section if defined
      */
-    async ngAfterViewInit() {
-        // Use Promise to defer loading to avoid change detection issues
+    async ngOnInit() {
+        await super.ngOnInit();
+        
+        // Load agent types for dropdown (needed for both new and existing records)
+        await this.loadAgentTypes();
+        
+        // Load context compression prompt if one is set
+        if (this.record?.ContextCompressionPromptID) {
+            await this.loadContextCompressionPrompt();
+        }
+        
         if (this.record?.ID) {
             await this.loadRelatedCounts();
             await this.loadAgentType();
             
-            // Force change detection to render the panel bar item
-            this.cdr.detectChanges();
+            // Schedule change detection - safer than manual detectChanges()
+            this.cdr.markForCheck();
             
             // Defer custom section loading to next tick after DOM updates
-            setTimeout(() => {
+            this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
+            
+            // Start background timer for running time updates
+            this.startRunningTimeUpdater();
         }
     }
 
@@ -390,6 +561,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     OrderBy: '__mj_CreatedAt DESC'
                 }
             ]);
+
+            // Load agent types for dropdown
+            await this.loadAgentTypes();
             
             // Process results in the same order as queries
             if (results.length >= 6) {
@@ -508,8 +682,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 // Mark as loaded
                 this.customSectionLoaded = true;
                 
-                // Trigger change detection
-                this.cdr.detectChanges();
+                // Mark for check instead of forcing immediate detection
+                this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('Error loading custom form section:', error);
@@ -521,12 +695,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * @param event The panel bar state change event
      */
     public onCustomSectionStateChange(event: any): void {
-        console.log('Panel state change:', event.expanded, 'Container:', this.customSectionContainer, 'Loaded:', this.customSectionLoaded);
-        
         // When panel is expanded, check if we need to load or reload the custom section
         if (event.expanded && this.agentType?.UIFormSectionKey) {
             // Always try to load on expand to handle cases where container might have been recreated
-            setTimeout(() => {
+            this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
         }
@@ -538,8 +710,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     private restoreFromSnapshots() {
         if (this.originalSnapshots) {
-            console.log('Restoring UI from snapshots...');
-            
             // Restore arrays (create new copies to ensure reactivity)
             this.agentPrompts = [...this.originalSnapshots.agentPrompts];
             this.agentActions = [...this.originalSnapshots.agentActions];
@@ -556,12 +726,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Reset other UI state
             this.hasUnsavedChanges = false;
             
-            console.log('UI restored - Prompts:', this.promptCount, 'Actions:', this.actionCount, 'SubAgents:', this.subAgentCount);
             
-            // Force change detection to update the UI
-            this.cdr.detectChanges();
-        } else {
-            console.warn('No snapshots available to restore from');
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
         }
     }
 
@@ -569,8 +736,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Override CancelEdit to restore UI state when user cancels changes
      */
     public override CancelEdit(): void {
-        console.log('=== AI Agent CancelEdit called ===');
-        console.log('Pending records before clear:', this.PendingRecords.length);
         
         // Set flag to indicate we're performing a cancel operation
         this.isPerformingCancel = true;
@@ -579,7 +744,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // CRITICAL: Clear our pending records BEFORE calling parent
             // This ensures that any prompt/action/sub-agent changes we added don't persist
             this.PendingRecords.length = 0;
-            console.log('Pending records after clear:', this.PendingRecords.length);
             
             // Call the parent CancelEdit first (this handles main record revert and pending records)
             super.CancelEdit();
@@ -589,8 +753,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             
             // Reset the unsaved changes flag
             this.hasUnsavedChanges = false;
-            
-            console.log('Cancel completed successfully');
         } finally {
             // Always reset the flag
             this.isPerformingCancel = false;
@@ -730,7 +892,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 parentAgentId: this.record.ID,
                 parentAgentName: this.record.Name || 'Agent',
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.subAgent) {
                         try {
@@ -801,8 +963,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                             this.subAgentCount = this.subAgents.length;
                             this.hasUnsavedChanges = true;
 
-                            // Trigger change detection
-                            this.cdr.detectChanges();
+                            // Mark for check instead of forcing immediate detection
+                            this.cdr.markForCheck();
 
                             MJNotificationService.Instance.CreateSimpleNotification(
                                 `Sub-agent "${result.subAgent.Name}" created and will be saved when you save the parent agent`,
@@ -857,7 +1019,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 showCreateNew: true,
                 linkedPromptIds: allLinkedIds,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.selectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
@@ -896,8 +1058,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
                         this.promptCount = this.agentPrompts.length;
                         
-                        // Trigger change detection to update UI
-                        this.cdr.detectChanges();
+                        // Mark for check instead of forcing immediate detection
+                        this.cdr.markForCheck();
                         
                         // Show success notification
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -940,8 +1102,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.record.ContextCompressionPromptID = null;
             this.record.ContextCompressionMessageRetentionCount = null;
             
-            // Trigger change detection to update the UI
-            this.cdr.detectChanges();
+            // Mark for check instead of forcing immediate detection
+            this.cdr.markForCheck();
         }
     }
 
@@ -961,7 +1123,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             agentName: this.record.Name || 'Agent',
             existingActionIds: allLinkedIds,
             viewContainerRef: this.viewContainerRef
-        }).subscribe({
+        }).pipe(takeUntil(this.destroy$)).subscribe({
             next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
@@ -999,8 +1161,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     this.agentActions.push(...newActions);
                     this.actionCount = this.agentActions.length;
                     
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
                     
                     // Show success notification
                     MJNotificationService.Instance.CreateSimpleNotification(
@@ -1143,18 +1305,52 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /**
      * Gets the running time for an execution that hasn't completed yet
+     * Uses a cached timestamp to avoid ExpressionChangedAfterItHasBeenCheckedError
      */
+    private _runningTimeCache = new Map<string, { time: string, timestamp: number }>();
+    private _runningTimeUpdater: any = null;
+    
     public getRunningTime(startDate: Date): string {
         if (!startDate) return 'N/A';
         
-        const now = new Date();
         const startTime = new Date(startDate).getTime();
-        const currentTime = now.getTime();
-        
         if (isNaN(startTime)) return 'N/A';
         
-        const milliseconds = currentTime - startTime;
-        return this.formatExecutionTime(milliseconds);
+        const cacheKey = startTime.toString();
+        const now = Date.now();
+        const cached = this._runningTimeCache.get(cacheKey);
+        
+        // Update cache every second to avoid constant changes
+        if (!cached || now - cached.timestamp > 1000) {
+            const milliseconds = now - startTime;
+            const timeString = this.formatExecutionTime(milliseconds);
+            this._runningTimeCache.set(cacheKey, { time: timeString, timestamp: now });
+            
+            // Don't trigger change detection here - let the background timer handle it
+            return timeString;
+        }
+        
+        return cached.time;
+    }
+
+    /**
+     * Starts the background timer for updating running times
+     */
+    private startRunningTimeUpdater() {
+        if (!this._runningTimeUpdater) {
+            this._runningTimeUpdater = setInterval(() => {
+                if (!this.destroy$.closed) {
+                    // Force cache refresh by clearing old entries
+                    const now = Date.now();
+                    for (const [key, cached] of this._runningTimeCache.entries()) {
+                        if (now - cached.timestamp > 500) { // Refresh every 500ms
+                            this._runningTimeCache.delete(key);
+                        }
+                    }
+                    this.cdr.markForCheck();
+                }
+            }, 1000); // Update every second
+        }
     }
 
     /**
@@ -1286,17 +1482,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Useful for troubleshooting cancel/revert issues
      */
     public debugPendingRecords() {
-        console.log('=== Pending Records Debug ===');
-        console.log('Pending Records Count:', this.PendingRecords.length);
-        console.log('Has Unsaved Changes:', this.hasUnsavedChanges);
-        console.log('Is Performing Cancel:', this.isPerformingCancel);
-        console.log('Pending Records:', this.PendingRecords.map(p => ({
-            entityName: p.entityObject.EntityInfo.Name,
-            id: p.entityObject.Get('ID'),
-            action: p.action,
-            isDirty: p.entityObject.Dirty
-        })));
-        console.log('=============================');
+        // Debug method for troubleshooting - console output removed for production
     }
 
 
@@ -1323,7 +1509,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 title: `Create New Prompt for ${this.record.Name || 'Agent'}`,
                 initialName: '',
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.prompt) {
                         try {
@@ -1478,8 +1664,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                     this.hasUnsavedChanges = true;
 
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
 
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Prompt "${prompt.Name}" will be removed when you save the agent`,
@@ -1531,7 +1717,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 parentAgentId: this.record.ID,
                 showCreateNew: true,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (result) => {
                     if (result && result.selectedAgents && result.selectedAgents.length > 0) {
                         // Filter out already linked or pending agents
@@ -1569,8 +1755,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         this.subAgents.push(...newAgents);
                         this.subAgentCount = this.subAgents.length;
                         
-                        // Trigger change detection to update UI
-                        this.cdr.detectChanges();
+                        // Mark for check instead of forcing immediate detection
+                        this.cdr.markForCheck();
                         
                         // Show success notification
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -1656,8 +1842,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                     this.hasUnsavedChanges = true;
 
-                    // Trigger change detection to update UI
-                    this.cdr.detectChanges();
+                    // Mark for check instead of forcing immediate detection
+                    this.cdr.markForCheck();
 
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `"${subAgent.Name}" will be removed as a sub-agent when you save`,
@@ -1740,8 +1926,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                 this.hasUnsavedChanges = true;
 
-                // Trigger change detection to update UI
-                this.cdr.detectChanges();
+                // Mark for check instead of forcing immediate detection
+                this.cdr.markForCheck();
 
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Action "${action.Name}" will be removed when you save the agent`,
@@ -1801,7 +1987,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 agentPrompt: agentPrompt,
                 allAgentPrompts: allAgentPrompts,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (formData) => {
                     if (formData) {
                         try {
@@ -1887,7 +2073,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 subAgent: subAgentEntity,
                 allSubAgents: allSubAgents,
                 viewContainerRef: this.viewContainerRef
-            }).subscribe({
+            }).pipe(takeUntil(this.destroy$)).subscribe({
                 next: async (formData) => {
                     if (formData) {
                         try {
@@ -1917,8 +2103,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                                     localSubAgent.ExposeAsAction = formData.exposeAsAction;
                                 }
 
-                                // Trigger change detection to update UI
-                                this.cdr.detectChanges();
+                                // Mark for check instead of forcing immediate detection
+                                this.cdr.markForCheck();
                             } else {
                                 MJNotificationService.Instance.CreateSimpleNotification(
                                     'Failed to save sub-agent settings. Please try again.',
@@ -1999,6 +2185,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
 
         try {
+            // Reset context compression fields if EnableContextCompression is false
+            if (!this.record.EnableContextCompression) {
+                this.record.ContextCompressionMessageThreshold = null;
+                this.record.ContextCompressionPromptID = null;
+                this.record.ContextCompressionMessageRetentionCount = null;
+                this.selectedContextCompressionPrompt = null;
+            }
+
             const md = new Metadata();
             const transactionGroup = await md.CreateTransactionGroup();
 
@@ -2158,6 +2352,50 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             return false;
         }
+    }
+
+    
+    /**
+     * Component cleanup - critical for preventing memory leaks
+     */
+    ngOnDestroy(): void {
+        // Signal all subscriptions to complete
+        this.destroy$.next();
+        this.destroy$.complete();
+        
+        // Clear all active timeouts
+        this.activeTimeouts.forEach(timeoutId => {
+            clearTimeout(timeoutId);
+        });
+        this.activeTimeouts.length = 0;
+        
+        // Clear running time updater
+        if (this._runningTimeUpdater) {
+            clearInterval(this._runningTimeUpdater);
+            this._runningTimeUpdater = null;
+        }
+        
+        // Clear all data arrays to release memory
+        this.subAgents.length = 0;
+        this.agentPrompts.length = 0;
+        this.agentActions.length = 0;
+        this.recentExecutions.length = 0;
+        this.learningCycles.length = 0;
+        this.agentNotes.length = 0;
+        
+        // Clear maps and objects
+        this._permissionCache.clear();
+        this._runningTimeCache.clear();
+        this.expandedExecutions = {};
+        this.originalSnapshots = null as any;
+        
+        // Clean up component references
+        if (this.customSectionComponentRef) {
+            this.customSectionComponentRef.destroy();
+            this.customSectionComponentRef = null;
+        }
+        this.customSectionComponent = null;
+        this.agentType = null;
     }
     
 }

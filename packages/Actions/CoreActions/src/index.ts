@@ -66,6 +66,13 @@ export * from './custom/workflow/delay.action';
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
 
+// User Management Actions
+export * from './custom/user-management/check-user-permission.action';
+export * from './custom/user-management/create-user.action';
+export * from './custom/user-management/create-employee.action';
+export * from './custom/user-management/assign-user-roles.action';
+export * from './custom/user-management/validate-email-unique.action';
+
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
 import { LoadSlackWebhookAction } from './custom/communication/slack-webhook.action';
@@ -111,6 +118,11 @@ import { LoadParallelExecuteAction } from './custom/workflow/parallel-execute.ac
 import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
+import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
+import { LoadCreateUserAction } from './custom/user-management/create-user.action';
+import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
+import { LoadAssignUserRolesAction } from './custom/user-management/assign-user-roles.action';
+import { LoadValidateEmailUniqueAction } from './custom/user-management/validate-email-unique.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -162,6 +174,11 @@ export function LoadAllCoreActions() {
     LoadRetryAction();
     LoadDelayAction();
     LoadExecuteAIPromptAction();
+    LoadCheckUserPermissionAction();
+    LoadCreateUserAction();
+    LoadCreateEmployeeAction();
+    LoadAssignUserRolesAction();
+    LoadValidateEmailUniqueAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

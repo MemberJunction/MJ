@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentPromptEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
@@ -63,7 +63,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   executionOrderError: string | null = null;
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
   ) {}

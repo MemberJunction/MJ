@@ -3,7 +3,7 @@ import { Subject, Observable, combineLatest, interval, of, from, Subscription } 
 import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { AIAgentRunDataService } from './ai-agent-run-data.service';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 export interface TimelineItem {
   id: string;
@@ -35,19 +35,20 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
   @Input() autoRefresh = false;
   @Input() refreshInterval = 30000; // Minimum 30 seconds
+  @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
   @Output() agentRunCompleted = new EventEmitter<string>();
 
   private destroy$ = new Subject<void>();
   
-  // Public observables from service
-  steps$ = this.dataService.steps$;
-  subRuns$ = this.dataService.subRuns$;
-  actionLogs$ = this.dataService.actionLogs$;
-  promptRuns$ = this.dataService.promptRuns$;
+  // Public observables from data helper
+  steps$!: Observable<AIAgentRunStepEntity[]>;
+  subRuns$!: Observable<AIAgentRunEntity[]>;
+  actionLogs$!: Observable<ActionExecutionLogEntity[]>;
+  promptRuns$!: Observable<AIPromptRunEntity[]>;
   
-  timelineItems$: Observable<TimelineItem[]>;
+  timelineItems$!: Observable<TimelineItem[]>;
   
   loading = false;
   error: string | null = null;
@@ -57,9 +58,16 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private refreshSubscription: Subscription | null = null;
   
   constructor(
-    private dataService: AIAgentRunDataService,
     private cdr: ChangeDetectorRef
-  ) {
+  ) {}
+  
+  ngOnInit() {
+    // Initialize observables from the data helper
+    this.steps$ = this.dataHelper.steps$;
+    this.subRuns$ = this.dataHelper.subRuns$;
+    this.actionLogs$ = this.dataHelper.actionLogs$;
+    this.promptRuns$ = this.dataHelper.promptRuns$;
+    
     // Combine all data sources to build timeline
     this.timelineItems$ = combineLatest([
       this.steps$,
@@ -72,16 +80,14 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       ),
       shareReplay(1)
     );
-  }
-  
-  ngOnInit() {
-    // Data loading is now handled by the parent component through the service
-    // Subscribe to loading state from service
-    this.dataService.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
+    
+    // Data loading is now handled by the parent component through the helper
+    // Subscribe to loading state from helper
+    this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
       this.loading = loading;
     });
     
-    this.dataService.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+    this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
       this.error = error;
     });
     
@@ -125,7 +131,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
         // Check if the agent run is still running
         if (agentRun.Status === 'Running') {
           // Reload data
-          this.dataService.loadAgentRunData(this.aiAgentRunId);
+          this.dataHelper.loadAgentRunData(this.aiAgentRunId);
         } else {
           // Agent run completed/failed - stop refresh
           console.log(`Agent run ${agentRun.Status} - stopping auto-refresh`);
@@ -150,8 +156,8 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   // This method is now just for compatibility - actual loading is done by parent
   async loadData() {
     if (!this.aiAgentRunId) return;
-    // The parent component should handle data loading through the service
-    return this.dataService.loadAgentRunData(this.aiAgentRunId);
+    // The parent component should handle data loading through the helper
+    return this.dataHelper.loadAgentRunData(this.aiAgentRunId);
   }
   
   private buildTimelineItems(
@@ -270,7 +276,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       }
       
       // Load sub-agent data through service
-      const data = await this.dataService.loadSubAgentData(subAgentRunId);
+      const data = await this.dataHelper.loadSubAgentData(subAgentRunId);
       
       if (!data.steps || data.steps.length === 0) {
         item.hasNoChildren = true;
@@ -316,5 +322,10 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
    */
   trackByItemId(index: number, item: TimelineItem): string {
     return item.id;
+  }
+  
+  createSubRunDataHelper(): AIAgentRunDataHelper {
+    // Create a new data helper instance for sub-runs to prevent caching conflicts
+    return new AIAgentRunDataHelper();
   }
 }

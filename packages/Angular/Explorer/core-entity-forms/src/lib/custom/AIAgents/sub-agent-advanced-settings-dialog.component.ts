@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
@@ -67,7 +67,7 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   executionOrderError: string | null = null;
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
   ) {}

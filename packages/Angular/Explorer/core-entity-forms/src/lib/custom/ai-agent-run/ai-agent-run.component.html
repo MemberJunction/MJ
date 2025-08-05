@@ -103,6 +103,7 @@
           <kendo-splitter-pane [min]="'400px'">
             <mj-ai-agent-run-timeline
               [aiAgentRunId]="record.ID"
+              [dataHelper]="dataHelper"
               [autoRefresh]="record.Status === 'Running'"
               [refreshInterval]="30000"
               (itemSelected)="selectTimelineItem($event)"
@@ -128,6 +129,7 @@
         <mj-ai-agent-run-visualization
           #visualizationComponent
           [aiAgentRunId]="record.ID"
+          [dataHelper]="dataHelper"
           *ngIf="visualizationLoaded">
         </mj-ai-agent-run-visualization>
       </div>
@@ -277,12 +279,18 @@
           <kendo-panelbar-item title="Result" *ngIf="record.Result">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedResult"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedResult"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading result data...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -290,12 +298,18 @@
           <kendo-panelbar-item title="Starting Payload" *ngIf="record.StartingPayload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedStartingPayload"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedStartingPayload"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading payload data...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -303,12 +317,18 @@
           <kendo-panelbar-item title="Execution Data" *ngIf="record.Data">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedData"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedData"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading execution data...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -316,12 +336,18 @@
           <kendo-panelbar-item title="Final Payload" *ngIf="record.FinalPayload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedFinalPayload"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedFinalPayload"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading final payload data...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -329,17 +355,23 @@
           <kendo-panelbar-item title="Payload Diff" *ngIf="showPayloadDiff">
             <ng-template kendoPanelBarContent>
               <div style="padding: 20px; background: #f8f9fa;">
-                <mj-deep-diff
-                  [oldValue]="startingPayloadObject"
-                  [newValue]="finalPayloadObject"
-                  [title]="''"
-                  [showSummary]="true"
-                  [showUnchanged]="false"
-                  [expandAll]="false"
-                  [maxDepth]="10"
-                  [maxStringLength]="200"
-                  [treatNullAsUndefined]="true">
-                </mj-deep-diff>
+                @if (isParsingComplete) {
+                  <mj-deep-diff
+                    [oldValue]="startingPayloadObject"
+                    [newValue]="finalPayloadObject"
+                    [title]="''"
+                    [showSummary]="true"
+                    [showUnchanged]="false"
+                    [expandAll]="false"
+                    [maxDepth]="10"
+                    [maxStringLength]="200"
+                    [treatNullAsUndefined]="true">
+                  </mj-deep-diff>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading payload diff...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>

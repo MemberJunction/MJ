@@ -811,6 +811,10 @@ export class EntityInfo extends BaseInfo {
      */
     public Name: string = null
     /**
+     * Optional display name for the entity. If not provided, the entity Name will be used for display purposes.
+     */
+    public DisplayName: string = null
+    /**
      * Optional suffix appended to entity names for display purposes
      */
     public NameSuffix: string = null
@@ -1203,8 +1207,15 @@ export class EntityInfo extends BaseInfo {
     /**
      * @returns The BaseTable but with spaces inbetween capital letters
      * */
-    get DisplayName(): string {
+    get BaseTableDisplayName(): string {
         return this.BaseTable.replace(/([A-Z])/g, ' $1').trim();
+    }
+
+    /**
+     * Returns the DisplayName if it exists, otherwise returns the Name.
+     */
+    get DisplayNameOrName(): string {
+        return this.DisplayName ? this.DisplayName : this.Name;
     }
 
     /**

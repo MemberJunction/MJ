@@ -695,142 +695,230 @@
                 <!-- Payload -->
                 <kendo-panelbar-item [expanded]="false">
                     <ng-template kendoPanelBarItemTitle>
-                        <i class="fa-solid fa-box"></i> Payload
+                        <i class="fa-solid fa-exchange-alt"></i> Payload Management
                     </ng-template>
                     <ng-template kendoPanelBarContent>
                         <div class="panel-content">
                             <div class="section-header">
                                 <div class="section-description">
-                                    Configure how this agent handles data payloads and validation.
+                                    Configure how this agent handles data payloads, path routing, and validation between parent and child agents.
                                 </div>
                             </div>
                             
-                            <!-- Configuration Fields -->
-                            <div class="payload-config-section">
-                                <h4 class="subsection-title">
-                                    <i class="fa-solid fa-cog"></i> Configuration
-                                </h4>
-                                <div class="payload-config-grid">
-                                    <!-- Payload Scope -->
-                                    <mj-form-field 
-                                        FieldName="PayloadScope" 
-                                        Type="textbox"
-                                        Caption="Payload Scope"
-                                        Description="Path to narrow payload (e.g., /functionalRequirements)"
-                                        [EditMode]="EditMode"
-                                        [record]="record">
-                                    </mj-form-field>
-
-                                    <!-- Final Payload Validation Mode -->
-                                    <mj-form-field 
-                                        FieldName="FinalPayloadValidationMode" 
-                                        Type="dropdownlist"
-                                        Caption="Validation Mode"
-                                        Description="Action on validation failure"
-                                        [EditMode]="EditMode"
-                                        [record]="record">
-                                    </mj-form-field>
-
-                                    <!-- Final Payload Validation Max Retries -->
-                                    <mj-form-field 
-                                        FieldName="FinalPayloadValidationMaxRetries" 
-                                        Type="numerictextbox"
-                                        Caption="Max Retries"
-                                        Description="Maximum validation retry attempts"
-                                        [EditMode]="EditMode"
-                                        [record]="record">
-                                    </mj-form-field>
-                                </div>
-                            </div>
-
-                            <!-- Path Configuration -->
-                            <div class="payload-paths-section">
-                                <h4 class="subsection-title">
-                                    <i class="fa-solid fa-route"></i> Path Configuration
-                                </h4>
+                            <!-- Payload Scope Section -->
+                            <div class="payload-section">
+                                <h3 class="payload-section-title">
+                                    <i class="fa-solid fa-target"></i>
+                                    Payload Scope
+                                </h3>
                                 
-                                <!-- Downstream Paths -->
-                                <div class="payload-field-group">
-                                    <label class="payload-field-label">
-                                        <i class="fa-solid fa-arrow-down"></i> Downstream Paths
-                                        <span class="field-description">JSON array of paths to pass to sub-agents</span>
-                                    </label>
-                                    <mj-code-editor 
-                                        [value]="record.PayloadDownstreamPaths || '[]'"
-                                        [readonly]="!EditMode"
-                                        language="json"
-                                        [lineWrapping]="true"
-                                        style="height: 120px; width: 100%;"
-                                        (valueChange)="updatePayloadField('PayloadDownstreamPaths', $event)">
-                                    </mj-code-editor>
-                                </div>
-
-                                <!-- Upstream Paths -->
-                                <div class="payload-field-group">
-                                    <label class="payload-field-label">
-                                        <i class="fa-solid fa-arrow-up"></i> Upstream Paths
-                                        <span class="field-description">JSON array of paths to return to parent agent</span>
-                                    </label>
-                                    <mj-code-editor 
-                                        [value]="record.PayloadUpstreamPaths || '[]'"
-                                        [readonly]="!EditMode"
-                                        language="json"
-                                        [lineWrapping]="true"
-                                        style="height: 120px; width: 100%;"
-                                        (valueChange)="updatePayloadField('PayloadUpstreamPaths', $event)">
-                                    </mj-code-editor>
-                                </div>
-
-                                <!-- Self Read Paths -->
-                                <div class="payload-field-group">
-                                    <label class="payload-field-label">
-                                        <i class="fa-solid fa-eye"></i> Self Read Paths
-                                        <span class="field-description">JSON array of paths this agent can read</span>
-                                    </label>
-                                    <mj-code-editor 
-                                        [value]="record.PayloadSelfReadPaths || '[]'"
-                                        [readonly]="!EditMode"
-                                        language="json"
-                                        [lineWrapping]="true"
-                                        style="height: 120px; width: 100%;"
-                                        (valueChange)="updatePayloadField('PayloadSelfReadPaths', $event)">
-                                    </mj-code-editor>
-                                </div>
-
-                                <!-- Self Write Paths -->
-                                <div class="payload-field-group">
-                                    <label class="payload-field-label">
-                                        <i class="fa-solid fa-pen"></i> Self Write Paths
-                                        <span class="field-description">JSON array of paths this agent can write to</span>
-                                    </label>
-                                    <mj-code-editor 
-                                        [value]="record.PayloadSelfWritePaths || '[]'"
-                                        [readonly]="!EditMode"
-                                        language="json"
-                                        [lineWrapping]="true"
-                                        style="height: 120px; width: 100%;"
-                                        (valueChange)="updatePayloadField('PayloadSelfWritePaths', $event)">
-                                    </mj-code-editor>
+                                <div class="payload-field-container">
+                                    <div class="payload-field-info">
+                                        <label class="payload-field-label">Payload Scope Path</label>
+                                        <p class="payload-field-description">
+                                            Specify a path within the parent payload that this sub-agent should operate on. 
+                                            Leave empty to receive the entire payload.
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="payload-field-input">
+                                        <mj-form-field 
+                                            FieldName="PayloadScope" 
+                                            Type="textbox"
+                                            Caption=""
+                                            [EditMode]="EditMode"
+                                            [record]="record"
+                                            style="width: 100%;">
+                                        </mj-form-field>
+                                        <div class="payload-field-example">
+                                            <i class="fa-solid fa-lightbulb"></i>
+                                            <span>Example: <code>/customer/profile</code> or <code>/analysis/results</code></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Validation Rules -->
-                            <div class="payload-validation-section">
-                                <h4 class="subsection-title">
-                                    <i class="fa-solid fa-shield-check"></i> Final Payload Validation
-                                </h4>
-                                <div class="payload-field-group">
-                                    <label class="payload-field-label">
-                                        <span class="field-description">JSON validation rules or schema for final payload validation</span>
-                                    </label>
-                                    <mj-code-editor 
-                                        [value]="record.FinalPayloadValidation || '{}'"
-                                        [readonly]="!EditMode"
-                                        language="json"
-                                        [lineWrapping]="true"
-                                        style="height: 200px; width: 100%;"
-                                        (valueChange)="updatePayloadField('FinalPayloadValidation', $event)">
-                                    </mj-code-editor>
+                            <!-- Path Configuration Section -->
+                            <div class="payload-section">
+                                <h3 class="payload-section-title">
+                                    <i class="fa-solid fa-route"></i>
+                                    Path Configuration
+                                </h3>
+                                
+                                <div class="payload-paths-grid">
+                                    <!-- Downstream Paths -->
+                                    <div class="payload-path-card">
+                                        <div class="payload-path-header">
+                                            <div class="payload-path-icon downstream">
+                                                <i class="fa-solid fa-arrow-down"></i>
+                                            </div>
+                                            <div class="payload-path-info">
+                                                <h4>Downstream Paths</h4>
+                                                <p>JSON array of paths to pass to sub-agents</p>
+                                            </div>
+                                        </div>
+                                        <div class="payload-path-content">
+                                            <div class="json-editor-container">
+                                                <mj-code-editor 
+                                                    [value]="record.PayloadDownstreamPaths || '[&quot;*&quot;]'"
+                                                    [readonly]="!EditMode"
+                                                    language="json"
+                                                    [lineWrapping]="true"
+                                                    style="height: 100px; width: 100%;"
+                                                    (valueChange)="updatePayloadField('PayloadDownstreamPaths', $event)">
+                                                </mj-code-editor>
+                                            </div>
+                                            <div class="payload-path-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Use <code>["*"]</code> to pass entire payload or specify paths like <code>["user.id", "order.*"]</code>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Upstream Paths -->
+                                    <div class="payload-path-card">
+                                        <div class="payload-path-header">
+                                            <div class="payload-path-icon upstream">
+                                                <i class="fa-solid fa-arrow-up"></i>
+                                            </div>
+                                            <div class="payload-path-info">
+                                                <h4>Upstream Paths</h4>
+                                                <p>JSON array of paths sub-agents can write back</p>
+                                            </div>
+                                        </div>
+                                        <div class="payload-path-content">
+                                            <div class="json-editor-container">
+                                                <mj-code-editor 
+                                                    [value]="record.PayloadUpstreamPaths || '[&quot;*&quot;]'"
+                                                    [readonly]="!EditMode"
+                                                    language="json"
+                                                    [lineWrapping]="true"
+                                                    style="height: 100px; width: 100%;"
+                                                    (valueChange)="updatePayloadField('PayloadUpstreamPaths', $event)">
+                                                </mj-code-editor>
+                                            </div>
+                                            <div class="payload-path-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Use <code>["*"]</code> to allow all writes or limit to specific paths
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Self Read Paths -->
+                                    <div class="payload-path-card">
+                                        <div class="payload-path-header">
+                                            <div class="payload-path-icon self-read">
+                                                <i class="fa-solid fa-eye"></i>
+                                            </div>
+                                            <div class="payload-path-info">
+                                                <h4>Self Read Paths</h4>
+                                                <p>JSON array of paths this agent can read</p>
+                                            </div>
+                                        </div>
+                                        <div class="payload-path-content">
+                                            <div class="json-editor-container">
+                                                <mj-code-editor 
+                                                    [value]="record.PayloadSelfReadPaths || '[]'"
+                                                    [readonly]="!EditMode"
+                                                    language="json"
+                                                    [lineWrapping]="true"
+                                                    style="height: 100px; width: 100%;"
+                                                    (valueChange)="updatePayloadField('PayloadSelfReadPaths', $event)">
+                                                </mj-code-editor>
+                                            </div>
+                                            <div class="payload-path-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Paths this agent's prompts can read from the payload
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Self Write Paths -->
+                                    <div class="payload-path-card">
+                                        <div class="payload-path-header">
+                                            <div class="payload-path-icon self-write">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </div>
+                                            <div class="payload-path-info">
+                                                <h4>Self Write Paths</h4>
+                                                <p>JSON array of paths this agent can write to</p>
+                                            </div>
+                                        </div>
+                                        <div class="payload-path-content">
+                                            <div class="json-editor-container">
+                                                <mj-code-editor 
+                                                    [value]="record.PayloadSelfWritePaths || '[]'"
+                                                    [readonly]="!EditMode"
+                                                    language="json"
+                                                    [lineWrapping]="true"
+                                                    style="height: 100px; width: 100%;"
+                                                    (valueChange)="updatePayloadField('PayloadSelfWritePaths', $event)">
+                                                </mj-code-editor>
+                                            </div>
+                                            <div class="payload-path-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Paths this agent's prompts can write back to the payload
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Validation Section -->
+                            <div class="payload-section">
+                                <h3 class="payload-section-title">
+                                    <i class="fa-solid fa-shield-check"></i>
+                                    Final Payload Validation
+                                </h3>
+                                
+                                <div class="payload-validation-container">
+                                    <div class="payload-validation-settings">
+                                        <div class="validation-field-group">
+                                            <label class="validation-field-label">Validation Mode</label>
+                                            <p class="validation-field-description">How to handle validation failures</p>
+                                            <mj-form-field 
+                                                FieldName="FinalPayloadValidationMode" 
+                                                Type="dropdownlist"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record"
+                                                style="width: 100%;">
+                                            </mj-form-field>
+                                        </div>
+                                        
+                                        <div class="validation-field-group">
+                                            <label class="validation-field-label">Max Retries</label>
+                                            <p class="validation-field-description">Maximum validation retry attempts</p>
+                                            <mj-form-field 
+                                                FieldName="FinalPayloadValidationMaxRetries" 
+                                                Type="numerictextbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record"
+                                                style="width: 100%;">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="payload-validation-schema">
+                                        <label class="validation-schema-label">
+                                            <i class="fa-solid fa-code"></i>
+                                            Validation Schema
+                                        </label>
+                                        <p class="validation-schema-description">
+                                            JSON schema or validation rules for the final payload structure
+                                        </p>
+                                        <div class="validation-schema-editor">
+                                            <mj-code-editor 
+                                                [value]="record.FinalPayloadValidation || '{}'"
+                                                [readonly]="!EditMode"
+                                                language="json"
+                                                [lineWrapping]="true"
+                                                style="height: 200px; width: 100%;"
+                                                (valueChange)="updatePayloadField('FinalPayloadValidation', $event)">
+                                            </mj-code-editor>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -896,150 +984,379 @@
                 <!-- Configuration (Settings Panel) -->
                 <kendo-panelbar-item [expanded]="false">
                     <ng-template kendoPanelBarItemTitle>
-                        <i class="fa-solid fa-cog"></i> Configuration
+                        <i class="fa-solid fa-cogs"></i> Configuration
                     </ng-template>
                     <ng-template kendoPanelBarContent>
                         <div class="panel-content">
                             <div class="section-header">
                                 <div class="section-description">
-                                    Advanced configuration settings for agent behavior and execution.
+                                    Configure agent behavior, execution settings, and advanced features.
                                 </div>
                             </div>
                             
-                            <div class="form-fields-grid">
-                                <!-- Core Settings -->
-                                <mj-form-field 
-                                    FieldName="Status" 
-                                    Type="dropdownlist"
-                                    Caption="Status"
-                                    Description="Agent availability status"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
+                            <!-- Identity & Behavior Section -->
+                            <div class="config-section">
+                                <h3 class="config-section-title">
+                                    <i class="fa-solid fa-id-card"></i>
+                                    Identity & Behavior
+                                </h3>
+                                
+                                <div class="config-grid">
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-toggle-on"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Agent Status</h4>
+                                                <p>Current availability and operational status</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            @if (EditMode) {
+                                                <kendo-dropdownlist 
+                                                    [(ngModel)]="record.Status"
+                                                    [data]="statusOptions"
+                                                    textField="text"
+                                                    valueField="value"
+                                                    [valuePrimitive]="true"
+                                                    name="agentStatus"
+                                                    class="config-field-input">
+                                                </kendo-dropdownlist>
+                                            } @else {
+                                                <span class="config-field-display">{{ record.Status || 'Not Set' }}</span>
+                                            }
+                                        </div>
+                                    </div>
 
-                                <mj-form-field 
-                                    FieldName="ExecutionMode" 
-                                    Type="dropdownlist"
-                                    Caption="Execution Mode"
-                                    Description="How sub-agents are executed"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-sitemap"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Agent Type</h4>
+                                                <p>Category and system-level behavior</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            @if (EditMode) {
+                                                <kendo-dropdownlist 
+                                                    [(ngModel)]="record.TypeID"
+                                                    [data]="agentTypes"
+                                                    textField="Name"
+                                                    valueField="ID"
+                                                    [valuePrimitive]="true"
+                                                    name="agentTypeID"
+                                                    class="config-field-input">
+                                                </kendo-dropdownlist>
+                                            } @else {
+                                                <span class="config-field-display">{{ record.Type || 'Not Set' }}</span>
+                                            }
+                                        </div>
+                                    </div>
 
-                                <mj-form-field 
-                                    FieldName="ExecutionOrder" 
-                                    Type="numerictextbox"
-                                    Caption="Execution Order"
-                                    Description="Order when run with siblings"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-bolt"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Expose as Action</h4>
+                                                <p>Make available as an action for other agents</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="ExposeAsAction" 
+                                                Type="checkbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
 
-                                <mj-form-field 
-                                    FieldName="ExposeAsAction" 
-                                    Type="checkbox"
-                                    Caption="Expose as Action"
-                                    Description="Make available as an action"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
-
-                                <mj-form-field 
-                                    FieldName="TypeID" 
-                                    Type="dropdownlist"
-                                    Caption="Agent Type"
-                                    Description="Category of this agent"
-                                    [EditMode]="EditMode"
-                                    [record]="record"
-                                    LinkType="Record"
-                                    LinkEntityName="MJ: AI Agent Types">
-                                </mj-form-field>
-
-                                <mj-form-field 
-                                    FieldName="DriverClass" 
-                                    Type="textbox"
-                                    Caption="Driver Class"
-                                    Description="Custom implementation class"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
-
-                                <mj-form-field 
-                                    FieldName="IconClass" 
-                                    Type="textbox"
-                                    Caption="Icon Class"
-                                    Description="Font Awesome icon class"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
-
-                                <mj-form-field 
-                                    FieldName="Description" 
-                                    Type="textarea"
-                                    Caption="Description"
-                                    Description="Detailed agent description"
-                                    [EditMode]="EditMode"
-                                    [record]="record"
-                                    style="grid-column: span 2;">
-                                </mj-form-field>
-
-                                <mj-form-field 
-                                    FieldName="LogoURL" 
-                                    Type="textbox"
-                                    Caption="Logo URL"
-                                    Description="URL for agent logo image"
-                                    [EditMode]="EditMode"
-                                    [record]="record"
-                                    style="grid-column: span 2;">
-                                </mj-form-field>
+                                    <div class="config-card full-width">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-align-left"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Description</h4>
+                                                <p>Detailed agent description and purpose</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="Description" 
+                                                Type="textarea"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record"
+                                                style="width: 100%;">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <!-- Context Compression Settings -->
-                            <div class="subsection-divider">
-                                <h4 class="subsection-title">
-                                    <i class="fa-solid fa-compress"></i> Context Compression
-                                </h4>
+                            <!-- Execution Settings Section -->
+                            <div class="config-section">
+                                <h3 class="config-section-title">
+                                    <i class="fa-solid fa-play"></i>
+                                    Execution Settings
+                                </h3>
+                                
+                                <div class="config-grid">
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-layer-group"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Execution Mode</h4>
+                                                <p>How sub-agents are executed</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="ExecutionMode" 
+                                                Type="dropdownlist"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
+
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-sort-numeric-down"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Execution Order</h4>
+                                                <p>Order when run with siblings</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="ExecutionOrder" 
+                                                Type="numerictextbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
+
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-code"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Driver Class</h4>
+                                                <p>Custom implementation class</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="DriverClass" 
+                                                Type="textbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="form-fields-grid">
-                                <mj-form-field 
-                                    FieldName="EnableContextCompression" 
-                                    Type="checkbox"
-                                    Caption="Enable Compression"
-                                    Description="Compress long conversations"
-                                    [EditMode]="EditMode"
-                                    [record]="record"
-                                    (valueChange)="onContextCompressionToggle($event)">
-                                </mj-form-field>
+                            <!-- Visual Identity Section -->
+                            <div class="config-section">
+                                <h3 class="config-section-title">
+                                    <i class="fa-solid fa-palette"></i>
+                                    Visual Identity
+                                </h3>
+                                
+                                <div class="config-grid">
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-icons"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Icon Class</h4>
+                                                <p>Font Awesome icon class</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="IconClass" 
+                                                Type="textbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                            <div class="config-card-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Example: <code>fa-solid fa-robot</code>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                <mj-form-field 
-                                    FieldName="ContextCompressionMessageThreshold" 
-                                    Type="numerictextbox"
-                                    Caption="Message Threshold"
-                                    Description="Messages before compression"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-image"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Logo URL</h4>
+                                                <p>URL for agent logo image</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="LogoURL" 
+                                                Type="textbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                            <div class="config-card-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Takes precedence over Icon Class
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <mj-form-field 
-                                    FieldName="ContextCompressionMessageRetentionCount" 
-                                    Type="numerictextbox"
-                                    Caption="Messages to Keep"
-                                    Description="Recent messages to retain"
-                                    [EditMode]="EditMode"
-                                    [record]="record">
-                                </mj-form-field>
+                            <!-- Context Compression Section -->
+                            <div class="config-section">
+                                <h3 class="config-section-title">
+                                    <i class="fa-solid fa-compress"></i>
+                                    Context Compression
+                                </h3>
+                                
+                                <div class="config-grid">
+                                    <div class="config-card full-width">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
+                                                <i class="fa-solid fa-toggle-on"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Enable Context Compression</h4>
+                                                <p>Automatically compress conversation context when message threshold is reached</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="EnableContextCompression" 
+                                                Type="checkbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record"
+                                                (valueChange)="onContextCompressionToggle($event)">
+                                            </mj-form-field>
+                                        </div>
+                                    </div>
 
-                                <mj-form-field 
-                                    FieldName="ContextCompressionPromptID" 
-                                    Type="dropdownlist"
-                                    Caption="Compression Prompt"
-                                    Description="Prompt for summarization"
-                                    [EditMode]="EditMode"
-                                    [record]="record"
-                                    LinkType="Record"
-                                    LinkEntityName="AI Prompts">
-                                </mj-form-field>
+                                    @if (record.EnableContextCompression) {
+                                        <div class="config-card">
+                                            <div class="config-card-header">
+                                                <div class="config-card-icon">
+                                                    <i class="fa-solid fa-hashtag"></i>
+                                                </div>
+                                                <div class="config-card-info">
+                                                    <h4>Message Threshold</h4>
+                                                    <p>Messages before compression triggers</p>
+                                                </div>
+                                            </div>
+                                            <div class="config-card-content">
+                                                <mj-form-field 
+                                                    FieldName="ContextCompressionMessageThreshold" 
+                                                    Type="numerictextbox"
+                                                    Caption=""
+                                                    [EditMode]="EditMode"
+                                                    [record]="record">
+                                                </mj-form-field>
+                                            </div>
+                                        </div>
+
+                                        <div class="config-card">
+                                            <div class="config-card-header">
+                                                <div class="config-card-icon">
+                                                    <i class="fa-solid fa-save"></i>
+                                                </div>
+                                                <div class="config-card-info">
+                                                    <h4>Messages to Keep</h4>
+                                                    <p>Recent messages to retain uncompressed</p>
+                                                </div>
+                                            </div>
+                                            <div class="config-card-content">
+                                                <mj-form-field 
+                                                    FieldName="ContextCompressionMessageRetentionCount" 
+                                                    Type="numerictextbox"
+                                                    Caption=""
+                                                    [EditMode]="EditMode"
+                                                    [record]="record">
+                                                </mj-form-field>
+                                            </div>
+                                        </div>
+
+                                        <div class="config-card">
+                                            <div class="config-card-header">
+                                                <div class="config-card-icon">
+                                                    <i class="fa-solid fa-comment-dots"></i>
+                                                </div>
+                                                <div class="config-card-info">
+                                                    <h4>Compression Prompt</h4>
+                                                    <p>Prompt used for summarization</p>
+                                                </div>
+                                            </div>
+                                            <div class="config-card-content">
+                                                @if (EditMode) {
+                                                    <div class="prompt-selector-container">
+                                                        <div class="prompt-display">
+                                                            @if (selectedContextCompressionPrompt) {
+                                                                <span class="prompt-name">{{ selectedContextCompressionPrompt.Name }}</span>
+                                                            } @else {
+                                                                <span class="no-prompt">No prompt selected</span>
+                                                            }
+                                                        </div>
+                                                        <div class="prompt-actions">
+                                                            <button type="button" 
+                                                                    kendoButton 
+                                                                    fillMode="outline" 
+                                                                    size="small"
+                                                                    (click)="openContextCompressionPromptSelector()"
+                                                                    class="prompt-select-btn">
+                                                                <i class="fa-solid fa-search"></i>
+                                                                {{ selectedContextCompressionPrompt ? 'Change' : 'Select' }} Prompt
+                                                            </button>
+                                                            @if (selectedContextCompressionPrompt) {
+                                                                <button type="button" 
+                                                                        kendoButton 
+                                                                        fillMode="flat" 
+                                                                        size="small"
+                                                                        (click)="clearContextCompressionPrompt()"
+                                                                        class="prompt-clear-btn"
+                                                                        title="Clear selection">
+                                                                    <i class="fa-solid fa-times"></i>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                } @else {
+                                                    <span class="config-field-display">{{ selectedContextCompressionPrompt?.Name || record.ContextCompressionPrompt || 'Not Set' }}</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </div>
                     </ng-template>

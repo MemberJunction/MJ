@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { RunView, LogError } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
@@ -14,7 +14,7 @@ import { DrillDownInfo } from '../drill-down-info';
   templateUrl: './skip-artifact-viewer.component.html',
   styleUrls: ['./skip-artifact-viewer.component.css']
 })
-export class SkipArtifactViewerComponent extends BaseAngularComponent implements OnInit, OnChanges, AfterViewInit {
+export class SkipArtifactViewerComponent extends BaseAngularComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() public ArtifactID: string = '';
   @Input() public ArtifactVersionID: string = '';
   @Input() public DataContext: DataContext | null = null;
@@ -462,5 +462,25 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
   public get isPlainText(): boolean {
     return this.contentType.includes('text/plain');
+  }
+
+  ngOnDestroy(): void {
+    // CRITICAL: Clean up dynamically created report component to prevent zombie components
+    this.destroyReportComponent();
+    
+    // Clear the view container to ensure no lingering references
+    if (this.reportContainer) {
+      this.reportContainer.clear();
+    }
+    
+    // Reset state
+    this.artifact = null;
+    this.artifactVersion = null;
+    this.artifactType = null;
+    this.conversationDetailRecord = null;
+    this.displayContent = null;
+    this.artifactVersions.length = 0;
+    this.isLoading = false;
+    this.error = null;
   }
 }

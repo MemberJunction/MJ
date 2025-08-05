@@ -3,7 +3,7 @@ import { Subject, combineLatest } from 'rxjs';
 import { takeUntil, take } from 'rxjs/operators';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { TimelineItem } from './ai-agent-run-timeline.component';
-import { AIAgentRunDataService } from './ai-agent-run-data.service';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 interface NodeData {
   step: AIAgentRunStepEntity;
@@ -35,9 +35,21 @@ interface ScopeData {
 export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('svgContainer', { static: false }) svgContainer!: ElementRef<HTMLDivElement>;
   @Input() aiAgentRunId!: string;
+  @Input() dataHelper!: AIAgentRunDataHelper;
   
   private destroy$ = new Subject<void>();
   private viewInitialized = false;
+  
+  /** Track active timeouts for cleanup */
+  private activeTimeouts: number[] = [];
+  
+  /** Remove timeout from tracking array */
+  private removeTimeoutFromTracking(timeoutId: number): void {
+    const index = this.activeTimeouts.indexOf(timeoutId);
+    if (index > -1) {
+      this.activeTimeouts.splice(index, 1);
+    }
+  }
   private pendingData: { steps: AIAgentRunStepEntity[], subRuns: AIAgentRunEntity[], actionLogs: ActionExecutionLogEntity[], promptRuns: AIPromptRunEntity[] } | null = null;
   
   loading = false;  // Start with false so the container renders
@@ -99,19 +111,18 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   private boundOnSvgMouseUp = this.onSvgMouseUp.bind(this);
   
   constructor(
-    private cdr: ChangeDetectorRef,
-    private dataService: AIAgentRunDataService
+    private cdr: ChangeDetectorRef
   ) {}
   
   ngOnInit() {
     if (this.aiAgentRunId) {
-      // Subscribe to data from service
+      // Subscribe to data from helper
       combineLatest([
-        this.dataService.steps$,
-        this.dataService.subRuns$,
-        this.dataService.actionLogs$,
-        this.dataService.promptRuns$,
-        this.dataService.loading$
+        this.dataHelper.steps$,
+        this.dataHelper.subRuns$,
+        this.dataHelper.actionLogs$,
+        this.dataHelper.promptRuns$,
+        this.dataHelper.loading$
       ]).pipe(
         takeUntil(this.destroy$)
       ).subscribe(([steps, subRuns, actionLogs, promptRuns, loading]) => {
@@ -139,7 +150,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       });
       
       // Subscribe to error state
-      this.dataService.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+      this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe((error: string | null) => {
         if (error) {
           this.error = error;
           this.loading = false;
@@ -178,8 +189,15 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   }
   
   ngOnDestroy() {
+    // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
+    
+    // Clear all active timeouts
+    this.activeTimeouts.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    this.activeTimeouts.length = 0;
     
     // Clean up document-level event listeners
     document.removeEventListener('mousemove', this.onMouseMove);
@@ -322,7 +340,13 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     try {
       // Wait a tick for the view to be fully ready
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => {
+        const timeoutId = setTimeout(() => {
+          this.removeTimeoutFromTracking(timeoutId);
+          resolve(undefined);
+        }, 0) as any as number;
+        this.activeTimeouts.push(timeoutId);
+      });
       
       // Clear existing elements
       this.clearVisualization();
@@ -865,7 +889,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     try {
       // Load sub-agent data through service
-      const data = await this.dataService.loadSubAgentData(targetLogId);
+      const data = await this.dataHelper.loadSubAgentData(targetLogId);
       
       if (data.steps && data.steps.length > 0) {
         // Create nodes from data

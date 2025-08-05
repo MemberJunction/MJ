@@ -145,6 +145,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       break;
     }
     this.contextMenuVisible = false;
+    
+    // CRITICAL: Force immediate change detection after tab array modifications
+    // This ensures Angular immediately processes component destruction for closed tabs
+    await this.waitForDomUpdate();
+    
     const md = new Metadata();
     const transGroup = await md.CreateTransactionGroup();
     for (let i = 0; i < this.closedTabs.length; ++i) {
@@ -918,8 +923,13 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public async removeWorkspaceItem(tab: Tab, transGroup: TransactionGroupBase | null) {
     // remove the tab from the tabs collection
     const index = this.tabs.indexOf(tab);
-    if (index >= 0)
+    if (index >= 0) {
       this.tabs.splice(index, 1);
+      
+      // CRITICAL: Force immediate change detection to trigger component destruction
+      // This ensures Angular processes the @for removal and calls ngOnDestroy on child components
+      await this.waitForDomUpdate();
+    }
 
     if (!tab.workspaceItem && tab.id && tab.id.length > 0) {
       // we lazy load the workspaceItem entity objects, so we load it here so we can delete it below, but only when it wasn't already loaded

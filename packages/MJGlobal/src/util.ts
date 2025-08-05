@@ -811,7 +811,7 @@ interface InternalParseJSONOptions {
  * // }
  */ 
 export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): any {
-  // Set default options
+  // Set default options with more conservative depth limit for performance
   const opts: Required<ParseJSONOptions> = {
     maxDepth: options.maxDepth ?? 100,
     extractInlineJson: options.extractInlineJson ?? false,
@@ -884,29 +884,43 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
     console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
   }
 
-  try {
-    const parsed = JSON.parse(str);
-    
-    // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
-    if (parsed === str) {
-      if (options.debug) {
-        console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
-      }
+  // PERFORMANCE OPTIMIZATION: Early exit for non-JSON strings
+  // Check if the first non-whitespace character is { or [ - if not, it's definitely not JSON
+  const trimmed = str.trim();
+  if (trimmed.length === 0 || (trimmed[0] !== '{' && trimmed[0] !== '[' && trimmed[0] !== '"')) {
+    // Not JSON-like, skip expensive JSON.parse() attempt unless extractInlineJson is enabled
+    if (!options.extractInlineJson) {
       return str;
     }
-
-    if (parsed && typeof parsed === 'object') {
-      if (options.debug) {
-        console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+    // With extractInlineJson, we still need to check for embedded JSON, but skip the initial parse
+  } else {
+    // Looks JSON-like, attempt to parse
+    try {
+      const parsed = JSON.parse(str);
+      
+      // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
+      if (parsed === str) {
+        if (options.debug) {
+          console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
+        }
+        return str;
       }
-      return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
-    } else {
-      return parsed; // Keep simple values as-is
+
+      if (parsed && typeof parsed === 'object') {
+        if (options.debug) {
+          console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+        }
+        return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
+      } else {
+        return parsed; // Keep simple values as-is
+      }
+    } catch (e) {
+      // JSON.parse failed, continue to inline extraction if enabled
     }
-  } catch (e) {
-    // If parsing fails, leave the string as-is, this is not a failure, as we trying to parse any string above
-    // however in this case we need to check for inline JSON extraction
-    if (options?.extractInlineJson) {
+  }
+
+  // Handle extractInlineJson or return original string
+  if (options?.extractInlineJson) {
       // Look for JSON patterns within the string
       // First try ```json blocks
       const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
@@ -938,7 +952,8 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
           // JSON.parse failed, the string doesn't contain valid JSON
         }
       }
-    }
-    return str;
   }
+  
+  // If we get here, return the original string
+  return str;
 }

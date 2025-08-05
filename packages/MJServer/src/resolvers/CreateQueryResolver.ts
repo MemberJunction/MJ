@@ -70,6 +70,18 @@ export class CreateQuerySystemUserInput {
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Number, { nullable: true })
+    CacheTTLMinutes?: number;
+
+    @Field(() => Number, { nullable: true })
+    CacheMaxSize?: number;
+
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
 }
@@ -117,6 +129,18 @@ export class UpdateQuerySystemUserInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Number, { nullable: true })
+    CacheTTLMinutes?: number;
+
+    @Field(() => Number, { nullable: true })
+    CacheMaxSize?: number;
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
@@ -305,7 +329,11 @@ export class QueryResolverExtended extends QueryResolver {
                 CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
                 QualityRank: input.QualityRank || 0,
-                UsesTemplate: input.UsesTemplate || false
+                UsesTemplate: input.UsesTemplate || false,
+                AuditQueryRuns: input.AuditQueryRuns || false,
+                CacheEnabled: input.CacheEnabled || false,
+                CacheTTLMinutes: input.CacheTTLMinutes || null,
+                CacheMaxSize: input.CacheMaxSize || null
             };
             // Remove Permissions from the fields to set since we handle them separately
             delete (fieldsToSet as any).Permissions;
@@ -407,18 +435,26 @@ export class QueryResolverExtended extends QueryResolver {
             }
 
             // Update fields that were provided
-            if (input.Name !== undefined) queryEntity.Name = input.Name;
-            if (finalCategoryID !== undefined) queryEntity.CategoryID = finalCategoryID;
-            if (input.UserQuestion !== undefined) queryEntity.UserQuestion = input.UserQuestion;
-            if (input.Description !== undefined) queryEntity.Description = input.Description;
-            if (input.SQL !== undefined) queryEntity.SQL = input.SQL;
-            if (input.TechnicalDescription !== undefined) queryEntity.TechnicalDescription = input.TechnicalDescription;
-            if (input.OriginalSQL !== undefined) queryEntity.OriginalSQL = input.OriginalSQL;
-            if (input.Feedback !== undefined) queryEntity.Feedback = input.Feedback;
-            if (input.Status !== undefined) queryEntity.Status = input.Status;
-            if (input.QualityRank !== undefined) queryEntity.QualityRank = input.QualityRank;
-            if (input.ExecutionCostRank !== undefined) queryEntity.ExecutionCostRank = input.ExecutionCostRank;
-            if (input.UsesTemplate !== undefined) queryEntity.UsesTemplate = input.UsesTemplate;
+            const updateFields: Record<string, any> = {};
+            if (input.Name !== undefined) updateFields.Name = input.Name;
+            if (finalCategoryID !== undefined) updateFields.CategoryID = finalCategoryID;
+            if (input.UserQuestion !== undefined) updateFields.UserQuestion = input.UserQuestion;
+            if (input.Description !== undefined) updateFields.Description = input.Description;
+            if (input.SQL !== undefined) updateFields.SQL = input.SQL;
+            if (input.TechnicalDescription !== undefined) updateFields.TechnicalDescription = input.TechnicalDescription;
+            if (input.OriginalSQL !== undefined) updateFields.OriginalSQL = input.OriginalSQL;
+            if (input.Feedback !== undefined) updateFields.Feedback = input.Feedback;
+            if (input.Status !== undefined) updateFields.Status = input.Status;
+            if (input.QualityRank !== undefined) updateFields.QualityRank = input.QualityRank;
+            if (input.ExecutionCostRank !== undefined) updateFields.ExecutionCostRank = input.ExecutionCostRank;
+            if (input.UsesTemplate !== undefined) updateFields.UsesTemplate = input.UsesTemplate;
+            if (input.AuditQueryRuns !== undefined) updateFields.AuditQueryRuns = input.AuditQueryRuns;
+            if (input.CacheEnabled !== undefined) updateFields.CacheEnabled = input.CacheEnabled;
+            if (input.CacheTTLMinutes !== undefined) updateFields.CacheTTLMinutes = input.CacheTTLMinutes;
+            if (input.CacheMaxSize !== undefined) updateFields.CacheMaxSize = input.CacheMaxSize;
+
+            // Use SetMany to update all fields at once
+            queryEntity.SetMany(updateFields);
 
             // Save the updated query
             const saveResult = await queryEntity.Save();

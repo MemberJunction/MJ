@@ -154,7 +154,8 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views');
+      const contextUser = this.GetUserFromPayload(userPayload);
+      const viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
       await viewInfo.Load(viewInput.ViewID);
       return this.RunViewGenericInternal(
         provider,
@@ -223,6 +224,7 @@ export class ResolverBase {
     userPayload: UserPayload
   ) {
     const md = provider;
+    const contextUser = this.GetUserFromPayload(userPayload);
     let params: RunViewGenericParams[] = [];
     for (const viewInput of viewInputs) {
       try {
@@ -231,7 +233,7 @@ export class ResolverBase {
         if (viewInput.ViewName) {
           viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views');
+          viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
         } else if (viewInput.EntityName) {
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);

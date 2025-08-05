@@ -573,6 +573,18 @@ export type RunQueryResult = {
      * Parameters that were applied to the query, including defaults
      */
     AppliedParameters?: Record<string, any>;
+    /**
+     * Whether this result was served from cache
+     */
+    CacheHit?: boolean;
+    /**
+     * Cache key used for this query
+     */
+    CacheKey?: string;
+    /**
+     * Time until cache expiration in milliseconds
+     */
+    CacheTTLRemaining?: number;
 }
 
 /**
