@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
-import { RunView } from "@memberjunction/core";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 /**
  * Validates that an email address is not already in use by another user in the system.
@@ -38,22 +38,19 @@ export class ValidateEmailUniqueAction extends BaseAction {
                 };
             }
 
-            // Check if email exists in Users table
-            const rv = new RunView();
-            const userCheck = await rv.RunView({
-                EntityName: 'Users',
-                ExtraFilter: `Email='${email.replace(/'/g, "''")}'`,
-                ResultType: 'simple'
-            }, params.ContextUser);
+            // Check if email exists in UserCache
+            const existingUser = UserCache.Users?.find(u => 
+                u.Email?.toLowerCase() === email.toLowerCase()
+            );
 
             let isUnique = true;
             let existingUserID: string | null = null;
             let existingUserName: string | null = null;
 
-            if (userCheck.Success && userCheck.Results && userCheck.Results.length > 0) {
+            if (existingUser) {
                 isUnique = false;
-                existingUserID = userCheck.Results[0].ID;
-                existingUserName = userCheck.Results[0].Name;
+                existingUserID = existingUser.ID;
+                existingUserName = existingUser.Name;
             }
 
             // Add output parameters

@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { CreateRecordAction } from "../crud/create-record.action";
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from "@memberjunction/core";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 /**
  * Creates a new user in the MemberJunction system with validation and optional employee linking.
@@ -31,15 +32,12 @@ export class CreateUserAction extends CreateRecordAction {
                 };
             }
 
-            // Check if email already exists
-            const rv = new RunView();
-            const existingUser = await rv.RunView({
-                EntityName: 'Users',
-                ExtraFilter: `Email='${email.replace(/'/g, "''")}'`,
-                ResultType: 'simple'
-            }, params.ContextUser);
+            // Check if email already exists using UserCache
+            const existingUser = UserCache.Users?.find(u => 
+                u.Email?.toLowerCase() === email.toLowerCase()
+            );
 
-            if (existingUser.Success && existingUser.Results && existingUser.Results.length > 0) {
+            if (existingUser) {
                 return {
                     Success: false,
                     ResultCode: 'EMAIL_EXISTS',
@@ -49,6 +47,7 @@ export class CreateUserAction extends CreateRecordAction {
 
             // Validate employee ID if provided
             if (employeeID) {
+                const rv = new RunView();
                 const employeeCheck = await rv.RunView({
                     EntityName: 'Employees',
                     ExtraFilter: `ID='${employeeID}'`,

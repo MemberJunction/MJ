@@ -1,9 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
-import { RunView } from "@memberjunction/core";
 import { Metadata } from "@memberjunction/core";
 import { UserRoleEntity } from "@memberjunction/core-entities";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 /**
  * Assigns one or more roles to a user by creating UserRole associations.
@@ -55,17 +55,11 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            const rv = new RunView();
             const md = new Metadata();
 
-            // Validate user exists
-            const userCheck = await rv.RunView({
-                EntityName: 'Users',
-                ExtraFilter: `ID='${userID}'`,
-                ResultType: 'simple'
-            }, params.ContextUser);
-
-            if (!userCheck.Success || !userCheck.Results || userCheck.Results.length === 0) {
+            // Validate user exists using UserCache
+            const user = UserCache.Users?.find(u => u.ID === userID);
+            if (!user) {
                 return {
                     Success: false,
                     ResultCode: 'USER_NOT_FOUND',
@@ -73,24 +67,12 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            // Get all roles and validate they exist
-            const roleNamesFilter = roleNames.map(name => `'${name.replace(/'/g, "''")}'`).join(',');
-            const rolesCheck = await rv.RunView({
-                EntityName: 'Roles',
-                ExtraFilter: `Name IN (${roleNamesFilter})`,
-                ResultType: 'simple'
-            }, params.ContextUser);
-
-            if (!rolesCheck.Success || !rolesCheck.Results) {
-                return {
-                    Success: false,
-                    ResultCode: 'FAILED',
-                    Message: 'Failed to query roles'
-                };
-            }
-
-            // Check if all requested roles exist
-            const foundRoles = rolesCheck.Results;
+            // Get all roles and validate they exist using Metadata cache
+            const allRoles = md.Roles;
+            const foundRoles = roleNames.map(name => {
+                return allRoles.find(r => r.Name === name);
+            }).filter(r => r != null);
+            
             const foundRoleNames = foundRoles.map(r => r.Name);
             const missingRoles = roleNames.filter(name => !foundRoleNames.includes(name));
 
@@ -102,16 +84,8 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            // Get existing role assignments
-            const existingAssignments = await rv.RunView({
-                EntityName: 'User Roles',
-                ExtraFilter: `UserID='${userID}'`,
-                ResultType: 'simple'
-            }, params.ContextUser);
-
-            const existingRoleIDs = existingAssignments.Success && existingAssignments.Results 
-                ? existingAssignments.Results.map(ur => ur.RoleID) 
-                : [];
+            // Get existing role assignments from user's cached data
+            const existingRoleIDs = user.UserRoles ? user.UserRoles.map(ur => ur.RoleID) : [];
 
             // Process each role
             const assignedRoles: { roleID: string, roleName: string, userRoleID: string }[] = [];

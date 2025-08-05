@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata, RunView } from "@memberjunction/core";
-import { UserRoleEntity } from "@memberjunction/core-entities";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 /**
  * Verifies if the current user has a specific role or permission to perform administrative tasks.
@@ -51,18 +51,11 @@ export class CheckUserPermissionAction extends BaseAction {
             // Check based on permission type
             switch (permissionType) {
                 case 'Role':
-                    // Get user's roles
-                    const rv = new RunView();
-                    const rolesResult = await rv.RunView<UserRoleEntity>({
-                        EntityName: 'User Roles',
-                        ExtraFilter: `UserID='${userID}'`,
-                        ResultType: 'entity_object'
-                    }, currentUser);
-
-                    if (rolesResult.Success && rolesResult.Results) {
-                        rolesResult.Results.forEach(ur => userRoles.push(ur.Role));
-                        hasPermission = rolesResult.Results.some(ur => ur.Role === permissionName);
-                        
+                    // Get user's roles from UserCache
+                    const cachedUser = UserCache.Users?.find(u => u.ID === userID);
+                    if (cachedUser && cachedUser.UserRoles) {
+                        cachedUser.UserRoles.forEach(ur => userRoles.push(ur.Role));
+                        hasPermission = cachedUser.UserRoles.some(ur => ur.Role === permissionName);
                     }
                     break;
 
