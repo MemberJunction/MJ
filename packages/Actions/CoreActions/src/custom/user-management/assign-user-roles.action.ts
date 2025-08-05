@@ -57,15 +57,10 @@ export class AssignUserRolesAction extends BaseAction {
 
             const md = new Metadata();
 
-            // Validate user exists using UserCache
+            // Validate user exists - check UserCache first
+            // For newly created users, the cache might not be updated yet
             const user = UserCache.Users?.find(u => u.ID === userID);
-            if (!user) {
-                return {
-                    Success: false,
-                    ResultCode: 'USER_NOT_FOUND',
-                    Message: `User ID '${userID}' does not exist`
-                };
-            }
+            const existingRoleIDs = user?.UserRoles ? user.UserRoles.map(ur => ur.RoleID) : [];
 
             // Get all roles and validate they exist using Metadata cache
             const allRoles = md.Roles;
@@ -83,9 +78,6 @@ export class AssignUserRolesAction extends BaseAction {
                     Message: `The following roles do not exist: ${missingRoles.join(', ')}`
                 };
             }
-
-            // Get existing role assignments from user's cached data
-            const existingRoleIDs = user.UserRoles ? user.UserRoles.map(ur => ur.RoleID) : [];
 
             // Process each role
             const assignedRoles: { roleID: string, roleName: string, userRoleID: string }[] = [];
