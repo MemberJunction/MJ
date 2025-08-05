@@ -3,7 +3,7 @@ import { Subject, combineLatest } from 'rxjs';
 import { takeUntil, take } from 'rxjs/operators';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { TimelineItem } from './ai-agent-run-timeline.component';
-import { AIAgentRunDataService } from './ai-agent-run-data.service';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 interface NodeData {
   step: AIAgentRunStepEntity;
@@ -35,6 +35,7 @@ interface ScopeData {
 export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('svgContainer', { static: false }) svgContainer!: ElementRef<HTMLDivElement>;
   @Input() aiAgentRunId!: string;
+  @Input() dataHelper!: AIAgentRunDataHelper;
   
   private destroy$ = new Subject<void>();
   private viewInitialized = false;
@@ -110,19 +111,18 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
   private boundOnSvgMouseUp = this.onSvgMouseUp.bind(this);
   
   constructor(
-    private cdr: ChangeDetectorRef,
-    private dataService: AIAgentRunDataService
+    private cdr: ChangeDetectorRef
   ) {}
   
   ngOnInit() {
     if (this.aiAgentRunId) {
-      // Subscribe to data from service
+      // Subscribe to data from helper
       combineLatest([
-        this.dataService.steps$,
-        this.dataService.subRuns$,
-        this.dataService.actionLogs$,
-        this.dataService.promptRuns$,
-        this.dataService.loading$
+        this.dataHelper.steps$,
+        this.dataHelper.subRuns$,
+        this.dataHelper.actionLogs$,
+        this.dataHelper.promptRuns$,
+        this.dataHelper.loading$
       ]).pipe(
         takeUntil(this.destroy$)
       ).subscribe(([steps, subRuns, actionLogs, promptRuns, loading]) => {
@@ -150,7 +150,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       });
       
       // Subscribe to error state
-      this.dataService.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+      this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe((error: string | null) => {
         if (error) {
           this.error = error;
           this.loading = false;
@@ -889,7 +889,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     try {
       // Load sub-agent data through service
-      const data = await this.dataService.loadSubAgentData(targetLogId);
+      const data = await this.dataHelper.loadSubAgentData(targetLogId);
       
       if (data.steps && data.steps.length > 0) {
         // Create nodes from data

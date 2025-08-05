@@ -1,4 +1,3 @@
-import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -10,10 +9,11 @@ export interface AgentRunData {
   promptRuns: AIPromptRunEntity[];
 }
 
-@Injectable({
-  providedIn: 'root'
-})
-export class AIAgentRunDataService {
+/**
+ * Helper class for managing AI Agent Run data per component instance
+ * No longer a singleton Angular service - instantiated per component
+ */
+export class AIAgentRunDataHelper {
   // Data subjects
   private stepsSubject$ = new BehaviorSubject<AIAgentRunStepEntity[]>([]);
   private subRunsSubject$ = new BehaviorSubject<AIAgentRunEntity[]>([]);
@@ -51,18 +51,13 @@ export class AIAgentRunDataService {
    * Load all data for an agent run
    */
   async loadAgentRunData(agentRunId: string): Promise<void> {
-    const loadStart = performance.now();
-    console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Starting for agent run ID: ${agentRunId}`);
-    
     if (!agentRunId) {
-      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: ABORTED - no agent run ID provided`);
       this.errorSubject$.next('No agent run ID provided');
       return;
     }
     
     // If already loaded for this run, don't reload
     if (this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
-      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Using cached data for ${agentRunId}`);
       return;
     }
     
@@ -74,32 +69,24 @@ export class AIAgentRunDataService {
     this.subAgentDataCache.clear();
     
     try {
-      console.log(`[PERF] AIAgentRunDataService: Starting loadStepsAndSubRuns`);
-      const dataLoadStart = performance.now();
       await this.loadStepsAndSubRuns(agentRunId);
-      console.log(`[PERF] AIAgentRunDataService: Data loading completed in ${(performance.now() - dataLoadStart).toFixed(2)}ms`);
     } catch (error) {
       this.errorSubject$.next('Failed to load agent run data');
       console.error('Error loading agent run data:', error);
     } finally {
       this.loadingSubject$.next(false);
-      console.log(`[PERF] AIAgentRunDataService.loadAgentRunData: Total time ${(performance.now() - loadStart).toFixed(2)}ms`);
     }
   }
   
   private async loadStepsAndSubRuns(agentRunId: string) {
-    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Starting queries for ${agentRunId}`);
     const rv = new RunView();
     
     // First, get all steps to determine what additional data we need
-    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Querying agent run steps`);
-    const stepsStart = performance.now();
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
       OrderBy: 'StepNumber'
     });
-    console.log(`[PERF] AIAgentRunDataService.loadStepsAndSubRuns: Steps query completed in ${(performance.now() - stepsStart).toFixed(2)}ms, found ${stepsResult.Results?.length || 0} steps`);
     
     if (!stepsResult.Success) {
       throw new Error('Failed to load agent run steps');
@@ -182,13 +169,6 @@ export class AIAgentRunDataService {
     this.subRunsSubject$.next(subRuns);
     this.actionLogsSubject$.next(actionLogs);
     this.promptRunsSubject$.next(promptRuns);
-    
-    console.log('AgentRunDataService: Data loaded', {
-      steps: steps.length,
-      subRuns: subRuns.length,
-      actionLogs: actionLogs.length,
-      promptRuns: promptRuns.length
-    });
   }
   
   /**
@@ -268,25 +248,12 @@ export class AIAgentRunDataService {
    * Clear all data
    */
   clearData() {
-    const clearStart = performance.now();
-    console.log(`[PERF] AIAgentRunDataService.clearData: Starting data cleanup`);
-    
-    const initialCounts = {
-      steps: this.stepsSubject$.value.length,
-      subRuns: this.subRunsSubject$.value.length,
-      actionLogs: this.actionLogsSubject$.value.length,
-      promptRuns: this.promptRunsSubject$.value.length,
-      cacheSize: this.subAgentDataCache.size
-    };
-    
     this.stepsSubject$.next([]);
     this.subRunsSubject$.next([]);
     this.actionLogsSubject$.next([]);
     this.promptRunsSubject$.next([]);
     this.clearCache();
     this.currentAgentRunId = null;
-    
-    console.log(`[PERF] AIAgentRunDataService.clearData: Cleared data in ${(performance.now() - clearStart).toFixed(2)}ms - Steps: ${initialCounts.steps}, SubRuns: ${initialCounts.subRuns}, ActionLogs: ${initialCounts.actionLogs}, PromptRuns: ${initialCounts.promptRuns}, Cache: ${initialCounts.cacheSize}`);
   }
   
   /**
@@ -310,7 +277,6 @@ export class AIAgentRunDataService {
   private clearCache() {
     this.subAgentDataCache.clear();
     this.cacheAccessOrder = [];
-    console.log('Agent run data cache cleared');
   }
   
   /**

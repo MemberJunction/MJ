@@ -12,7 +12,7 @@ import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
-import { AIAgentRunDataService } from './ai-agent-run-data.service';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -52,23 +52,26 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
   @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
+  // Instance of data helper per component
+  public dataHelper: AIAgentRunDataHelper;
+
   constructor(
     elementRef: ElementRef,
     sharedService: SharedService,
     protected router: Router,
     route: ActivatedRoute,
     cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService,
-    private dataService: AIAgentRunDataService
+    private costService: AIAgentRunCostService
   ) {
     super(elementRef, sharedService, router, route, cdr);
+    this.dataHelper = new AIAgentRunDataHelper();
   }
   
   async ngOnInit() {
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {
-      await this.dataService.loadAgentRunData(this.record.ID);
+      await this.dataHelper.loadAgentRunData(this.record.ID);
       await this.loadAgent();
       await this.loadCostMetrics();
       
@@ -81,7 +84,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     this.destroy$.next();
     this.destroy$.complete();
     this.clearParsedCache();
-    this.dataService.clearData();
+    this.dataHelper.clearData();
     this.costMetrics = null;
     this.agent = null;
   }
@@ -194,8 +197,8 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         this.costService.clearCache(this.record.ID);
         this.loadCostMetrics();
         
-        // Reload data through service - this will update all components
-        this.dataService.loadAgentRunData(this.record.ID);
+        // Reload data through helper - this will update all components
+        this.dataHelper.loadAgentRunData(this.record.ID);
         
         // Trigger analytics refresh
         if (this.analyticsComponent) {

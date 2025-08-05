@@ -103,6 +103,7 @@
           <kendo-splitter-pane [min]="'400px'">
             <mj-ai-agent-run-timeline
               [aiAgentRunId]="record.ID"
+              [dataHelper]="dataHelper"
               [autoRefresh]="record.Status === 'Running'"
               [refreshInterval]="30000"
               (itemSelected)="selectTimelineItem($event)"
@@ -128,6 +129,7 @@
         <mj-ai-agent-run-visualization
           #visualizationComponent
           [aiAgentRunId]="record.ID"
+          [dataHelper]="dataHelper"
           *ngIf="visualizationLoaded">
         </mj-ai-agent-run-visualization>
       </div>
