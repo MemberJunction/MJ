@@ -3,7 +3,6 @@ import { RunQuery, QueryInfo } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
-import { QueryEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 
 @ObjectType()
@@ -34,6 +33,12 @@ export class RunQueryResultType {
 
   @Field(() => String, { nullable: true })
   AppliedParameters?: string;
+
+  @Field(() => Boolean, { nullable: true })
+  CacheHit?: boolean;
+
+  @Field(() => Int, { nullable: true })
+  CacheTTLRemaining?: number;
 }
 
 @Resolver()
@@ -79,9 +84,11 @@ export class RunQueryResolver {
                      @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                      @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
-                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
+                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
+                     @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
+                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
-    console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow });
+    console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription });
     const result = await runQuery.RunQuery(
       { 
         QueryID: QueryID,
@@ -89,7 +96,9 @@ export class RunQueryResolver {
         CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
-        StartRow: StartRow
+        StartRow: StartRow,
+        ForceAuditLog: ForceAuditLog,
+        AuditLogDescription: AuditLogDescription
       }, 
       context.userPayload.userRecord);
     console.log('RunQuery result:', { 
@@ -120,7 +129,9 @@ export class RunQueryResolver {
       TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
-      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      CacheHit: (result as any).CacheHit,
+      CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
   }
 
@@ -131,7 +142,9 @@ export class RunQueryResolver {
                            @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                            @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                            @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
-                           @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
+                           @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
+                           @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
+                           @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
@@ -140,7 +153,9 @@ export class RunQueryResolver {
         CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
-        StartRow: StartRow
+        StartRow: StartRow,
+        ForceAuditLog: ForceAuditLog,
+        AuditLogDescription: AuditLogDescription
       },
       context.userPayload.userRecord);
       
@@ -153,7 +168,9 @@ export class RunQueryResolver {
       TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
-      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      CacheHit: (result as any).CacheHit,
+      CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
   }
 
@@ -165,7 +182,9 @@ export class RunQueryResolver {
                                @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                                @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                                @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
-                               @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
+                               @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
+                               @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
+                               @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
@@ -174,7 +193,9 @@ export class RunQueryResolver {
         CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
-        StartRow: StartRow
+        StartRow: StartRow,
+        ForceAuditLog: ForceAuditLog,
+        AuditLogDescription: AuditLogDescription
       }, 
       context.userPayload.userRecord);
     
@@ -200,7 +221,9 @@ export class RunQueryResolver {
       TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
-      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      CacheHit: (result as any).CacheHit,
+      CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
   }
 
@@ -212,7 +235,9 @@ export class RunQueryResolver {
                                      @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
                                      @Arg('Parameters', () => GraphQLJSONObject, {nullable: true}) Parameters?: Record<string, any>,
                                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
-                                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number): Promise<RunQueryResultType> {
+                                     @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
+                                     @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
+                                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
     const result = await runQuery.RunQuery(
       { 
@@ -221,7 +246,9 @@ export class RunQueryResolver {
         CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
-        StartRow: StartRow
+        StartRow: StartRow,
+        ForceAuditLog: ForceAuditLog,
+        AuditLogDescription: AuditLogDescription
       }, 
       context.userPayload.userRecord);
     
@@ -234,7 +261,9 @@ export class RunQueryResolver {
       TotalRowCount: result.TotalRowCount ?? 0,
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
-      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined
+      AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      CacheHit: (result as any).CacheHit,
+      CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
   }
 }

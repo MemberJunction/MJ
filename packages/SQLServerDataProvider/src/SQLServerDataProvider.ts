@@ -69,6 +69,7 @@ import {
   DatabaseProviderBase,
   QueryInfo,
   QueryCategoryInfo,
+  QueryCache,
 } from '@memberjunction/core';
 import { QueryParameterProcessor } from './queryParameterProcessor';
 
@@ -237,6 +238,9 @@ export class SQLServerDataProvider
   private _transactionDepth: number = 0;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
+  
+  // Query cache instance
+  private queryCache = new QueryCache();
   
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _localStorageProvider: ILocalStorageProvider;
@@ -777,80 +781,42 @@ export class SQLServerDataProvider
   /**************************************************************************/
   public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
     try {
-      // Build filter to find the query
-      let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
-      if (params.CategoryID) {
-        filter += ` AND CategoryID = '${params.CategoryID}'`;
+      // Find and validate query
+      const query = await this.findAndValidateQuery(params, contextUser);
+      
+      // Process parameters if needed
+      const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters);
+      
+      // Check cache if enabled
+      const cachedResult = this.checkQueryCache(query, params, appliedParameters);
+      if (cachedResult) {
+        return cachedResult;
       }
-      if (params.CategoryPath) {
-        filter += ` AND Category = '${params.CategoryPath}'`;
-      }
-
-      const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath, true);
-      if (!query) {
-        throw new Error('Query not found');
-      } 
-
-      // Check permissions and status
-      if (!query.UserCanRun(contextUser)) {
-        if (!query.UserHasRunPermissions(contextUser)) {
-          throw new Error('User does not have permission to run this query');
-        } else {
-          throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
-        }
-      }
-
-      // Process the query with parameters if it uses templates
-      let finalSQL = query.SQL;
-      let appliedParameters: Record<string, any> = {};
-
-      if (query.UsesTemplate) {
-        const processingResult = QueryParameterProcessor.processQueryTemplate(query, params.Parameters);
-        
-        if (!processingResult.success) {
-          throw new Error(processingResult.error);
-        }
-        
-        finalSQL = processingResult.processedSQL;
-        appliedParameters = processingResult.appliedParameters || {};
-      } else if (params.Parameters && Object.keys(params.Parameters).length > 0) {
-        // Warn if parameters were provided but query doesn't use templates
-        LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
-      }
-
-      // Execute the query
-      const start = new Date().getTime();
-      const result = await this.ExecuteSQL(finalSQL, undefined, undefined, contextUser);
-      const end = new Date().getTime();
-
-      if (result) {
-        // Apply pagination if specified
-        const totalRowCount = result.length;
-        const startRow = params.StartRow || 0;
-        
-        // Apply StartRow offset and MaxRows limit
-        let paginatedResult = result;
-        if (startRow > 0) {
-          paginatedResult = paginatedResult.slice(startRow);
-        }
-        if (params.MaxRows && params.MaxRows > 0) {
-          paginatedResult = paginatedResult.slice(0, params.MaxRows);
-        }
-          
-        return {
-          Success: true,
-          QueryID: query.ID,
-          QueryName: query.Name,
-          Results: paginatedResult,
-          RowCount: paginatedResult.length,
-          TotalRowCount: totalRowCount,
-          ExecutionTime: end - start,
-          ErrorMessage: '',
-          AppliedParameters: appliedParameters
-        };
-      } else {
-        throw new Error('Error executing query SQL');
-      }
+      
+      // Execute query and measure performance
+      const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+      
+      // Apply pagination
+      const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+      
+      // Handle audit logging (fire-and-forget)
+      this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
+      
+      // Cache results if enabled
+      this.cacheQueryResults(query, params.Parameters || {}, result);
+      
+      return {
+        Success: true,
+        QueryID: query.ID,
+        QueryName: query.Name,
+        Results: paginatedResult,
+        RowCount: paginatedResult.length,
+        TotalRowCount: totalRowCount,
+        ExecutionTime: executionTime,
+        ErrorMessage: '',
+        AppliedParameters: appliedParameters,
+        CacheHit: false
+      };
     } catch (e) {
       LogError(e);
       return {
@@ -864,6 +830,179 @@ export class SQLServerDataProvider
         ErrorMessage: e.message,
       };
     }
+  }
+
+  /**
+   * Finds a query based on provided parameters and validates user permissions
+   */
+  protected async findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<QueryInfo> {
+    const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath, true);
+    if (!query) {
+      throw new Error('Query not found');
+    }
+    
+    // Check permissions and status
+    if (!query.UserCanRun(contextUser)) {
+      if (!query.UserHasRunPermissions(contextUser)) {
+        throw new Error('User does not have permission to run this query');
+      } else {
+        throw new Error(`Query is not in an approved status (current status: ${query.Status})`);
+      }
+    }
+    
+    return query;
+  }
+
+  /**
+   * Processes query parameters and applies template substitution if needed
+   */
+  protected processQueryParameters(query: QueryInfo, parameters?: Record<string, any>): { finalSQL: string; appliedParameters: Record<string, any> } {
+    let finalSQL = query.SQL;
+    let appliedParameters: Record<string, any> = {};
+    
+    if (query.UsesTemplate) {
+      const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters);
+      
+      if (!processingResult.success) {
+        throw new Error(processingResult.error);
+      }
+      
+      finalSQL = processingResult.processedSQL;
+      appliedParameters = processingResult.appliedParameters || {};
+    } else if (parameters && Object.keys(parameters).length > 0) {
+      // Warn if parameters were provided but query doesn't use templates
+      LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+    }
+    
+    return { finalSQL, appliedParameters };
+  }
+
+  /**
+   * Checks the cache for existing results and returns them if valid
+   */
+  protected checkQueryCache(query: QueryInfo, params: RunQueryParams, appliedParameters: Record<string, any>): RunQueryResult | null {
+    const cacheConfig = query.CacheConfig;
+    if (!cacheConfig?.enabled) {
+      return null;
+    }
+    
+    const cachedEntry = this.queryCache.get(query.ID, params.Parameters || {}, cacheConfig);
+    if (!cachedEntry) {
+      return null;
+    }
+    
+    LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
+    
+    // Apply pagination to cached results
+    const { paginatedResult, totalRowCount } = this.applyQueryPagination(cachedEntry.results, params);
+    
+    const remainingTTL = (cachedEntry.timestamp + (cachedEntry.ttlMinutes * 60 * 1000)) - Date.now();
+    
+    return {
+      Success: true,
+      QueryID: query.ID,
+      QueryName: query.Name,
+      Results: paginatedResult,
+      RowCount: paginatedResult.length,
+      TotalRowCount: totalRowCount,
+      ExecutionTime: 0, // Cached result
+      ErrorMessage: '',
+      AppliedParameters: appliedParameters,
+      CacheHit: true,
+      CacheTTLRemaining: remainingTTL
+    } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+  }
+
+  /**
+   * Executes the query and tracks execution time
+   */
+  protected async executeQueryWithTiming(sql: string, contextUser?: UserInfo): Promise<{ result: any[]; executionTime: number }> {
+    const start = new Date().getTime();
+    const result = await this.ExecuteSQL(sql, undefined, undefined, contextUser);
+    const end = new Date().getTime();
+    
+    if (!result) {
+      throw new Error('Error executing query SQL');
+    }
+    
+    return { 
+      result, 
+      executionTime: end - start 
+    };
+  }
+
+  /**
+   * Applies pagination to query results based on StartRow and MaxRows parameters
+   */
+  protected applyQueryPagination(results: any[], params: RunQueryParams): { paginatedResult: any[]; totalRowCount: number } {
+    const totalRowCount = results.length;
+    const startRow = params.StartRow || 0;
+    
+    let paginatedResult = results;
+    if (startRow > 0) {
+      paginatedResult = paginatedResult.slice(startRow);
+    }
+    if (params.MaxRows && params.MaxRows > 0) {
+      paginatedResult = paginatedResult.slice(0, params.MaxRows);
+    }
+    
+    return { paginatedResult, totalRowCount };
+  }
+
+  /**
+   * Creates an audit log record for query execution (fire-and-forget)
+   */
+  protected auditQueryExecution(
+    query: QueryInfo, 
+    params: RunQueryParams, 
+    finalSQL: string, 
+    rowCount: number, 
+    totalRowCount: number, 
+    executionTime: number, 
+    contextUser?: UserInfo
+  ): void {
+    if (!params.ForceAuditLog && !query.AuditQueryRuns) {
+      return;
+    }
+    
+    // Fire and forget - we do NOT await this but catch errors
+    this.CreateAuditLogRecord(
+      contextUser,
+      'Run Query',
+      'Run Query',
+      'Success',
+      JSON.stringify({
+        QueryID: query.ID,
+        QueryName: query.Name,
+        CategoryPath: query.CategoryPath,
+        Description: params.AuditLogDescription,
+        Parameters: params.Parameters,
+        RowCount: rowCount,
+        TotalRowCount: totalRowCount,
+        ExecutionTime: executionTime,
+        SQL: finalSQL // After parameter substitution
+      }),
+      null, // entityId - No specific entity for queries
+      query.ID, // recordId
+      params.AuditLogDescription,
+      { IgnoreDirtyState: true } // saveOptions
+    ).catch(error => {
+      console.error('Error creating audit log:', error);
+    });
+  }
+
+  /**
+   * Caches query results if caching is enabled for the query
+   */
+  protected cacheQueryResults(query: QueryInfo, parameters: Record<string, any>, results: any[]): void {
+    const cacheConfig = query.CacheConfig;
+    if (!cacheConfig?.enabled) {
+      return;
+    }
+    
+    // Cache the full result set (before pagination)
+    this.queryCache.set(query.ID, parameters, results, cacheConfig);
+    LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
   }
 
   /**************************************************************************/
@@ -1369,7 +1508,9 @@ export class SQLServerDataProvider
       const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
 
       if (!user) throw new Error(`User is a required parameter`);
-      if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
+      if (!auditLogType) {
+        throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
+      }
 
       const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
@@ -1387,7 +1528,9 @@ export class SQLServerDataProvider
 
       if (auditLogDescription) auditLog.Description = auditLogDescription;
 
-      if (await auditLog.Save(saveOptions)) return auditLog;
+      if (await auditLog.Save(saveOptions)) {
+        return auditLog;
+      }
       else throw new Error(`Error saving audit log record`);
     } catch (err) {
       LogError(err);

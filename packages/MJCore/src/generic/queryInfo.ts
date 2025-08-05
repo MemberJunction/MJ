@@ -2,6 +2,7 @@ import { BaseInfo } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { UserInfo } from "./securityInfo";
+import { QueryCacheConfig } from "./QueryCacheConfig";
 
 /**
  * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
@@ -50,6 +51,22 @@ export class QueryInfo extends BaseInfo {
      */
     public UsesTemplate: boolean = false
     /**
+     * When true, all executions of this query will be logged to the Audit Log system for tracking and compliance
+     */
+    public AuditQueryRuns: boolean = false
+    /**
+     * When true, query results will be cached in memory with TTL expiration
+     */
+    public CacheEnabled: boolean = false
+    /**
+     * Time-to-live in minutes for cached query results. NULL uses default TTL.
+     */
+    public CacheTTLMinutes: number = null
+    /**
+     * Maximum number of cached result sets for this query. NULL uses default size limit.
+     */
+    public CacheMaxSize: number = null
+    /**
      * Date and time when this query record was created
      */
     __mj_CreatedAt: Date = null
@@ -76,6 +93,65 @@ export class QueryInfo extends BaseInfo {
             this._categoryPath = this.buildCategoryPath();
         }
         return this._categoryPath;
+    }
+
+    private _cacheConfig: QueryCacheConfig | null = null;
+    /**
+     * Gets the cache configuration for this query.
+     * If the query has no explicit cache config but category inheritance is enabled,
+     * walks up the category tree to find inherited cache settings.
+     * @returns {QueryCacheConfig | null} The cache configuration or null if caching is disabled
+     */
+    get CacheConfig(): QueryCacheConfig | null {
+        // If we already built the config, return it
+        if (this._cacheConfig !== null) {
+            return this._cacheConfig;
+        }
+
+        // If caching is explicitly enabled on this query
+        if (this.CacheEnabled) {
+            this._cacheConfig = {
+                enabled: true,
+                ttlMinutes: this.CacheTTLMinutes || 60, // Default to 60 minutes
+                maxCacheSize: this.CacheMaxSize || undefined,
+                cacheKey: 'exact'
+            };
+            return this._cacheConfig;
+        }
+
+        // Check for inherited cache config from category
+        if (this.CategoryInfo) {
+            const inheritedConfig = this.getInheritedCacheConfig();
+            if (inheritedConfig) {
+                this._cacheConfig = inheritedConfig;
+                return this._cacheConfig;
+            }
+        }
+
+        // No caching configured
+        this._cacheConfig = { enabled: false, ttlMinutes: 0 };
+        return this._cacheConfig;
+    }
+
+    /**
+     * Walks up the category hierarchy to find inherited cache configuration.
+     * @returns {QueryCacheConfig | null} The inherited cache config or null if none found
+     */
+    private getInheritedCacheConfig(): QueryCacheConfig | null {
+        let category = this.CategoryInfo;
+        while (category) {
+            if (category.DefaultCacheEnabled && category.CacheInheritanceEnabled) {
+                return {
+                    enabled: true,
+                    ttlMinutes: category.DefaultCacheTTLMinutes || 60,
+                    maxCacheSize: category.DefaultCacheMaxSize || undefined,
+                    cacheKey: 'exact',
+                    inheritFromCategory: true
+                };
+            }
+            category = category.ParentCategoryInfo;
+        }
+        return null;
     }
 
     private _fields: QueryFieldInfo[] = null
@@ -236,6 +312,22 @@ export class QueryCategoryInfo extends BaseInfo {
      * Description of what types of queries belong in this category
      */
     public Description: string = null
+    /**
+     * Default cache setting for queries in this category
+     */
+    public DefaultCacheEnabled: boolean = false
+    /**
+     * Default TTL in minutes for cached results of queries in this category
+     */
+    public DefaultCacheTTLMinutes: number = null
+    /**
+     * Default maximum cache size for queries in this category
+     */
+    public DefaultCacheMaxSize: number = null
+    /**
+     * When true, queries without cache config will inherit from this category
+     */
+    public CacheInheritanceEnabled: boolean = true
     /**
      * Date and time when this category was created
      */
