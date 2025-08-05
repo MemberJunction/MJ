@@ -53,6 +53,7 @@
         <mj-ai-agent-run-timeline
           *ngIf="item.type === 'subrun' && item.data?.ID"
           [aiAgentRunId]="item.data.ID"
+          [dataHelper]="createSubRunDataHelper()"
           [autoRefresh]="false"
           (itemSelected)="selectItem($event)"
           (navigateToEntity)="navigateToEntity.emit($event)">

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity, AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntity, AIAgentEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -12,7 +12,7 @@ import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
-import { AIAgentRunDataService } from './ai-agent-run-data.service';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
@@ -39,9 +39,21 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   // Cost metrics using shared service
   costMetrics: AgentRunCostMetrics | null = null;
   
+  // Cached parsed results to prevent redundant JSON parsing
+  private _cachedParsedResult: string | null = null;
+  private _cachedParsedStartingPayload: string | null = null;
+  private _cachedParsedFinalPayload: string | null = null;
+  private _cachedParsedData: string | null = null;
+  
+  // Simple parsing state - true when all parsing is complete
+  private _allParsingComplete = false;
+  
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
   @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
+
+  // Instance of data helper per component
+  public dataHelper: AIAgentRunDataHelper;
 
   constructor(
     elementRef: ElementRef,
@@ -49,28 +61,32 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     protected router: Router,
     route: ActivatedRoute,
     cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService,
-    private dataService: AIAgentRunDataService
+    private costService: AIAgentRunCostService
   ) {
     super(elementRef, sharedService, router, route, cdr);
+    this.dataHelper = new AIAgentRunDataHelper();
   }
   
   async ngOnInit() {
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {
-      // Load all data through the service
-      await this.dataService.loadAgentRunData(this.record.ID);
+      await this.dataHelper.loadAgentRunData(this.record.ID);
       await this.loadAgent();
       await this.loadCostMetrics();
+      
+      // Parse all JSON fields on form load for instant access later
+      this.parseAllFields();
     }
   }
   
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-    // Clear data when component is destroyed
-    this.dataService.clearData();
+    this.clearParsedCache();
+    this.dataHelper.clearData();
+    this.costMetrics = null;
+    this.agent = null;
   }
   
   private async loadAgent() {
@@ -92,7 +108,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     
     try {
       this.costMetrics = await this.costService.getAgentRunCostMetrics(this.record.ID);
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading cost metrics:', error);
       this.costMetrics = {
@@ -112,14 +128,13 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     // Lazy load visualization when the tab is first accessed
     if (tab === 'visualization' && !this.visualizationLoaded) {
       this.visualizationLoaded = true;
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
     
     // Lazy load analytics when the tab is first accessed
     if (tab === 'analytics' && !this.analyticsLoaded) {
       this.analyticsLoaded = true;
-      // The component will load data in its ngOnInit
-      this.cdr.detectChanges();
+      this.cdr.markForCheck();
     }
   }
   
@@ -137,12 +152,12 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   selectTimelineItem(item: TimelineItem) {
     this.selectedTimelineItem = item;
     this.jsonPanelExpanded = true;
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
   
   closeJsonPanel() {
     this.selectedTimelineItem = null;
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
   
   navigateToSubRun(runId: string) {
@@ -172,13 +187,18 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   refreshData() {
     // Reload the agent run record to get latest status
     if (this.record?.ID) {
+      // Clear parsed cache when refreshing data
+      this.clearParsedCache();
+      
+      // No panel states to reset in simplified approach
+      
       this.record.Load(this.record.ID).then(() => {
         // Clear cost cache and reload
         this.costService.clearCache(this.record.ID);
         this.loadCostMetrics();
         
-        // Reload data through service - this will update all components
-        this.dataService.loadAgentRunData(this.record.ID);
+        // Reload data through helper - this will update all components
+        this.dataHelper.loadAgentRunData(this.record.ID);
         
         // Trigger analytics refresh
         if (this.analyticsComponent) {
@@ -212,7 +232,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   onAgentRunCompleted(status: string) {
     // Update the record status
     this.record.Status = status as 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Paused';
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
     
     // Reload the full record to get updated data
     this.refreshData();
@@ -222,7 +242,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
    * Get the Result field with recursive JSON parsing applied
    */
   get parsedResult(): string {
-    if (!this.record?.Result) return '';
+    if (!this.record?.Result) {
+      return '';
+    }
+    
+    // Return cached result if available
+    if (this._cachedParsedResult !== null) {
+      return this._cachedParsedResult;
+    }
+    
     
     try {
       // First, check if Result is a JSON string that needs to be parsed
@@ -240,10 +268,18 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       const parsed = ParseJSONRecursive(resultData, parseOptions);
-      return JSON.stringify(parsed, null, 2);
+      const result = JSON.stringify(parsed, null, 2);
+      
+      // Cache the result
+      this._cachedParsedResult = result;
+      
+      return result;
     } catch (e) {
-      return this.record.Result;
+      const fallbackResult = this.record.Result;
+      this._cachedParsedResult = fallbackResult;
+      return fallbackResult;
     }
   }
   
@@ -251,7 +287,15 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
    * Get the Starting Payload field with recursive JSON parsing applied
    */
   get parsedStartingPayload(): string {
-    if (!this.record?.StartingPayload) return '';
+    if (!this.record?.StartingPayload) {
+      return '';
+    }
+    
+    // Return cached result if available
+    if (this._cachedParsedStartingPayload !== null) {
+      return this._cachedParsedStartingPayload;
+    }
+    
     
     try {
       // First, check if StartingPayload is a JSON string that needs to be parsed
@@ -269,10 +313,18 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       const parsed = ParseJSONRecursive(payloadData, parseOptions);
-      return JSON.stringify(parsed, null, 2);
+      const result = JSON.stringify(parsed, null, 2);
+      
+      // Cache the result
+      this._cachedParsedStartingPayload = result;
+      
+      return result;
     } catch (e) {
-      return this.record.StartingPayload;
+      const fallbackResult = this.record.StartingPayload;
+      this._cachedParsedStartingPayload = fallbackResult;
+      return fallbackResult;
     }
   }
 
@@ -281,6 +333,11 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
    */
   get parsedFinalPayload(): string {
     if (!this.record?.FinalPayload) return '';
+    
+    // Return cached result if available
+    if (this._cachedParsedFinalPayload !== null) {
+      return this._cachedParsedFinalPayload;
+    }
     
     try {
       // First, check if FinalPayload is a JSON string that needs to be parsed
@@ -298,10 +355,18 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false // Disable debug logging - regex issue fixed
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       const parsed = ParseJSONRecursive(payloadData, parseOptions);
-      return JSON.stringify(parsed, null, 2);
+      const result = JSON.stringify(parsed, null, 2);
+      
+      // Cache the result
+      this._cachedParsedFinalPayload = result;
+      
+      return result;
     } catch (e) {
-      return this.record.FinalPayload;
+      const fallbackResult = this.record.FinalPayload;
+      this._cachedParsedFinalPayload = fallbackResult;
+      return fallbackResult;
     }
   }
 
@@ -310,6 +375,11 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
    */
   get parsedData(): string {
     if (!this.record?.Data) return '';
+    
+    // Return cached result if available
+    if (this._cachedParsedData !== null) {
+      return this._cachedParsedData;
+    }
     
     try {
       // First, check if Data is a JSON string that needs to be parsed
@@ -327,10 +397,18 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       const parsed = ParseJSONRecursive(data, parseOptions);
-      return JSON.stringify(parsed, null, 2);
+      const result = JSON.stringify(parsed, null, 2);
+      
+      // Cache the result
+      this._cachedParsedData = result;
+      
+      return result;
     } catch (e) {
-      return this.record.Data;
+      const fallbackResult = this.record.Data;
+      this._cachedParsedData = fallbackResult;
+      return fallbackResult;
     }
   }
   
@@ -356,6 +434,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
@@ -384,10 +463,64 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
     }
+  }
+
+  /**
+   * Clear all cached parsed results
+   */
+  private clearParsedCache(): void {
+    this._cachedParsedResult = null;
+    this._cachedParsedStartingPayload = null;
+    this._cachedParsedFinalPayload = null;
+    this._cachedParsedData = null;
+    this._allParsingComplete = false;
+  }
+  
+  /**
+   * Parse all JSON fields at once and cache results
+   */
+  private parseAllFields(): void {
+    try {
+      let parsedCount = 0;
+      
+      // Parse all fields that exist
+      if (this.record?.Result) {
+        this.parsedResult; // Triggers parsing and caching
+        parsedCount++;
+      }
+      
+      if (this.record?.StartingPayload) {
+        this.parsedStartingPayload; // Triggers parsing and caching
+        parsedCount++;
+      }
+      
+      if (this.record?.FinalPayload) {
+        this.parsedFinalPayload; // Triggers parsing and caching
+        parsedCount++;
+      }
+      
+      if (this.record?.Data) {
+        this.parsedData; // Triggers parsing and caching
+        parsedCount++;
+      }
+      
+      this._allParsingComplete = true;
+      
+    } catch (error) {
+      console.error('Error during JSON parsing:', error);
+    }
+  }
+  
+  /**
+   * Check if all parsing is complete - used by template
+   */
+  get isParsingComplete(): boolean {
+    return this._allParsingComplete;
   }
 
   /**
@@ -441,6 +574,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;
@@ -473,6 +607,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
         maxDepth: 100,
         debug: false
       };
+      // Re-enabled ParseJSONRecursive with performance optimizations
       return ParseJSONRecursive(payloadData, parseOptions);
     } catch (e) {
       return null;

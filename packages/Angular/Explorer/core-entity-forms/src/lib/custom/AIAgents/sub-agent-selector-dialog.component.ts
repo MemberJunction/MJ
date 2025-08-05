@@ -96,18 +96,29 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   private async loadAgentsAndTypes() {
     const rv = new RunView();
     
-    // Load root agents (ParentID IS NULL) excluding the current parent agent
-    // Also exclude agents with ExposeAsAction = true (constraint prevents sub-agents from being exposed as actions)
-    const agentsResult = await rv.RunView<AIAgentEntity>({
-      EntityName: 'AI Agents',
-      ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
-      OrderBy: 'Name',
-      ResultType: 'entity_object',
-      MaxRows: 1000
-    });
+    // Load both agents and types in a single batch for better performance
+    const results = await rv.RunViews([
+      // Root agents (index 0)
+      {
+        EntityName: 'AI Agents',
+        ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
+        OrderBy: 'Name',
+        ResultType: 'entity_object',
+        MaxRows: 1000
+      },
+      // Agent types (index 1)
+      {
+        EntityName: 'MJ: AI Agent Types',
+        ExtraFilter: 'IsActive = 1',
+        OrderBy: 'Name',
+        ResultType: 'entity_object',
+        MaxRows: 1000
+      }
+    ]);
 
-    if (agentsResult.Success) {
-      const agents: AgentDisplayItem[] = (agentsResult.Results || []).map(agent => ({
+    // Process root agents (index 0)
+    if (results[0].Success) {
+      const agents: AgentDisplayItem[] = (results[0].Results || []).map(agent => ({
         ...agent.GetAll(),
         selected: false,
         typeName: agent.Type || 'Default'
@@ -116,17 +127,9 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       this.allAgents$.next(agents);
     }
 
-    // Load agent types for filtering
-    const typesResult = await rv.RunView<AIAgentTypeEntity>({
-      EntityName: 'MJ: AI Agent Types',
-      ExtraFilter: 'IsActive = 1',
-      OrderBy: 'Name',
-      ResultType: 'entity_object',
-      MaxRows: 1000
-    });
-
-    if (typesResult.Success) {
-      this.agentTypes$.next(typesResult.Results || []);
+    // Process agent types (index 1)
+    if (results[1].Success) {
+      this.agentTypes$.next(results[1].Results || []);
     }
   }
 

@@ -1,4 +1,3 @@
-import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
@@ -10,10 +9,11 @@ export interface AgentRunData {
   promptRuns: AIPromptRunEntity[];
 }
 
-@Injectable({
-  providedIn: 'root'
-})
-export class AIAgentRunDataService {
+/**
+ * Helper class for managing AI Agent Run data per component instance
+ * No longer a singleton Angular service - instantiated per component
+ */
+export class AIAgentRunDataHelper {
   // Data subjects
   private stepsSubject$ = new BehaviorSubject<AIAgentRunStepEntity[]>([]);
   private subRunsSubject$ = new BehaviorSubject<AIAgentRunEntity[]>([]);
@@ -58,7 +58,6 @@ export class AIAgentRunDataService {
     
     // If already loaded for this run, don't reload
     if (this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
-      console.log('AgentRunDataService: Data already loaded for', agentRunId);
       return;
     }
     
@@ -170,13 +169,6 @@ export class AIAgentRunDataService {
     this.subRunsSubject$.next(subRuns);
     this.actionLogsSubject$.next(actionLogs);
     this.promptRunsSubject$.next(promptRuns);
-    
-    console.log('AgentRunDataService: Data loaded', {
-      steps: steps.length,
-      subRuns: subRuns.length,
-      actionLogs: actionLogs.length,
-      promptRuns: promptRuns.length
-    });
   }
   
   /**
@@ -285,7 +277,6 @@ export class AIAgentRunDataService {
   private clearCache() {
     this.subAgentDataCache.clear();
     this.cacheAccessOrder = [];
-    console.log('Agent run data cache cleared');
   }
   
   /**

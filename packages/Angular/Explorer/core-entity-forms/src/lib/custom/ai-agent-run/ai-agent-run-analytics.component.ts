@@ -71,6 +71,29 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   
   private destroy$ = new Subject<void>();
   
+  /** Track active timeouts for cleanup */
+  private activeTimeouts: number[] = [];
+  
+  /** Helper method to create tracked setTimeout calls */
+  private setTrackedTimeout(callback: () => void, delay: number = 0): number {
+    const timeoutId = setTimeout(() => {
+      // Remove from tracking array when timeout executes
+      this.removeTimeoutFromTracking(timeoutId);
+      callback();
+    }, delay) as any as number;
+    
+    this.activeTimeouts.push(timeoutId);
+    return timeoutId;
+  }
+  
+  /** Remove timeout from tracking array */
+  private removeTimeoutFromTracking(timeoutId: number): void {
+    const index = this.activeTimeouts.indexOf(timeoutId);
+    if (index > -1) {
+      this.activeTimeouts.splice(index, 1);
+    }
+  }
+  
   // Chart expansion states
   expandedCharts: { [key: string]: boolean } = {
     modelDistribution: false,
@@ -148,11 +171,20 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   }
   
   ngOnDestroy() {
+    // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
     
-    // Clean up all D3 charts
+    // Clear all active timeouts
+    this.activeTimeouts.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    this.activeTimeouts.length = 0;
+    
+    // Clean up all D3 charts (must be done last)
     this.cleanupAllCharts();
+    
+    console.log('AI Agent Run Analytics component destroyed and cleaned up');
   }
   
   private cleanupAllCharts() {
@@ -170,26 +202,58 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       this.promptCountByNameChart
     ];
     
-    // Clean up each chart
+    // More comprehensive D3 cleanup
     chartRefs.forEach(chartRef => {
       if (chartRef?.nativeElement) {
         const element = chartRef.nativeElement;
+        const d3Element = d3.select(element);
         
-        // Remove all event listeners
-        d3.select(element).selectAll('*')
-          .on('click', null)
-          .on('mouseover', null)
-          .on('mouseout', null)
-          .on('mousemove', null)
-          .on('mouseleave', null);
+        // Remove ALL possible event listeners (comprehensive list)
+        const allEventTypes = [
+          'click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mouseout', 
+          'mousemove', 'mouseenter', 'mouseleave', 'contextmenu',
+          'touchstart', 'touchend', 'touchmove', 'touchcancel',
+          'wheel', 'scroll', 'resize', 'focus', 'blur',
+          'keydown', 'keyup', 'keypress',
+          'drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop'
+        ];
         
-        // Remove all SVG elements
-        d3.select(element).selectAll('*').remove();
+        // Remove event listeners from all child elements
+        d3Element.selectAll('*').each(function() {
+          const node = d3.select(this);
+          allEventTypes.forEach(eventType => {
+            node.on(eventType, null);
+          });
+        });
+        
+        // Remove event listeners from the main element too
+        allEventTypes.forEach(eventType => {
+          d3Element.on(eventType, null);
+        });
+        
+        // Cancel any ongoing transitions
+        d3Element.selectAll('*').interrupt();
+        
+        // Remove all SVG elements and clear the container
+        d3Element.selectAll('*').remove();
+        
+        // Clear innerHTML as final cleanup
+        element.innerHTML = '';
       }
     });
     
-    // Clear any tooltips that might be attached to body
-    d3.selectAll('.d3-tooltip').remove();
+    // Clear any tooltips that might be attached to body or other elements
+    d3.selectAll('.d3-tooltip, .tooltip, .chart-tooltip').remove();
+    
+    // Clear any D3 selections that might be cached globally
+    // Note: This is more aggressive but necessary for preventing leaks
+    try {
+      d3.selectAll('[data-chart-element="true"]').remove();
+      d3.selectAll('.d3-tooltip').remove();
+      d3.selectAll('.chart-tooltip').remove();
+    } catch (error) {
+      console.warn('D3 global cleanup had issues:', error);
+    }
   }
   
   ngAfterViewInit() {
@@ -214,7 +278,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       
       // Render charts after view updates
       this.cdr.detectChanges();
-      setTimeout(() => {
+      this.setTrackedTimeout(() => {
         this.renderCharts();
       });
       
@@ -1053,7 +1117,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   toggleChartExpansion(chartKey: string): void {
     this.expandedCharts[chartKey] = !this.expandedCharts[chartKey];
     // Re-render the chart after expansion state changes
-    setTimeout(() => {
+    this.setTrackedTimeout(() => {
       this.renderCharts();
     }, 100);
   }
@@ -1072,7 +1136,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
         this.expandedCharts[key] = false;
       });
     }
-    setTimeout(() => {
+    this.setTrackedTimeout(() => {
       this.renderCharts();
     }, 100);
   }
