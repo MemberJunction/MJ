@@ -17,6 +17,16 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE', @level1name = 'Entity',
     @level2type = N'COLUMN', @level2name = 'DisplayName';
 
+GO
+
+-- Update existing entities to set DisplayName based on Name
+-- If Name starts with 'MJ: ', set DisplayName to the substring after 'MJ: '
+-- Otherwise, set DisplayName to NULL
+UPDATE ${flyway:defaultSchema}.Entity
+  SET DisplayName = CASE
+      WHEN Name LIKE 'MJ: %' THEN SUBSTRING(Name, 5, LEN(Name) - 4)
+      ELSE NULL
+  END;
 
 /**** CODE GEN RUN ****/
 /* SQL text to insert new entity field */

@@ -36,14 +36,20 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         else {
             const md = new Metadata();
+            const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            if (!e) {
+                console.warn(`Entity ${data.Configuration.Entity} not found in metadata`);
+                return '';
+            }
+           
             let pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
             if (pk.HasValue) {
                 const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
                 //const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
-                return (name ? name : data.Configuration.Entity);// + ` (${displayId})`;    
+                return (name ? name : e.DisplayNameOrName);// + ` (${displayId})`;    
             }
             else 
-                return `New ${data.Configuration.Entity} Record`;
+                return `New ${e.DisplayNameOrName} Record`;
         }
     }
 
