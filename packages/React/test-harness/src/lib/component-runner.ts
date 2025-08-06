@@ -22,6 +22,7 @@ export interface ComponentExecutionOptions {
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
   libraryConfiguration?: LibraryConfiguration;
+  isRootComponent?: boolean; // Whether this is a root component (for prop validation)
 }
  
 
@@ -73,12 +74,14 @@ export class ComponentRunner {
   async lintComponent(
     componentCode: string, 
     componentName: string,
-    componentSpec?: any
+    componentSpec?: any,
+    isRootComponent?: boolean
   ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentName,
-      componentSpec
+      componentSpec,
+      isRootComponent
     );
 
     const violations = lintResult.violations.map(v => v.message);
