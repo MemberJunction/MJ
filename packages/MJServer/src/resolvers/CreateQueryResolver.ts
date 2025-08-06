@@ -501,7 +501,6 @@ export class QueryResolverExtended extends QueryResolver {
                 SQLBaseType: f.SQLBaseType || undefined,
                 SQLFullType: f.SQLFullType || undefined,
                 IsComputed: f.IsComputed,
-                ComputationEnabled: true, // Default to true as it's not in QueryFieldInfo
                 ComputationDescription: f.ComputationDescription || undefined
             }));
             

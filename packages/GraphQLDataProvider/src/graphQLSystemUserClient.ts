@@ -580,7 +580,6 @@ export class GraphQLSystemUserClient {
                         SQLBaseType
                         SQLFullType
                         IsComputed
-                        ComputationEnabled
                         ComputationDescription
                     }
                     Parameters {
@@ -656,7 +655,6 @@ export class GraphQLSystemUserClient {
                         SQLBaseType
                         SQLFullType
                         IsComputed
-                        ComputationEnabled
                         ComputationDescription
                     }
                     Parameters {
@@ -1361,7 +1359,6 @@ export interface QueryField {
     SQLBaseType?: string;
     SQLFullType?: string;
     IsComputed: boolean;
-    ComputationEnabled: boolean;
     ComputationDescription?: string;
 }
 
