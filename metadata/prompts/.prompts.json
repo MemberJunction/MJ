@@ -58,8 +58,23 @@
             "ID": "1AE94A70-6159-4983-8112-7093572D69D9"
           },
           "sync": {
-            "lastModified": "2025-08-02T11:43:26.874Z",
+            "lastModified": "2025-08-06T03:26:39.038Z",
             "checksum": "3ff71f1fd021576b1153e1cc2a4640fbc3b2c6cfa6b6bf027bca1b5a27f82800"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 6
+          },
+          "primaryKey": {
+            "ID": "2390CFEB-A855-4545-AD8F-AC08AF119298"
+          },
+          "sync": {
+            "lastModified": "2025-08-06T03:26:39.075Z",
+            "checksum": "44a315e584e660db5c1ae4ee262a263a8e1b53b85454ef7e1636cb83ed2305b1"
           }
         }
       ]
