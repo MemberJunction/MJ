@@ -75,7 +75,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     {
       id: 'applications',
       label: 'Applications',
-      icon: 'fa-solid fa-grid-2',
+      icon: 'fa-solid fa-th-large',
       badgeCount: 0
     },
     {

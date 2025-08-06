@@ -1,5 +1,6 @@
 import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { UserInfo, ValidationResult } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
 
 /**
@@ -54,6 +55,15 @@ export interface ExecutionTask {
 
   /** Optional streaming configuration for this task */
   streamingConfig?: AIPromptStreamingConfig;
+
+  /** Vendor-specific driver class to use (overrides model.DriverClass) */
+  vendorDriverClass?: string;
+
+  /** Vendor-specific API name to use (overrides model.APIName) */
+  vendorApiName?: string;
+
+  /** Selected vendor ID for this execution */
+  vendorId?: string;
 }
 
 /**

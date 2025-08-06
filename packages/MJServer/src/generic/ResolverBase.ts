@@ -2,8 +2,11 @@ import {
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
+  DatabaseProviderBase,
   EntityFieldTSType,
   EntityPermissionType,
+  EntitySaveOptions,
+  IRunViewProvider,
   LogDebug,
   LogError,
   LogStatus,
@@ -13,7 +16,7 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { AuditLogEntity, ErrorLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
@@ -80,37 +83,83 @@ export class ResolverBase {
     return dataObjectArray;
   }
 
-  protected async findBy(dataSource: sql.ConnectionPool, entity: string, params: any, contextUser: UserInfo) {
+  protected async findBy<T = any>(provider: DatabaseProviderBase, entity: string, params: any, contextUser: UserInfo): Promise<Array<T>> {
     // build the SQL query based on the params passed in
-    const md = new Metadata();
-    const e = md.Entities.find((e) => e.Name === entity);
+    const rv = provider as any as IRunViewProvider;
+    const e = provider.Entities.find((e) => e.Name === entity);
     if (!e) throw new Error(`Entity ${entity} not found in metadata`);
     // now build a SQL string using the entityInfo and using the properties in the params object
-    let sqlQuery = `SELECT * FROM ${e.SchemaName}.${e.BaseView} WHERE `;
+    let extraFilter = "";
     const keys = Object.keys(params);
     keys.forEach((k, i) => {
-      if (i > 0) sqlQuery += ' AND ';
+      if (i > 0) extraFilter += ' AND ';
       // look up the field in the entityInfo to see if it needs quotes
       const field = e.Fields.find((f) => f.Name === k);
       if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
       const quotes = field.NeedsQuotes ? "'" : '';
-      sqlQuery += `${k} = ${quotes}${params[k]}${quotes}`;
+      extraFilter += `${k} = ${quotes}${params[k]}${quotes}`;
     });
 
     // ok, now we have a SQL string, run it and return the results
     // use the SQLServerDataProvider
-    const result = await SQLServerDataProvider.ExecuteSQLWithPool(dataSource, sqlQuery, undefined, contextUser);
-    return result;
+    const result = await rv.RunView({
+      EntityName: entity,
+      ExtraFilter: extraFilter,
+    }, contextUser)
+    if (result && result.Success && result.Results.length > 0) {
+      return result.Results;
+    }
+    else {
+      return [];
+    }
   }
 
-  async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserViewEntity = this.safeFirstArrayElement(
-        await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord)
-      );
+      const rv = provider as any as IRunViewProvider;
+      const result = await rv.RunView<UserViewEntity>({
+        EntityName: 'User Views',
+        ExtraFilter: "Name='" + viewInput.ViewName + "'",
+      }, userPayload.userRecord);
+      if (result && result.Success && result.Results.length > 0) {
+        const viewInfo = result.Results[0];
+        return this.RunViewGenericInternal(
+          provider,
+          viewInfo,
+          viewInput.ExtraFilter,
+          viewInput.OrderBy,
+          viewInput.UserSearchString,
+          viewInput.ExcludeUserViewRunID,
+          viewInput.OverrideExcludeFilter,
+          viewInput.SaveViewResults,
+          viewInput.Fields,
+          viewInput.IgnoreMaxRows,
+          viewInput.ExcludeDataFromAllPriorViewRuns,
+          viewInput.ForceAuditLog,
+          viewInput.AuditLogDescription,
+          viewInput.ResultType,
+          userPayload,
+          viewInput.MaxRows
+        );
+      }
+      else {
+        LogError(`RunViewByNameGeneric: View ${viewInput.ViewName} not found or no results returned`);
+        return null;
+      }
+    } catch (err) {
+      console.log(err);
+      return null;
+    }
+  }
+
+  async RunViewByIDGeneric(viewInput: RunViewByIDInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    try {
+      const contextUser = this.GetUserFromPayload(userPayload);
+      const viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
+      await viewInfo.Load(viewInput.ViewID);
       return this.RunViewGenericInternal(
+        provider,
         viewInfo,
-        dataSource,
         viewInput.ExtraFilter,
         viewInput.OrderBy,
         viewInput.UserSearchString,
@@ -124,7 +173,7 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        pubSub
+        viewInput.MaxRows
       );
     } catch (err) {
       console.log(err);
@@ -132,36 +181,9 @@ export class ResolverBase {
     }
   }
 
-  async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
-      return this.RunViewGenericInternal(
-        viewInfo,
-        dataSource,
-        viewInput.ExtraFilter,
-        viewInput.OrderBy,
-        viewInput.UserSearchString,
-        viewInput.ExcludeUserViewRunID,
-        viewInput.OverrideExcludeFilter,
-        viewInput.SaveViewResults,
-        viewInput.Fields,
-        viewInput.IgnoreMaxRows,
-        viewInput.ExcludeDataFromAllPriorViewRuns,
-        viewInput.ForceAuditLog,
-        viewInput.AuditLogDescription,
-        viewInput.ResultType,
-        userPayload,
-        pubSub
-      );
-    } catch (err) {
-      console.log(err);
-      return null;
-    }
-  }
-
-  async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
-    try {
-      const md = new Metadata();
+      const md = provider;
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
@@ -173,8 +195,8 @@ export class ResolverBase {
       } as UserViewEntity; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
+        provider,
         viewInfo,
-        dataSource,
         viewInput.ExtraFilter,
         viewInput.OrderBy,
         viewInput.UserSearchString,
@@ -188,7 +210,7 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        pubSub
+        viewInput.MaxRows
       );
     } catch (err) {
       console.log(err);
@@ -198,22 +220,22 @@ export class ResolverBase {
 
   async RunViewsGeneric(
     viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
-    dataSource: sql.ConnectionPool,
-    userPayload: UserPayload,
-    pubSub: PubSubEngine
+    provider: DatabaseProviderBase,
+    userPayload: UserPayload
   ) {
-    let md: Metadata | null = null;
+    const md = provider;
+    const contextUser = this.GetUserFromPayload(userPayload);
     let params: RunViewGenericParams[] = [];
     for (const viewInput of viewInputs) {
       try {
         let viewInfo: UserViewEntity | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
+          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }, userPayload.userRecord));
+          viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
+          await viewInfo.Load(viewInput.ViewID);
         } else if (viewInput.EntityName) {
-          md = md || new Metadata();
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
           if (!entity) {
             throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
@@ -231,8 +253,8 @@ export class ResolverBase {
         }
 
         params.push({
-          viewInfo: viewInfo,
-          dataSource: dataSource,
+          viewInfo,
+          provider,
           extraFilter: viewInput.ExtraFilter,
           orderBy: viewInput.OrderBy,
           userSearchString: viewInput.UserSearchString,
@@ -245,8 +267,7 @@ export class ResolverBase {
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
-          userPayload,
-          pubSub,
+          userPayload, 
         });
       } catch (err) {
         LogError(err);
@@ -332,8 +353,8 @@ export class ResolverBase {
    * - Improved error handling (Fix #9)
    */
   protected async RunViewGenericInternal(
+    provider: DatabaseProviderBase,
     viewInfo: UserViewEntity,
-    dataSource: sql.ConnectionPool,
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
@@ -347,19 +368,19 @@ export class ResolverBase {
     auditLogDescription: string | undefined,
     resultType: string | undefined,
     userPayload: UserPayload | null,
-    pubSub: PubSubEngine
+    maxRows: number | undefined
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      const md = new Metadata();
+      const md = provider
       const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
 
-      const rv = new RunView();
+      const rv = md as any as IRunViewProvider;
 
       // Determine result type
       let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
@@ -396,6 +417,7 @@ export class ResolverBase {
           SaveViewResults: saveViewResults,
           ExcludeDataFromAllPriorViewRuns: excludeDataFromAllPriorViewRuns,
           IgnoreMaxRows: ignoreMaxRows,
+          MaxRows: maxRows,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
@@ -440,7 +462,7 @@ export class ResolverBase {
       if (!params.length) return [];
 
       let md: Metadata | null = null;
-      const rv = new RunView();
+      const rv = params[0].provider as any as IRunViewProvider;
       let runViewParams: RunViewParams[] = [];
       
       // Fix #1: Get user info only once for all queries
@@ -519,9 +541,9 @@ export class ResolverBase {
     }
   }
 
-  protected async createRecordAccessAuditLogRecord(userPayload: UserPayload, entityName: string, recordId: any): Promise<any> {
+  protected async createRecordAccessAuditLogRecord(provider: DatabaseProviderBase, userPayload: UserPayload, entityName: string, recordId: any): Promise<any> {
     try {
-      const md = new Metadata();
+      const md = provider;
       const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
 
@@ -533,15 +555,15 @@ export class ResolverBase {
         if (!userInfo) throw new Error(`User ${userPayload?.email} not found in metadata`);
         if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
 
-        return await this.createAuditLogRecord(userPayload, null, auditLogTypeName, 'Success', null, entityInfo.ID, recordId);
+        return await this.createAuditLogRecord(provider, userPayload, null, auditLogTypeName, 'Success', null, entityInfo.ID, recordId);
       }
     } catch (e) {
       console.log(e);
     }
   }
 
-  protected getRowLevelSecurityWhereClause(entityName: string, userPayload: UserPayload, type: EntityPermissionType, returnPrefix: string) {
-    const md = new Metadata();
+  protected getRowLevelSecurityWhereClause(provider: DatabaseProviderBase, entityName: string, userPayload: UserPayload, type: EntityPermissionType, returnPrefix: string) {
+    const md = provider;
     const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
     if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
     const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
@@ -551,6 +573,7 @@ export class ResolverBase {
   }
 
   protected async createAuditLogRecord(
+    provider: DatabaseProviderBase,
     userPayload: UserPayload,
     authorizationName: string | null,
     auditLogTypeName: string,
@@ -560,7 +583,7 @@ export class ResolverBase {
     recordId: any | null
   ): Promise<any> {
     try {
-      const md = new Metadata();
+      const md = provider;
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       const authorization = authorizationName
         ? md.Authorizations.find((a) => a.Name.trim().toLowerCase() === authorizationName.trim().toLowerCase())
@@ -588,15 +611,17 @@ export class ResolverBase {
 
       if (recordId) auditLog.RecordID = recordId;
 
-      if (await auditLog.Save()) return auditLog;
-      else throw new Error(`Error saving audit log record`);
+      if (await auditLog.Save()) 
+        return auditLog;
+      else 
+        throw new Error(`Error saving audit log record`);
     } catch (err) {
       console.log(err);
       return null;
     }
   }
 
-  protected safeFirstArrayElement(arr: any[]) {
+  protected safeFirstArrayElement<T = any>(arr: T[]) {
     if (arr && arr.length > 0) {
       return arr[0];
     }
@@ -608,7 +633,6 @@ export class ResolverBase {
   }
 
   protected GetUserFromEmail(email: string): UserInfo | undefined {
-    const md = new Metadata();
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === email.toLowerCase().trim());
   }
   protected GetUserFromPayload(userPayload: UserPayload): UserInfo | undefined {
@@ -621,7 +645,6 @@ export class ResolverBase {
     if (!userPayload.email) 
       return undefined;
 
-    const md = new Metadata();
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
   }
 
@@ -668,18 +691,19 @@ export class ResolverBase {
     }
   }
 
-  protected async CreateRecord(entityName: string, input: any, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
-    if (await this.BeforeCreate(dataSource, input)) {
+  protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
-      const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+      const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       entityObject.NewRecord();
       entityObject.SetMany(input);
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
+      // Pass the transactionScopeId from the user payload to the save operation
       if (await entityObject.Save()) {
         // save worked, fire the AfterCreate event and then return all the data
-        await this.AfterCreate(dataSource, input); // fire event
+        await this.AfterCreate(provider, input); // fire event
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       }
       // save failed, return null
@@ -688,17 +712,16 @@ export class ResolverBase {
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
-  protected async BeforeCreate(dataSource: sql.ConnectionPool, input: any): Promise<boolean> {
+  protected async BeforeCreate(provider: DatabaseProviderBase, input: any): Promise<boolean> {
     return true;
   }
-  protected async AfterCreate(dataSource: sql.ConnectionPool, input: any) {}
+  protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
-  protected async UpdateRecord(entityName: string, input: any, dataSource: sql.ConnectionPool, userPayload: UserPayload, pubSub: PubSubEngine) {
-    if (await this.BeforeUpdate(dataSource, input)) {
+  protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
-      const md = new Metadata();
       const userInfo = this.GetUserFromPayload(userPayload);
-      const entityObject = await md.GetEntityObject(entityName, userInfo);
+      const entityObject = await provider.GetEntityObject(entityName, userInfo);
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
@@ -722,7 +745,7 @@ export class ResolverBase {
           // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
-            this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject);
+            await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
             entityObject.SetMany(input);
@@ -747,9 +770,10 @@ export class ResolverBase {
       }
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
+      
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
-        await this.AfterUpdate(dataSource, input); // fire event
+        await this.AfterUpdate(provider, input); // fire event
         
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       } else {
@@ -770,7 +794,7 @@ export class ResolverBase {
    *
    * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
    */
-  protected TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity) {
+  protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
     // for each item in the oldValues array, add it to the clientOldValues object
@@ -878,17 +902,48 @@ export class ResolverBase {
       });
 
       // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
-      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to throw an error
+      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to log a warning but allow the save to continue
       const overlap = clientDifferences.filter((cd) => dbDifferences.find((dd) => dd.FieldName === cd.FieldName));
       if (overlap.length > 0) {
         const msg = {
           Message:
-            'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Update operation cancelled.',
+            'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Save operation continued with warning.',
           ClientDifferences: clientDifferences,
           DBDifferences: dbDifferences,
           Overlap: overlap,
         };
-        throw new Error(JSON.stringify(msg));
+        
+        // Log as warning to console and ErrorLog table instead of throwing error
+        console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
+        LogError({
+          service: 'ResolverBase',
+          operation: 'TestAndSetClientOldValuesToDBValues',
+          error: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
+          details: {
+            entityName: entityObject.EntityInfo.Name,
+            clientDifferences: clientDifferences,
+            dbDifferences: dbDifferences,
+            overlap: overlap
+          }
+        });
+
+        // Create ErrorLog record in the database
+        try {
+          const md = new Metadata();
+          const errorLogEntity = await md.GetEntityObject<ErrorLogEntity>('Error Logs', contextUser);
+          errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
+          errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
+          errorLogEntity.Status = 'Warning';
+          errorLogEntity.Category = 'Entity Save';
+          errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
+          
+          const saveResult = await errorLogEntity.Save();
+          if (!saveResult) {
+            console.error('Failed to save ErrorLog record');
+          }
+        } catch (errorLogError) {
+          console.error('Error creating ErrorLog record:', errorLogError);
+        }
       }
     }
 
@@ -901,20 +956,20 @@ export class ResolverBase {
     entityName: string,
     key: CompositeKey,
     options: DeleteOptionsInput,
-    dataSource: sql.ConnectionPool,
+    provider: DatabaseProviderBase,
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
-    if (await this.BeforeDelete(dataSource, key)) {
+    if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
-      const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+      const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       await entityObject.InnerLoad(key);
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-
+      
       if (await entityObject.Delete(options)) {
-        await this.AfterDelete(dataSource, key); // fire event
+        await this.AfterDelete(provider, key); // fire event
         return returnValue;
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
@@ -929,14 +984,14 @@ export class ResolverBase {
   }
 
   // Before/After DELETE Event Hooks for Sub-Classes to Override
-  protected async BeforeDelete(dataSource: sql.ConnectionPool, key: CompositeKey): Promise<boolean> {
+  protected async BeforeDelete(provider: DatabaseProviderBase, key: CompositeKey): Promise<boolean> {
     return true;
   }
-  protected async AfterDelete(dataSource: sql.ConnectionPool, key: CompositeKey) {}
+  protected async AfterDelete(provider: DatabaseProviderBase, key: CompositeKey) {}
 
   // Before/After UPDATE Event Hooks for Sub-Classes to Override
-  protected async BeforeUpdate(dataSource: sql.ConnectionPool, input: any): Promise<boolean> {
+  protected async BeforeUpdate(provider: DatabaseProviderBase, input: any): Promise<boolean> {
     return true;
   }
-  protected async AfterUpdate(dataSource: sql.ConnectionPool, input: any) {}
+  protected async AfterUpdate(provider: DatabaseProviderBase, input: any) {}
 }

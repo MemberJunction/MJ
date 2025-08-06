@@ -1,4 +1,4 @@
-import { BaseEmbeddings, Embeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult } from '@memberjunction/ai';
+import { BaseEmbeddings, Embeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import ModelClient from "@azure-rest/ai-inference";
 import { AzureKeyCredential } from "@azure/core-auth";
@@ -131,6 +131,10 @@ export class AzureEmbedding extends BaseEmbeddings {
         } catch (error) {
             const endTime = new Date();
             
+            // Log error details for debugging
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'Azure');
+            console.error('Azure embedding error:', errorInfo);
+            
             // Return error result
             const result: EmbedTextResult = {
                 object: 'object',
@@ -205,6 +209,10 @@ export class AzureEmbedding extends BaseEmbeddings {
             return result;
         } catch (error) {
             const endTime = new Date();
+            
+            // Log error details for debugging
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'Azure');
+            console.error('Azure embedding error:', errorInfo);
             
             // Return error result
             const result: EmbedTextsResult = {

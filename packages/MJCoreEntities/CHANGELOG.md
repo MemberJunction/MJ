@@ -1,5 +1,252 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.81.0
+
+### Minor Changes
+
+- e623f99: added DisplayName to Entities entity
+- 971c5d4: feat: implement query audit logging and TTL-based caching
+
+  Add comprehensive audit logging and caching capabilities to the
+  MemberJunction Query system:
+
+  - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
+    granular audit control
+  - Implement TTL-based result caching with LRU eviction strategy for
+    improved performance
+  - Add cache configuration columns to Query and QueryCategory entities
+  - Support category-level cache configuration inheritance
+  - Update GraphQL resolvers to handle new audit and cache fields
+  - Refactor RunQuery method into logical helper methods for better
+    maintainability
+  - Follow established RunView pattern for fire-and-forget audit logging
+
+### Patch Changes
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/core@2.80.1
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Minor Changes
+
+- d03dfae: migration
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+- Updated dependencies [7c5f844]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Minor Changes
+
+- 4bf2634: migrations
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Minor Changes
+
+- 06088e5: Queries Entity - Cascade Deletes Turned On
+
+### Patch Changes
+
+- @memberjunction/core@2.78.0
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
+
+  - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
+  - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
+  - For database providers (server-side), delete operations are wrapped in
+    BeginTransaction/CommitTransaction/RollbackTransaction
+  - For network providers (client-side), deletes pass through as cascade handling occurs server-side
+  - Ensures atomicity of cascade delete operations
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Minor Changes
+
+- 4b27b3c: migration file so minor bump
+- ffda243: migration
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/core@2.75.0
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Minor Changes
+
+- b70301e: migrations
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- e99336f: UI tweaks
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Minor Changes
+
+- 636b6ee: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.72.0
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/core@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/core@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/core@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/core@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Minor Changes
+
+- b029c5d: Added fields to AIAgent table
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Minor Changes
+
+- e775f2b: Found bug in metadata extraction from SQL Server, fixed and migration to capture changes for 2.64.0
+
+### Patch Changes
+
+- @memberjunction/core@2.64.0
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/core@2.63.1
+
+## 2.63.0
+
+### Minor Changes
+
+- 28e8a85: Migration included to modify the AIAgentRun table, so minor bump
+
+### Patch Changes
+
+- @memberjunction/core@2.63.0
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- c995603: Better Error Handling and Failover in AI core and Promts
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

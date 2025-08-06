@@ -130,6 +130,20 @@ import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FinalPayloadValidationResult"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FinalPayloadValidationMessages"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

@@ -89,8 +89,6 @@
               <div class="loading-content">
                 <div class="loading-spinner">
                   <div class="spinner-ring"></div>
-                  <div class="spinner-ring"></div>
-                  <div class="spinner-ring"></div>
                 </div>
                 <div class="loading-text">Loading agents...</div>
               </div>
@@ -190,16 +188,18 @@
 
                       <!-- Card Actions -->
                       <div class="card-actions">
-                        <button 
-                          type="button" 
-                          class="action-btn"
-                          (click)="openAgentRecord(agent.ID)"
-                          title="Open Agent">
-                          <i class="fa-solid fa-external-link-alt"></i>
-                          Open
-                        </button>
+                        @if (UserCanReadAgents) {
+                          <button 
+                            type="button" 
+                            class="action-btn"
+                            (click)="openAgentRecord(agent.ID)"
+                            title="Open Agent">
+                            <i class="fa-solid fa-external-link-alt"></i>
+                            Open
+                          </button>
+                        }
                         
-                        @if (agent.Status === 'Active') {
+                        @if (agent.Status === 'Active' && UserCanReadAgents) {
                           <button 
                             type="button" 
                             class="action-btn action-btn-primary"
@@ -260,14 +260,16 @@
                           </td>
                           <td>
                             <div class="table-actions">
-                              <button 
-                                type="button" 
-                                class="action-btn-small"
-                                (click)="openAgentRecord(agent.ID)"
-                                title="Open Agent">
-                                <i class="fa-solid fa-external-link-alt"></i>
-                              </button>
-                              @if (agent.Status === 'Active') {
+                              @if (UserCanReadAgents) {
+                                <button 
+                                  type="button" 
+                                  class="action-btn-small"
+                                  (click)="openAgentRecord(agent.ID)"
+                                  title="Open Agent">
+                                  <i class="fa-solid fa-external-link-alt"></i>
+                                </button>
+                              }
+                              @if (agent.Status === 'Active' && UserCanReadAgents) {
                                 <button 
                                   type="button" 
                                   class="action-btn-small primary"

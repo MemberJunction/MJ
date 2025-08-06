@@ -1,0 +1,253 @@
+<div class="sub-agent-dialog">
+  <div class="sub-agent-header">
+    <h2 class="dialog-title">
+      <i class="fa-solid fa-robot"></i>
+      {{ config.title || 'Create New Sub-Agent' }}
+    </h2>
+    @if (config.parentAgentName) {
+      <p class="parent-info">
+        <i class="fa-solid fa-link"></i>
+        Sub-agent of: <strong>{{ config.parentAgentName }}</strong>
+      </p>
+    }
+  </div>
+
+  @if (isLoading$ | async) {
+    <div class="loading-container">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>Loading sub-agent creation form...</span>
+    </div>
+  } @else {
+    <form [formGroup]="subAgentForm" class="sub-agent-form">
+      <!-- Basic Information Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-info-circle"></i>
+          Basic Information
+        </h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" formControlName="name" class="form-control" placeholder="Enter sub-agent name">
+          </div>
+          
+          <div class="form-group">
+            <label for="typeID">Type *</label>
+            <select id="typeID" formControlName="typeID" class="form-control">
+              <option value="">Select agent type...</option>
+              @for (type of availableAgentTypes$ | async; track type.ID) {
+                <option [value]="type.ID">{{ type.Name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" formControlName="description" class="form-control" rows="2" placeholder="Enter description"></textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="status">Status</label>
+            <select id="status" formControlName="status" class="form-control">
+              <option value="Pending">Pending</option>
+              <option value="Active">Active</option>
+              <option value="Disabled">Disabled</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="executionMode">Execution Mode</label>
+            <select id="executionMode" formControlName="executionMode" class="form-control">
+              <option value="Sequential">Sequential</option>
+              <option value="Parallel">Parallel</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Purpose & Messages Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-bullseye"></i>
+          Purpose & Messages
+        </h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="purpose">Purpose</label>
+            <input type="text" id="purpose" formControlName="purpose" class="form-control" placeholder="Enter the purpose of this sub-agent">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="userMessage">User Message</label>
+            <textarea id="userMessage" formControlName="userMessage" class="form-control" rows="3" placeholder="Enter user message"></textarea>
+          </div>
+        </div>
+
+        <!-- System Message field removed - property does not exist on AIAgentEntity -->
+      </div>
+
+      <!-- Model Configuration Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-cogs"></i>
+          Model Configuration
+        </h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="modelSelectionMode">Model Selection Mode</label>
+            <select id="modelSelectionMode" formControlName="modelSelectionMode" class="form-control">
+              <option value="Agent Type">Agent Type</option>
+              <option value="Agent">Agent</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="temperature">Temperature</label>
+            <input type="number" id="temperature" formControlName="temperature" class="form-control" min="0" max="2" step="0.1">
+          </div>
+          
+          <div class="form-group">
+            <label for="topP">Top P</label>
+            <input type="number" id="topP" formControlName="topP" class="form-control" min="0" max="1" step="0.1">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="topK">Top K</label>
+            <input type="number" id="topK" formControlName="topK" class="form-control" min="1" max="100" step="1">
+          </div>
+          
+          <div class="form-group">
+            <label for="maxTokens">Max Tokens</label>
+            <input type="number" id="maxTokens" formControlName="maxTokens" class="form-control" min="1" max="32000" step="1">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="enableCaching">
+              <input type="checkbox" id="enableCaching" formControlName="enableCaching">
+              Enable Caching
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label for="cacheTTL">Cache TTL (seconds)</label>
+            <input type="number" id="cacheTTL" formControlName="cacheTTL" class="form-control" min="60" max="86400" step="60">
+          </div>
+        </div>
+      </div>
+
+      <!-- Prompts Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-comments"></i>
+          Prompts ({{ linkedPromptCount }})
+        </h3>
+        
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-sm" (click)="addPrompt()">
+            <i class="fa-solid fa-plus"></i>
+            Add Existing Prompt
+          </button>
+          <button type="button" class="btn btn-success btn-sm" (click)="createNewPrompt()">
+            <i class="fa-solid fa-plus"></i>
+            Create New Prompt
+          </button>
+        </div>
+
+        @if (linkedPrompts.length > 0) {
+          <div class="linked-items">
+            @for (prompt of linkedPrompts; track prompt.ID) {
+              <div class="linked-item prompt-item">
+                <div class="item-info">
+                  <i class="fa-solid fa-comments"></i>
+                  <span class="item-name">{{ prompt.Name }}</span>
+                  @if (prompt.Description) {
+                    <span class="item-description">{{ prompt.Description }}</span>
+                  }
+                </div>
+                <button type="button" class="btn btn-danger btn-xs" (click)="removePrompt(prompt)">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-comments"></i>
+            <p>No prompts added yet. Click the buttons above to add prompts.</p>
+          </div>
+        }
+      </div>
+
+      <!-- Actions Section -->
+      <div class="form-section">
+        <h3 class="section-title">
+          <i class="fa-solid fa-bolt"></i>
+          Actions ({{ linkedActionCount }})
+        </h3>
+        
+        <div class="section-actions">
+          <button type="button" class="btn btn-primary btn-sm" (click)="addAction()">
+            <i class="fa-solid fa-plus"></i>
+            Add Action
+          </button>
+        </div>
+
+        @if (linkedActions.length > 0) {
+          <div class="linked-items">
+            @for (action of linkedActions; track action.ID) {
+              <div class="linked-item action-item">
+                <div class="item-info">
+                  <i class="fa-solid fa-bolt"></i>
+                  <span class="item-name">{{ action.Name }}</span>
+                  @if (action.Description) {
+                    <span class="item-description">{{ action.Description }}</span>
+                  }
+                </div>
+                <button type="button" class="btn btn-danger btn-xs" (click)="removeAction(action)">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-bolt"></i>
+            <p>No actions added yet. Click the button above to add actions.</p>
+          </div>
+        }
+      </div>
+    </form>
+  }
+
+  <!-- Dialog Actions -->
+  <div class="dialog-actions">
+    <button type="button" class="btn btn-secondary" (click)="cancel()" [disabled]="isSaving$ | async">
+      <i class="fa-solid fa-times"></i>
+      Cancel
+    </button>
+    <button type="button" class="btn btn-primary" (click)="save()" [disabled]="(isSaving$ | async) || !subAgentForm.valid">
+      @if (isSaving$ | async) {
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Creating...
+      } @else {
+        <i class="fa-solid fa-save"></i>
+        Create Sub-Agent
+      }
+    </button>
+  </div>
+</div>

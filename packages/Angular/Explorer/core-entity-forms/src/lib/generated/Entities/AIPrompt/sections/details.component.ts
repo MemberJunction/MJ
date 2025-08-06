@@ -330,6 +330,41 @@ import { AIPromptEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="FailoverStrategy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverMaxAttempts"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverDelaySeconds"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverModelStrategy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FailoverErrorScope"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Template"
             Type="textbox"
             [EditMode]="EditMode"

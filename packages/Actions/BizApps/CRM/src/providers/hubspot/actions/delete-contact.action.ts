@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to delete/archive a contact in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'DeleteContactAction')
+@RegisterClass(BaseAction, 'DeleteContactAction')
 export class DeleteContactAction extends HubSpotBaseAction {
     /**
      * Delete/archive a contact

@@ -1,0 +1,25 @@
+{
+  "name": "react-test-example",
+  "version": "1.0.0",
+  "description": "Example React components for testing with MemberJunction test harness",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.22.0",
+    "@babel/preset-env": "^7.22.0",
+    "@babel/preset-react": "^7.22.0",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "babel-jest": "^29.5.0",
+    "jest": "^29.5.0",
+    "jest-environment-jsdom": "^29.5.0"
+  }
+}

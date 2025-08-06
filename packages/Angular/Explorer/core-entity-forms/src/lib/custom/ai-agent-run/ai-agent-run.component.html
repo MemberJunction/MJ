@@ -44,29 +44,52 @@
           <span class="label">Duration</span>
           <span class="value">{{ calculateDuration(record.StartedAt, record.CompletedAt) }}</span>
         </div>
-        <div class="stat" *ngIf="record.Success !== null">
+        <div class="stat" *ngIf="record.Success !== null && record.CompletedAt !== null">
           <span class="label">Result</span>
           <span class="value" [class.success]="record.Success" [class.error]="!record.Success">
             {{ record.Success ? 'Success' : 'Failed' }}
           </span>
         </div>
-        <div class="stat" *ngIf="record.TotalTokensUsed">
+        <div class="stat" *ngIf="costMetrics && (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) > 0">
           <span class="label">Tokens</span>
-          <span class="value">{{ record.TotalTokensUsed | number:'1.0-0' }}</span>
+          <span class="value" *ngIf="!costMetrics.isLoading">{{ (costMetrics.totalTokensInput + costMetrics.totalTokensOutput) | number:'1.0-0' }}</span>
+          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
-        <div class="stat" *ngIf="record.TotalCost != null && record.TotalCost > 0">
+        <div class="stat" *ngIf="costMetrics && costMetrics.totalCost > 0">
           <span class="label">Cost</span>
-          <span class="value">${{ record.TotalCost | number:'1.2-4' }}</span>
+          <span class="value" *ngIf="!costMetrics.isLoading">${{ costMetrics.totalCost | number:'1.2-4' }}</span>
+          <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
+        </div>
+      </div>
+      
+      <!-- Configuration Bar (shown below header stats when ConfigurationID exists) -->
+      <div class="configuration-bar" *ngIf="record.ConfigurationID">
+        <div class="config-item">
+          <i class="fas fa-cog"></i>
+          <div class="config-content">
+            <div class="config-label">Configuration</div>
+            <div class="config-value">
+              <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Configurations', record.ConfigurationID)">
+                {{ record.Configuration || 'Unknown' }}
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="activeTab = 'timeline'">
+      <button class="tab" [class.active]="activeTab === 'timeline'" (click)="changeTab('timeline')">
         <i class="fas fa-stream"></i> Timeline
       </button>
-      <button class="tab" [class.active]="activeTab === 'details'" (click)="activeTab = 'details'">
+      <button class="tab" [class.active]="activeTab === 'visualization'" (click)="changeTab('visualization')">
+        <i class="fas fa-diagram-project"></i> Visualization
+      </button>
+      <button class="tab" [class.active]="activeTab === 'analytics'" (click)="changeTab('analytics')">
+        <i class="fas fa-chart-line"></i> Analytics
+      </button>
+      <button class="tab" [class.active]="activeTab === 'details'" (click)="changeTab('details')">
         <i class="fas fa-info-circle"></i> Details
       </button>
     </div>
@@ -80,98 +103,124 @@
           <kendo-splitter-pane [min]="'400px'">
             <mj-ai-agent-run-timeline
               [aiAgentRunId]="record.ID"
+              [dataHelper]="dataHelper"
               [autoRefresh]="record.Status === 'Running'"
-              [refreshInterval]="3000"
+              [refreshInterval]="30000"
               (itemSelected)="selectTimelineItem($event)"
-              (navigateToEntity)="navigateToEntityRecord($event)">
+              (navigateToEntity)="navigateToEntityRecord($event)"
+              (agentRunCompleted)="onAgentRunCompleted($event)">
             </mj-ai-agent-run-timeline>
           </kendo-splitter-pane>
           
           <!-- JSON Detail Pane -->
           <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
-            <div class="json-detail-pane" *ngIf="selectedTimelineItem">
-              <div class="json-pane-header">
-                <h3>
-                  <i class="fas" [ngClass]="selectedTimelineItem.icon"></i>
-                  {{ selectedTimelineItem.title }}
-                </h3>
-                <button class="btn-icon" (click)="closeJsonPanel()" title="Close">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-              <div class="json-pane-content">
-                <div class="json-meta">
-                  <div class="meta-item">
-                    <label>Type</label>
-                    <span>{{ selectedTimelineItem.type }}</span>
-                  </div>
-                  <div class="meta-item">
-                    <label>Status</label>
-                    <span class="status-badge small" [attr.data-status]="selectedTimelineItem.status">
-                      {{ selectedTimelineItem.status }}
-                    </span>
-                  </div>
-                  <div class="meta-item">
-                    <label>Duration</label>
-                    <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
-                  </div>
-                </div>
-                
-                <!-- Action-specific link -->
-                <div class="action-link" *ngIf="selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID">
-                  <button class="btn-link" (click)="navigateToActionLog(selectedTimelineItem.data.ID)">
-                    <i class="fas fa-external-link-alt"></i> View Action Execution Log
-                  </button>
-                </div>
-                
-                <div class="json-viewer">
-                  <div class="json-toolbar">
-                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(getSelectedItemJson())">
-                      <i class="fas fa-copy"></i>
-                    </button>
-                  </div>
-                  <mj-code-editor
-                    [(ngModel)]="selectedItemJsonString"
-                    [language]="'json'"
-                    [readonly]="true"
-                    style="height: calc(100% - 160px); width: 100%;">
-                  </mj-code-editor>
-                </div>
-              </div>
-            </div>
+            <mj-ai-agent-run-step-detail
+              [selectedTimelineItem]="selectedTimelineItem"
+              (closePanel)="closeJsonPanel()"
+              (navigateToActionLog)="navigateToActionLog($event)"
+              (copyToClipboard)="copyToClipboard($event)">
+            </mj-ai-agent-run-step-detail>
           </kendo-splitter-pane>
         </kendo-splitter>
       </div>
 
+      <!-- Visualization Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'visualization'" style="height: 100%;">
+        <mj-ai-agent-run-visualization
+          #visualizationComponent
+          [aiAgentRunId]="record.ID"
+          [dataHelper]="dataHelper"
+          *ngIf="visualizationLoaded">
+        </mj-ai-agent-run-visualization>
+      </div>
+
+      <!-- Analytics Tab -->
+      <div class="tab-content" *ngIf="activeTab === 'analytics'" style="height: 100%;">
+        <mj-ai-agent-run-analytics 
+          #analyticsComponent
+          [agentRunId]="record.ID"
+          *ngIf="analyticsLoaded">
+        </mj-ai-agent-run-analytics>
+      </div>
+
       <!-- Details Tab -->
       <div class="tab-content" *ngIf="activeTab === 'details'">
-        <kendo-panelbar>
+        <kendo-panelbar [keepItemContent]="true">
           <kendo-panelbar-item title="General Information" [expanded]="true">
             <ng-template kendoPanelBarContent>
               <div class="details-grid">
                 <div class="detail-item">
-                  <label>Run ID</label>
-                  <span>{{ record.ID }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Agent ID</label>
-                  <span>{{ record.AgentID }}</span>
-                </div>
-                <div class="detail-item">
-                  <label>Agent Name</label>
-                  <span>{{ agent?.Name || 'N/A' }}</span>
+                  <label>Agent</label>
+                  <span>
+                    <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
+                      {{ agent?.Name || 'N/A' }}
+                    </a>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>Parent Run ID</label>
-                  <span>{{ record.ParentRunID || 'None (Root)' }}</span>
+                  <span>
+                    <a *ngIf="record.ParentRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.ParentRunID)">
+                      {{ record.ParentRunID }}
+                    </a>
+                    <span *ngIf="!record.ParentRunID">None (Root)</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Last Run ID</label>
+                  <span>
+                    <a *ngIf="record.LastRunID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agent Runs', record.LastRunID)">
+                      {{ record.LastRunID }}
+                    </a>
+                    <span *ngIf="!record.LastRunID">None</span>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>Conversation ID</label>
-                  <span>{{ record.ConversationID || 'N/A' }}</span>
+                  <span>
+                    <a *ngIf="record.ConversationID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Conversations', record.ConversationID)">
+                      {{ record.ConversationID }}
+                    </a>
+                    <span *ngIf="!record.ConversationID">N/A</span>
+                  </span>
                 </div>
                 <div class="detail-item">
                   <label>User</label>
-                  <span>{{ record.User || 'N/A' }}</span>
+                  <span>
+                    <a *ngIf="record.UserID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Users', record.UserID)">
+                      {{ record.User || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.UserID">N/A</span>
+                  </span>
+                </div>
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Settings">
+            <ng-template kendoPanelBarContent>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Override Model</label>
+                  <span>
+                    <a *ngIf="record.OverrideModelID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Models', record.OverrideModelID)">
+                      {{ record.OverrideModel || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideModelID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Override Vendor</label>
+                  <span>
+                    <a *ngIf="record.OverrideVendorID" href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
+                      {{ record.OverrideVendor || 'N/A' }}
+                    </a>
+                    <span *ngIf="!record.OverrideVendorID">N/A</span>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Verbose Logging</label>
+                  <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
                 </div>
               </div>
             </ng-template>
@@ -219,6 +268,10 @@
                   <label>Total Cost</label>
                   <span>{{ record.TotalCost != null ? ('$' + (record.TotalCost | number:'1.2-4')) : 'N/A' }}</span>
                 </div>
+                <div class="detail-item">
+                  <label>Total Prompt Iterations</label>
+                  <span>{{ record.TotalPromptIterations != null ? (record.TotalPromptIterations | number:'1.0-0') : 'N/A' }}</span>
+                </div>
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -226,12 +279,56 @@
           <kendo-panelbar-item title="Result" *ngIf="record.Result">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedResult"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedResult"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading result data...
+                  </div>
+                }
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Starting Payload" *ngIf="record.StartingPayload">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedStartingPayload"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading payload data...
+                  </div>
+                }
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Execution Data" *ngIf="record.Data">
+            <ng-template kendoPanelBarContent>
+              <div class="result-viewer">
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedData"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading execution data...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>
@@ -239,12 +336,42 @@
           <kendo-panelbar-item title="Final Payload" *ngIf="record.FinalPayload">
             <ng-template kendoPanelBarContent>
               <div class="result-viewer">
-                <mj-code-editor
-                  [ngModel]="parsedFinalPayload"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="height: 300px; width: 100%;">
-                </mj-code-editor>
+                @if (isParsingComplete) {
+                  <mj-code-editor
+                    [ngModel]="parsedFinalPayload"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading final payload data...
+                  </div>
+                }
+              </div>
+            </ng-template>
+          </kendo-panelbar-item>
+          
+          <kendo-panelbar-item title="Payload Diff" *ngIf="showPayloadDiff">
+            <ng-template kendoPanelBarContent>
+              <div style="padding: 20px; background: #f8f9fa;">
+                @if (isParsingComplete) {
+                  <mj-deep-diff
+                    [oldValue]="startingPayloadObject"
+                    [newValue]="finalPayloadObject"
+                    [title]="''"
+                    [showSummary]="true"
+                    [showUnchanged]="false"
+                    [expandAll]="false"
+                    [maxDepth]="10"
+                    [maxStringLength]="200"
+                    [treatNullAsUndefined]="true">
+                  </mj-deep-diff>
+                } @else {
+                  <div style="padding: 20px; text-align: center; color: #666;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading payload diff...
+                  </div>
+                }
               </div>
             </ng-template>
           </kendo-panelbar-item>

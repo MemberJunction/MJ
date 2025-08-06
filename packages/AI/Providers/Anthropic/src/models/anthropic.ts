@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
-    SummarizeResult, ModelUsage } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -173,7 +173,7 @@ export class AnthropicLLM extends BaseLLM {
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens || 64000, // large default for max_tokens if not provided
+                max_tokens: params.maxOutputTokens || 32000, // large default for max_tokens if not provided
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
@@ -250,6 +250,9 @@ export class AnthropicLLM extends BaseLLM {
                 content = content.trim();
             }
             
+            // Create ModelUsage with cost information if available
+            const usage = new ModelUsage(result.usage.input_tokens, result.usage.output_tokens);
+            
             const chatResult: ChatResult = {
                 data: {
                     choices: [
@@ -263,7 +266,7 @@ export class AnthropicLLM extends BaseLLM {
                             index: 0
                         }
                     ],
-                    usage: new ModelUsage(result.usage.input_tokens, result.usage.output_tokens)
+                    usage: usage
                 },
                 success: true,
                 statusText: 'success',
@@ -282,6 +285,22 @@ export class AnthropicLLM extends BaseLLM {
                 };
             }
             
+            // Add model-specific response details
+            chatResult.modelSpecificResponseDetails = {
+                provider: 'anthropic',
+                model: result.model,
+                id: result.id,
+                type: result.type,
+                role: result.role,
+                stopReason: result.stop_reason,
+                stopSequence: result.stop_sequence,
+                usage: {
+                    cached_tokens: result.usage.cached_tokens,
+                    thinking_tokens: result.thinking_usage?.output_tokens,
+                    thinking_budget_tokens: result.thinking_usage?.budget_tokens
+                }
+            };
+            
             return chatResult;   
         }
         catch (e) {
@@ -297,7 +316,8 @@ export class AnthropicLLM extends BaseLLM {
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 errorMessage: e?.message,
-                exception: {exception: e, llmResult: result}
+                exception: {exception: e, llmResult: result},
+                errorInfo: ErrorAnalyzer.analyzeError(e, 'Anthropic')
             };
         }
     }

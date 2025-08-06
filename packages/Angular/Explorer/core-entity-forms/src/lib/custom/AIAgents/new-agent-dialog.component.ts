@@ -6,6 +6,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { AIAgentEntity, AIModelEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 export interface NewAgentConfig {
   parentAgentId?: string;
@@ -16,7 +17,7 @@ export interface NewAgentConfig {
 @Component({
   selector: 'mj-new-agent-dialog',
   templateUrl: './new-agent-dialog.component.html',
-  styleUrls: ['./new-agent-dialog.component.scss']
+  styleUrls: ['./new-agent-dialog.component.css']
 })
 export class NewAgentDialogComponent implements OnInit {
   @Input() config: NewAgentConfig = {
@@ -58,36 +59,22 @@ export class NewAgentDialogComponent implements OnInit {
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
-      const [modelsResult, typesResult] = await rv.RunViews([
-        {
-          EntityName: 'AI Models',
-          ExtraFilter: 'IsActive = 1',
-          OrderBy: 'Priority, Name',
-          ResultType: 'entity_object',
-          MaxRows: 1000
-        },
-        {
-          EntityName: 'AI Agent Types',
-          OrderBy: 'Name',
-          ResultType: 'entity_object',
-          MaxRows: 100
-        }
-      ]);
+      const engine = AIEngineBase.Instance;
+      await engine.Config(false);
+      const models = engine.Models;
+      models.sort ((a, b) => { 
+        return a.Name.localeCompare(b.Name);
+      });
       
-      if (modelsResult.Success) {
-        this.models$.next(modelsResult.Results as AIModelEntity[] || []);
-        
-        // Pre-select first model if available
-        const models = modelsResult.Results as AIModelEntity[];
-        if (models && models.length > 0) {
-          this.form.patchValue({ modelId: models[0].ID });
-        }
+      this.models$.next(models || []);
+      
+      // Pre-select first model if available
+      if (models && models.length > 0) {
+        this.form.patchValue({ modelId: models[0].ID });
       }
       
-      if (typesResult.Success) {
-        this.agentTypes$.next(typesResult.Results as AIAgentTypeEntity[] || []);
-      }
+      const agentTypes = engine.AgentTypes;
+      this.agentTypes$.next(agentTypes as AIAgentTypeEntity[] || []);
     } catch (error) {
       console.error('Error loading data:', error);
       this.showError('Failed to load required data');

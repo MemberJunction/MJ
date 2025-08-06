@@ -18,48 +18,36 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isSubAgent(): boolean {
-    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'subagent');
+    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
   }
 
   get canNavigateToEntity(): boolean {
     // For steps, check if it's a type that has a target and if TargetLogID exists
     if (this.item.type === 'step' && this.item.data) {
       const stepType = this.item.data.StepType;
-      return (stepType === 'execute_action' || stepType === 'action' || stepType === 'prompt' || stepType === 'subagent') 
+      return (stepType === 'Actions' || stepType === 'Prompt' || stepType === 'Sub-Agent') 
         && !!this.item.data.TargetLogID;
     }
-    // For direct types (from related entities)
-    return this.item.type === 'action' || this.item.type === 'prompt' || this.item.type === 'subrun';
+    return false;
   }
 
   get entityNavigationText(): string {
     // For step types, check the StepType
     if (this.item.type === 'step' && this.item.data) {
       const stepType = this.item.data.StepType;
-      switch (stepType) {
-        case 'execute_action':
-        case 'action':
+      switch (stepType.trim().toLowerCase()) {
+        case 'actions':
           return 'View Action Log';
         case 'prompt':
           return 'View Prompt Run';
-        case 'subagent':
+        case 'sub-agent':
           return 'View Agent Run';
         default:
           return 'View Details';
       }
     }
-    
-    // For direct types
-    switch (this.item.type) {
-      case 'action':
-        return 'View Action Log';
-      case 'prompt':
-        return 'View Prompt Run';
-      case 'subrun':
-        return 'View Agent Run';
-      default:
-        return 'View Details';
-    }
+
+    return "";
   }
 
   getStatusIcon(status: string): string {
@@ -78,14 +66,6 @@ export class AIAgentRunStepNodeComponent {
   }
 
   handleExpandToggle(event: Event) {
-    console.log('🔄 StepNode: Expand toggle clicked:', {
-      itemId: this.item.id,
-      itemType: this.item.type,
-      isSubAgent: this.isSubAgent,
-      stepType: this.item.data?.StepType,
-      hasChildren: this.hasChildren,
-      currentExpanded: this.item.isExpanded
-    });
     if (this.isSubAgent) {
       this.expandToggle.emit(event);
     }
@@ -104,15 +84,14 @@ export class AIAgentRunStepNodeComponent {
       recordId = this.item.data.TargetLogID;
       const stepType = this.item.data.StepType;
       
-      switch (stepType) {
-        case 'execute_action':
-        case 'action':
+      switch (stepType.trim().toLowerCase()) {
+        case 'actions':
           entityName = 'Action Execution Logs';
           break;
         case 'prompt':
           entityName = 'MJ: AI Prompt Runs';
           break;
-        case 'subagent':
+        case 'sub-agent':
           entityName = 'MJ: AI Agent Runs';
           break;
       }
@@ -120,14 +99,14 @@ export class AIAgentRunStepNodeComponent {
       // For direct types, use the item ID
       recordId = this.item.id;
       
-      switch (this.item.type) {
-        case 'action':
+      switch (this.item.type.trim().toLowerCase()) {
+        case 'actions':
           entityName = 'Action Execution Logs';
           break;
         case 'prompt':
           entityName = 'MJ: AI Prompt Runs';
           break;
-        case 'subrun':
+        case 'sub-agent':
           entityName = 'MJ: AI Agent Runs';
           break;
       }

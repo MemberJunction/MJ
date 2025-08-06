@@ -11,13 +11,15 @@
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/AgentManager/*",
+    "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
     "packages/Templates/*",
     "packages/Angular/*",
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",
-    "packages/AngularElements/*"
+    "packages/AngularElements/*",
+    "packages/React/*"
   ],
   "scripts": {
     "build": "npm run build:stream",

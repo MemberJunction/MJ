@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -19,6 +19,7 @@ import {
 import { createDownloadUrl, createUploadUrl, deleteObject, moveObject } from '@memberjunction/storage';
 import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -57,8 +58,9 @@ export class FileResolver extends FileResolverBase {
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Check to see if there's already an object with that name
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
     const [sameName] = await this.findBy(
-      context.dataSource,
+      provider,
       'Files',
       { Name: input.Name, ProviderID: input.ProviderID },
       context.userPayload.userRecord

@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve certificates earned by users in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetCertificatesAction')
+@RegisterClass(BaseAction, 'GetCertificatesAction')
 export class GetCertificatesAction extends LearnWorldsBaseAction {
     /**
      * Get certificates for a user or course

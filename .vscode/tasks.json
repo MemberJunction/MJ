@@ -66,6 +66,29 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "Build MetadataSync Extension",
+      "type": "npm",
+      "script": "build",
+      "path": "packages/VSCodeExtensions/MetadataSync",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build AI Packages",
+      "type": "shell",
+      "command": "npm run build --workspace=@memberjunction/ai-prompts && npm run build --workspace=@memberjunction/ai-agents && npm run build --workspace=@memberjunction/ai-cli",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
 import { TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -20,7 +20,7 @@ export interface TemplateEditorConfig {
     templateUrl: './template-editor.component.html',
     styleUrls: ['./template-editor.component.css']
 })
-export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
     @Input() template: TemplateEntity | null = null;
     @Input() config: TemplateEditorConfig = {
         allowEdit: true,
@@ -52,6 +52,7 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
     private _metadata = new Metadata();
+    private activeTimeouts: number[] = [];
     
     constructor(private notificationService: MJNotificationService) {}
 
@@ -60,6 +61,22 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
         this.organizePlaceholdersByCategory();
         if (this.template) {
             await this.loadTemplateContents();
+        }
+    }
+
+    async ngOnChanges(changes: SimpleChanges) {
+        if (changes['template']) {
+            // Template input has changed, reload contents
+            if (this.template) {
+                await this.loadTemplateContents();
+            } else {
+                // Template cleared, reset state
+                this.templateContents = [];
+                this.selectedContentIndex = 0;
+                this.isAddingNewContent = false;
+                this.newTemplateContent = null;
+                this.hasUnsavedChanges = false;
+            }
         }
     }
     
@@ -113,6 +130,10 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+        
+        // Clean up any active timeouts
+        this.activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.activeTimeouts.length = 0;
     }
 
     ngAfterViewInit() {
@@ -121,35 +142,54 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     }
 
     async loadTemplateContents() {
-        if (this.template && this.template.ID) {
-            try {
-                const rv = new RunView();
-                const results = await rv.RunView<TemplateContentEntity>({
-                    EntityName: 'Template Contents',
-                    ExtraFilter: `TemplateID='${this.template.ID}'`,
-                    OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                this.templateContents = results.Results;
-                
-                // If we have contents but no selection, select the first one
-                if (this.templateContents.length > 0 && this.selectedContentIndex === 0) {
-                    this.selectedContentIndex = 0;
+        if (this.template) {
+            // Reset state first
+            this.templateContents = [];
+            this.selectedContentIndex = 0;
+            this.isAddingNewContent = false;
+            this.newTemplateContent = null;
+            this.hasUnsavedChanges = false;
+            
+            if (this.template.IsSaved && this.template.ID) {
+                // Load existing template contents for saved templates
+                try {
+                    const rv = new RunView();
+                    const results = await rv.RunView<TemplateContentEntity>({
+                        EntityName: 'Template Contents',
+                        ExtraFilter: `TemplateID='${this.template.ID}'`,
+                        OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
+                        ResultType: 'entity_object'
+                    });
+                    
+                    this.templateContents = results.Results;
+                } catch (error) {
+                    console.error('Error loading template contents:', error);
                 }
-                
-                // If no template contents exist, create a default one for single-content optimization
-                if (this.templateContents.length === 0) {
-                    await this.createDefaultTemplateContent();
-                }
-
-                // Sync editor value after loading content
-                this.syncEditorValue();
-                this.contentChange.emit(this.templateContents);
-            } catch (error) {
-                console.error('Error loading template contents:', error);
             }
+            
+            // If we have contents but no selection, select the first one
+            if (this.templateContents.length > 0) {
+                this.selectedContentIndex = 0;
+            }
+            
+            // If no template contents exist (either new template or saved template with no content), 
+            // create a default one for single-content optimization
+            if (this.templateContents.length === 0) {
+                await this.createDefaultTemplateContent();
+            }
+
+            // Sync editor value after loading content
+            this.syncEditorValue();
+            this.contentChange.emit(this.templateContents);
         }
+    }
+
+    /**
+     * Public method to refresh the template editor and discard unsaved changes
+     * This should be called when canceling edits to restore the original state
+     */
+    public async refreshAndDiscardChanges() {
+        await this.loadTemplateContents();
     }
 
     async createDefaultTemplateContent() {
@@ -241,7 +281,8 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
         
         const contentToDelete = this.templateContents[index];
         
-        if (contentToDelete.ID) {
+        // Check if the entity is actually saved, not just if it has an ID
+        if (contentToDelete.IsSaved) {
             try {
                 const result = await contentToDelete.Delete();
                 if (result) {
@@ -263,6 +304,7 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
                 }
             } catch (error) {
                 console.error('Error deleting template content:', error);
+                MJNotificationService.Instance.CreateSimpleNotification(`Error deleting template content: ${error}`, 'error');
             }
         } else {
             // Not saved yet, just remove from array
@@ -324,13 +366,29 @@ export class TemplateEditorComponent implements OnInit, OnDestroy, AfterViewInit
     }
 
     /**
+     * Helper method to track setTimeout calls for cleanup
+     */
+    private setTrackedTimeout(callback: () => void, delay: number): number {
+        const timeoutId = setTimeout(() => {
+            // Remove from tracking when it executes
+            const index = this.activeTimeouts.indexOf(timeoutId);
+            if (index > -1) {
+                this.activeTimeouts.splice(index, 1);
+            }
+            callback();
+        }, delay) as any as number;
+        this.activeTimeouts.push(timeoutId);
+        return timeoutId;
+    }
+
+    /**
      * Manually sync the editor value without triggering change events
      */
     private syncEditorValue() {
         // Use Promise.resolve() to wait for the next microtask after any pending changes
         Promise.resolve().then(() => {
-            // Then setTimeout for the next macrotask to ensure DOM is updated
-            setTimeout(() => {
+            // Then tracked setTimeout for the next macrotask to ensure DOM is updated
+            this.setTrackedTimeout(() => {
                 if (!this.codeEditor) {
                     return;
                 }

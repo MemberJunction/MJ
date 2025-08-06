@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { TikTokBaseAction } from '../tiktok-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Comment data structure
@@ -22,7 +23,7 @@ interface TikTokComment {
 /**
  * Action to get comments from TikTok videos
  */
-@RegisterClass(TikTokBaseAction, 'GetCommentsAction')
+@RegisterClass(BaseAction, 'GetCommentsAction')
 export class GetCommentsAction extends TikTokBaseAction {
     
     /**

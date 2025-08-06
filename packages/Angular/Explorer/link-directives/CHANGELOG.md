@@ -1,5 +1,155 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.81.0
+
+### Patch Changes
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/core@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [7c5f844]
+  - @memberjunction/core@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/core@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [7dabb22]
+  - @memberjunction/core@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/core@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [d316670]
+  - @memberjunction/core@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/core@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/core@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [5a127bb]
+  - @memberjunction/core@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- @memberjunction/core@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+  - @memberjunction/core@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/core@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/core@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/core@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- @memberjunction/core@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/core@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/core@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

@@ -1,0 +1,75 @@
+name: Generate Release Notes
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened]
+    branches: [main]
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Generate Release Notes with Claude
+        id: claude-release-notes
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-0
+
+          direct_prompt: |
+            You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.
+
+            ## Process
+
+            1. Compare next HEAD to the latest published version tag (using repo tags, `git fetch --tags && git --no-pager tag -l "v*" --sort=-version:refname | head -n1`) to get the changes in this release.
+            2. Figure out the next version (whether patch or minor) using `npx changeset status --since main`
+            3. Use both the diff contents and git commit messages to build up the context.
+            - The .changeset/ dir also has more focused human-entered notes you can use.
+            4. Write the release notes to tmp/release-<version>.md following the template given below.
+            - You can add/remove bullets as needed and omit sections if there are no bullets.
+            5. Use the GitHub MCP server to update the PR description with the release notes.
+
+            ## Steps to complete:
+            1. **Get current PR details**: Use `mcp__github__get_pull_request` to get the current PR description
+            2. **Generate release notes**: Follow the process above to create release notes
+            3. **Update PR title and description**: Use `mcp__github__update_pull_request` to:
+               - Set the PR title to the version number (e.g., "v2.73.0")
+               - Set the PR description to the generated release notes (replace entire description)
+
+            <template>
+            # <6-10 word summary of the entire release>
+
+            ## New Features
+            - <Detail>
+            - <Detail>
+            - <Detail>
+
+            ## Improvements
+            - <Detail>
+            - <Detail>
+            - <Detail>
+
+            ## Bug Fixes
+            - <Detail>
+            - <Detail>
+            - <Detail>
+            </template>
+
+            The generated release notes following the template above should become the entire PR description, not appended to existing content.
+
+          allowed_tools: 'mcp__github__get_pull_request,mcp__github__update_pull_request,Bash,Read,Write,Glob,Grep'

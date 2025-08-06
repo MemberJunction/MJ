@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { TikTokBaseAction, TikTokUser } from '../tiktok-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get analytics for a TikTok account
  */
-@RegisterClass(TikTokBaseAction, 'GetAccountAnalyticsAction')
+@RegisterClass(BaseAction, 'GetAccountAnalyticsAction')
 export class GetAccountAnalyticsAction extends TikTokBaseAction {
     
     /**

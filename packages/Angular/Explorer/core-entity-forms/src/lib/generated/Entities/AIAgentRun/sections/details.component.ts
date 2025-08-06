@@ -211,6 +211,70 @@ import { AIAgentRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="LastRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StartingPayload"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TotalPromptIterations"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ConfigurationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideVendorID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Data"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Verbose"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"
@@ -226,6 +290,27 @@ import { AIAgentRunEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverrideVendor"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

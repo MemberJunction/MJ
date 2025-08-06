@@ -8,6 +8,7 @@ import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
+import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
@@ -113,7 +114,9 @@ export class PushService {
             formatAsMigration: this.syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync push operation',
             statementTypes: "mutations",
-            prettyPrint: true,            
+            prettyPrint: true,
+            filterPatterns: this.syncConfig.sqlLogging?.filterPatterns,
+            filterType: this.syncConfig.sqlLogging?.filterType,
           });
           
           if (options.verbose) {
@@ -127,7 +130,9 @@ export class PushService {
       }
       
       // Find entity directories to process
-      const entityDirs = this.findEntityDirectories(configDir);
+      // Note: If options.dir is specified, configDir already points to that directory
+      // So we don't need to pass it as specificDir
+      const entityDirs = this.findEntityDirectories(configDir, undefined, this.syncConfig?.directoryOrder);
       
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
@@ -166,8 +171,19 @@ export class PushService {
             continue;
           }
           
-          if (options.verbose) {
-            callbacks?.onLog?.(`\nProcessing ${entityConfig.entity} in ${entityDir}`);
+          // Show folder with spinner at start
+          const dirName = path.relative(process.cwd(), entityDir) || '.';
+          callbacks?.onLog?.(`\n📁 ${dirName}:`);
+          
+          // Use onProgress for animated spinner if available
+          if (callbacks?.onProgress) {
+            callbacks.onProgress(`Processing ${dirName}...`);
+          } else {
+            callbacks?.onLog?.(`   ⏳ Processing...`);
+          }
+          
+          if (options.verbose && callbacks?.onLog) {
+            callbacks.onLog(`Processing ${entityConfig.entity} in ${entityDir}`);
           }
           
           const result = await this.processEntityDirectory(
@@ -179,11 +195,14 @@ export class PushService {
             sqlLogger
           );
           
+          // Stop the spinner if we were using onProgress
+          if (callbacks?.onProgress && callbacks?.onSuccess) {
+            callbacks.onSuccess(`Processed ${dirName}`);
+          }
+          
           // Show per-directory summary
-          const dirName = path.relative(process.cwd(), entityDir) || '.';
           const dirTotal = result.created + result.updated + result.unchanged;
           if (dirTotal > 0 || result.errors > 0) {
-            callbacks?.onLog?.(`\n📁 ${dirName}:`);
             callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
             if (result.created > 0) {
               callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
@@ -369,7 +388,7 @@ export class PushService {
         
         // Write back the entire file if it's an array (after processing all records)
         if (isArray && !options.dryRun) {
-          await fs.writeJson(filePath, records, { spaces: 2 });
+          await JsonWriteHelper.writeOrderedRecordData(filePath, records);
         }
       } catch (fileError) {
         const errorMsg = `Error reading file ${filePath}: ${fileError}`;
@@ -560,6 +579,11 @@ export class PushService {
         lastModified: new Date().toISOString(),
         checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
       };
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ✓ Updated sync metadata (record was ${isNew ? 'new' : 'changed'})`);
+      }
+    } else if (options.verbose) {
+      callbacks?.onLog?.(`   - Skipped sync metadata update (no changes detected)`);
     }
     
     // Restore original field values to preserve @ references
@@ -567,7 +591,7 @@ export class PushService {
     
     // Write back to file only if it's a single record (not part of an array)
     if (filePath && arrayIndex === undefined && !options.dryRun) {
-      await fs.writeJson(filePath, recordData, { spaces: 2 });
+      await JsonWriteHelper.writeOrderedRecordData(filePath, recordData);
     }
     
     // Process related entities after parent save
@@ -716,6 +740,18 @@ export class PushService {
           
           // Check if the record is dirty before saving
           let wasActuallyUpdated = false;
+          
+          // Check for file content changes for related entities
+          if (!isNew && relatedRecord.sync) {
+            const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir);
+            if (currentChecksum !== relatedRecord.sync.checksum) {
+              wasActuallyUpdated = true;
+              if (options.verbose) {
+                callbacks?.onLog?.(`${indent}📄 File content changed for related ${entityName} record (checksum mismatch)`);
+              }
+            }
+          }
+          
           if (!isNew && entity.Dirty) {
             // Record is dirty, get the changes
             const changes = entity.GetChangesSinceLastSave();
@@ -795,11 +831,18 @@ export class PushService {
               this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
             }
             
-            // Always update sync metadata
-            relatedRecord.sync = {
-              lastModified: new Date().toISOString(),
-              checksum: this.syncEngine.calculateChecksum(relatedRecord.fields)
-            };
+            // Only update sync metadata if the record was actually changed
+            if (isNew || wasActuallyUpdated) {
+              relatedRecord.sync = {
+                lastModified: new Date().toISOString(),
+                checksum: await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir)
+              };
+              if (options.verbose) {
+                callbacks?.onLog?.(`${indent}  ✓ Updated sync metadata for related ${entityName} (record was ${isNew ? 'new' : 'changed'})`);
+              }
+            } else if (options.verbose) {
+              callbacks?.onLog?.(`${indent}  - Skipped sync metadata update for related ${entityName} (no changes detected)`);
+            }
           }
           
           // Process nested related entities if any
@@ -838,19 +881,6 @@ export class PushService {
            typeof data.fields === 'object';
   }
   
-  private getRecordKey(recordData: RecordData, entityName: string): string {
-    if (recordData.primaryKey) {
-      const keys = Object.entries(recordData.primaryKey)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}:${v}`)
-        .join('|');
-      return `${entityName}|${keys}`;
-    }
-    
-    // Generate a key from fields if no primary key
-    const fieldKeys = Object.keys(recordData.fields).sort().join(',');
-    return `${entityName}|fields:${fieldKeys}`;
-  }
   
   private formatFieldValue(value: any, maxLength: number = 50): string {
     let strValue = JSON.stringify(value);
@@ -944,7 +974,7 @@ export class PushService {
     return `${absolutePath}:${lineNumber}`;
   }
   
-  private findEntityDirectories(baseDir: string, specificDir?: string): string[] {
+  private findEntityDirectories(baseDir: string, specificDir?: string, directoryOrder?: string[]): string[] {
     const dirs: string[] = [];
     
     if (specificDir) {
@@ -971,6 +1001,31 @@ export class PushService {
     } else {
       // Find all entity directories
       this.findEntityDirectoriesRecursive(baseDir, dirs);
+    }
+    
+    // Apply directory ordering if specified
+    if (directoryOrder && directoryOrder.length > 0 && !specificDir) {
+      // Create a map of directory name to order index
+      const orderMap = new Map<string, number>();
+      directoryOrder.forEach((dir, index) => {
+        orderMap.set(dir, index);
+      });
+      
+      // Sort directories based on the order map
+      dirs.sort((a, b) => {
+        const nameA = path.basename(a);
+        const nameB = path.basename(b);
+        const orderA = orderMap.get(nameA) ?? Number.MAX_SAFE_INTEGER;
+        const orderB = orderMap.get(nameB) ?? Number.MAX_SAFE_INTEGER;
+        
+        // If both have specified orders, use them
+        if (orderA !== Number.MAX_SAFE_INTEGER || orderB !== Number.MAX_SAFE_INTEGER) {
+          return orderA - orderB;
+        }
+        
+        // Otherwise, maintain original order (stable sort)
+        return 0;
+      });
     }
     
     return dirs;

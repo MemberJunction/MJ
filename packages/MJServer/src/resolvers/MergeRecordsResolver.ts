@@ -163,7 +163,8 @@ export class RecordMergeResolver {
   ) {
     try {
       const md = new Metadata();
-      const result = await md.MergeRecords(request, userPayload.userRecord);
+      const options = {};
+      const result = await md.MergeRecords(request, userPayload.userRecord, options);
       return result;
     } catch (e) {
       LogError(e);

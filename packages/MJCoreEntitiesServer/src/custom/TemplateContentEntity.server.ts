@@ -169,7 +169,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
                 newParam.TemplateContentID = templateContentID;
                 newParam.Name = param.name;
                 newParam.Type = param.type;
-                newParam.IsRequired = param.isRequired;
+                newParam.IsRequired = false; // LLM has been unreliable here, make them ALL optional so we don't break template rendering in case it picks up stuff that is NOT really a param... param.isRequired;
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
                 promises.push(newParam.Save());
@@ -187,7 +187,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
                         hasChanges = true;
                     }
                     if (existingParam.IsRequired !== extractedParam.isRequired) {
-                        existingParam.IsRequired = extractedParam.isRequired;
+                        existingParam.IsRequired = false; // SEE ABOVE - make not required in all cases....  extractedParam.isRequired;
                         hasChanges = true;
                     }
                     if (existingParam.DefaultValue !== extractedParam.defaultValue) {

@@ -816,6 +816,69 @@
     align-items: center;
 }
 
+.rerun-mode-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: #f0f9ff;
+    border-radius: 8px;
+    gap: 16px;
+}
+
+.rerun-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #0369a1;
+    font-size: 14px;
+}
+
+.rerun-message i {
+    font-size: 16px;
+}
+
+.rerun-message strong {
+    font-family: 'Fira Code', 'Consolas', monospace;
+}
+
+.rerun-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    min-width: 100px;
+    justify-content: center;
+}
+
+.rerun-button span {
+    font-weight: 500;
+}
+
+.rerun-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.reset-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    min-width: 120px;
+    justify-content: center;
+    background-color: #6b7280;
+}
+
+.reset-button:hover:not(:disabled) {
+    background-color: #4b5563;
+}
+
+.reset-button span {
+    font-weight: 500;
+}
+
 .message-input {
     flex: 1;
 }

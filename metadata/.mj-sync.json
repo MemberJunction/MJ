@@ -9,11 +9,15 @@
     "prompt-categories",
     "prompts",
     "agent-types",
-    "agents"
+    "agents",
+    "query-categories",
+    "queries"
   ],
   "sqlLogging": {
     "enabled": true,
     "outputDirectory": "./sql_logging",
+    "filterPatterns": ["*spCreateAIPromptRun*", "*spUpdateAIPromptRun*"],
+    "filterType": "exclude",
     "formatAsMigration": true
   }
 }

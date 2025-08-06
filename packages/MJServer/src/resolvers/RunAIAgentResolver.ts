@@ -305,7 +305,10 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
         @Arg('data', { nullable: true }) data?: string,
-        @Arg('templateData', { nullable: true }) templateData?: string
+        @Arg('templateData', { nullable: true }) templateData?: string,
+        @Arg('lastRunId', { nullable: true }) lastRunId?: string,
+        @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
+        @Arg('configurationId', { nullable: true }) configurationId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -345,7 +348,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationMessages: parsedMessages,
                 contextUser: currentUser,
                 onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
-                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef)
+                onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef),
+                lastRunId: lastRunId,
+                autoPopulateLastRunPayload: autoPopulateLastRunPayload,
+                configurationId: configurationId,
+                data: parsedData
             });
 
             // Update agent run ref once available

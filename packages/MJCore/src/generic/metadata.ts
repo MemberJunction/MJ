@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -40,8 +40,8 @@ export class Metadata {
      * Forces a refresh of all cached metadata.
      * @returns 
      */
-    public async Refresh(): Promise<boolean> {
-        return await Metadata.Provider.Refresh();
+    public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+        return await Metadata.Provider.Refresh(providerToUse);
     }
 
     public get ProviderType(): ProviderType {
@@ -284,10 +284,10 @@ export class Metadata {
      * @param request 
      * @returns 
      */
-    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
+    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.EntityByName(request.EntityName);
         if (e.AllowRecordMerge)
-            return await Metadata.Provider.MergeRecords(request, contextUser);
+            return await Metadata.Provider.MergeRecords(request, contextUser, options);
         else
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
@@ -472,16 +472,16 @@ export class Metadata {
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetStatusResultType> {
-        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser);
+    public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType> {
+        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser, providerToUse);
     }
     /**
      * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
      * @param datasetName 
      * @param itemFilters 
      */
-    public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType> {
-        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters, contextUser);
+    public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
+        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
     }
 
     /**

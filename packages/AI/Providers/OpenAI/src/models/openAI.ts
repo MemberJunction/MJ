@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
@@ -95,7 +95,20 @@ export class OpenAILLM extends BaseLLM {
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
-        return {
+        // Create ModelUsage with any available timing data
+        const usage = new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens);
+        
+        // OpenAI doesn't provide the same timing metrics as Groq,
+        // but we can check for any extended usage data
+        const extendedUsage = result.usage as any;
+        if (extendedUsage.prompt_tokens_details) {
+            // Store prompt token details in usage if needed in future
+        }
+        if (extendedUsage.completion_tokens_details) {
+            // Store completion token details in usage if needed in future
+        }
+        
+        const chatResult: ChatResult = {
             data: {
                 choices: result.choices.map((c: any) => {
                     // Extract thinking/reasoning content if present
@@ -134,7 +147,7 @@ export class OpenAILLM extends BaseLLM {
                         logprobs: c.logprobs // Include logprobs if present
                     }
                 }),
-                usage: new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens)
+                usage: usage
             },
             success: !!result,
             statusText: 'success',
@@ -143,7 +156,26 @@ export class OpenAILLM extends BaseLLM {
             timeElapsed: timeElapsed,
             errorMessage: null,
             exception: null
-        }
+        } as ChatResult;
+        
+        // Add model-specific response details
+        chatResult.modelSpecificResponseDetails = {
+            provider: 'openai',
+            model: result.model,
+            systemFingerprint: result.system_fingerprint,
+            created: result.created,
+            id: result.id,
+            object: result.object,
+            service_tier: (result as any).service_tier,
+            usage_details: {
+                reasoning_tokens: extendedUsage.reasoning_tokens,
+                cached_tokens: extendedUsage.cached_tokens,
+                prompt_tokens_details: extendedUsage.prompt_tokens_details,
+                completion_tokens_details: extendedUsage.completion_tokens_details
+            }
+        };
+        
+        return chatResult;
     }
 
     /**

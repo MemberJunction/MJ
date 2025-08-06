@@ -4,6 +4,7 @@ import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import * as PDFDocument from "pdfkit";
 import { marked } from "marked";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that generates PDF files from HTML or Markdown content
@@ -40,7 +41,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "PDF Generator")
+@RegisterClass(BaseAction, "PDF Generator")
 export class PDFGeneratorAction extends BaseFileHandlerAction {
     
     /**

@@ -1,6 +1,6 @@
 <div class="timeline-container" *ngIf="!loading && (timelineItems$ | async) as items">
   <div class="timeline" *ngIf="items.length > 0">
-    <ng-container *ngFor="let item of items">
+    <ng-container *ngFor="let item of items; trackBy: trackByItemId">
       <!-- Main Timeline Item -->
       <mj-ai-agent-run-step-node
         [item]="item"
@@ -11,7 +11,7 @@
       </mj-ai-agent-run-step-node>
       
       <!-- Sub-Run Timeline (Recursive) -->
-      <div class="sub-timeline" *ngIf="(item.type === 'subrun' || (item.type === 'step' && item.data?.StepType === 'subagent')) && item.isExpanded">
+      <div class="sub-timeline" *ngIf="(item.type === 'subrun' || (item.type === 'step' && item.data?.StepType === 'Sub-Agent')) && item.isExpanded">
         <!-- Show loading indicator while loading children -->
         <div class="loading-children" *ngIf="item.type === 'step' && !item.childrenLoaded">
           <i class="fas fa-spinner fa-spin"></i> Loading sub-agent steps...
@@ -24,7 +24,7 @@
         
         <!-- For sub-agent steps that have loaded children -->
         <ng-container *ngIf="item.type === 'step' && item.childrenLoaded && item.children && item.children.length > 0">
-          <ng-container *ngFor="let child of item.children">
+          <ng-container *ngFor="let child of item.children; trackBy: trackByItemId">
             <!-- Render the sub-run container with its steps -->
             <mj-ai-agent-run-step-node
               [item]="child"
@@ -36,7 +36,7 @@
             
             <!-- Show the steps within this sub-run when expanded -->
             <div class="sub-run-steps" *ngIf="child.isExpanded && child.children">
-              <ng-container *ngFor="let step of child.children">
+              <ng-container *ngFor="let step of child.children; trackBy: trackByItemId">
                 <mj-ai-agent-run-step-node
                   [item]="step"
                   [isSelected]="selectedItem?.id === step.id"
@@ -53,6 +53,7 @@
         <mj-ai-agent-run-timeline
           *ngIf="item.type === 'subrun' && item.data?.ID"
           [aiAgentRunId]="item.data.ID"
+          [dataHelper]="createSubRunDataHelper()"
           [autoRefresh]="false"
           (itemSelected)="selectItem($event)"
           (navigateToEntity)="navigateToEntity.emit($event)">

@@ -1,5 +1,80 @@
 # Change Log - @memberjunction/global
 
+## 2.81.0
+
+## 2.80.1
+
+## 2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- 907e73f: correct handling in CleanJSON
+
+## 2.78.0
+
+## 2.77.0
+
+## 2.76.0
+
+## 2.75.0
+
+## 2.74.0
+
+## 2.73.0
+
+## 2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- c5a409c: Add missing 'lodash' dependency to MJGlobal package.
+- 5a127bb: Remove status badge dots
+
+## 2.70.0
+
+### Minor Changes
+
+- c9d86cd: migration
+
+### Patch Changes
+
+- 6f74409: Minor bump
+
+## 2.69.1
+
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+
+## 2.68.0
+
+## 2.67.0
+
+## 2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- 619488f: Pattern filtering for sql logging
+
+## 2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- 59e2c4b: Improved RegisterClass/ClassFactory and added a bunch of utility functions for walking the inheritance hierarchy
+
+## 2.63.0
+
+## 2.62.0
+
 ## 2.61.0
 
 ## 2.60.0

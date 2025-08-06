@@ -26,7 +26,16 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
         try{
-            const user: User | null = await this.GetServiceAccount();
+            // Smart selection: use message.From if provided and different from default
+            // This maintains backward compatibility while enabling custom From addresses
+            let senderEmail: string | undefined;
+            if (message.From && 
+                message.From.trim() !== '' && 
+                message.From !== Config.AZURE_ACCOUNT_EMAIL) {
+                senderEmail = message.From;
+            }
+            
+            const user: User | null = await this.GetServiceAccount(senderEmail);
             if(!user){
                 return {
                     Message: message,
@@ -72,7 +81,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                         };
                     })
                 },
-                saveToSentItems: 'false'
+                saveToSentItems: message.ContextData?.saveToSentItems ?? false
             };
     
             const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/sendMail`;

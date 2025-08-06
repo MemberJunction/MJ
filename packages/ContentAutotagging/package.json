@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/content-autotagging",
-  "version": "2.61.0",
+  "version": "2.81.0",
   "description": "MemberJunction Content Autotagging Application",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -15,11 +15,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "2.61.0",
-    "@memberjunction/aiengine": "2.61.0",
-    "@memberjunction/core": "2.61.0",
-    "@memberjunction/core-entities": "2.61.0",
-    "@memberjunction/global": "2.61.0",
+    "@memberjunction/ai": "2.81.0",
+    "@memberjunction/aiengine": "2.81.0",
+    "@memberjunction/core": "2.81.0",
+    "@memberjunction/core-entities": "2.81.0",
+    "@memberjunction/global": "2.81.0",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "crypto": "^1.0.1",
@@ -36,7 +36,6 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
-    "@types/jasmine": "~5.1.0",
     "@types/node": "^18.18.0",
     "@types/pdf-parse": "^1.1.4",
     "ts-node-dev": "^2.0.0",

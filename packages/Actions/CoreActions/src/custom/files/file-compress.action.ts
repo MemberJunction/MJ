@@ -5,6 +5,7 @@ import * as archiver from "archiver";
 import * as unzipper from "unzipper";
 import { Readable } from "stream";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action that compresses or decompresses files
@@ -58,7 +59,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
-@RegisterClass(BaseFileHandlerAction, "File Compress")
+@RegisterClass(BaseAction, "File Compress")
 export class FileCompressAction extends BaseFileHandlerAction {
     
     /**

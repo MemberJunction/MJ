@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary } from "@memberjunction/ai";
+import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { ElevenLabsClient } from "elevenlabs";
 
 @RegisterClass(BaseAudioGenerator, "ElevenLabsAudioGenerator")
@@ -33,9 +33,10 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
             speechResult.success = true;
         } catch (error) {
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
             speechResult.success = false;
-            speechResult.errorMessage = error.message;
-            console.error(error);
+            speechResult.errorMessage = error?.message || 'Unknown error occurred';
+            console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;
     }
@@ -62,7 +63,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 result.push(voiceInfo);
             }
         } catch (error) {
-            console.error(error);
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
+            console.error('ElevenLabs GetVoices error:', errorInfo);
         }
         return result;
     }
@@ -88,7 +90,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 result.push(audioModel);
             }
         } catch (error) {
-            console.error(error);
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
+            console.error('ElevenLabs GetModels error:', errorInfo);
         }
         return result;
     }
@@ -108,7 +111,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 result.push(dictionary);
             }
         } catch (error) {
-            console.error(error);
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
+            console.error('ElevenLabs GetPronounciationDictionaries error:', errorInfo);
         }
         return result;
     }

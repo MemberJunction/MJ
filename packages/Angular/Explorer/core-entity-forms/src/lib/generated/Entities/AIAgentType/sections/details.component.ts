@@ -70,6 +70,27 @@ import { AIAgentTypeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="UIFormSectionKey"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UIFormKey"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UIFormSectionExpandedByDefault"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="SystemPrompt"
             Type="textbox"
             [EditMode]="EditMode"

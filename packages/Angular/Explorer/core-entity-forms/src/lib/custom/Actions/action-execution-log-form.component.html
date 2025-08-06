@@ -66,7 +66,7 @@
 
         <!-- Content Area -->
         <div class="content-area">
-            <kendo-panelbar>
+            <kendo-panelbar [keepItemContent]="true">
                 <!-- Execution Details -->
                 <kendo-panelbar-item title="Execution Details" [expanded]="true">
                     <ng-template kendoPanelBarContent>
@@ -102,20 +102,68 @@
                     </ng-template>
                 </kendo-panelbar-item>
 
-                <!-- Input Parameters -->
-                @if (record.Params) {
-                    <kendo-panelbar-item title="Input Parameters" [expanded]="expandedSections.input">
+                <!-- Input Parameters Only -->
+                @if (hasInputParams && formattedInputParams) {
+                    <kendo-panelbar-item title="Input Parameters" [expanded]="expandedSections.inputParams">
                         <ng-template kendoPanelBarContent>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
-                                    <span class="json-label">JSON</span>
-                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedParams)">
+                                    <span class="json-label">JSON (Input Parameters Only)</span>
+                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedInputParams)">
                                         <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                                 <mj-code-editor 
-                                    [(ngModel)]="formattedParams"
-                                    name="formattedParams"
+                                    [(ngModel)]="formattedInputParams"
+                                    name="formattedInputParams"
+                                    [readonly]="true"
+                                    [language]="'json'"
+                                    [lineWrapping]="true"
+                                    style="height: 300px; width: 100%;">
+                                </mj-code-editor>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Output Parameters Only -->
+                @if (hasOutputParams && formattedOutputParams) {
+                    <kendo-panelbar-item title="Output Parameters" [expanded]="expandedSections.outputParams">
+                        <ng-template kendoPanelBarContent>
+                            <div class="json-viewer">
+                                <div class="json-toolbar">
+                                    <span class="json-label">JSON (Output Parameters Only)</span>
+                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedOutputParams)">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <mj-code-editor 
+                                    [(ngModel)]="formattedOutputParams"
+                                    name="formattedOutputParams"
+                                    [readonly]="true"
+                                    [language]="'json'"
+                                    [lineWrapping]="true"
+                                    style="height: 300px; width: 100%;">
+                                </mj-code-editor>
+                            </div>
+                        </ng-template>
+                    </kendo-panelbar-item>
+                }
+
+                <!-- Input+Output Parameters -->
+                @if (hasBothParams && formattedBothParams) {
+                    <kendo-panelbar-item title="Input+Output Parameters" [expanded]="expandedSections.bothParams">
+                        <ng-template kendoPanelBarContent>
+                            <div class="json-viewer">
+                                <div class="json-toolbar">
+                                    <span class="json-label">JSON (Input+Output Parameters)</span>
+                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedBothParams)">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <mj-code-editor 
+                                    [(ngModel)]="formattedBothParams"
+                                    name="formattedBothParams"
                                     [readonly]="true"
                                     [language]="'json'"
                                     [lineWrapping]="true"
@@ -151,12 +199,12 @@
                 }
 
                 <!-- Empty States for missing data -->
-                @if (!record.Params && !record.Message) {
+                @if (!record.Params && !record.Message && !hasInputParams && !hasOutputParams && !hasBothParams) {
                     <kendo-panelbar-item title="Execution Data" [expanded]="true">
                         <ng-template kendoPanelBarContent>
                             <div class="empty-state">
                                 <i class="fas fa-inbox"></i>
-                                <p>No input parameters or output messages recorded</p>
+                                <p>No execution data recorded</p>
                             </div>
                         </ng-template>
                     </kendo-panelbar-item>

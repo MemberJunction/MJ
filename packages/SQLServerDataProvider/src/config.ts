@@ -9,12 +9,12 @@ import { UserCache } from "./UserCache";
 export async function setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider> {
     try {
         // Set the provider for all entities to be SQL Server in this project, can use a different provider in other situations....
-        const pool: sql.ConnectionPool = <sql.ConnectionPool>config.DataSource; // Now expects a ConnectionPool
+        const pool: sql.ConnectionPool = config.ConnectionPool;
         if (pool.connected) {
             const provider = new SQLServerDataProvider()
             await provider.Config(config);
 
-            // BaseEntity + Metadata share the same GraphQLDataProvider instance
+            // BaseEntity + Metadata share the same provider instance
             SetProvider(provider);
 
             // now setup the user cache

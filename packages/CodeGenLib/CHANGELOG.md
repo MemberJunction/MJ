@@ -1,5 +1,505 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.81.0
+
+### Minor Changes
+
+- 76cf3e3: migration associated with this, change itself is just code
+
+### Patch Changes
+
+- 6d2d478: feat: AI Agent UI improvements and server-side context fixes
+
+  - Enhanced AI Agent dialogs with resizable and draggable functionality
+    using Kendo UI Window component
+  - Improved dialog positioning with consistent center placement and proper
+    container context
+  - Fixed prompt selector in AI Agent form for better user experience
+  - Added missing contextUser parameter to GetEntityObject calls in
+    BaseResolver for proper multi-user isolation
+  - Fixed createRecordAccessAuditLogRecord calls in generated resolvers to
+    include provider argument
+  - Added JSDoc documentation to ViewInfo class properties for better code
+    documentation
+  - Applied consistent dialog styling across all AI Agent management
+    components
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/core-entities-server@2.81.0
+  - @memberjunction/sqlserver-dataprovider@2.81.0
+  - @memberjunction/aiengine@2.81.0
+  - @memberjunction/actions@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/ai-anthropic@2.81.0
+  - @memberjunction/ai-groq@2.81.0
+  - @memberjunction/ai-mistral@2.81.0
+  - @memberjunction/ai-openai@2.81.0
+  - @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.80.1
+- @memberjunction/aiengine@2.80.1
+- @memberjunction/ai-anthropic@2.80.1
+- @memberjunction/ai-groq@2.80.1
+- @memberjunction/ai-mistral@2.80.1
+- @memberjunction/ai-openai@2.80.1
+- @memberjunction/actions@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/core-entities-server@2.80.1
+- @memberjunction/global@2.80.1
+- @memberjunction/sqlserver-dataprovider@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [3073dc3]
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core-entities-server@2.80.0
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/sqlserver-dataprovider@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/actions@2.80.0
+  - @memberjunction/ai@2.80.0
+  - @memberjunction/ai-anthropic@2.80.0
+  - @memberjunction/ai-groq@2.80.0
+  - @memberjunction/ai-mistral@2.80.0
+  - @memberjunction/ai-openai@2.80.0
+  - @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/core-entities-server@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/ai-anthropic@2.79.0
+  - @memberjunction/ai-groq@2.79.0
+  - @memberjunction/ai-mistral@2.79.0
+  - @memberjunction/ai-openai@2.79.0
+  - @memberjunction/actions@2.79.0
+  - @memberjunction/aiengine@2.79.0
+  - @memberjunction/sqlserver-dataprovider@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- d9abd67: feat(codegen-lib): Add cascade delete dependency tracking for
+  stored procedures
+
+  When an entity's schema changes (e.g., new columns added), any
+  delete stored procedures that reference its update SP via cascade
+  operations need to be regenerated to include the new parameters.
+  This prevents runtime failures when cascade delete operations
+  reference outdated stored procedure signatures.
+
+  - Track cascade delete dependencies during SQL generation
+  - Detect entities with schema changes from metadata management
+    phase
+  - Automatically mark dependent delete SPs for regeneration
+  - Ensure SQL logging captures cascade dependency regenerations
+  - Respect spDeleteGenerated flag - never modify custom stored
+    procedures
+
+- Updated dependencies [ef7c014]
+- Updated dependencies [06088e5]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/ai-anthropic@2.78.0
+  - @memberjunction/ai-groq@2.78.0
+  - @memberjunction/ai-mistral@2.78.0
+  - @memberjunction/ai-openai@2.78.0
+  - @memberjunction/actions@2.78.0
+  - @memberjunction/sqlserver-dataprovider@2.78.0
+  - @memberjunction/core-entities-server@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+
+### Patch Changes
+
+- 8ee0d86: Fix: Query parameter validation and cascade delete transaction handling
+
+  - Added validation to ensure query parameters are JSON objects rather than arrays in GraphQL system user client
+  - Implemented automatic transaction wrapping for entities with CascadeDeletes enabled
+  - For database providers (server-side), delete operations are wrapped in
+    BeginTransaction/CommitTransaction/RollbackTransaction
+  - For network providers (client-side), deletes pass through as cascade handling occurs server-side
+  - Ensures atomicity of cascade delete operations
+
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/core-entities-server@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/actions@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/ai-anthropic@2.77.0
+  - @memberjunction/ai-groq@2.77.0
+  - @memberjunction/ai-mistral@2.77.0
+  - @memberjunction/ai-openai@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core-entities-server@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/sqlserver-dataprovider@2.76.0
+  - @memberjunction/aiengine@2.76.0
+  - @memberjunction/actions@2.76.0
+  - @memberjunction/ai@2.76.0
+  - @memberjunction/ai-anthropic@2.76.0
+  - @memberjunction/ai-groq@2.76.0
+  - @memberjunction/ai-mistral@2.76.0
+  - @memberjunction/ai-openai@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Minor Changes
+
+- 9ccd145: migration
+
+### Patch Changes
+
+- 4ee29f2: Fix ordering of emitted validation code
+  - @memberjunction/actions@2.75.0
+  - @memberjunction/core-entities-server@2.75.0
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+  - @memberjunction/ai@2.75.0
+  - @memberjunction/aiengine@2.75.0
+  - @memberjunction/ai-anthropic@2.75.0
+  - @memberjunction/ai-groq@2.75.0
+  - @memberjunction/ai-mistral@2.75.0
+  - @memberjunction/ai-openai@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Minor Changes
+
+- b70301e: migrations
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core-entities-server@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/aiengine@2.74.0
+  - @memberjunction/actions@2.74.0
+  - @memberjunction/sqlserver-dataprovider@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/ai-anthropic@2.74.0
+  - @memberjunction/ai-groq@2.74.0
+  - @memberjunction/ai-mistral@2.74.0
+  - @memberjunction/ai-openai@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [26c2b03]
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/aiengine@2.73.0
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/actions@2.73.0
+  - @memberjunction/core-entities-server@2.73.0
+  - @memberjunction/sqlserver-dataprovider@2.73.0
+  - @memberjunction/ai-anthropic@2.73.0
+  - @memberjunction/ai-groq@2.73.0
+  - @memberjunction/ai-mistral@2.73.0
+  - @memberjunction/ai-openai@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/aiengine@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/core-entities-server@2.72.0
+  - @memberjunction/sqlserver-dataprovider@2.72.0
+  - @memberjunction/ai@2.72.0
+  - @memberjunction/ai-anthropic@2.72.0
+  - @memberjunction/ai-groq@2.72.0
+  - @memberjunction/ai-mistral@2.72.0
+  - @memberjunction/ai-openai@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/aiengine@2.71.0
+  - @memberjunction/ai-anthropic@2.71.0
+  - @memberjunction/ai-groq@2.71.0
+  - @memberjunction/ai-mistral@2.71.0
+  - @memberjunction/ai-openai@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/core-entities-server@2.71.0
+  - @memberjunction/sqlserver-dataprovider@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ai@2.70.0
+  - @memberjunction/aiengine@2.70.0
+  - @memberjunction/ai-anthropic@2.70.0
+  - @memberjunction/ai-groq@2.70.0
+  - @memberjunction/ai-mistral@2.70.0
+  - @memberjunction/ai-openai@2.70.0
+  - @memberjunction/actions@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/core-entities-server@2.70.0
+  - @memberjunction/sqlserver-dataprovider@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/aiengine@2.69.1
+  - @memberjunction/actions@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/core-entities-server@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/ai@2.69.1
+  - @memberjunction/ai-anthropic@2.69.1
+  - @memberjunction/ai-groq@2.69.1
+  - @memberjunction/ai-mistral@2.69.1
+  - @memberjunction/ai-openai@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/actions@2.69.0
+  - @memberjunction/core-entities-server@2.69.0
+  - @memberjunction/aiengine@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+  - @memberjunction/ai@2.69.0
+  - @memberjunction/ai-anthropic@2.69.0
+  - @memberjunction/ai-groq@2.69.0
+  - @memberjunction/ai-mistral@2.69.0
+  - @memberjunction/ai-openai@2.69.0
+
+## 2.68.0
+
+### Minor Changes
+
+- 23250f1: Refactored and Changed logic for spDelete proc generation - this PR will include regenerating all \_\_mj Entity spDelete procs too (as of this writing, doesn't have that yet)
+
+### Patch Changes
+
+- Updated dependencies [a6b43d0]
+- Updated dependencies [b10b7e6]
+- Updated dependencies [0f38a61]
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities-server@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/ai-anthropic@2.68.0
+  - @memberjunction/ai-groq@2.68.0
+  - @memberjunction/ai-mistral@2.68.0
+  - @memberjunction/ai-openai@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/core-entities-server@2.67.0
+  - @memberjunction/ai@2.67.0
+  - @memberjunction/aiengine@2.67.0
+  - @memberjunction/ai-anthropic@2.67.0
+  - @memberjunction/ai-groq@2.67.0
+  - @memberjunction/ai-mistral@2.67.0
+  - @memberjunction/ai-openai@2.67.0
+  - @memberjunction/actions@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Minor Changes
+
+- 7e22e3e: Child Generated Actions - completed implementation!
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/actions@2.66.0
+  - @memberjunction/core-entities-server@2.66.0
+  - @memberjunction/aiengine@2.66.0
+  - @memberjunction/sqlserver-dataprovider@2.66.0
+  - @memberjunction/ai@2.66.0
+  - @memberjunction/ai-anthropic@2.66.0
+  - @memberjunction/ai-groq@2.66.0
+  - @memberjunction/ai-mistral@2.66.0
+  - @memberjunction/ai-openai@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Minor Changes
+
+- b029c5d: Added fields to AIAgent table
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-anthropic@2.65.0
+  - @memberjunction/ai-groq@2.65.0
+  - @memberjunction/ai-mistral@2.65.0
+  - @memberjunction/ai-openai@2.65.0
+  - @memberjunction/actions@2.65.0
+  - @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/aiengine@2.64.0
+  - @memberjunction/actions@2.64.0
+  - @memberjunction/sqlserver-dataprovider@2.64.0
+  - @memberjunction/ai@2.64.0
+  - @memberjunction/ai-anthropic@2.64.0
+  - @memberjunction/ai-groq@2.64.0
+  - @memberjunction/ai-mistral@2.64.0
+  - @memberjunction/ai-openai@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai@2.63.1
+  - @memberjunction/aiengine@2.63.1
+  - @memberjunction/ai-anthropic@2.63.1
+  - @memberjunction/ai-groq@2.63.1
+  - @memberjunction/ai-mistral@2.63.1
+  - @memberjunction/ai-openai@2.63.1
+  - @memberjunction/actions@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+  - @memberjunction/sqlserver-dataprovider@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/aiengine@2.63.0
+  - @memberjunction/actions@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+  - @memberjunction/ai@2.63.0
+  - @memberjunction/ai-anthropic@2.63.0
+  - @memberjunction/ai-groq@2.63.0
+  - @memberjunction/ai-mistral@2.63.0
+  - @memberjunction/ai-openai@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/actions@2.62.0
+  - @memberjunction/aiengine@2.62.0
+  - @memberjunction/ai-anthropic@2.62.0
+  - @memberjunction/ai-groq@2.62.0
+  - @memberjunction/ai-mistral@2.62.0
+  - @memberjunction/ai-openai@2.62.0
+  - @memberjunction/sqlserver-dataprovider@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

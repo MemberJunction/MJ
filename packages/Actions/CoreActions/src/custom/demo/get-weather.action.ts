@@ -241,6 +241,18 @@ export class GetWeatherAction extends BaseAction {
                 }
             };
 
+            // add output parameters for the full data object and also for the currentTemp and conditions
+            params.Params.push({
+                Name: "CurrentTemp",
+                Value: weatherData.current.temperature,
+                Type: "Output"
+            })
+            params.Params.push({
+                Name: "CurrentConditions",
+                Value: weatherData.current.conditions,
+                Type: "Output"
+            })
+
             return {
                 Success: true,
                 ResultCode: "SUCCESS",

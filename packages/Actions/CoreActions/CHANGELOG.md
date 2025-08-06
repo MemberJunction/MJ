@@ -1,5 +1,398 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.81.0
+
+### Patch Changes
+
+- 42a6954: Add User Onboarding Flow Agent with role assignment improvements
+
+  - Add support for Flow Agent Type to execute flow-specific prompts
+    instead of system prompts
+  - Fix Flow Agent payload persistence across workflow steps
+  - Create assign-user-roles action to support multiple role assignments
+  - Update validate-email-unique action with better error handling
+  - Enable proper role mapping from user input to database role names
+
+  This enables deterministic workflow execution for user onboarding with
+  dynamic role assignment.
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/core-entities-server@2.81.0
+  - @memberjunction/ai-core-plus@2.81.0
+  - @memberjunction/ai-vector-sync@2.81.0
+  - @memberjunction/actions@2.81.0
+  - @memberjunction/communication-engine@2.81.0
+  - @memberjunction/content-autotagging@2.81.0
+  - @memberjunction/external-change-detection@2.81.0
+  - @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.80.1
+- @memberjunction/ai-vector-sync@2.80.1
+- @memberjunction/actions@2.80.1
+- @memberjunction/communication-engine@2.80.1
+- @memberjunction/content-autotagging@2.80.1
+- @memberjunction/external-change-detection@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/core-entities-server@2.80.1
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [3073dc3]
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core-entities-server@2.80.0
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/ai-core-plus@2.80.0
+  - @memberjunction/ai-vector-sync@2.80.0
+  - @memberjunction/actions@2.80.0
+  - @memberjunction/communication-engine@2.80.0
+  - @memberjunction/content-autotagging@2.80.0
+  - @memberjunction/external-change-detection@2.80.0
+  - @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/core-entities-server@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai-core-plus@2.79.0
+  - @memberjunction/actions@2.79.0
+  - @memberjunction/communication-engine@2.79.0
+  - @memberjunction/content-autotagging@2.79.0
+  - @memberjunction/external-change-detection@2.79.0
+  - @memberjunction/ai-vector-sync@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [06088e5]
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/ai-core-plus@2.78.0
+  - @memberjunction/ai-vector-sync@2.78.0
+  - @memberjunction/actions@2.78.0
+  - @memberjunction/content-autotagging@2.78.0
+  - @memberjunction/core-entities-server@2.78.0
+  - @memberjunction/communication-engine@2.78.0
+  - @memberjunction/external-change-detection@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/external-change-detection@2.77.0
+  - @memberjunction/core-entities-server@2.77.0
+  - @memberjunction/ai-core-plus@2.77.0
+  - @memberjunction/ai-vector-sync@2.77.0
+  - @memberjunction/actions@2.77.0
+  - @memberjunction/communication-engine@2.77.0
+  - @memberjunction/content-autotagging@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core-entities-server@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/ai-core-plus@2.76.0
+  - @memberjunction/actions@2.76.0
+  - @memberjunction/communication-engine@2.76.0
+  - @memberjunction/content-autotagging@2.76.0
+  - @memberjunction/external-change-detection@2.76.0
+  - @memberjunction/ai-vector-sync@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/actions@2.75.0
+- @memberjunction/core-entities-server@2.75.0
+- @memberjunction/external-change-detection@2.75.0
+- @memberjunction/ai-core-plus@2.75.0
+- @memberjunction/ai-vector-sync@2.75.0
+- @memberjunction/communication-engine@2.75.0
+- @memberjunction/content-autotagging@2.75.0
+- @memberjunction/core@2.75.0
+- @memberjunction/core-entities@2.75.0
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core-entities-server@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/ai-core-plus@2.74.0
+  - @memberjunction/actions@2.74.0
+  - @memberjunction/communication-engine@2.74.0
+  - @memberjunction/content-autotagging@2.74.0
+  - @memberjunction/external-change-detection@2.74.0
+  - @memberjunction/ai-vector-sync@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [e99336f]
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai-vector-sync@2.73.0
+  - @memberjunction/actions@2.73.0
+  - @memberjunction/content-autotagging@2.73.0
+  - @memberjunction/core-entities-server@2.73.0
+  - @memberjunction/ai-core-plus@2.73.0
+  - @memberjunction/communication-engine@2.73.0
+  - @memberjunction/external-change-detection@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/ai-core-plus@2.72.0
+  - @memberjunction/actions@2.72.0
+  - @memberjunction/communication-engine@2.72.0
+  - @memberjunction/content-autotagging@2.72.0
+  - @memberjunction/external-change-detection@2.72.0
+  - @memberjunction/core-entities-server@2.72.0
+  - @memberjunction/ai-vector-sync@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai-core-plus@2.71.0
+  - @memberjunction/ai-vector-sync@2.71.0
+  - @memberjunction/actions@2.71.0
+  - @memberjunction/communication-engine@2.71.0
+  - @memberjunction/content-autotagging@2.71.0
+  - @memberjunction/external-change-detection@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/core-entities-server@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ai-core-plus@2.70.0
+  - @memberjunction/ai-vector-sync@2.70.0
+  - @memberjunction/actions@2.70.0
+  - @memberjunction/communication-engine@2.70.0
+  - @memberjunction/content-autotagging@2.70.0
+  - @memberjunction/external-change-detection@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/core-entities-server@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/ai-core-plus@2.69.1
+  - @memberjunction/ai-vector-sync@2.69.1
+  - @memberjunction/actions@2.69.1
+  - @memberjunction/communication-engine@2.69.1
+  - @memberjunction/content-autotagging@2.69.1
+  - @memberjunction/external-change-detection@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/core-entities-server@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/actions@2.69.0
+  - @memberjunction/core-entities-server@2.69.0
+  - @memberjunction/ai-core-plus@2.69.0
+  - @memberjunction/ai-vector-sync@2.69.0
+  - @memberjunction/communication-engine@2.69.0
+  - @memberjunction/content-autotagging@2.69.0
+  - @memberjunction/external-change-detection@2.69.0
+  - @memberjunction/core-entities@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [b10b7e6]
+- Updated dependencies [0f38a61]
+  - @memberjunction/core@2.68.0
+  - @memberjunction/core-entities-server@2.68.0
+  - @memberjunction/external-change-detection@2.68.0
+  - @memberjunction/actions@2.68.0
+  - @memberjunction/ai-core-plus@2.68.0
+  - @memberjunction/ai-vector-sync@2.68.0
+  - @memberjunction/communication-engine@2.68.0
+  - @memberjunction/content-autotagging@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/external-change-detection@2.67.0
+- @memberjunction/core-entities-server@2.67.0
+- @memberjunction/ai-core-plus@2.67.0
+- @memberjunction/ai-vector-sync@2.67.0
+- @memberjunction/actions@2.67.0
+- @memberjunction/communication-engine@2.67.0
+- @memberjunction/content-autotagging@2.67.0
+- @memberjunction/core@2.67.0
+- @memberjunction/core-entities@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Minor Changes
+
+- 7e22e3e: Child Generated Actions - completed implementation!
+
+### Patch Changes
+
+- Updated dependencies [7e22e3e]
+  - @memberjunction/actions@2.66.0
+  - @memberjunction/core-entities-server@2.66.0
+  - @memberjunction/ai-core-plus@2.66.0
+  - @memberjunction/ai-vector-sync@2.66.0
+  - @memberjunction/content-autotagging@2.66.0
+  - @memberjunction/external-change-detection@2.66.0
+  - @memberjunction/communication-engine@2.66.0
+  - @memberjunction/core@2.66.0
+  - @memberjunction/core-entities@2.66.0
+  - @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai-core-plus@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/ai-vector-sync@2.65.0
+  - @memberjunction/actions@2.65.0
+  - @memberjunction/content-autotagging@2.65.0
+  - @memberjunction/communication-engine@2.65.0
+  - @memberjunction/external-change-detection@2.65.0
+  - @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/ai-core-plus@2.64.0
+  - @memberjunction/actions@2.64.0
+  - @memberjunction/communication-engine@2.64.0
+  - @memberjunction/content-autotagging@2.64.0
+  - @memberjunction/external-change-detection@2.64.0
+  - @memberjunction/ai-vector-sync@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai-core-plus@2.63.1
+  - @memberjunction/ai-vector-sync@2.63.1
+  - @memberjunction/actions@2.63.1
+  - @memberjunction/communication-engine@2.63.1
+  - @memberjunction/content-autotagging@2.63.1
+  - @memberjunction/external-change-detection@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/ai-core-plus@2.63.0
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/actions@2.63.0
+  - @memberjunction/communication-engine@2.63.0
+  - @memberjunction/content-autotagging@2.63.0
+  - @memberjunction/external-change-detection@2.63.0
+  - @memberjunction/ai-vector-sync@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/ai-core-plus@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/actions@2.62.0
+  - @memberjunction/ai-vector-sync@2.62.0
+  - @memberjunction/content-autotagging@2.62.0
+  - @memberjunction/communication-engine@2.62.0
+  - @memberjunction/external-change-detection@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

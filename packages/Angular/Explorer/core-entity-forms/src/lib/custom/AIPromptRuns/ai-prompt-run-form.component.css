@@ -1,3 +1,36 @@
+/* Error Info Styles */
+.error-info {
+    margin-top: 16px;
+    padding: 16px;
+    background-color: #fef3f3;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+}
+
+.finish-reason {
+    margin: 0 0 12px 0;
+    color: #dc2626;
+    font-size: 14px;
+}
+
+.error-details {
+    margin-top: 12px;
+}
+
+.error-details h4 {
+    margin: 0 0 8px 0;
+    color: #991b1b;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.error-hint {
+    margin: 0;
+    color: #7f1d1d;
+    font-size: 14px;
+    font-style: italic;
+}
+
 /* Header Section */
 .prompt-run-header {
     background: #f8f9fa;
@@ -110,6 +143,28 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+.original-run {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    background: #fff3cd;
+    font-size: 0.85em;
+}
+
+.original-link {
+    color: #ff6358;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.original-link:hover {
+    color: #ff4444;
+    text-decoration: underline;
+}
+
 .run-actions {
     display: flex;
     gap: 8px;
@@ -155,6 +210,18 @@
     color: #2c3e50;
 }
 
+.config-link {
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.config-link:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
 /* Panels */
 .form-content {
     padding: 16px;
@@ -165,6 +232,79 @@
     align-items: center;
     gap: 8px;
     font-weight: 600;
+}
+
+/* Nested Sub-Panel Styles */
+.sub-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 0.95em;
+}
+
+.sub-panel-content {
+    padding: 0;
+}
+
+/* Nested kendo-panelbar styles */
+.k-panelbar .k-panelbar {
+    border: none;
+    background: transparent;
+}
+
+.k-panelbar .k-panelbar > .k-item {
+    border: 1px solid #e5e7eb;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.k-panelbar .k-panelbar > .k-item > .k-link {
+    background-color: #f9fafb;
+    padding: 12px 16px;
+}
+
+.k-panelbar .k-panelbar > .k-item.k-expanded > .k-link {
+    background-color: #f3f4f6;
+}
+
+.k-panelbar .k-panelbar .k-content {
+    padding: 0;
+    background: white;
+}
+
+/* Ensure chat message viewer takes appropriate height */
+.sub-panel-content mj-chat-message-viewer {
+    display: block;
+    min-height: 200px;
+    max-height: 750px; /* Increased by 50% from 500px */
+    height: auto;
+    overflow: hidden;
+}
+
+/* Different colors for sub-expansion panels */
+.sub-expansion-panel {
+    margin-bottom: 8px;
+}
+
+.sub-expansion-panel::ng-deep .k-expander {
+    background-color: #f7fafc;
+    border-color: #e2e8f0;
+}
+
+.sub-expansion-panel::ng-deep .k-expander:hover {
+    background-color: #edf2f7;
+}
+
+.sub-expansion-panel::ng-deep .k-header {
+    background-color: #f7fafc;
+    border-color: #e2e8f0;
+}
+
+.sub-expansion-panel::ng-deep .k-content {
+    background-color: #ffffff;
+    border-color: #e2e8f0;
 }
 
 .panel-badge {
@@ -255,6 +395,25 @@
     font-size: 1.1em;
 }
 
+/* Loading State */
+.loading-state {
+    text-align: center;
+    padding: 60px 40px;
+    color: #6c757d;
+}
+
+.loading-state i {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.6;
+    color: #007bff;
+}
+
+.loading-state p {
+    margin: 0;
+    font-size: 1.1em;
+}
+
 /* Metrics Grid */
 .metrics-grid {
     display: grid;
@@ -310,7 +469,6 @@
 
 /* Additional Metrics */
 .additional-metrics {
-    border-top: 1px solid #e9ecef;
     padding-top: 16px;
 }
 

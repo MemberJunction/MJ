@@ -138,46 +138,6 @@
     margin-right: 16px;
 }
 
-/* Model Selection Mode */
-.model-selection-mode {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    background: #f0f7ff;
-    border: 1px solid #cce5ff;
-    border-radius: 8px;
-}
-
-.model-selection-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #0066cc;
-    margin: 0;
-}
-
-.model-selection-label i {
-    font-size: 14px;
-}
-
-.model-selection-dropdown {
-    min-width: 140px;
-    height: 32px;
-}
-
-.model-selection-value {
-    font-size: 13px;
-    font-weight: 500;
-    color: #495057;
-    padding: 4px 12px;
-    background: white;
-    border-radius: 6px;
-    border: 1px solid #dee2e6;
-}
-
 .agent-meta-info {
     display: flex;
     gap: 24px;
@@ -762,6 +722,94 @@
     color: #2196f3;
 }
 
+/* Payload Section Styles */
+.payload-config-section,
+.payload-paths-section,
+.payload-validation-section {
+    margin-bottom: 32px;
+}
+
+.subsection-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subsection-title i {
+    color: #2196f3;
+}
+
+.subsection-divider {
+    margin-top: 32px;
+    margin-bottom: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #e0e6ed;
+}
+
+.payload-config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.payload-field-group {
+    margin-bottom: 20px;
+}
+
+.payload-field-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.payload-field-label i {
+    color: #6c757d;
+    font-size: 16px;
+}
+
+.field-description {
+    font-size: 12px;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: auto;
+}
+
+/* Code editor styling */
+.payload-field-group mj-code-editor {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.payload-field-group mj-code-editor:hover {
+    border-color: #2196f3;
+}
+
+/* Payload textarea styling */
+.payload-field-group mj-form-field ::ng-deep textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* Execution History Panel */
+.execution-history-panel {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 /* Timeline List for Execution History */
 .timeline-list {
     display: flex;
@@ -1287,6 +1335,13 @@
     overflow-y: auto;
 }
 
+/* Code editor styling within result section */
+.result-section mj-code-editor {
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
 .error-content {
     background: #f8d7da;
     border-color: #f5c6cb;
@@ -1505,3 +1560,847 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Execution History Panel - Max Height and Scroll */
+.execution-history-panel {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Custom scrollbar for execution history */
+.execution-history-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.execution-history-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.execution-history-panel::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.execution-history-panel::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+
+/* New Execution History Card Design */
+.execution-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.execution-card {
+    background: white;
+    border: 1px solid #e0e6ed;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.execution-card:hover {
+    border-color: #2196f3;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.1);
+    transform: translateY(-1px);
+}
+
+.execution-card.expanded {
+    border-color: #2196f3;
+    box-shadow: 0 6px 20px rgba(33, 150, 243, 0.15);
+}
+
+.execution-header {
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.execution-left-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.execution-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.status-indicator {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.status-indicator i {
+    color: white;
+    font-size: 14px;
+}
+
+.execution-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.execution-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.execution-date {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.execution-metrics {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-left: 44px; /* Align with execution title text, accounting for status indicator + gap */
+}
+
+.metric-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    background: #f8f9fa;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.metric-item i {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.metric-label {
+    font-weight: 500;
+}
+
+.metric-value {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.execution-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.action-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #6c757d;
+}
+
+.action-btn:hover {
+    background: #2196f3;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.action-btn i {
+    font-size: 12px;
+}
+
+.expand-icon {
+    transition: transform 0.2s ease;
+    color: #6c757d;
+    margin-right: 4px;
+}
+
+.expand-icon.expanded {
+    transform: rotate(90deg);
+}
+
+/* Execution Expanded Content */
+.execution-expanded-content {
+    padding: 16px;
+    border-top: 1px solid #f0f4f8;
+    background: #fafbfc;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+}
+
+.detailed-metrics {
+    margin-bottom: 20px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.metric-detail {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+}
+
+.metric-detail i {
+    color: #2196f3;
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+.metric-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.metric-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metric-data {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.result-section {
+    margin-top: 16px;
+}
+
+.result-section h5 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.error-section h5 {
+    color: #dc3545;
+}
+
+.error-content {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #721c24;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+/* Responsive adjustments for execution history */
+@media (max-width: 768px) {
+    .execution-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .execution-left-section {
+        width: 100%;
+    }
+    
+    .execution-metrics {
+        margin-left: 0; /* Remove left margin on mobile */
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .metric-item {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* === PAYLOAD MANAGEMENT SECTION === */
+.payload-section {
+    margin-bottom: 2rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    overflow: hidden;
+}
+
+.payload-section-title {
+    margin: 0;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-bottom: 1px solid #e0e0e0;
+    color: #495057;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.payload-section-title i {
+    color: #2196f3;
+    font-size: 1.2rem;
+}
+
+/* Payload Scope Styling */
+.payload-field-container {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.payload-field-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.payload-field-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+.payload-field-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.payload-field-input {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.payload-field-example {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+    background: #f8f9fa;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.payload-field-example i {
+    color: #ffc107;
+    font-size: 0.9rem;
+}
+
+.payload-field-example code {
+    background: #e9ecef;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    color: #495057;
+}
+
+/* Path Configuration Grid */
+.payload-paths-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+
+.payload-path-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.payload-path-card:hover {
+    border-color: #2196f3;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+}
+
+.payload-path-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.payload-path-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.payload-path-icon.downstream {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.payload-path-icon.upstream {
+    background: linear-gradient(135deg, #007bff, #6610f2);
+}
+
+.payload-path-icon.self-read {
+    background: linear-gradient(135deg, #17a2b8, #20c997);
+}
+
+.payload-path-icon.self-write {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+}
+
+.payload-path-icon i {
+    color: white;
+    font-size: 1.2rem;
+}
+
+.payload-path-info h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.payload-path-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6c757d;
+    line-height: 1.4;
+}
+
+.payload-path-content {
+    padding: 1rem;
+}
+
+.json-editor-container {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+}
+
+.json-editor-container:hover {
+    border-color: #2196f3;
+}
+
+.payload-path-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #6c757d;
+    line-height: 1.4;
+}
+
+.payload-path-hint i {
+    color: #17a2b8;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
+.payload-path-hint code {
+    background: #e9ecef;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    color: #495057;
+}
+
+/* Payload Validation Container */
+.payload-validation-container {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.payload-validation-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.validation-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.validation-field-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+.validation-field-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin: 0 0 0.5rem 0;
+}
+
+.payload-validation-schema {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.validation-schema-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.validation-schema-label i {
+    color: #2196f3;
+}
+
+.validation-schema-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.validation-schema-editor {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.validation-schema-editor:hover {
+    border-color: #2196f3;
+}
+
+/* === CONFIGURATION SECTION === */
+.config-section {
+    margin-bottom: 2rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    overflow: hidden;
+}
+
+.config-section-title {
+    margin: 0;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-bottom: 1px solid #e0e0e0;
+    color: #495057;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.config-section-title i {
+    color: #2196f3;
+    font-size: 1.2rem;
+}
+
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+    width: 100%;
+}
+
+.config-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.config-card:hover {
+    border-color: #2196f3;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+}
+
+.config-card.full-width {
+    grid-column: 1 / -1;
+}
+
+.config-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.config-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.config-card-icon i {
+    color: white;
+    font-size: 1.2rem;
+}
+
+.config-card-info h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.config-card-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6c757d;
+    line-height: 1.4;
+}
+
+.config-card-content {
+    padding: 1rem;
+}
+
+/* Custom field styling for config cards */
+.config-field-input {
+    width: 100%;
+    min-width: 250px;
+}
+
+/* Fix numeric textbox cutoff issue */
+.config-card-content ::ng-deep kendo-numerictextbox {
+    width: 100% !important;
+}
+
+.config-card-content ::ng-deep kendo-numerictextbox .k-numerictextbox {
+    width: 100% !important;
+}
+
+.config-card-content ::ng-deep kendo-numerictextbox .k-input {
+    width: 100% !important;
+    min-width: 200px !important;
+}
+
+.config-card-content ::ng-deep mj-form-field {
+    width: 100% !important;
+}
+
+.config-card-content ::ng-deep mj-form-field kendo-numerictextbox {
+    width: 100% !important;
+}
+
+.config-card-content ::ng-deep mj-form-field kendo-numerictextbox .k-numerictextbox {
+    width: 100% !important;
+}
+
+.config-card-content ::ng-deep mj-form-field kendo-numerictextbox .k-input {
+    width: 100% !important;
+    min-width: 200px !important;
+}
+
+.config-field-display {
+    color: #495057;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 0;
+    display: block;
+    min-height: 20px;
+}
+
+/* Prompt selector styling */
+.prompt-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.prompt-display {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+
+.prompt-name {
+    color: #495057;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.no-prompt {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 14px;
+}
+
+.prompt-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.prompt-select-btn {
+    white-space: nowrap;
+}
+
+.prompt-clear-btn {
+    min-width: 32px;
+}
+
+.config-card-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #6c757d;
+    line-height: 1.4;
+    margin-top: 0.5rem;
+}
+
+.config-card-hint i {
+    color: #17a2b8;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
+.config-card-hint code {
+    background: #e9ecef;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    color: #495057;
+}
+
+
+/* === RESPONSIVE DESIGN === */
+@media (max-width: 768px) {
+    .payload-field-container,
+    .payload-validation-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .payload-paths-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .config-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .payload-section-title,
+    .config-section-title {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    .payload-path-header,
+    .config-card-header {
+        padding: 0.75rem;
+    }
+    
+    .payload-path-content,
+    .config-card-content {
+        padding: 0.75rem;
+    }
+    
+    .payload-field-container,
+    .payload-validation-container {
+        padding: 1rem;
+    }
+}
+

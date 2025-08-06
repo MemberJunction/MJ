@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create a new user in LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'CreateUserAction')
+@RegisterClass(BaseAction, 'CreateUserAction')
 export class CreateUserAction extends LearnWorldsBaseAction {
     /**
      * Create a new user

@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "CalculateRunCost",
+      "CategoryID": "@lookup:Query Categories.Name=Agents",
+      "UserQuestion": "What is the total cost, token usage, and number of prompts for an AI Agent Run including all its sub-agent runs?",
+      "Description": "Calculates comprehensive cost metrics for an AI Agent Run, including all nested sub-agent runs. Returns total cost, token usage (input/output), and prompt count by recursively traversing the agent run hierarchy.",
+      "SQL": "@file:SQL/calculate-ai-agent-run-cost.sql",
+      "TechnicalDescription": "This query uses a Common Table Expression (CTE) to recursively traverse the AI Agent Run hierarchy, starting from a specified root agent run and including all nested sub-agent runs up to 20 levels deep. It then joins with AI Agent Run Steps to find all prompt executions and calculates aggregate cost and token metrics. The query uses template parameters for the MJ Core schema name and agent run ID to ensure compatibility across different environments.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "1ED5F808-5B12-45DB-A376-324CF65B0CAF"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:22:25.447Z",
+      "checksum": "d2d1377076d38e85c6f46ad28cf7cda14efc977ffec00e97db8a6b790d5258f6"
+    }
+  }
+]

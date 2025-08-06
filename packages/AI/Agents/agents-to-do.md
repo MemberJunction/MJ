@@ -30,6 +30,29 @@ This document outlines the next steps for testing and refining the new change-ba
 - [ ] Document actual token savings percentages
 - [ ] Verify cost reduction in real-world scenarios
 
+### 3.5. Implement Payload Feedback Manager 🔄 NEW
+- [ ] Create AI Prompt template for payload change feedback
+  - [ ] Design prompt that presents suspicious changes and asks for confirmation
+  - [ ] Support batching multiple questions in single prompt
+  - [ ] Return structured JSON with yes/no answers for each change
+- [ ] Implement PayloadFeedbackManager.queryAgent using MJ prompt system
+  - [ ] Load feedback prompt from database by ID
+  - [ ] Use AIPromptRunner to execute with proper template parameters
+  - [ ] Parse structured response and map to PayloadFeedbackResponse[]
+- [ ] Integrate feedback loop into BaseAgent workflow
+  - [ ] Check PayloadManagerResult.requiresFeedback flag
+  - [ ] If true, query agent about suspicious changes
+  - [ ] Handle rejected changes (revert, retry, or continue with warning)
+- [ ] Test feedback system with common scenarios:
+  - [ ] Content truncation (>70% reduction)
+  - [ ] Non-empty key removal
+  - [ ] Type changes (object→primitive)
+  - [ ] Pattern anomalies (placeholder replacements)
+- [ ] Configuration and tuning
+  - [ ] Make feedback thresholds configurable
+  - [ ] Add option to disable feedback for specific agents
+  - [ ] Configure batch size for feedback questions
+
 ## Integration Testing
 
 ### 4. Sub-Agent State Management Testing 🔄
@@ -192,5 +215,5 @@ For our next working session, we should focus on:
 
 ---
 
-*Last Updated: [Current Date]*
-*Version: 1.0*
+*Last Updated: 2024-01-16*
+*Version: 1.1* - Added Payload Feedback Manager implementation task

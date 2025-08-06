@@ -1,5 +1,346 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.81.0
+
+### Patch Changes
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/sqlserver-dataprovider@2.81.0
+  - @memberjunction/aiengine@2.81.0
+  - @memberjunction/communication-types@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/ai-openai@2.81.0
+  - @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.80.1
+- @memberjunction/aiengine@2.80.1
+- @memberjunction/ai-openai@2.80.1
+- @memberjunction/communication-types@2.80.1
+- @memberjunction/core@2.80.1
+- @memberjunction/core-entities@2.80.1
+- @memberjunction/global@2.80.1
+- @memberjunction/sqlserver-dataprovider@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- Updated dependencies [7c5f844]
+- Updated dependencies [d03dfae]
+  - @memberjunction/core@2.80.0
+  - @memberjunction/core-entities@2.80.0
+  - @memberjunction/sqlserver-dataprovider@2.80.0
+  - @memberjunction/aiengine@2.80.0
+  - @memberjunction/communication-types@2.80.0
+  - @memberjunction/ai@2.80.0
+  - @memberjunction/ai-openai@2.80.0
+  - @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [4bf2634]
+- Updated dependencies [907e73f]
+- Updated dependencies [bad1a60]
+  - @memberjunction/core-entities@2.79.0
+  - @memberjunction/global@2.79.0
+  - @memberjunction/ai@2.79.0
+  - @memberjunction/ai-openai@2.79.0
+  - @memberjunction/aiengine@2.79.0
+  - @memberjunction/communication-types@2.79.0
+  - @memberjunction/sqlserver-dataprovider@2.79.0
+  - @memberjunction/core@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- Updated dependencies [ef7c014]
+- Updated dependencies [06088e5]
+  - @memberjunction/ai@2.78.0
+  - @memberjunction/core-entities@2.78.0
+  - @memberjunction/aiengine@2.78.0
+  - @memberjunction/ai-openai@2.78.0
+  - @memberjunction/sqlserver-dataprovider@2.78.0
+  - @memberjunction/communication-types@2.78.0
+  - @memberjunction/core@2.78.0
+  - @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- Updated dependencies [476a458]
+- Updated dependencies [d8f14a2]
+- Updated dependencies [8ee0d86]
+- Updated dependencies [c91269e]
+  - @memberjunction/sqlserver-dataprovider@2.77.0
+  - @memberjunction/core@2.77.0
+  - @memberjunction/core-entities@2.77.0
+  - @memberjunction/aiengine@2.77.0
+  - @memberjunction/communication-types@2.77.0
+  - @memberjunction/ai@2.77.0
+  - @memberjunction/ai-openai@2.77.0
+  - @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- Updated dependencies [4b27b3c]
+- Updated dependencies [7dabb22]
+- Updated dependencies [ffda243]
+  - @memberjunction/core-entities@2.76.0
+  - @memberjunction/core@2.76.0
+  - @memberjunction/sqlserver-dataprovider@2.76.0
+  - @memberjunction/aiengine@2.76.0
+  - @memberjunction/communication-types@2.76.0
+  - @memberjunction/ai@2.76.0
+  - @memberjunction/ai-openai@2.76.0
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- 1d0972d: Enabling custom Sender address when sending email using MS Graph Provider
+  - @memberjunction/sqlserver-dataprovider@2.75.0
+  - @memberjunction/ai@2.75.0
+  - @memberjunction/aiengine@2.75.0
+  - @memberjunction/ai-openai@2.75.0
+  - @memberjunction/communication-types@2.75.0
+  - @memberjunction/core@2.75.0
+  - @memberjunction/core-entities@2.75.0
+  - @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- e10780d: Allow MS Graph users to save sent emails in sender's sent items.
+- Updated dependencies [b70301e]
+- Updated dependencies [d316670]
+  - @memberjunction/core-entities@2.74.0
+  - @memberjunction/core@2.74.0
+  - @memberjunction/aiengine@2.74.0
+  - @memberjunction/communication-types@2.74.0
+  - @memberjunction/sqlserver-dataprovider@2.74.0
+  - @memberjunction/ai@2.74.0
+  - @memberjunction/ai-openai@2.74.0
+  - @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- Updated dependencies [26c2b03]
+- Updated dependencies [e99336f]
+- Updated dependencies [eebfb9a]
+  - @memberjunction/aiengine@2.73.0
+  - @memberjunction/core-entities@2.73.0
+  - @memberjunction/ai@2.73.0
+  - @memberjunction/sqlserver-dataprovider@2.73.0
+  - @memberjunction/communication-types@2.73.0
+  - @memberjunction/ai-openai@2.73.0
+  - @memberjunction/core@2.73.0
+  - @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- Updated dependencies [636b6ee]
+  - @memberjunction/core-entities@2.72.0
+  - @memberjunction/aiengine@2.72.0
+  - @memberjunction/communication-types@2.72.0
+  - @memberjunction/sqlserver-dataprovider@2.72.0
+  - @memberjunction/ai@2.72.0
+  - @memberjunction/ai-openai@2.72.0
+  - @memberjunction/core@2.72.0
+  - @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/ai@2.71.0
+  - @memberjunction/aiengine@2.71.0
+  - @memberjunction/ai-openai@2.71.0
+  - @memberjunction/communication-types@2.71.0
+  - @memberjunction/core@2.71.0
+  - @memberjunction/core-entities@2.71.0
+  - @memberjunction/sqlserver-dataprovider@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/ai@2.70.0
+  - @memberjunction/aiengine@2.70.0
+  - @memberjunction/ai-openai@2.70.0
+  - @memberjunction/communication-types@2.70.0
+  - @memberjunction/core@2.70.0
+  - @memberjunction/core-entities@2.70.0
+  - @memberjunction/sqlserver-dataprovider@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- Updated dependencies [2aebdf5]
+  - @memberjunction/core@2.69.1
+  - @memberjunction/aiengine@2.69.1
+  - @memberjunction/communication-types@2.69.1
+  - @memberjunction/core-entities@2.69.1
+  - @memberjunction/sqlserver-dataprovider@2.69.1
+  - @memberjunction/ai@2.69.1
+  - @memberjunction/ai-openai@2.69.1
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/core@2.69.0
+  - @memberjunction/global@2.69.0
+  - @memberjunction/aiengine@2.69.0
+  - @memberjunction/communication-types@2.69.0
+  - @memberjunction/core-entities@2.69.0
+  - @memberjunction/sqlserver-dataprovider@2.69.0
+  - @memberjunction/ai@2.69.0
+  - @memberjunction/ai-openai@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- Updated dependencies [a6b43d0]
+- Updated dependencies [b10b7e6]
+  - @memberjunction/sqlserver-dataprovider@2.68.0
+  - @memberjunction/core@2.68.0
+  - @memberjunction/aiengine@2.68.0
+  - @memberjunction/communication-types@2.68.0
+  - @memberjunction/core-entities@2.68.0
+  - @memberjunction/ai@2.68.0
+  - @memberjunction/ai-openai@2.68.0
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- Updated dependencies [1fbfc26]
+  - @memberjunction/sqlserver-dataprovider@2.67.0
+  - @memberjunction/ai@2.67.0
+  - @memberjunction/aiengine@2.67.0
+  - @memberjunction/ai-openai@2.67.0
+  - @memberjunction/communication-types@2.67.0
+  - @memberjunction/core@2.67.0
+  - @memberjunction/core-entities@2.67.0
+  - @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.66.0
+- @memberjunction/sqlserver-dataprovider@2.66.0
+- @memberjunction/ai@2.66.0
+- @memberjunction/ai-openai@2.66.0
+- @memberjunction/communication-types@2.66.0
+- @memberjunction/core@2.66.0
+- @memberjunction/core-entities@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [1d034b7]
+- Updated dependencies [619488f]
+- Updated dependencies [b029c5d]
+  - @memberjunction/ai@2.65.0
+  - @memberjunction/global@2.65.0
+  - @memberjunction/sqlserver-dataprovider@2.65.0
+  - @memberjunction/core-entities@2.65.0
+  - @memberjunction/aiengine@2.65.0
+  - @memberjunction/ai-openai@2.65.0
+  - @memberjunction/communication-types@2.65.0
+  - @memberjunction/core@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- Updated dependencies [e775f2b]
+  - @memberjunction/core-entities@2.64.0
+  - @memberjunction/aiengine@2.64.0
+  - @memberjunction/communication-types@2.64.0
+  - @memberjunction/sqlserver-dataprovider@2.64.0
+  - @memberjunction/ai@2.64.0
+  - @memberjunction/ai-openai@2.64.0
+  - @memberjunction/core@2.64.0
+  - @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/ai@2.63.1
+  - @memberjunction/aiengine@2.63.1
+  - @memberjunction/ai-openai@2.63.1
+  - @memberjunction/communication-types@2.63.1
+  - @memberjunction/core@2.63.1
+  - @memberjunction/core-entities@2.63.1
+  - @memberjunction/sqlserver-dataprovider@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- Updated dependencies [28e8a85]
+  - @memberjunction/core-entities@2.63.0
+  - @memberjunction/aiengine@2.63.0
+  - @memberjunction/communication-types@2.63.0
+  - @memberjunction/sqlserver-dataprovider@2.63.0
+  - @memberjunction/ai@2.63.0
+  - @memberjunction/ai-openai@2.63.0
+  - @memberjunction/core@2.63.0
+  - @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- Updated dependencies [c995603]
+  - @memberjunction/ai@2.62.0
+  - @memberjunction/core-entities@2.62.0
+  - @memberjunction/aiengine@2.62.0
+  - @memberjunction/ai-openai@2.62.0
+  - @memberjunction/sqlserver-dataprovider@2.62.0
+  - @memberjunction/communication-types@2.62.0
+  - @memberjunction/core@2.62.0
+  - @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

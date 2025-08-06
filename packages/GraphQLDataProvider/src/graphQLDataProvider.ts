@@ -8,7 +8,7 @@
 import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
-         ILocalStorageProvider, EntitySaveOptions, LogError,
+         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
          TransactionGroupBase, TransactionItem, TransactionResult, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
@@ -219,7 +219,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param separateConnection 
      * @returns 
      */
-    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
+    public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
             if (separateConnection) {
                 this._configData = configData;
@@ -307,32 +307,41 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
         }
         else {
             throw new Error("No QueryID or QueryName provided to RunQuery");
         }
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
-        if (CategoryName !== undefined) {
-            variables.CategoryName = CategoryName;
+        if (CategoryPath !== undefined) {
+            variables.CategoryPath = CategoryPath;
+        }
+        if (Parameters !== undefined) {
+            variables.Parameters = Parameters;
+        }
+        if (MaxRows !== undefined) {
+            variables.MaxRows = MaxRows;
+        }
+        if (StartRow !== undefined) {
+            variables.StartRow = StartRow;
         }
     
         const result = await this.ExecuteGQL(query, variables);
@@ -341,17 +350,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables = { QueryName, CategoryID, CategoryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
+        if (CategoryID !== undefined) {
+            variables.CategoryID = CategoryID;
+        }
+        if (CategoryPath !== undefined) {
+            variables.CategoryPath = CategoryPath;
+        }
+        if (Parameters !== undefined) {
+            variables.Parameters = Parameters;
+        }
+        if (MaxRows !== undefined) {
+            variables.MaxRows = MaxRows;
+        }
+        if (StartRow !== undefined) {
+            variables.StartRow = StartRow;
+        }
     
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryDataByName) {
@@ -366,8 +390,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 QueryName
                 Results
                 RowCount
+                TotalRowCount
                 ExecutionTime
-                ErrorMessage`
+                ErrorMessage
+                AppliedParameters`
     }
     protected TransformQueryPayload(data: any): RunQueryResult {
         try {
@@ -377,8 +403,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Success: data.Success,
                 Results: JSON.parse(data.Results),
                 RowCount: data.RowCount,
+                TotalRowCount: data.TotalRowCount,
                 ExecutionTime: data.ExecutionTime,
                 ErrorMessage: data.ErrorMessage,
+                AppliedParameters: data.AppliedParameters ? JSON.parse(data.AppliedParameters) : undefined
             };    
         }
         catch (e) {
@@ -825,7 +853,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult> {
+    public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);

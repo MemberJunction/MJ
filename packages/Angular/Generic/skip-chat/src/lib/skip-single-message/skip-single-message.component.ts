@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewContainerRef } from '@angular/core';
 import { ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
@@ -17,7 +17,7 @@ import { DrillDownInfo } from '../drill-down-info';
   templateUrl: './skip-single-message.component.html',
   styleUrls: ['./skip-single-message.component.css']
 })
-export class SkipSingleMessageComponent  extends BaseAngularComponent implements AfterViewInit {  
+export class SkipSingleMessageComponent  extends BaseAngularComponent implements AfterViewInit, OnDestroy {  
     @Input() public ConversationRecord!: ConversationEntity;
     @Input() public ConversationDetailRecord!: ConversationDetailEntity;
     @Input() public ConversationUser!: UserInfo;
@@ -157,6 +157,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
 
     @ViewChild('reportContainer', { read: ViewContainerRef }) reportContainerRef!: ViewContainerRef;
 
+    // Track dynamically created report component for cleanup
+    private _reportComponentRef: ComponentRef<any> | null = null;
+
     private static _detailHtml: any = {};
 
 
@@ -170,13 +173,23 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * showing as a string like "5 seconds" or "1:05" which will update every second
      */
     public get ElapsedTimeSinceLoadFormatted(): string {
-      // first time this gets called we invoke the timer to get things going, don't do until then as it's not needed
+      return this._elapsedTimeFormatted;
+    }
+
+    /**
+     * Starts the elapsed time updater interval
+     */
+    private startElapsedTimeUpdater(): void {
+      // Initialize the formatted time immediately
+      this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+      
+      // Start the interval to update every second
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
           this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+          this.cdRef.markForCheck();
         }, 1000);
       }
-      return this._elapsedTimeFormatted;
     }
 
     private _elapsedTimeFormatted: string = "";
@@ -217,6 +230,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
 
         // Set _loadTime to the provided loadTime if available, otherwise use current time
         this._loadTime = this.loadTime !== undefined ? this.loadTime instanceof Date ? this.loadTime.getTime() : this.loadTime : Date.now();
+        
+        // Initialize elapsed time formatting and start the update interval
+        this.startElapsedTimeUpdater();
         
         // Load artifact info if available
         if (this.HasArtifact) {
@@ -399,6 +415,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
           if (resultObject.responsePhase ===  SkipResponsePhase.analysis_complete ) {
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
             const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);            
+            
+            // CRITICAL: Track the component reference for cleanup
+            this._reportComponentRef = componentRef;
             
             // Pass the data to the new report
             const report = componentRef.instance;
@@ -608,5 +627,36 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
       } catch (err) {
         console.error('Error loading artifact information', err);
       }
+    }
+
+    ngOnDestroy(): void {
+      // CRITICAL: Clean up dynamically created report component to prevent zombie components
+      if (this._reportComponentRef) {
+        this._reportComponentRef.destroy();
+        this._reportComponentRef = null;
+      }
+      
+      // Clear the view container to ensure no lingering references
+      if (this.reportContainerRef) {
+        this.reportContainerRef.clear();
+      }
+      
+      // Clean up the elapsed time interval to prevent memory leaks
+      if (this._elapsedTimeInterval !== null) {
+        clearInterval(this._elapsedTimeInterval);
+        this._elapsedTimeInterval = null;
+      }
+      
+      // Clear arrays and objects
+      this.SuggestedQuestions.length = 0;
+      this.SuggestedAnswers.length = 0;
+      
+      // Reset state
+      this._cachedMessage = null;
+      this.ArtifactName = null;
+      this.ArtifactDescription = null;
+      this.ArtifactVersion = null;
+      this.UserFeedbackText = '';
+      this._elapsedTimeFormatted = '';
     }
 }

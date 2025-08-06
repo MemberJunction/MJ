@@ -5,6 +5,7 @@ import path from 'path';
 import { mjCoreSchema, outputOptionValue } from '../Config/config';
 import { RegisterClass } from '@memberjunction/global';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
+import { sortBySequenceAndCreatedAt } from '../Misc/util';
 
 /**
  * Represents metadata about an Angular form section that is generated for an entity
@@ -477,7 +478,8 @@ export function Load${entity.ClassName}FormComponent() {
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
-          for (const field of entity.Fields) {
+          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm) 
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category);
@@ -561,7 +563,8 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       
           // figure out which fields will be in this section first
           section.Fields = [];
-          for (const field of entity.Fields) {
+          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   let bMatch: boolean = false;
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top && section.Type === GeneratedFormSectionType.Top) {
@@ -695,7 +698,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
         const tabs: AngularFormSectionInfo[] = [];
-        const sortedRelatedEntities = entity.RelatedEntities.filter(re => re.DisplayInForm).sort((a, b) => a.Sequence - b.Sequence); // only show related entities that are marked to display in the form and sort by sequence
+        const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities.filter(re => re.DisplayInForm)); // only show related entities that are marked to display in the form and sort by sequence, then by creation date
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)

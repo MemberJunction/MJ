@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Account balance information
@@ -37,7 +38,7 @@ export interface TrialBalanceSummary {
 /**
  * Action to retrieve account balances (trial balance) from QuickBooks Online
  */
-@RegisterClass(QuickBooksBaseAction, 'GetQuickBooksAccountBalancesAction')
+@RegisterClass(BaseAction, 'GetQuickBooksAccountBalancesAction')
 export class GetQuickBooksAccountBalancesAction extends QuickBooksBaseAction {
     
     /**

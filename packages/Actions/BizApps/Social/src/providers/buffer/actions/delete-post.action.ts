@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to delete a post from Buffer
  */
-@RegisterClass(BufferBaseAction, 'BufferDeletePostAction')
+@RegisterClass(BaseAction, 'BufferDeletePostAction')
 export class BufferDeletePostAction extends BufferBaseAction {
     /**
      * Delete a Buffer post

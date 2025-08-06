@@ -338,22 +338,12 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Categories',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Action Categories', 
+          OrderBy: 'Name' 
         },
         {
-          EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          UserSearchString: '',
-          IgnoreMaxRows: false,
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          EntityName: 'Actions', 
+          OrderBy: 'Name'
         }
       ]);
       

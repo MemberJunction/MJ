@@ -1,8 +1,10 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
 import { TemplateMessageRole } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngine } from '@memberjunction/aiengine';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -138,6 +140,7 @@ export class ExecutionPlanner {
     }
 
     const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+    const vendorInfo = this.selectVendorForModel(selectedModel);
 
     const task: ExecutionTask = {
       taskId: uuidv4(),
@@ -152,6 +155,9 @@ export class ExecutionPlanner {
       modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
       conversationMessages,
       templateMessageRole,
+      vendorId: vendorInfo.vendorId,
+      vendorDriverClass: vendorInfo.vendorDriverClass,
+      vendorApiName: vendorInfo.vendorApiName,
     };
 
     LogStatus(`Created single execution plan with model: ${selectedModel.Name}`);
@@ -185,7 +191,7 @@ export class ExecutionPlanner {
 
     if (parallelCount <= 1) {
       LogStatus(`StaticCount parallelization with count ${parallelCount}, falling back to single execution`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
     }
 
     const tasks: ExecutionTask[] = [];
@@ -202,6 +208,8 @@ export class ExecutionPlanner {
       const selectedModel = availableModels[modelIndex];
       const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
 
+      const vendorInfo = this.selectVendorForModel(selectedModel);
+
       const task: ExecutionTask = {
         taskId: uuidv4(),
         prompt,
@@ -215,6 +223,9 @@ export class ExecutionPlanner {
         modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
         conversationMessages,
         templateMessageRole,
+        vendorId: vendorInfo.vendorId,
+        vendorDriverClass: vendorInfo.vendorDriverClass,
+        vendorApiName: vendorInfo.vendorApiName,
       };
 
       tasks.push(task);
@@ -251,18 +262,17 @@ export class ExecutionPlanner {
 
     if (!configParamName) {
       LogError(`ConfigParam parallelization specified but ParallelConfigParam is not set for prompt "${prompt.Name}"`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
     }
 
-    // TODO: Implement configuration parameter lookup
-    // This would involve loading the configuration and extracting the parallel count
+    // Look up the configuration parameter to get the parallel count
     const parallelCount = this.getConfigurationParameter(configParamName, configurationId) || 1;
 
     LogStatus(`ConfigParam parallelization: ${configParamName} = ${parallelCount}`);
 
     // Create tasks using the resolved parallel count
     if (parallelCount <= 1) {
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
     }
 
     const tasks: ExecutionTask[] = [];
@@ -279,6 +289,8 @@ export class ExecutionPlanner {
       const selectedModel = availableModels[modelIndex];
       const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
 
+      const vendorInfo = this.selectVendorForModel(selectedModel);
+
       const task: ExecutionTask = {
         taskId: uuidv4(),
         prompt,
@@ -292,6 +304,9 @@ export class ExecutionPlanner {
         modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
         conversationMessages,
         templateMessageRole,
+        vendorId: vendorInfo.vendorId,
+        vendorDriverClass: vendorInfo.vendorDriverClass,
+        vendorApiName: vendorInfo.vendorApiName,
       };
 
       tasks.push(task);
@@ -329,7 +344,7 @@ export class ExecutionPlanner {
 
     if (activePromptModels.length === 0) {
       LogError(`No active prompt models found for ModelSpecific parallelization of prompt "${prompt.Name}"`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
     }
 
     // Create tasks based on each prompt model's configuration
@@ -345,6 +360,8 @@ export class ExecutionPlanner {
 
       // Create multiple tasks for this model if parallel count > 1
       for (let i = 0; i < parallelCount; i++) {
+        const vendorInfo = this.selectVendorForModel(model);
+
         const task: ExecutionTask = {
           taskId: uuidv4(),
           prompt,
@@ -358,6 +375,9 @@ export class ExecutionPlanner {
           modelParameters: this.parseModelParameters(promptModel.ModelParameters),
           conversationMessages,
           templateMessageRole,
+          vendorId: vendorInfo.vendorId,
+          vendorDriverClass: vendorInfo.vendorDriverClass,
+          vendorApiName: vendorInfo.vendorApiName,
         };
 
         tasks.push(task);
@@ -478,7 +498,7 @@ export class ExecutionPlanner {
         return promptModel.ParallelCount || 1;
 
       case 'ConfigParam': {
-        const configValue = this.getConfigurationParameter(promptModel.ParallelConfigParam, null);
+        const configValue = this.getConfigurationParameter(promptModel.ParallelConfigParam, promptModel.ConfigurationID);
         return configValue || 1;
       }
 
@@ -495,16 +515,58 @@ export class ExecutionPlanner {
    * @param configurationId - Configuration context ID
    * @returns number | null - The parameter value or null if not found
    */
-  private getConfigurationParameter(paramName: string | null, _configurationId: string | null): number | null {
+  private getConfigurationParameter(paramName: string | null, configurationId: string | null): number | null {
     if (!paramName) {
       return null;
     }
 
-    // TODO: Implement actual configuration parameter lookup
-    // This would involve querying the MJ: AI Configurations system
-    // For now, return a default value
-    LogStatus(`Configuration parameter lookup not yet implemented: ${paramName}`);
-    return 2; // Default parallel count
+    if (!configurationId) {
+      LogStatus(`No configuration ID provided for parameter lookup: ${paramName}`);
+      return null;
+    }
+
+    try {
+      const aiEngine = AIEngineBase.Instance;
+      const configParam = aiEngine.GetConfigurationParam(configurationId, paramName);
+      
+      if (!configParam) {
+        LogStatus(`Configuration parameter "${paramName}" not found in configuration "${configurationId}"`);
+        return null;
+      }
+
+      // Parse the value based on the Type
+      let value: number | null = null;
+      
+      switch (configParam.Type) {
+        case 'number':
+          value = parseFloat(configParam.Value);
+          if (isNaN(value)) {
+            LogError(`Failed to parse number value for configuration parameter "${paramName}": ${configParam.Value}`);
+            return null;
+          }
+          break;
+          
+        case 'string':
+          // Try to parse string as number
+          value = parseFloat(configParam.Value);
+          if (isNaN(value)) {
+            LogError(`Configuration parameter "${paramName}" is a string but expected a number: ${configParam.Value}`);
+            return null;
+          }
+          break;
+          
+        default:
+          LogError(`Unsupported data type for parallel count configuration parameter "${paramName}": ${configParam.Type}`);
+          return null;
+      }
+
+      LogStatus(`Retrieved configuration parameter "${paramName}" = ${value} from configuration "${configurationId}"`);
+      return value;
+      
+    } catch (error) {
+      LogError(`Error retrieving configuration parameter "${paramName}": ${error.message}`);
+      return null;
+    }
   }
 
   /**
@@ -524,5 +586,49 @@ export class ExecutionPlanner {
       LogError(`Failed to parse model parameters JSON: ${error.message}`);
       return undefined;
     }
+  }
+
+  /**
+   * Selects vendor information for a model, preferring inference providers
+   */
+  private selectVendorForModel(model: AIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
+    // Find the inference provider type from vendor type definitions
+    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
+      vt => vt.Name === 'Inference Provider'
+    );
+    
+    if (!inferenceProviderType) {
+      // Fallback to model defaults if we can't find the inference provider type
+      return {
+        vendorDriverClass: model.DriverClass,
+        vendorApiName: model.APIName
+      };
+    }
+
+    // Get active model vendors for this model that are inference providers
+    const modelVendors = AIEngine.Instance.ModelVendors
+      .filter(mv => 
+        mv.ModelID === model.ID && 
+        mv.Status === 'Active' && 
+        mv.TypeID === inferenceProviderType.ID
+      )
+      .sort((a, b) => b.Priority - a.Priority);
+
+    if (modelVendors.length === 0) {
+      // No vendors found, use model defaults
+      return {
+        vendorDriverClass: model.DriverClass,
+        vendorApiName: model.APIName
+      };
+    }
+
+    // Use the highest priority vendor
+    const selectedVendor = modelVendors[0];
+
+    return {
+      vendorId: selectedVendor.VendorID,
+      vendorDriverClass: selectedVendor.DriverClass || model.DriverClass,
+      vendorApiName: selectedVendor.APIName || model.APIName
+    };
   }
 }

@@ -3,11 +3,12 @@ import { TwitterBaseAction, Tweet, TwitterSearchParams } from '../twitter-base.a
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search for tweets on Twitter/X with advanced operators and historical data
  */
-@RegisterClass(TwitterBaseAction, 'TwitterSearchTweetsAction')
+@RegisterClass(BaseAction, 'TwitterSearchTweetsAction')
 export class TwitterSearchTweetsAction extends TwitterBaseAction {
     /**
      * Search for tweets on Twitter

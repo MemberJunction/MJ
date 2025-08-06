@@ -3,13 +3,14 @@ import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Searches for historical Instagram posts from the business account.
  * Instagram API only allows searching within your own business account's posts.
  * Supports filtering by date range, hashtags, and content.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Search Posts')
+@RegisterClass(BaseAction, 'Instagram - Search Posts')
 export class InstagramSearchPostsAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

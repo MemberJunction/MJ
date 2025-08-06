@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create tasks in HubSpot
  */
-@RegisterClass(HubSpotBaseAction, 'CreateTaskAction')
+@RegisterClass(BaseAction, 'CreateTaskAction')
 export class CreateTaskAction extends HubSpotBaseAction {
     /**
      * Create a task in HubSpot

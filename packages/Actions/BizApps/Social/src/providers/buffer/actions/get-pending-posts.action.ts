@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get pending (scheduled) posts from Buffer
  */
-@RegisterClass(BufferBaseAction, 'BufferGetPendingPostsAction')
+@RegisterClass(BaseAction, 'BufferGetPendingPostsAction')
 export class BufferGetPendingPostsAction extends BufferBaseAction {
     /**
      * Get pending posts from Buffer

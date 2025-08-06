@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Interface for a General Ledger Entry from Business Central
@@ -34,7 +35,7 @@ export interface BCDimensionSetLine {
 /**
  * Action to retrieve General Ledger Entries from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BusinessCentralBaseAction, 'GetBusinessCentralGeneralLedgerEntriesAction')
+@RegisterClass(BaseAction, 'GetBusinessCentralGeneralLedgerEntriesAction')
 export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentralBaseAction {
     
     /**

@@ -1,9 +1,15 @@
+import { AIErrorInfo } from './errorTypes.js';
+
 export class BaseResult {
     success: boolean
     startTime: Date
     endTime: Date
     errorMessage: string
     exception: any
+    /**
+     * Structured error information for better error handling and retry logic
+     */
+    errorInfo?: AIErrorInfo
     get timeElapsed(): number {
         return this.endTime.getTime() - this.startTime.getTime();
     }
@@ -115,6 +121,24 @@ export class ModelUsage {
      * If not specified when cost is provided, the currency is provider-specific.
      */
     costCurrency?: string
+    
+    /**
+     * Optional queue time in milliseconds before the model started processing the request.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    queueTime?: number
+    
+    /**
+     * Optional time in milliseconds for the model to ingest and process the prompt.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    promptTime?: number
+    
+    /**
+     * Optional time in milliseconds for the model to generate the completion/response tokens.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    completionTime?: number
     
     /**
      * Calculated total number of tokens (prompt + completion).

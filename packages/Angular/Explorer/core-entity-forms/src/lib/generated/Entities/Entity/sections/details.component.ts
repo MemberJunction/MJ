@@ -245,6 +245,13 @@ import { EntityEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="CodeName"
             Type="textbox"
             [EditMode]="EditMode"

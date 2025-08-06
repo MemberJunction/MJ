@@ -1,5 +1,217 @@
 # Change Log - @memberjunction/core
 
+## 2.81.0
+
+### Minor Changes
+
+- 971c5d4: feat: implement query audit logging and TTL-based caching
+
+  Add comprehensive audit logging and caching capabilities to the
+  MemberJunction Query system:
+
+  - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
+    granular audit control
+  - Implement TTL-based result caching with LRU eviction strategy for
+    improved performance
+  - Add cache configuration columns to Query and QueryCategory entities
+  - Support category-level cache configuration inheritance
+  - Update GraphQL resolvers to handle new audit and cache fields
+  - Refactor RunQuery method into logical helper methods for better
+    maintainability
+  - Follow established RunView pattern for fire-and-forget audit logging
+
+### Patch Changes
+
+- 6d2d478: feat: AI Agent UI improvements and server-side context fixes
+
+  - Enhanced AI Agent dialogs with resizable and draggable functionality
+    using Kendo UI Window component
+  - Improved dialog positioning with consistent center placement and proper
+    container context
+  - Fixed prompt selector in AI Agent form for better user experience
+  - Added missing contextUser parameter to GetEntityObject calls in
+    BaseResolver for proper multi-user isolation
+  - Fixed createRecordAccessAuditLogRecord calls in generated resolvers to
+    include provider argument
+  - Added JSDoc documentation to ViewInfo class properties for better code
+    documentation
+  - Applied consistent dialog styling across all AI Agent management
+    components
+  - @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- 7c5f844: Bug fixes for SQLServerDataProvider and fix ability to use other providers for MD refreshes up and down the stack
+  - @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Minor Changes
+
+- d8f14a2: significant changes in all of these
+- c91269e: migration file for permissions driving minor bump
+
+### Patch Changes
+
+- @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- 7dabb22: feat: add hierarchical CategoryName support for query lookup
+
+  Adds support for hierarchical category paths in query lookup operations.
+  The CategoryName parameter now accepts filesystem-like paths (e.g.,
+  "/MJ/AI/Agents/") that walk through the QueryCategory parent-child
+  relationships.
+
+  ### New Features
+
+  - **Hierarchical Path Resolution**: CategoryName now supports paths like
+    "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
+    category hierarchy using ParentID relationships
+  - **CategoryPath Property**: Added CategoryPath getter to QueryInfo class
+    that returns the full hierarchical path for any query
+  - **Backward Compatibility**: Existing simple CategoryName usage (e.g.,
+    "Agents") continues to work unchanged
+  - @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Minor Changes
+
+- d316670: migration - MJCore
+
+### Patch Changes
+
+- @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- 2aebdf5: Patch to repackage failed deployment run
+  - @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Minor Changes
+
+- 79e8509: Several changes to improve validation functionality
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/global@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- b10b7e6: tweaks to EntityField active status assertion - enabled supression per field instance
+  - @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes

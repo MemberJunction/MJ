@@ -2,35 +2,116 @@ import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 
 /**
- * Information about a single user
+ * A list of all users who have or had access to the system.
+ * Contains user profile information, authentication details, and role assignments.
  */
 export class UserInfo extends BaseInfo {
+    /**
+     * Unique identifier for the user
+     */
     ID: string = null;
 
-    /* Name of the user that is used in various places in UIs/etc, can be anything including FirstLast, Email, a Handle, etc */
+    /**
+     * Name of the user that is used in various places in UIs/etc, can be anything including FirstLast, Email, a Handle, etc
+     */
     Name: string = null
+    
+    /**
+     * User's first name or given name
+     */
     FirstName: string = null
+    
+    /**
+     * User's last name or surname
+     */
     LastName: string = null
+    
+    /**
+     * User's professional title or salutation
+     */
     Title: string = null
+    
+    /**
+     * Unique email address for the user. This field must be unique across all users in the system
+     */
     Email: string = null
+    
+    /**
+     * User account type (User, Owner)
+     */
     Type: string = null
+    
+    /**
+     * Whether this user account is currently active and can log in
+     */
     IsActive: boolean = null
+    
+    /**
+     * Type of record this user is linked to (None, Employee, Contact, etc.)
+     */
     LinkedRecordType: 'None' | 'Employee' | 'Other' = null
+    
+    /**
+     * Foreign key reference to the Employee entity
+     */
     EmployeeID: number = null
+    
+    /**
+     * Foreign key reference to the Entities table
+     */
     LinkedEntityID: number = null
+    
+    /**
+     * ID of the specific record this user is linked to
+     */
     LinkedEntityRecordID: number = null
+    
+    /**
+     * Timestamp when the user record was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the user record was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
+    /**
+     * Concatenated first and last name
+     */
     FirstLast: string = null
+    
+    /**
+     * Employee's concatenated first and last name
+     */
     EmployeeFirstLast: string = null
+    
+    /**
+     * Employee's email address
+     */
     EmployeeEmail: string = null
+    
+    /**
+     * Employee's job title
+     */
     EmployeeTitle: string = null
+    
+    /**
+     * Name of the employee's supervisor
+     */
     EmployeeSupervisor: string = null
+    
+    /**
+     * Email address of the employee's supervisor
+     */
     EmployeeSupervisorEmail: string = null
 
     private _UserRoles: UserRoleInfo[] = []
+    /**
+     * Gets the roles assigned to this user.
+     * @returns {UserRoleInfo[]} Array of user role assignments
+     */
     public get UserRoles(): UserRoleInfo[] {
         return this._UserRoles;
     } 
@@ -52,16 +133,38 @@ export class UserInfo extends BaseInfo {
 }
 
 /**
- * Information about a role that a user is linked to
+ * Associates users with roles in the system, managing role-based access control and permission inheritance.
  */
 export class UserRoleInfo extends BaseInfo {
+    /**
+     * Foreign key reference to the Users table
+     */
     UserID: string = null
+    
+    /**
+     * Foreign key reference to the Roles table
+     */
     RoleID: string = null
+    
+    /**
+     * Timestamp when the user-role association was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the user-role association was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     // virtual fields - returned by the database VIEW
+    /**
+     * Name of the user
+     */
     User: string = null
+    
+    /**
+     * Name of the role
+     */
     Role: string = null
     
     constructor (initData: any) {
@@ -71,15 +174,43 @@ export class UserRoleInfo extends BaseInfo {
 }
 
 /**
- * Information about a single role
+ * Roles are used for security administration and can have zero to many Users as members.
+ * Defines groups of permissions that can be assigned to multiple users.
  */
 export class RoleInfo extends BaseInfo {
+    /**
+     * Unique identifier for the role
+     */
     ID: string = null
+    
+    /**
+     * Name of the role
+     */
     Name: string = null
+    
+    /**
+     * Description of the role
+     */
     Description: string = null
+    
+    /**
+     * The unique ID of the role in the directory being used for authentication, for example an ID in Azure
+     */
     DirectoryID: string = null
+    
+    /**
+     * The name of the role in the database, this is used for auto-generating permission statements by CodeGen
+     */
     SQLName: string = null
+    
+    /**
+     * Timestamp when the role was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the role was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
@@ -88,12 +219,38 @@ export class RoleInfo extends BaseInfo {
     }
 }
 
+/**
+ * Defines data access rules that filter records based on user context, implementing fine-grained security at the row level.
+ */
 export class RowLevelSecurityFilterInfo extends BaseInfo {
+    /**
+     * Unique identifier for the row level security filter
+     */
     ID: string = null
+    
+    /**
+     * Name of the row level security filter
+     */
     Name: string = null
+    
+    /**
+     * Description of the row level security filter
+     */
     Description: string = null
+    
+    /**
+     * SQL WHERE clause template that filters records based on user context variables
+     */
     FilterText: string = null
+    
+    /**
+     * Timestamp when the filter was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the filter was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     constructor (initData: any) {
@@ -101,6 +258,12 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         this.copyInitData(initData);
     }
 
+    /**
+     * Replaces user-specific tokens in the filter text with actual user values.
+     * Tokens are in the format {{UserFieldName}} where FieldName is any property of the UserInfo object.
+     * @param {UserInfo} user - The user whose properties will be substituted into the filter text
+     * @returns {string} The filter text with all user tokens replaced with actual values
+     */
     public MarkupFilterText(user: UserInfo): string {
         let ret = this.FilterText
         if (user) {
@@ -118,34 +281,53 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
 }
 
 /**
- * Represents detailed information about an authorization in the system, 
- * including its relationship to roles and the ability for a given user to execute actions that require this authorization.
- *  
- **/
+ * Stores the fundamental permissions and access rights that can be granted to users and roles throughout the system.
+ */
 export class AuthorizationInfo extends BaseInfo {
-    ID: string = null
     /**
-     * The unique identifier for the parent authorization, if applicable.
-     * @type {string|null}
+     * Unique identifier for the authorization
+     */
+    ID: string = null
+    
+    /**
+     * The unique identifier for the parent authorization, if applicable
      */
     ParentID: string = null
-    Name: string = null
+    
     /**
-     * Indicates whether the authorization is active.
-     * @type {boolean|null}
+     * Name of the authorization
+     */
+    Name: string = null
+    
+    /**
+     * Indicates whether this authorization is currently active and can be granted to users or roles
      */
     IsActive: boolean = null
+    
     /**
-     * Determines whether actions under this authorization will be logged for audit purposes.
-     * @type {boolean|null}
+     * When set to 1, Audit Log records are created whenever this authorization is invoked for a user
      */
     UseAuditLog: boolean = null
 
+    /**
+     * Description of the authorization
+     */
     Description: string = null
+    
+    /**
+     * Timestamp when the authorization was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the authorization was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
+    /**
+     * Name of the parent authorization
+     */
     Parent: string
 
     private _AuthorizationRoles: AuthorizationRoleInfo[] = []
@@ -221,16 +403,49 @@ export const AuthorizationRoleType = {
 export type AuthorizationRoleType = typeof AuthorizationRoleType[keyof typeof AuthorizationRoleType];
 
 
+/**
+ * Links authorizations to roles, defining which permissions are granted to users assigned to specific roles in the system.
+ */
 export class AuthorizationRoleInfo extends BaseInfo {
+    /**
+     * Unique identifier for the authorization-role mapping
+     */
     ID: string = null
+    
+    /**
+     * Foreign key reference to the Authorizations table
+     */
     AuthorizationID: string = null
+    
+    /**
+     * Foreign key reference to the Roles table
+     */
     RoleID: string = null
+    
+    /**
+     * Specifies whether this authorization is granted to ('Allow') or explicitly denied ('Deny') for the role. Deny overrides Allow from all other roles a user may be part of
+     */
     Type: string = null
+    
+    /**
+     * Timestamp when the authorization-role mapping was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the authorization-role mapping was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
+    /**
+     * Name of the authorization
+     */
     Authorization: string
+    
+    /**
+     * Name of the role
+     */
     Role: string
 
     private _RoleInfo: RoleInfo = null
@@ -253,16 +468,49 @@ export class AuthorizationRoleInfo extends BaseInfo {
 }
 
 
+/**
+ * Defines the types of events that can be recorded in the audit log, enabling categorization and filtering of system activities.
+ */
 export class AuditLogTypeInfo extends BaseInfo {
+    /**
+     * Unique identifier for the audit log type
+     */
     ID: string = null
+    
+    /**
+     * Foreign key reference to the parent Audit Log Type
+     */
     ParentID: string = null
+    
+    /**
+     * Name of the audit log type
+     */
     Name: string = null
+    
+    /**
+     * Description of the audit log type
+     */
     Description: string = null
+    
+    /**
+     * Name of the associated authorization
+     */
     AuthorizationName: string = null
+    
+    /**
+     * Timestamp when the audit log type was created
+     */
     __mj_CreatedAt: Date = null
+    
+    /**
+     * Timestamp when the audit log type was last updated
+     */
     __mj_UpdatedAt: Date = null
 
     // virtual fields from base view
+    /**
+     * Name of the parent audit log type
+     */
     Parent: string
 
     constructor (initData: any) {

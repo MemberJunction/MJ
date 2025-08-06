@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
@@ -130,7 +130,10 @@ export class MistralLLM extends BaseLLM {
             return res;
         });
         
-        return {
+        // Create ModelUsage
+        const usage = new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens);
+        
+        const chatResult: ChatResult = {
             success: true,
             statusText: "OK",
             startTime: startTime,
@@ -138,11 +141,22 @@ export class MistralLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens)
+                usage: usage
             },
             errorMessage: "",
             exception: null,
-        }
+        };
+        
+        // Add model-specific response details
+        chatResult.modelSpecificResponseDetails = {
+            provider: 'mistral',
+            model: chatResponse.model,
+            id: chatResponse.id,
+            object: chatResponse.object,
+            created: chatResponse.created
+        };
+        
+        return chatResult;
     }
     
     /**

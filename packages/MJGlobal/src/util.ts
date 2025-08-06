@@ -61,62 +61,188 @@ export function CopyScalarsAndArrays<T extends object>(input: T): Partial<T> {
     return result;
 }
 
+/**
+ * Combines CleanJSON and SafeJSONParse to clean, extract, and parse JSON in one operation.
+ * This is a convenience function that first cleans the input string using CleanJSON to handle
+ * various formats (double-escaped, markdown blocks, etc.), then safely parses the result.
+ * 
+ * @param inputString - The string to clean and parse, which may contain JSON in various formats
+ * @param logErrors - If true, parsing errors will be logged to console (default: false)
+ * @returns The parsed object of type T, or null if cleaning/parsing fails
+ * 
+ * @example
+ * // Parse double-escaped JSON
+ * const result = CleanAndParseJSON<{name: string}>('{\\"name\\": \\"test\\"}', true);
+ * // Returns: {name: "test"}
+ * 
+ * @example
+ * // Parse JSON from markdown
+ * const data = CleanAndParseJSON<{id: number}>('```json\n{"id": 123}\n```', false);
+ * // Returns: {id: 123}
+ * 
+ * @example
+ * // Parse complex AI response with type safety
+ * interface AIResponse {
+ *   status: string;
+ *   data: any;
+ * }
+ * const response = CleanAndParseJSON<AIResponse>(aiOutput, true);
+ * // Returns typed object or null
+ */
+export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T {
+    if (!inputString) {
+        return null;
+    }
+    return SafeJSONParse<T>(CleanJSON(inputString), logErrors);
+}
 
 /**
- * This function takes in an input string and attempts to clean it up to return a valid JSON string. This function will attempt to extract JSON from a Markdown code block if it exists, 
- * otherwise it will attempt to extract JSON from the input string itself. If the input string is not valid JSON, this function will return null.
- * @param inputString 
- * @returns 
+ * Cleans and extracts valid JSON from various input formats including double-escaped strings, 
+ * strings with embedded JSON, and markdown code blocks.
+ * 
+ * This function handles multiple scenarios in the following priority order:
+ * 1. **Valid JSON**: If the input is already valid JSON, it returns it formatted
+ * 2. **Double-escaped JSON**: Handles strings with escaped quotes (\\") and newlines (\\n)
+ * 3. **Markdown blocks**: Extracts JSON from ```json code blocks (only as last resort)
+ * 4. **Mixed content**: Extracts JSON objects/arrays from strings with surrounding text
+ * 
+ * @param inputString - The string to process, which may contain JSON in various formats
+ * @returns A formatted JSON string if valid JSON is found, otherwise null
+ * 
+ * @example
+ * // Simple JSON
+ * CleanJSON('{"name": "test"}') 
+ * // Returns: '{\n  "name": "test"\n}'
+ * 
+ * @example
+ * // Double-escaped JSON
+ * CleanJSON('{\\"name\\": \\"test\\", \\"value\\": 123}')
+ * // Returns: '{\n  "name": "test",\n  "value": 123\n}'
+ * 
+ * @example
+ * // JSON with embedded markdown (preserves the markdown in string values)
+ * CleanJSON('{"text": "```json\\n{\\"inner\\": true}\\n```"}')
+ * // Returns: '{\n  "text": "```json\\n{\\"inner\\": true}\\n```"\n}'
+ * 
+ * @example
+ * // Markdown block extraction (only when not valid JSON)
+ * CleanJSON('Some text ```json\n{"extracted": true}\n``` more text')
+ * // Returns: '{\n  "extracted": true\n}'
  */
 export function CleanJSON(inputString: string | null): string | null {
     if (!inputString)
         return null;
 
-    // replace all \n and \t with nothing
-    const jsonString = inputString.trim().replace(/\n/g, "").replace(/\t/g, "");
+    let processedString = inputString.trim();
+    let originalException = null;
+    
+    // First, try to parse the string as-is
+    // This preserves any embedded JSON or markdown blocks within string values
+    try {
+        const parsed = JSON.parse(processedString);
+        // If successful, return formatted JSON
+        return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        // save the original exception to throw later if we can't find a path to valid JSON
+        originalException = e;
+
+        // common JSON patterns from LLM often have extra } or missing final
+        // } so let's test those two patterns quickly here and if they fail
+        // then we'll continue with the rest of the logic
+        if (processedString.endsWith('}')) {
+            // first try to remove the last }
+            const newString = processedString.slice(0, -1);
+            // now try to parse again
+            const result = SafeJSONParse(newString);
+            if (result) { 
+                return JSON.stringify(result, null, 2);
+            }
+
+            // if we get here the above didn't work so try to add
+            // an extra } at the end and see if that works
+            const nextString = processedString + '}';
+            const nextResult = SafeJSONParse(nextString);
+            if (nextResult) {
+                return JSON.stringify(nextResult, null, 2);
+            }
+        }
+    }
+
+    // Now proceed with the extraction logic only as a last resort
+    // Remove formatting newlines/tabs but preserve \n and \t inside strings
+    processedString = processedString.replace(/(?<!\\)\n/g, '').replace(/(?<!\\)\t/g, '');
+
+    // Handle double-escaped characters
+    // This converts \\n to actual \n, \\" to actual ", etc.
+    if (processedString.includes('\\\\') || processedString.includes('\\"')) {
+        try {
+            // Try to parse it as a JSON string to unescape it
+            // This handles cases where the entire string is a JSON-encoded string
+            processedString = JSON.parse('"' + processedString + '"');
+        } catch (e) {
+            // If that doesn't work, manually replace common double-escaped sequences
+            processedString = processedString
+                .replace(/\\\\n/g, '\n')     // \\n -> \n
+                .replace(/\\\\t/g, '\t')     // \\t -> \t
+                .replace(/\\\\r/g, '\r')     // \\r -> \r
+                .replace(/\\\\"/g, '"')      // \\" -> "
+                .replace(/\\\\\\/g, '\\');   // \\\\ -> \\
+        }
+    }
+
+    // Try to parse the processed string after unescaping
+    try {
+        const parsed = JSON.parse(processedString);
+        // If successful, return formatted JSON
+        return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        // If direct parsing still fails, continue with extraction logic
+    }
 
     // Regular expression to match JavaScript code blocks within Markdown fences
-    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
-    const markdownRegex = /```(?:json|JSON)?\s*([\s\S]*?)```/gi;
+    // This regex looks for ``` (including when the ` is escaped like \`)
+    // optionally followed by js or javascript (case-insensitive), then captures until the closing ```
+    const markdownRegex = /(?:```|\\`\\`\\`)(?:json|JSON)?\s*([\s\S]*?)(?:```|\\`\\`\\`)/gi;
 
     // Check if the input contains Markdown code fences for JavaScript
-    const matches = Array.from(jsonString.matchAll(markdownRegex));
+    const matches = Array.from(processedString.matchAll(markdownRegex));
 
     if (matches.length > 0) {
         // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
-        return matches.map(match => match[1].trim()).join('\n');
+        const extracted = matches.map(match => match[1].trim()).join('\n');
+        return CleanJSON(extracted); // Recursively clean the extracted JSON
     } else {
         // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON
         // Attempt to extract JSON from a mixed string
-        const firstBracketIndex = jsonString.indexOf('[');
-        const firstBraceIndex = jsonString.indexOf('{');
+        const firstBracketIndex = processedString.indexOf('[');
+        const firstBraceIndex = processedString.indexOf('{');
         let startIndex = -1;
         let endIndex = -1;
     
         // Determine the starting index based on the position of the first '[' and '{'
         if ((firstBracketIndex !== -1 && firstBracketIndex < firstBraceIndex) || firstBraceIndex === -1) {
             startIndex = firstBracketIndex;
-            endIndex = jsonString.lastIndexOf(']');
+            endIndex = processedString.lastIndexOf(']');
         } else if (firstBraceIndex !== -1) {
             startIndex = firstBraceIndex;
-            endIndex = jsonString.lastIndexOf('}');
+            endIndex = processedString.lastIndexOf('}');
         }
     
         if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
             console.warn("No JSON found in the input.");
-            return jsonString.trim();
+            return processedString; // Return the processed string instead of jsonString
         }
     
-        const potentialJSON = jsonString.substring(startIndex, endIndex + 1);
+        const potentialJSON = processedString.substring(startIndex, endIndex + 1);
         try {
             // Parse and stringify to format the JSON nicely
             // and to validate it's indeed a valid JSON.
             const jsonObject = JSON.parse(potentialJSON);
             return JSON.stringify(jsonObject, null, 2);
         } catch (error) {
-            console.error("Failed to parse extracted string as JSON:", error);
-            // Return null or potentially invalid JSON text as a fallback
-            return null;
+            // that was our last attempt and it failed so we need
+            // to throw an exception here with the orignal exception
+            throw new Error(`Failed to find a path to CleanJSON\n\n${originalException?.message}`);
         }     
     }
 }
@@ -144,11 +270,31 @@ export function CleanJavaScript(javaScriptCode: string): string {
 }
 
 /**
- * Simple wrapper method to JSON.parse that catches any errors and logs them to the console. This method is useful when you want to parse JSON but don't want to crash the application if the JSON is invalid.
- * @param jsonString 
- * @returns 
+ * Simple wrapper method to JSON.parse that catches any errors and optionally logs them to the console. 
+ * This method is useful when you want to parse JSON but don't want to crash the application if the JSON is invalid.
+ * 
+ * @param jsonString - The JSON string to parse
+ * @param logErrors - If true, parsing errors will be logged to console (default: false)
+ * @returns The parsed object of type T (default: any), or null if parsing fails or input is empty
+ * 
+ * @example
+ * // Basic usage without type
+ * const data = SafeJSONParse('{"name": "test"}');
+ * 
+ * @example
+ * // With type parameter
+ * interface User { name: string; age: number; }
+ * const user = SafeJSONParse<User>('{"name": "John", "age": 30}', true);
+ * 
+ * @example
+ * // Invalid JSON returns null
+ * const result = SafeJSONParse('invalid json', true); // logs error, returns null
  */
-export function SafeJSONParse<T>(jsonString: string, logErrors: boolean = false): T {
+export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T {
+    if (!jsonString) {
+        return null;
+    }
+
     try {
         return <T>JSON.parse(jsonString);
     } catch (e) {
@@ -665,7 +811,7 @@ interface InternalParseJSONOptions {
  * // }
  */ 
 export function ParseJSONRecursive(obj: any, options: ParseJSONOptions = {}): any {
-  // Set default options
+  // Set default options with more conservative depth limit for performance
   const opts: Required<ParseJSONOptions> = {
     maxDepth: options.maxDepth ?? 100,
     extractInlineJson: options.extractInlineJson ?? false,
@@ -738,29 +884,43 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
     console.log(`[ParseJSONRecursive] String preview: ${str.substring(0, 100)}${str.length > 100 ? '...' : ''}`);
   }
 
-  try {
-    const parsed = JSON.parse(str);
-    
-    // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
-    if (parsed === str) {
-      if (options.debug) {
-        console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
-      }
+  // PERFORMANCE OPTIMIZATION: Early exit for non-JSON strings
+  // Check if the first non-whitespace character is { or [ - if not, it's definitely not JSON
+  const trimmed = str.trim();
+  if (trimmed.length === 0 || (trimmed[0] !== '{' && trimmed[0] !== '[' && trimmed[0] !== '"')) {
+    // Not JSON-like, skip expensive JSON.parse() attempt unless extractInlineJson is enabled
+    if (!options.extractInlineJson) {
       return str;
     }
-
-    if (parsed && typeof parsed === 'object') {
-      if (options.debug) {
-        console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+    // With extractInlineJson, we still need to check for embedded JSON, but skip the initial parse
+  } else {
+    // Looks JSON-like, attempt to parse
+    try {
+      const parsed = JSON.parse(str);
+      
+      // Check if parsing returned the same value (e.g., JSON.parse('"user"') === "user")
+      if (parsed === str) {
+        if (options.debug) {
+          console.log(`[ParseJSONRecursive] JSON.parse returned same value at path: ${path}, stopping`);
+        }
+        return str;
       }
-      return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
-    } else {
-      return parsed; // Keep simple values as-is
+
+      if (parsed && typeof parsed === 'object') {
+        if (options.debug) {
+          console.log(`[ParseJSONRecursive] Successfully parsed JSON at path: ${path}`);
+        }
+        return parseJSONRecursiveWithDepth(parsed, options, depth + 1, `${path}[parsed-json]`);
+      } else {
+        return parsed; // Keep simple values as-is
+      }
+    } catch (e) {
+      // JSON.parse failed, continue to inline extraction if enabled
     }
-  } catch (e) {
-    // If parsing fails, leave the string as-is, this is not a failure, as we trying to parse any string above
-    // however in this case we need to check for inline JSON extraction
-    if (options?.extractInlineJson) {
+  }
+
+  // Handle extractInlineJson or return original string
+  if (options?.extractInlineJson) {
       // Look for JSON patterns within the string
       // First try ```json blocks
       const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
@@ -792,7 +952,8 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
           // JSON.parse failed, the string doesn't contain valid JSON
         }
       }
-    }
-    return str;
   }
+  
+  // If we get here, return the original string
+  return str;
 }

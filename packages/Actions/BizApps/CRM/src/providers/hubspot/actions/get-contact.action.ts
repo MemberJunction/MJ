@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { HubSpotBaseAction } from '../hubspot-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get a contact from HubSpot by ID or email
  */
-@RegisterClass(HubSpotBaseAction, 'GetContactAction')
+@RegisterClass(BaseAction, 'GetContactAction')
 export class GetContactAction extends HubSpotBaseAction {
     /**
      * Get a contact by ID or email

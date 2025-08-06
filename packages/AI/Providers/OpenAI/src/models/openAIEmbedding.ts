@@ -1,4 +1,4 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
@@ -37,9 +37,18 @@ export class OpenAIEmbedding extends BaseEmbeddings {
                 vector: response.data[0].embedding
             }
         }
-        catch(ex){
-            console.log(ex);
-            return null;
+        catch(error){
+            // Log error details for debugging
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
+            console.error('OpenAI embedding error:', errorInfo);
+            
+            // Return error result
+            return {
+                object: "object",
+                model: params.model || "text-embedding-3-small",
+                ModelUsage: new ModelUsage(0, 0),
+                vector: []
+            };
         }
     }
 
@@ -59,9 +68,18 @@ export class OpenAIEmbedding extends BaseEmbeddings {
                 vectors: response.data.map((data) => data.embedding)
             }
         }
-        catch(ex){
-            console.log(ex);
-            return null;
+        catch(error){
+            // Log error details for debugging
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
+            console.error('OpenAI embedding error:', errorInfo);
+            
+            // Return error result
+            return {
+                object: "list",
+                model: params.model || "text-embedding-3-small",
+                ModelUsage: new ModelUsage(0, 0),
+                vectors: []
+            };
         }
     }
 

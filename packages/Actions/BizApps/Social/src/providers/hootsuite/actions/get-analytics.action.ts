@@ -3,11 +3,12 @@ import { HootSuiteBaseAction, HootSuiteAnalytics } from '../hootsuite-base.actio
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve analytics data from HootSuite
  */
-@RegisterClass(HootSuiteBaseAction, 'HootSuiteGetAnalyticsAction')
+@RegisterClass(BaseAction, 'HootSuiteGetAnalyticsAction')
 export class HootSuiteGetAnalyticsAction extends HootSuiteBaseAction {
     /**
      * Get analytics data from HootSuite

@@ -1,6 +1,4 @@
 /**
- * @fileoverview Conversation and messaging types for Skip API
- * 
  * This file contains types related to conversations and messaging within the Skip API system.
  * These types define the structure for:
  * 
@@ -15,9 +13,6 @@
  * 
  * Sub-process responses are used when Skip executes code in a sandboxed environment and needs
  * to communicate the results back to the main API server.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 import type { SkipAPIArtifact } from './artifact-types';

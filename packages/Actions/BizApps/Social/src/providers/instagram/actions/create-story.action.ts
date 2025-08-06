@@ -3,13 +3,14 @@ import { InstagramBaseAction } from '../instagram-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Creates an Instagram Story with images or videos.
  * Stories are temporary content that disappears after 24 hours.
  * Supports stickers, links, and interactive elements.
  */
-@RegisterClass(InstagramBaseAction, 'Instagram - Create Story')
+@RegisterClass(BaseAction, 'Instagram - Create Story')
 export class InstagramCreateStoryAction extends InstagramBaseAction {
     
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

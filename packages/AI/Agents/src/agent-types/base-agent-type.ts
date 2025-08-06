@@ -11,10 +11,11 @@
  * @since 2.49.0
  */
 
-import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep} from '@memberjunction/ai-core-plus';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import { AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { MJGlobal, JSONValidator } from '@memberjunction/global';
+import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { ActionResult } from '@memberjunction/actions-base';
 
 /**
  * Abstract base class for agent type implementations.
@@ -52,6 +53,18 @@ import { LogError } from '@memberjunction/core';
  */
 export abstract class BaseAgentType {
     /**
+     * JSON validator instance for cleaning and validating responses
+     * @protected
+     */
+    protected _jsonValidator: JSONValidator = new JSONValidator();
+
+    /**
+     * Common placeholder for current payload injection
+     * @static
+     */
+    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+
+    /**
      * Analyzes the output from prompt execution to determine the next step.
      * 
      * This method is called after the hierarchical prompts have been executed
@@ -60,6 +73,8 @@ export abstract class BaseAgentType {
      * and the format of output expected from its system prompt.
      * 
      * @abstract
+     * @param {AIPromptRunResult | null} promptResult - Result from prompt execution (null for non-prompt steps)
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent and context
      * @returns {Promise<BaseAgentNextStep>} The determined next step and optional return value
      * 
      * @example
@@ -78,7 +93,49 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep<P = any>(promptResult: AIPromptRunResult): Promise<BaseAgentNextStep<P>>;
+    public abstract DetermineNextStep<P = any>(
+        promptResult: AIPromptRunResult | null, 
+        params: ExecuteAgentParams<any, P>
+    ): Promise<BaseAgentNextStep<P>>;
+
+    /**
+     * Determines the initial step when no previous decision exists.
+     * 
+     * This method allows agent types to customize how they begin execution.
+     * For example:
+     * - Loop agents might execute a prompt to determine initial actions
+     * - Flow agents might look up their starting step from configuration
+     * - Pipeline agents might execute the first step in their sequence
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters including agent, payload, and context
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step, or null to use default behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null>;
+
+    /**
+     * Pre-processes a retry step to allow agent types to customize retry behavior.
+     * 
+     * This method is called when the previous step returned 'Retry' as the next step.
+     * Agent types can override this to provide custom behavior instead of the default
+     * prompt execution. This is particularly useful for:
+     * - Flow agents that need to evaluate paths after action execution
+     * - State machine agents that need to transition based on results
+     * - Pipeline agents that need to move to the next stage
+     * 
+     * @abstract
+     * @param {ExecuteAgentParams} params - The full execution parameters
+     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @returns {Promise<BaseAgentNextStep | null>} Custom next step, or null to use default retry behavior (prompt execution)
+     * 
+     * @since 2.76.0
+     */
+    public abstract PreProcessRetryStep<P = any>(
+        params: ExecuteAgentParams<P>,
+        retryStep: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P> | null>;
 
     // /**
     //  * The agent type is responsible for knowing what to retreive a payload from the prompt results for its
@@ -89,10 +146,37 @@ export abstract class BaseAgentType {
     /**
      * The agent type is responsible for injecting a payload into the prompt. This can be done by updating the
      * system prompt by replacing a special non-Nunjucks placeholder, or by adding extra messages to the prompt.
-     * @param payload 
-     * @param prompt 
+     * @param payload - The payload to inject
+     * @param prompt - The prompt parameters to update
+     * @param agentInfo - Agent identification info including agent ID and run ID
      */
-    public abstract InjectPayload<P = any>(payload: P, prompt: AIPromptParams): Promise<void>;
+    public abstract InjectPayload<P = any>(
+        payload: P, 
+        prompt: AIPromptParams,
+        agentInfo: { agentId: string; agentRunId?: string }
+    ): Promise<void>;
+
+    /**
+     * Allows agent types to provide a custom prompt for a specific step.
+     * This is used by agent types that need to override the default prompt
+     * selection logic (e.g., Flow agents that use different prompts for different steps).
+     * 
+     * The base implementation should return the default prompt from configuration.
+     * Agent types can override this to provide custom prompt selection logic.
+     * 
+     * @param {ExecuteAgentParams} params - The full execution parameters for additional context
+     * @param {AgentConfiguration} config - The loaded agent configuration with default prompts
+     * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain context
+     * @returns {Promise<AIPromptEntity | null>} A prompt entity to use (either custom or config.childPrompt)
+     * 
+     * @abstract
+     * @since 2.76.0
+     */
+    public abstract GetPromptForStep<P = any>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision?: BaseAgentNextStep<P> | null
+    ): Promise<AIPromptEntity | null>;
 
     /**
      * Helper method that retrieves an instance of the agent type based on the provided agent type entity.
@@ -175,5 +259,183 @@ export abstract class BaseAgentType {
         }
         
         return instance;
+    }
+
+    /**
+     * Parses JSON response from prompt execution with automatic validation syntax cleaning
+     * 
+     * @template T The expected response type
+     * @param {AIPromptRunResult} promptResult - The prompt execution result
+     * 
+     * @returns {T | null} Parsed response or null if parsing fails
+     * 
+     * @protected
+     */
+    protected parseJSONResponse<T>(promptResult: AIPromptRunResult): T | null {
+        if (!promptResult.success || !promptResult.result) {
+            return null;
+        }
+        
+        try {
+            let response: T;
+            if (typeof promptResult.result === 'string') {
+                response = JSON.parse(promptResult.result);
+            } else {
+                response = promptResult.result as T;
+            }
+            
+            // Clean validation syntax from the response
+            response = this._jsonValidator.cleanValidationSyntax<T>(response);
+            
+            if (IsVerboseLoggingEnabled()) {
+                console.log(`${this.constructor.name}: Cleaned response from validation syntax`, response);
+            }
+            
+            return response;
+        } catch (error) {
+            LogError(`Failed to parse JSON response in ${this.constructor.name}: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Creates a standardized next step object with common defaults
+     * 
+     * @template P The payload type
+     * @param {BaseAgentNextStep['step']} step - The step type
+     * @param {Partial<BaseAgentNextStep<P>>} options - Additional options to merge
+     * 
+     * @returns {BaseAgentNextStep<P>} The next step object
+     * 
+     * @protected
+     */
+    protected createNextStep<P>(
+        step: BaseAgentNextStep['step'],
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return {
+            step,
+            terminate: false,
+            ...options
+        } as BaseAgentNextStep<P>;
+    }
+
+    /**
+     * Creates a retry step with a standardized error message
+     * 
+     * @template P The payload type
+     * @param {string} errorMessage - The error message
+     * @param {Partial<BaseAgentNextStep<P>>} options - Additional options
+     * 
+     * @returns {BaseAgentNextStep<P>} Retry step
+     * 
+     * @protected
+     */
+    protected createRetryStep<P>(
+        errorMessage: string,
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Retry', {
+            errorMessage,
+            terminate: false,
+            ...options
+        });
+    }
+
+    /**
+     * Creates a success step with optional payload changes
+     * 
+     * @template P The payload type
+     * @param {Partial<BaseAgentNextStep<P>>} options - Success options
+     * 
+     * @returns {BaseAgentNextStep<P>} Success step
+     * 
+     * @protected
+     */
+    protected createSuccessStep<P>(
+        options: Partial<BaseAgentNextStep<P>> = {}
+    ): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Success', {
+            terminate: true,
+            ...options
+        });
+    }
+    
+    /**
+     * Pre-processes an action step before execution.
+     * 
+     * This method is called by BaseAgent before action(s) are executed.
+     * Agent types can override this method to perform custom pre-processing,
+     * such as mapping payload values to action input parameters or modifying action configurations.
+     * 
+     * @param {AgentAction[]} actions - The actions that will be executed (can be modified)
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<void>} Actions are modified in place
+     * 
+     * @since 2.76.0
+     */
+    public async PreProcessActionStep<P>(
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<void> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+    }
+    
+    /**
+     * Post-processes the result of action execution.
+     * 
+     * This method is called by BaseAgent after action(s) have been executed.
+     * Agent types can override this method to perform custom processing of action results,
+     * such as mapping output parameters to the payload or storing results in agent-specific context.
+     * 
+     * @param {ActionResult[]} actionResults - The results from action execution
+     * @param {AgentAction[]} actions - The actions that were executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessActionStep<P>(
+        actionResults: ActionResult[],
+        actions: AgentAction[],
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
+    }
+    
+    /**
+     * Post-processes the result of sub-agent execution.
+     * 
+     * This method is called by BaseAgent after a sub-agent has been executed.
+     * Agent types can override this method to perform custom processing of sub-agent results,
+     * such as extracting specific data from the sub-agent's payload or updating context.
+     * 
+     * @param {any} subAgentResult - The result from sub-agent execution
+     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request that was executed
+     * @param {P} currentPayload - The current payload
+     * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
+     * 
+     * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Optional payload change request
+     * 
+     * @since 2.76.0
+     */
+    public async PostProcessSubAgentStep<P>(
+        subAgentResult: any,
+        subAgentRequest: AgentSubAgentRequest,
+        currentPayload: P,
+        currentStep: BaseAgentNextStep<P>
+    ): Promise<AgentPayloadChangeRequest<P> | null> {
+        // Default implementation does nothing
+        // Subclasses can override to implement custom logic
+        return null;
     }
 }

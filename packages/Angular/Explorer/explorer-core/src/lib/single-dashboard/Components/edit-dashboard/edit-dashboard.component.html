@@ -26,7 +26,7 @@
           <kendo-tilelayout-item *ngFor="let item of _items" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
             <kendo-tilelayout-item-header>
               {{item.title}}
-              <kendo-button class="k-float-right" (click)="removeItem(item)">X</kendo-button>
+              <button kendoButton class="k-float-right" (click)="removeItem(item)">X</button>
             </kendo-tilelayout-item-header>
             <kendo-tilelayout-item-body>
               <!-- <div class="overlay"></div> -->
@@ -38,14 +38,14 @@
       </div>
       <div class="dialog-footer">
         <div class="k-card-footer !k-border-none">
-          <kendo-button (click)="closeDialog($event)" >
+          <button kendoButton (click)="closeDialog($event)" >
             <span class="fa-solid fa-xmark"></span>
             Cancel
-          </kendo-button>
-          <kendo-button (click)="saveChanges()" [primary]="true" >
+          </button>
+          <button kendoButton (click)="saveChanges()">
             <span class="fa-solid fa-check"></span>
             Save
-          </kendo-button>
+          </button>
         </div>
       </div>
     </div>

@@ -2,11 +2,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { BufferBaseAction } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { MediaFile } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to create a new post in Buffer (scheduled or immediate)
  */
-@RegisterClass(BufferBaseAction, 'BufferCreatePostAction')
+@RegisterClass(BaseAction, 'BufferCreatePostAction')
 export class BufferCreatePostAction extends BufferBaseAction {
     /**
      * Create a Buffer post

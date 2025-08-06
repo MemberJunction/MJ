@@ -6,6 +6,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { ApplicationEntity, ApplicationEntityEntity } from '@memberjunction/core-entities';
 import { SharedSettingsModule } from '../shared/shared-settings.module';
+import { ApplicationDialogComponent, ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
 
 interface AppStats {
   totalApplications: number;
@@ -25,7 +26,8 @@ interface FilterOptions {
   imports: [
     CommonModule,
     FormsModule,
-    SharedSettingsModule
+    SharedSettingsModule,
+    ApplicationDialogComponent
   ],
   templateUrl: './application-management.component.html',
   styleUrls: ['./application-management.component.scss']
@@ -56,8 +58,8 @@ export class ApplicationManagementComponent implements OnInit, OnDestroy {
   });
   
   // UI State
-  public showCreateDialog = false;
-  public showEditDialog = false;
+  public showApplicationDialog = false;
+  public applicationDialogData: ApplicationDialogData | null = null;
   public showDeleteConfirm = false;
   public expandedAppId: string | null = null;
   
@@ -222,13 +224,18 @@ export class ApplicationManagementComponent implements OnInit, OnDestroy {
   }
   
   public createNewApplication(): void {
-    this.selectedApp = null;
-    this.showCreateDialog = true;
+    this.applicationDialogData = {
+      mode: 'create'
+    };
+    this.showApplicationDialog = true;
   }
   
   public editApplication(app: ApplicationEntity): void {
-    this.selectedApp = app;
-    this.showEditDialog = true;
+    this.applicationDialogData = {
+      application: app,
+      mode: 'edit'
+    };
+    this.showApplicationDialog = true;
   }
   
   public confirmDeleteApplication(app: ApplicationEntity): void {
@@ -240,12 +247,33 @@ export class ApplicationManagementComponent implements OnInit, OnDestroy {
     if (!this.selectedApp) return;
     
     try {
-      // Implement application deletion logic
+      this.isLoading = true;
+      this.error = null;
+
+      // Delete the application
+      const deleteResult = await this.selectedApp.Delete();
+      if (!deleteResult) {
+        throw new Error(this.selectedApp.LatestResult?.Message || 'Failed to delete application');
+      }
+
       this.showDeleteConfirm = false;
+      this.selectedApp = null;
       await this.loadInitialData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting application:', error);
-      this.error = 'Failed to delete application';
+      this.error = error.message || 'Failed to delete application';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  public onApplicationDialogResult(result: ApplicationDialogResult): void {
+    this.showApplicationDialog = false;
+    this.applicationDialogData = null;
+
+    if (result.action === 'save') {
+      // Refresh the application list after save
+      this.loadInitialData();
     }
   }
   

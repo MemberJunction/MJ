@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LearnWorldsBaseAction } from '../learnworlds-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to retrieve quiz/assessment results from LearnWorlds
  */
-@RegisterClass(LearnWorldsBaseAction, 'GetQuizResultsAction')
+@RegisterClass(BaseAction, 'GetQuizResultsAction')
 export class GetQuizResultsAction extends LearnWorldsBaseAction {
     /**
      * Get quiz results for a user, course, or specific quiz

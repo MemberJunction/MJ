@@ -3,11 +3,12 @@ import { LinkedInBaseAction, LinkedInShare } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to search for historical posts on LinkedIn
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInSearchPostsAction')
+@RegisterClass(BaseAction, 'LinkedInSearchPostsAction')
 export class LinkedInSearchPostsAction extends LinkedInBaseAction {
     /**
      * Search for posts on LinkedIn with various filters

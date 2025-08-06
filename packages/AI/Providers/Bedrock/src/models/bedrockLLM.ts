@@ -9,7 +9,8 @@ import {
   SummarizeParams, 
   SummarizeResult, 
   ModelUsage, 
-  ChatMessage 
+  ChatMessage,
+  ErrorAnalyzer 
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { 
@@ -188,6 +189,7 @@ export class BedrockLLM extends BaseLLM {
         },
         errorMessage: error.message || "Error calling Amazon Bedrock",
         exception: error,
+        errorInfo: ErrorAnalyzer.analyzeError(error, 'Bedrock')
       };
     }
   }

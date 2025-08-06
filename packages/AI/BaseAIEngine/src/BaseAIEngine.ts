@@ -12,7 +12,11 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIPromptEntityExtended,
          AIModelCostEntity,
          AIModelPriceTypeEntity,
-         AIModelPriceUnitTypeEntity} from "@memberjunction/core-entities";
+         AIModelPriceUnitTypeEntity,
+         AIConfigurationEntity,
+         AIConfigurationParamEntity,
+         AIAgentStepEntity,
+         AIAgentStepPathEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -36,6 +40,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _modelCosts: AIModelCostEntity[] = [];
     private _modelPriceTypes: AIModelPriceTypeEntity[] = [];
     private _modelPriceUnitTypes: AIModelPriceUnitTypeEntity[] = [];
+    private _configurations: AIConfigurationEntity[] = [];
+    private _configurationParams: AIConfigurationParamEntity[] = [];
+    private _agentSteps: AIAgentStepEntity[] = [];
+    private _agentStepPaths: AIAgentStepPathEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -118,6 +126,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_modelPriceUnitTypes',
                 EntityName: 'MJ: AI Model Price Unit Types'
+            },
+            {
+                PropertyName: '_configurations',
+                EntityName: 'MJ: AI Configurations'
+            },
+            {
+                PropertyName: '_configurationParams',
+                EntityName: 'MJ: AI Configuration Params'
+            },
+            {
+                PropertyName: '_agentSteps',
+                EntityName: 'MJ: AI Agent Steps'
+            },
+            {
+                PropertyName: '_agentStepPaths',
+                EntityName: 'MJ: AI Agent Step Paths'
             }            
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -225,6 +249,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agents;
     }
 
+    /**
+     * Returns the sub-agents for a given agent ID, optionally filtering by status.
+     * @param agentID - The ID of the parent agent to get sub-agents for
+     * @param status - Optional status to filter sub-agents by (e.g., 'Active', 'Inactive'). If not provided, all sub-agents are returned.
+     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria.
+     * @memberof
+     */
+    public GetSubAgents(agentID: string, status?: AIAgentEntityExtended['Status']): AIAgentEntityExtended[] {
+        return this._agents.filter(a => a.ParentID === agentID && (!status || a.Status === status));
+    }
+
     public get AgentTypes(): AIAgentTypeEntity[] {
         return this._agentTypes;
     }
@@ -315,6 +350,75 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelPriceUnitTypes(): AIModelPriceUnitTypeEntity[] {
         return this._modelPriceUnitTypes;
+    }
+
+    public get Configurations(): AIConfigurationEntity[] {
+        return this._configurations;
+    }
+
+    public get ConfigurationParams(): AIConfigurationParamEntity[] {
+        return this._configurationParams;
+    }
+
+    /**
+     * Gets configuration parameters for a specific configuration
+     * @param configurationId - The ID of the configuration
+     * @returns Array of configuration parameters for the specified configuration
+     */
+    public GetConfigurationParams(configurationId: string): AIConfigurationParamEntity[] {
+        return this._configurationParams.filter(p => p.ConfigurationID === configurationId);
+    }
+
+    /**
+     * Gets a specific configuration parameter value
+     * @param configurationId - The ID of the configuration
+     * @param paramName - The name of the parameter
+     * @returns The parameter entity or null if not found
+     */
+    public GetConfigurationParam(configurationId: string, paramName: string): AIConfigurationParamEntity | null {
+        return this._configurationParams.find(p => 
+            p.ConfigurationID === configurationId && 
+            p.Name.toLowerCase() === paramName.toLowerCase()
+        ) || null;
+    }
+
+    public get AgentSteps(): AIAgentStepEntity[] {
+        return this._agentSteps;
+    }
+
+    public get AgentStepPaths(): AIAgentStepPathEntity[] {
+        return this._agentStepPaths;
+    }
+
+    /**
+     * Gets agent steps for a specific agent, optionally filtered by status
+     * @param agentId - The ID of the agent
+     * @param status - Optional status filter ('Active', 'Pending', 'Disabled')
+     * @returns Array of agent steps
+     */
+    public GetAgentSteps(agentId: string, status?: string): AIAgentStepEntity[] {
+        return this._agentSteps.filter(step => 
+            step.AgentID === agentId && 
+            (!status || step.Status === status)
+        );
+    }
+
+    /**
+     * Gets a specific agent step by ID
+     * @param stepId - The ID of the step
+     * @returns The step or null if not found
+     */
+    public GetAgentStepById(stepId: string): AIAgentStepEntity | null {
+        return this._agentSteps.find(step => step.ID === stepId) || null;
+    }
+
+    /**
+     * Gets paths originating from a specific step
+     * @param stepId - The ID of the origin step
+     * @returns Array of paths from the step
+     */
+    public GetPathsFromStep(stepId: string): AIAgentStepPathEntity[] {
+        return this._agentStepPaths.filter(path => path.OriginStepID === stepId);
     }
 
     /**

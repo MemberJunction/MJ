@@ -3,11 +3,12 @@ import { LinkedInBaseAction, LinkedInAnalytics } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
+import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Action to get analytics for a LinkedIn post
  */
-@RegisterClass(LinkedInBaseAction, 'LinkedInGetPostAnalyticsAction')
+@RegisterClass(BaseAction, 'LinkedInGetPostAnalyticsAction')
 export class LinkedInGetPostAnalyticsAction extends LinkedInBaseAction {
     /**
      * Get analytics for a specific LinkedIn post

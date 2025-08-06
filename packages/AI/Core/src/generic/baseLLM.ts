@@ -2,6 +2,7 @@ import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
 import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
+import { ErrorAnalyzer } from "./errorAnalyzer";
 
 /**
  * Type for thinking stream state management
@@ -128,6 +129,7 @@ export abstract class BaseLLM extends BaseModel {
                 errorResult.statusText = 'error';
                 errorResult.errorMessage = result.reason?.message || 'Unknown error';
                 errorResult.exception = {exception: result.reason};
+                errorResult.errorInfo = ErrorAnalyzer.analyzeError(result.reason, this.constructor.name);
                 return errorResult;
             }
         });
@@ -262,6 +264,7 @@ export abstract class BaseLLM extends BaseModel {
                     errorResult.statusText = 'error';
                     errorResult.errorMessage = error?.message || 'Unknown error';
                     errorResult.exception = {exception: error};
+                    errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, this.constructor.name);
                     
                     reject(errorResult);
                 }

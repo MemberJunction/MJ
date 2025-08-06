@@ -10,9 +10,12 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="settings-card" [class.settings-card-floating]="floating" [class.settings-card-sm]="size === 'sm'" [class.settings-card-lg]="size === 'lg'">
+    <div class="mj-card" 
+         [class.mj-card-floating]="floating" 
+         [class.mj-card-sm]="size === 'sm'" 
+         [class.mj-card-lg]="size === 'lg'">
       @if (title || headerTemplate) {
-        <div class="card-header">
+        <div class="mj-card-header">
           @if (headerTemplate) {
             <ng-container *ngTemplateOutlet="headerTemplate"></ng-container>
           } @else {
@@ -23,7 +26,7 @@ import { CommonModule } from '@angular/common';
               }
             </div>
             @if (actionTemplate) {
-              <div class="header-actions">
+              <div class="mj-card-actions">
                 <ng-container *ngTemplateOutlet="actionTemplate"></ng-container>
               </div>
             }
@@ -31,12 +34,12 @@ import { CommonModule } from '@angular/common';
         </div>
       }
       
-      <div class="card-content" [class.no-padding]="noPadding">
+      <div class="mj-card-body" [class.no-padding]="noPadding">
         <ng-content></ng-content>
       </div>
       
       @if (footerTemplate) {
-        <div class="card-footer">
+        <div class="mj-card-footer">
           <ng-container *ngTemplateOutlet="footerTemplate"></ng-container>
         </div>
       }

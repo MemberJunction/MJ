@@ -1,6 +1,4 @@
 /**
- * @fileoverview Query and data request types for Skip API
- * 
  * This file contains types related to database queries, stored queries, and data requests
  * within the Skip API system. These types define the structure for:
  * 
@@ -16,9 +14,6 @@
  * Data requests allow Skip to ask for additional data beyond what was initially provided,
  * either through custom SQL statements or by referencing stored queries. This capability
  * enables Skip to iteratively refine its analysis by gathering the exact data it needs.
- * 
- * @author MemberJunction
- * @since 2.0.0
  */
 
 /**
@@ -85,6 +80,16 @@ export class SkipQueryFieldInfo {
     sourceEntity: string;
 }
 
+export class SkipQueryParamInfo {
+    name: string;
+    description: string;
+    type: string;
+    isRequired: boolean;
+    defaultValue: string;
+    createdAt: Date;
+    updatedAt: Date;        
+}
+
 /**
  * Complete metadata about a stored query, including its SQL, approval status, quality ranking,
  * and field definitions. This information allows Skip to understand and utilize pre-built
@@ -103,7 +108,9 @@ export class SkipQueryInfo {
     createdAt: Date;
     updatedAt: Date;
     category: string;
+    categoryPath: string;
     fields: SkipQueryFieldInfo[];
+    params: SkipQueryParamInfo[];
 }
 
 /**

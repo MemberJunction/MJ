@@ -9,6 +9,28 @@ Advanced AI prompt execution engine with hierarchical template composition, inte
 
 ## Key Features
 
+### 🛡️ Intelligent Failover Support
+Automatic failover when AI providers experience outages, rate limits, or service degradation. The system intelligently switches between models and vendors to ensure reliable prompt execution.
+
+#### Failover Strategies
+- **SameModelDifferentVendor**: Try the same model from different providers
+- **NextBestModel**: Switch to alternative models based on power rankings
+- **PowerRank**: Use the global model power ranking for selection
+
+#### Configuration
+```typescript
+const promptWithFailover = {
+    Name: "Critical Analysis",
+    FailoverStrategy: "SameModelDifferentVendor",
+    FailoverMaxAttempts: 3,
+    FailoverDelaySeconds: 2,
+    FailoverModelStrategy: "PreferSameModel",
+    FailoverErrorScope: "All"  // or "NetworkOnly", "RateLimitOnly", "ServiceErrorOnly"
+};
+```
+
+**Note**: Prompts with `AIModelTypeID = NULL` can use any available model during failover, while prompts with a specific type ID are restricted to models of that type.
+
 ### 🎯 Dynamic Hierarchical Template Composition
 
 #### Why Dynamic Template Composition?
@@ -558,6 +580,171 @@ comprehensivePromptExecution().catch(console.error);
 
 ## Advanced Features
 
+### Intelligent Failover System
+
+The AI Prompt Runner includes a sophisticated failover system that automatically handles provider outages, rate limits, and service degradation. This ensures your AI-powered applications remain resilient and responsive even when individual providers experience issues.
+
+#### How Failover Works
+
+When a prompt execution fails, the system:
+1. **Analyzes the error** using the ErrorAnalyzer to determine if failover is appropriate
+2. **Selects alternative models/vendors** based on the configured strategy
+3. **Applies intelligent delays** with exponential backoff to prevent overwhelming providers
+4. **Tracks all attempts** for debugging and analysis
+5. **Updates the execution** to use the successful model/vendor combination
+
+#### Failover Configuration
+
+Configure failover behavior at the prompt level:
+
+```typescript
+// Database columns added to AIPrompt entity:
+FailoverStrategy: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None'
+FailoverMaxAttempts: number        // Maximum failover attempts (default: 3)
+FailoverDelaySeconds: number       // Initial delay between attempts (default: 1)
+FailoverModelStrategy: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel'
+FailoverErrorScope: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'
+```
+
+#### Failover Strategies Explained
+
+**SameModelDifferentVendor**: Ideal for multi-cloud deployments
+```typescript
+// Example: Claude from different providers
+// Primary: Anthropic API
+// Failover 1: AWS Bedrock
+// Failover 2: Google Vertex AI
+```
+
+**NextBestModel**: Balances capability and availability
+```typescript
+// Example: Gradual capability reduction
+// Primary: GPT-4-turbo
+// Failover 1: Claude-3-opus
+// Failover 2: GPT-3.5-turbo
+```
+
+**PowerRank**: Uses MemberJunction's model power rankings
+```typescript
+// Automatically selects models based on their PowerRank scores
+// Ensures you always get the best available model
+```
+
+#### Error Scope Configuration
+
+Control which types of errors trigger failover:
+
+- **All**: Any error triggers failover (most resilient)
+- **NetworkOnly**: Only network/connection errors
+- **RateLimitOnly**: Only rate limit errors (429 status)
+- **ServiceErrorOnly**: Only service errors (500, 503 status)
+
+#### Failover Tracking
+
+The system comprehensively tracks failover attempts in the database:
+
+```typescript
+// AIPromptRun entity tracking fields:
+OriginalModelID: string           // The initially selected model
+OriginalRequestStartTime: Date    // When the request started
+FailoverAttempts: number          // Number of failover attempts made
+FailoverErrors: string (JSON)     // Detailed error information for each attempt
+FailoverDurations: string (JSON)  // Duration of each attempt in milliseconds
+TotalFailoverDuration: number     // Total time spent in failover
+```
+
+#### Advanced Failover Customization
+
+The AIPromptRunner exposes protected methods for advanced customization:
+
+```typescript
+class CustomPromptRunner extends AIPromptRunner {
+    // Override to implement custom failover configuration
+    protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+        // Add environment-specific logic
+        if (process.env.NODE_ENV === 'production') {
+            return {
+                strategy: 'SameModelDifferentVendor',
+                maxAttempts: 5,
+                delaySeconds: 2,
+                modelStrategy: 'PreferSameModel',
+                errorScope: 'NetworkOnly'
+            };
+        }
+        return super.getFailoverConfiguration(prompt);
+    }
+
+    // Override to implement custom failover decision logic
+    protected shouldAttemptFailover(
+        error: Error,
+        config: FailoverConfiguration,
+        attemptNumber: number
+    ): boolean {
+        // Add custom error analysis
+        if (error.message.includes('quota_exceeded')) {
+            return false; // Don't retry quota errors
+        }
+        return super.shouldAttemptFailover(error, config, attemptNumber);
+    }
+
+    // Override to implement custom delay calculation
+    protected calculateFailoverDelay(
+        attemptNumber: number,
+        baseDelaySeconds: number,
+        previousError?: Error
+    ): number {
+        // Custom backoff strategy
+        if (previousError?.message.includes('rate_limit')) {
+            return 60000; // 1 minute for rate limits
+        }
+        return super.calculateFailoverDelay(attemptNumber, baseDelaySeconds, previousError);
+    }
+}
+```
+
+#### Failover Best Practices
+
+1. **Configure Appropriately**: Use `NetworkOnly` or `RateLimitOnly` for production to avoid retrying invalid requests
+2. **Set Reasonable Attempts**: 3-5 attempts typically sufficient
+3. **Monitor Failover Patterns**: Query the tracking data to identify problematic providers
+4. **Test Failover Scenarios**: Simulate provider outages in development
+5. **Consider Costs**: Failover may route to more expensive providers
+
+#### Example: Production-Ready Configuration
+
+```typescript
+const productionPrompt = {
+    Name: "Customer Service Assistant",
+    FailoverStrategy: "SameModelDifferentVendor",
+    FailoverMaxAttempts: 4,
+    FailoverDelaySeconds: 2,
+    FailoverModelStrategy: "PreferSameModel",
+    FailoverErrorScope: "NetworkOnly",
+    // Ensure failover stays within approved models
+    MinPowerRank: 85
+};
+
+// Query failover performance
+const failoverStats = await runView.RunView({
+    EntityName: 'MJ: AI Prompt Runs',
+    ExtraFilter: `FailoverAttempts > 0 AND RunAt >= '2024-01-01'`,
+    OrderBy: 'RunAt DESC'
+});
+
+// Analyze which vendors are most reliable
+SELECT 
+    OriginalModelID,
+    ModelID as FinalModelID,
+    COUNT(*) as FailoverCount,
+    AVG(TotalFailoverDuration) as AvgFailoverTime
+FROM AIPromptRun
+WHERE FailoverAttempts > 0
+GROUP BY OriginalModelID, ModelID
+ORDER BY FailoverCount DESC;
+```
+
+For more details on the failover implementation, see the [Failover Design Document](./failover-design.md).
+
 ### Intelligent Caching
 
 The prompt system provides sophisticated caching with vector similarity matching:
@@ -678,6 +865,43 @@ const result = await runner.ExecutePrompt({
 });
 
 // Result.result will be validated against the expected structure
+```
+
+### Validation Syntax Cleaning
+
+When using output validation with JSON responses, the AI Prompt Runner automatically handles validation syntax that AI models might inadvertently include in their JSON keys:
+
+```typescript
+// Validation syntax in prompts:
+// - name?: optional field
+// - items:[2+]: array with minimum 2 items
+// - status:!empty: non-empty required field
+// - count:number: field with type hint
+
+// If the AI returns JSON with validation syntax in keys:
+{
+  "name?": "John Doe",
+  "items:[2+]": ["apple", "banana", "orange"],
+  "status:!empty": "active",
+  "count:number": 42
+}
+
+// The system automatically cleans it to:
+{
+  "name": "John Doe",
+  "items": ["apple", "banana", "orange"],
+  "status": "active",
+  "count": 42
+}
+```
+
+**Automatic Cleaning Behavior:**
+- **Always enabled** when prompt has `ValidationBehavior` set to `"Strict"` or `"Warn"`
+- **Always enabled** when prompt has an `OutputExample` defined
+- **Optional** for prompts with `ValidationBehavior` set to `"None"` (via `cleanValidationSyntax` parameter)
+
+This ensures that validation patterns used in prompt templates don't interfere with the actual JSON structure returned by the AI model.
+
 ```
 
 ### Template Integration
@@ -801,6 +1025,35 @@ if (result.promptRun) {
     console.log(`Configuration: ${result.promptRun.ConfigurationID}`);
 }
 ```
+
+### Early Run ID Callback
+
+Get the PromptRun ID immediately after creation for real-time monitoring:
+
+```typescript
+const params = new AIPromptParams();
+params.prompt = myPrompt;
+params.data = { query: 'Analyze this data' };
+
+// Callback fired immediately after PromptRun record is saved
+params.onPromptRunCreated = async (promptRunId) => {
+    console.log(`Prompt run started: ${promptRunId}`);
+    
+    // Use cases:
+    // - Link to parent records (e.g., AIAgentRunStep.TargetLogID)
+    // - Send to monitoring systems
+    // - Update UI with tracking info
+    // - Start real-time log streaming
+};
+
+const result = await runner.ExecutePrompt(params);
+```
+
+The callback is invoked:
+- **When**: Right after the AIPromptRun record is created and saved
+- **Before**: The actual AI model execution begins
+- **Error Handling**: Callback errors are logged but don't fail the execution
+- **Async Support**: Can be synchronous or asynchronous
 
 ## AI Prompt Run Logging
 
@@ -1500,7 +1753,7 @@ interface AIPromptParams {
     data?: any;                                // Template and context data
     modelId?: string;                          // Override model selection
     vendorId?: string;                         // Override vendor selection
-    configurationId?: string;                  // Environment-specific config
+    configurationId?: string;                  // AI Configuration ID for environment-specific model selection (e.g., Prod vs Dev)
     contextUser?: UserInfo;                    // User context
     skipValidation?: boolean;                  // Skip output validation
     templateData?: any;                        // Additional template data that augments the main data context
@@ -1510,6 +1763,7 @@ interface AIPromptParams {
     onProgress?: ExecutionProgressCallback;    // Progress update callback
     onStreaming?: ExecutionStreamingCallback;  // Streaming content callback
     agentRunId?: string;                       // Optional agent run ID to link prompt executions to parent agent run
+    cleanValidationSyntax?: boolean;           // Clean validation syntax from JSON responses (auto-enabled for validated prompts)
 }
 
 /**
@@ -2293,3 +2547,373 @@ VALUES ('System Prompt', 'Agent execution control wrapper', @TemplateID, 'System
 
 UPDATE AIAgentType SET SystemPromptID = @SystemPromptID WHERE Name = 'DataGatherAgent';
 ```
+
+## API Keys
+
+The AI Prompts system provides flexible API key management for runtime configuration without modifying environment variables or global settings.
+
+### Environment-Based API Configuration
+
+MemberJunction now supports sophisticated environment-based API key resolution through AIConfigSet entities, allowing different configurations for different environments:
+
+```typescript
+// Configurations are loaded based on the environment name
+// Default fallback order: process.env.NODE_ENV -> 'production'
+
+// Example: Different API keys per environment
+// Development -> AIConfigSet(Name='development') -> Config Key OPENAI_LLM_APIKEY
+// Production -> AIConfigSet(Name='production') -> Config Key OPENAI_LLM_APIKEY
+```
+
+#### Configuration Set Priority
+
+When multiple configuration sets exist, they are evaluated in this order:
+1. **Exact environment match** (e.g., 'development' matches 'development')
+2. **Priority field** (higher priority values are preferred)
+3. **Custom resolver logic** (if implemented via subclassing)
+
+### Using Runtime API Keys
+
+You can provide API keys at prompt execution time, which is useful for:
+- Multi-tenant applications where different users have different API keys
+- Testing with different API providers or accounts
+- Isolating API usage by application or department
+- Temporary API key usage for specific operations
+
+```typescript
+import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
+import { AIAPIKey } from '@memberjunction/ai';
+
+const runner = new AIPromptRunner();
+
+// Execute with specific API keys
+const result = await runner.ExecutePrompt({
+    prompt: myPrompt,
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser,
+    apiKeys: [
+        { driverClass: 'OpenAILLM', apiKey: 'sk-user-specific-key' },
+        { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-department-key' }
+    ]
+});
+```
+
+### API Key Precedence
+
+When executing prompts, API keys are resolved in this order:
+1. **Local API keys** provided in `AIPromptParams.apiKeys` (highest priority)
+2. **Configuration sets** from database based on environment
+3. **Environment variables** (traditional dotenv approach)
+4. **Custom implementations** via AIAPIKeys subclassing
+
+### Configuration Set Structure
+
+Configuration sets are managed through these entities:
+
+#### AIConfigSet
+- **Name**: Environment name (e.g., 'development', 'production', 'staging')
+- **Description**: Human-readable description
+- **Priority**: Higher values take precedence when multiple sets match
+- **Status**: 'Active' or 'Inactive'
+
+#### AIConfiguration
+- **ConfigSetID**: Links to parent configuration set
+- **ConfigKey**: The configuration key (e.g., 'OPENAI_LLM_APIKEY')
+- **ConfigValue**: The actual value (encrypted for sensitive data)
+- **EncryptedValue**: Whether the value is encrypted
+- **Description**: Documentation for the configuration
+
+### Environment Variables vs Configuration Sets
+
+```typescript
+// Traditional environment variable approach (still supported)
+process.env.OPENAI_LLM_APIKEY = 'sk-...';
+
+// New configuration set approach (recommended)
+// Stored in database:
+// ConfigSet: { Name: 'production', Priority: 100 }
+// Config: { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-...', Encrypted: true }
+
+// The system automatically uses the configuration set if available
+// Falls back to environment variables if not found in database
+```
+
+### Hierarchical API Key Propagation
+
+For hierarchical prompt execution (prompts with child prompts), API keys are automatically propagated:
+
+```typescript
+const parentParams = new AIPromptParams();
+parentParams.prompt = parentPrompt;
+parentParams.childPrompts = [
+    new ChildPromptParam(childPrompt1, 'analysis'),
+    new ChildPromptParam(childPrompt2, 'summary')
+];
+parentParams.apiKeys = [
+    { driverClass: 'OpenAILLM', apiKey: 'sk-parent-key' }
+];
+
+// Child prompts automatically inherit the parent's API keys
+// This ensures consistent API key usage throughout the execution tree
+const result = await runner.ExecutePrompt(parentParams);
+```
+
+### Custom Global API Key Management
+
+For advanced scenarios, you can subclass the global `AIAPIKeys` object:
+
+```typescript
+import { AIAPIKeys, RegisterClass } from '@memberjunction/ai';
+
+@RegisterClass(AIAPIKeys, 'CustomAPIKeys', 2) // Priority 2 overrides default
+export class CustomAPIKeys extends AIAPIKeys {
+    public GetAPIKey(AIDriverName: string): string {
+        // First check configuration sets
+        const configValue = this.getFromConfigSet(AIDriverName);
+        if (configValue) return configValue;
+        
+        // Then check custom logic: database lookup, vault access, etc.
+        if (AIDriverName === 'OpenAILLM') {
+            return this.getFromVault('openai-key');
+        }
+        
+        // Finally fall back to environment variables
+        return super.GetAPIKey(AIDriverName);
+    }
+    
+    private getFromConfigSet(driverName: string): string | null {
+        // Implementation would query AIConfiguration entities
+        // based on current environment
+        const envName = process.env.NODE_ENV || 'production';
+        // ... query logic here
+        return null;
+    }
+}
+```
+
+### Multi-Environment Setup Example
+
+```typescript
+// Development environment setup
+const devConfig = {
+    ConfigSet: { Name: 'development', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-dev-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-dev-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'debug', Encrypted: false }
+    ]
+};
+
+// Production environment setup
+const prodConfig = {
+    ConfigSet: { Name: 'production', Priority: 100 },
+    Configurations: [
+        { ConfigKey: 'OPENAI_LLM_APIKEY', ConfigValue: 'sk-prod-...', Encrypted: true },
+        { ConfigKey: 'ANTHROPIC_LLM_APIKEY', ConfigValue: 'sk-ant-prod-...', Encrypted: true },
+        { ConfigKey: 'LOG_LEVEL', ConfigValue: 'error', Encrypted: false }
+    ]
+};
+
+// The system automatically loads the correct configuration based on NODE_ENV
+```
+
+### Security Best Practices
+
+1. **Never hardcode API keys** in your source code
+2. **Use encrypted storage** for sensitive configuration values
+3. **Separate configurations** by environment (dev, staging, prod)
+4. **Rotate keys regularly** and update configuration sets
+5. **Monitor API key usage** to detect unauthorized access
+6. **Use the principle of least privilege** - give each user/app only the keys they need
+7. **Audit configuration changes** through MemberJunction's change tracking
+
+## AI Configuration System
+
+The AI Prompts system supports sophisticated environment-specific model selection through AI Configurations. This allows you to use different sets of models for the same prompts based on the active configuration (e.g., Production vs Development).
+
+### Configuration Concepts
+
+#### AI Configurations
+- Named configuration sets (e.g., "Production", "Development", "Europe-Region")
+- Filter which models are available for prompt execution
+- Support configuration parameters for dynamic behavior
+- One configuration can be marked as default (`IsDefault = true`)
+
+#### AI Configuration Parameters
+- Name-value pairs stored per configuration
+- Support different data types (string, number, boolean, date, object)
+- Can control dynamic parallelization and other runtime behavior
+- Example: `ParallelExecutions = 5` for development testing
+
+### Model Selection with Configurations
+
+When executing a prompt with a specific `configurationId`, the system follows a two-phase model selection process that ensures configuration-specific models ALWAYS take precedence:
+
+#### Phase 1: Configuration-Specific Models (Highest Priority)
+```typescript
+// First, try to find models with matching configuration
+const configModels = promptModels.filter(pm => 
+    pm.ConfigurationID === configurationId &&
+    (pm.Status === 'Active' || pm.Status === 'Preview')
+);
+```
+
+If configuration-specific models are found, they are used exclusively. The system will NOT consider models with NULL or mismatched configurations.
+
+#### Phase 2: Default Models (Fallback)
+
+Only if NO models match the specific configuration, the system falls back to models with NULL configuration:
+
+```typescript
+// Fall back to NULL configuration models only if no matches found
+if (configModels.length === 0) {
+    const defaultModels = promptModels.filter(pm => 
+        pm.ConfigurationID === null &&
+        (pm.Status === 'Active' || pm.Status === 'Preview')
+    );
+}
+```
+
+This ensures:
+- **Configuration-specific models always win**: When you specify a configuration, only models explicitly assigned to that configuration are considered first
+- **Clear environment separation**: Production models never mix with Development models when configurations are used
+- **Explicit fallback behavior**: NULL configuration models serve as defaults only when no configuration-specific models exist
+
+### Configuration Setup Example
+
+```sql
+-- Create configurations
+INSERT INTO AIConfiguration (Name, Description, IsDefault, Status)
+VALUES 
+    ('Production', 'Stable models for production use', 1, 'Active'),
+    ('Development', 'Experimental models for testing', 0, 'Active');
+
+-- Assign models to configurations
+-- Production uses GPT-4
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Production')
+WHERE PromptID = @PromptID AND ModelID = @GPT4ModelID;
+
+-- Development uses GPT-4-Turbo and Claude-3-Opus
+UPDATE AIPromptModel 
+SET ConfigurationID = (SELECT ID FROM AIConfiguration WHERE Name = 'Development')
+WHERE PromptID = @PromptID AND ModelID IN (@GPT4TurboID, @Claude3OpusID);
+
+-- Models with NULL ConfigurationID serve as defaults when no configuration matches
+UPDATE AIPromptModel 
+SET ConfigurationID = NULL
+WHERE PromptID = @PromptID AND ModelID = @FallbackModelID;
+```
+
+### Using Configurations
+
+#### In Code
+```typescript
+const result = await promptRunner.ExecutePrompt({
+    prompt: myPrompt,
+    configurationId: 'dev-config-id', // Optional
+    data: { query: 'Analyze this data' },
+    contextUser: currentUser
+});
+```
+
+#### Configuration Precedence
+1. **Configuration-specific models** (highest priority) - When a configurationId is provided, ONLY models with matching ConfigurationID are considered initially
+2. **NULL configuration models** (fallback only) - Used only when NO models match the specified configuration
+3. **Priority within each phase** - Models are ranked by their Priority field (higher number = higher priority)
+
+### Dynamic Parallelization with Configurations
+
+Configurations can control parallel execution through parameters:
+
+```typescript
+// Set up configuration parameter
+INSERT INTO AIConfigurationParam (ConfigurationID, Name, Type, Value)
+VALUES (@DevConfigID, 'ParallelExecutions', 'number', '5');
+
+// Use in prompt setup
+UPDATE AIPrompt 
+SET ParallelizationMode = 'ConfigParam',
+    ParallelConfigParam = 'ParallelExecutions'
+WHERE ID = @PromptID;
+```
+
+### Best Practices
+
+1. **Use NULL ConfigurationID for fallback models** that provide a safety net when no configuration-specific models exist
+2. **Create environment-specific configurations** for different deployment scenarios (Production, Development, Testing)
+3. **Document configuration purposes** in the Description field to clarify their intended use
+4. **Test configuration precedence** to ensure configuration-specific models always take priority over defaults
+5. **Use configuration parameters** for environment-specific settings beyond just model selection
+6. **Assign models explicitly to configurations** to ensure clear separation between environments
+
+For more details on API key management, see the [AI Core API Keys documentation](../Core/README.md#api-key-management).
+
+## Model Selection Tracking (v2.78+)
+
+The AIPromptRunner now provides comprehensive tracking of model selection decisions through the `modelSelectionInfo` property in `AIPromptRunResult`. This feature helps developers understand:
+
+- Which models were considered during selection
+- Why specific models were or weren't available
+- Which configuration influenced the selection
+- What selection strategy was used
+
+### Enhanced Model Selection Information
+
+```typescript
+const result = await promptRunner.ExecutePrompt(params);
+
+if (result.modelSelectionInfo) {
+  // Access the configuration that was used
+  const config = result.modelSelectionInfo.aiConfiguration;
+  console.log(`Configuration: ${config?.Name || 'Default'}`);
+  
+  // See all models that were considered
+  for (const candidate of result.modelSelectionInfo.modelsConsidered) {
+    console.log(`Model: ${candidate.model.Name}`);
+    console.log(`  Vendor: ${candidate.vendor?.Name || 'default'}`);
+    console.log(`  Priority: ${candidate.priority}`);
+    console.log(`  Available: ${candidate.available}`);
+    if (!candidate.available) {
+      console.log(`  Reason: ${candidate.unavailableReason}`);
+    }
+  }
+  
+  // Understand the final selection
+  console.log(`Selected: ${result.modelSelectionInfo.modelSelected.Name}`);
+  console.log(`Vendor: ${result.modelSelectionInfo.vendorSelected?.Name}`);
+  console.log(`Reason: ${result.modelSelectionInfo.selectionReason}`);
+  console.log(`Strategy: ${result.modelSelectionInfo.selectionStrategy}`);
+}
+```
+
+### Database Storage
+
+Model selection information is stored in the `AIPromptRun.ModelSelection` field as JSON, containing:
+- Model and vendor IDs (not full entities)
+- Configuration ID and name
+- Array of considered models with their availability status
+- Selection reason and strategy
+
+Additional fields track:
+- `SelectionStrategy`: The strategy used ('Default', 'Specific', 'ByPower')
+- `ModelPowerRank`: Power rank of the selected model
+- `Status`: Execution status ('Pending', 'Running', 'Completed', 'Failed', 'Cancelled')
+- `Cancelled`: Boolean flag for cancellation
+- `CancellationReason`: Why execution was cancelled
+- `ErrorDetails`: Detailed error information for failures
+
+### Benefits
+
+- **Debugging**: Understand why a specific model was selected
+- **Monitoring**: Track which models are being used across prompts
+- **Optimization**: Identify models that are frequently unavailable
+- **Compliance**: Audit model selection for regulatory requirements
+
+## Version History
+
+- **2.78.0** - Added model selection tracking with full entity objects in results
+- **2.77.0** - Enhanced status tracking and cancellation support
+- **2.76.0** - Added intelligent failover system
+- **2.75.0** - Introduced dynamic template composition
+- **2.50.0** - Initial release with core prompt execution

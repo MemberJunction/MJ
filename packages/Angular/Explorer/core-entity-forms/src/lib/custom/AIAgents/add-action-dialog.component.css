@@ -1,0 +1,502 @@
+.add-action-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Ensure dialog appears above banner and other elements */
+:host ::ng-deep .k-dialog,
+:host ::ng-deep .k-window {
+  z-index: 10000 !important;
+}
+
+:host ::ng-deep .k-overlay {
+  z-index: 9999 !important;
+}
+
+/* === Dialog Header === */
+.add-action-dialog .dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+.add-action-dialog .dialog-header .search-section {
+  flex: 1;
+}
+
+.add-action-dialog .dialog-header .search-section .search-input {
+  width: 100%;
+  max-width: 400px;
+}
+
+.add-action-dialog .dialog-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.add-action-dialog .dialog-header .header-actions .stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.add-action-dialog .dialog-header .header-actions .stats .stat-item i {
+  color: #28a745;
+}
+
+/* === Main Content === */
+.add-action-dialog .dialog-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* === Category Sidebar === */
+.add-action-dialog .category-sidebar {
+  width: 250px;
+  background: #f8f9fa;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+}
+
+.add-action-dialog .category-sidebar .sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.add-action-dialog .category-sidebar .sidebar-header h4 {
+  margin: 0;
+  color: #495057;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.add-action-dialog .category-sidebar .sidebar-header h4 i {
+  margin-right: 0.5rem;
+  color: #6c757d;
+}
+
+.add-action-dialog .category-sidebar .category-list {
+  padding: 0.5rem 0;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item:hover {
+  background: #e9ecef;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item.selected {
+  background: #e3f2fd;
+  border-left-color: #2196f3;
+  color: #1976d2;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item.selected .category-icon {
+  color: #1976d2;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item .category-icon {
+  width: 16px;
+  text-align: center;
+  margin-right: 0.75rem;
+  color: #6c757d;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item .category-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item .category-count {
+  background: #dee2e6;
+  color: #495057;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+
+.add-action-dialog .category-sidebar .category-list .category-item.selected .category-count {
+  background: #bbdefb;
+  color: #1976d2;
+}
+
+/* === Actions Container === */
+.add-action-dialog .actions-container {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: white;
+}
+
+/* Loading State */
+.add-action-dialog .actions-container .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #6c757d;
+}
+
+.add-action-dialog .actions-container .loading-state .loading-spinner {
+  margin-bottom: 1rem;
+}
+
+.add-action-dialog .actions-container .loading-state .loading-spinner i {
+  color: #2196f3;
+}
+
+.add-action-dialog .actions-container .loading-state p {
+  margin-top: 1rem;
+  font-size: 1.1rem;
+}
+
+/* Empty State */
+.add-action-dialog .actions-container .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #6c757d;
+  text-align: center;
+}
+
+.add-action-dialog .actions-container .empty-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #dee2e6;
+}
+
+.add-action-dialog .actions-container .empty-state h3 {
+  margin: 0 0 0.5rem 0;
+  color: #495057;
+}
+
+.add-action-dialog .actions-container .empty-state p {
+  margin: 0 0 1.5rem 0;
+}
+
+/* === Grid View === */
+.add-action-dialog .actions-container .actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card {
+  position: relative;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card:hover {
+  border-color: #2196f3;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+  transform: translateY(-2px);
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card.selected {
+  border-color: #28a745;
+  background: #f8fff9;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.15);
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card.selected .selection-indicator i {
+  color: #28a745;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card.existing {
+  border-color: #6c757d;
+  background: #f8f9fa;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card.existing:hover {
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .selection-indicator {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .selection-indicator i {
+  font-size: 1.25rem;
+  color: #dee2e6;
+  transition: color 0.2s ease;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-header .action-icon {
+  width: 40px;
+  height: 40px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 1rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-header .action-icon i {
+  font-size: 1.25rem;
+  color: #1976d2;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-header .action-name {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #212529;
+  line-height: 1.2;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .action-description {
+  margin: 0 0 1rem 0;
+  color: #6c757d;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .category-badge,
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #f8f9fa;
+  color: #495057;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .category-badge i,
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .type-badge i {
+  font-size: 0.7rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .card-body .type-badge {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .existing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(108, 117, 125, 0.9);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .existing-overlay i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.add-action-dialog .actions-container .actions-grid .action-card .existing-overlay span {
+  font-weight: 600;
+}
+
+/* === List View === */
+.add-action-dialog .actions-container .actions-list .list-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 150px 100px 2fr 120px;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item {
+  display: grid;
+  grid-template-columns: 40px 1fr 150px 100px 2fr 120px;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-items: center;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item:hover {
+  background: #f8f9fa;
+  border-color: #2196f3;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item.selected {
+  background: #f8fff9;
+  border-color: #28a745;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item.selected .col-select i {
+  color: #28a745;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item.existing {
+  background: #f8f9fa;
+  opacity: 0.7;
+  cursor: default;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item.existing:hover {
+  background: #f8f9fa;
+  border-color: #e0e0e0;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .col-select i {
+  font-size: 1.25rem;
+  color: #dee2e6;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .col-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .col-name .action-icon {
+  color: #1976d2;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .col-description {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .status-badge.existing {
+  background: #6c757d;
+  color: white;
+}
+
+.add-action-dialog .actions-container .actions-list .list-item .status-badge.available {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* === Selection Summary === */
+.add-action-dialog .selection-summary {
+  padding: 1rem 1.5rem;
+  background: #d4edda;
+  border-top: 1px solid #c3e6cb;
+}
+
+.add-action-dialog .selection-summary .summary-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #155724;
+  font-weight: 500;
+}
+
+.add-action-dialog .selection-summary .summary-content i {
+  color: #28a745;
+}
+
+/* === Dialog Footer === */
+.add-action-dialog .dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+.add-action-dialog .dialog-footer button[kendoButton] {
+  min-width: 120px;
+}
+
+.add-action-dialog .dialog-footer button[kendoButton][look="primary"] i {
+  margin-right: 0.5rem;
+}
+
+/* === Responsive Design === */
+@media (max-width: 768px) {
+  .add-action-dialog .dialog-content {
+    flex-direction: column;
+  }
+
+  .add-action-dialog .category-sidebar {
+    width: 100%;
+    max-height: 200px;
+  }
+
+  .add-action-dialog .actions-container .actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .add-action-dialog .actions-container .actions-list .list-header,
+  .add-action-dialog .actions-container .actions-list .list-item {
+    grid-template-columns: 40px 1fr 80px;
+    gap: 0.5rem;
+  }
+
+  .add-action-dialog .actions-container .actions-list .list-header .col-category,
+  .add-action-dialog .actions-container .actions-list .list-header .col-type,
+  .add-action-dialog .actions-container .actions-list .list-header .col-description,
+  .add-action-dialog .actions-container .actions-list .list-item .col-category,
+  .add-action-dialog .actions-container .actions-list .list-item .col-type,
+  .add-action-dialog .actions-container .actions-list .list-item .col-description {
+    display: none;
+  }
+}

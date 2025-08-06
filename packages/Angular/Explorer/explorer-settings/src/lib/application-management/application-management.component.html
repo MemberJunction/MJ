@@ -1,19 +1,19 @@
 <div class="application-management-container">
   <!-- Action Buttons -->
   <div class="action-buttons">
-    <button class="btn-secondary" (click)="refreshData()" [disabled]="isLoading">
+    <button class="mj-btn mj-btn-secondary" (click)="refreshData()" [disabled]="isLoading">
       <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
       Refresh
     </button>
-    <button class="btn-primary" (click)="createNewApplication()">
+    <button class="mj-btn mj-btn-primary" (click)="createNewApplication()">
       <i class="fa-solid fa-plus"></i>
       Add Application
     </button>
   </div>
 
   <!-- Stats Cards -->
-  <div class="stats-grid" style="display: flex">
-    <div class="stat-card">
+  <div class="mj-grid mj-grid-4">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-total">
         <i class="fa-solid fa-grid-2"></i>
       </div>
@@ -23,7 +23,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-active">
         <i class="fa-solid fa-check-circle"></i>
       </div>
@@ -33,7 +33,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-entities">
         <i class="fa-solid fa-database"></i>
       </div>
@@ -43,7 +43,7 @@
       </div>
     </div>
     
-    <div class="stat-card">
+    <div class="mj-card">
       <div class="stat-icon stat-icon-public">
         <i class="fa-solid fa-globe"></i>
       </div>
@@ -58,11 +58,11 @@
   <div class="filters-section">
     <div class="filters-row">
       <!-- Search -->
-      <div class="search-container">
-        <i class="fa-solid fa-search search-icon"></i>
+      <div class="mj-search">
+        <i class="fa-solid fa-search mj-search-icon"></i>
         <input 
           type="text" 
-          class="search-input" 
+          class="mj-search-input" 
           placeholder="Search applications by name or description..."
           (input)="onSearchChange($event)"
           [value]="filters$.value.search"
@@ -70,26 +70,26 @@
       </div>
       
       <!-- Status Filter -->
-      <div class="filter-group">
-        <label class="filter-label">Status</label>
-        <div class="filter-buttons">
+      <div class="mj-filter-group">
+        <label class="mj-filter-label">Status</label>
+        <div class="mj-filter-buttons">
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'all'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'all'"
             (click)="onStatusFilterChange('all')"
           >
             All
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'active'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'active'"
             (click)="onStatusFilterChange('active')"
           >
             Active
           </button>
           <button 
-            class="filter-btn"
-            [class.active]="filters$.value.status === 'inactive'"
+            class="mj-btn mj-btn-ghost"
+            [class.mj-btn-primary]="filters$.value.status === 'inactive'"
             (click)="onStatusFilterChange('inactive')"
           >
             Inactive
@@ -117,7 +117,7 @@
       <div class="error-content">
         <i class="fa-solid fa-exclamation-triangle error-icon"></i>
         <p class="error-message">{{ error }}</p>
-        <button class="retry-button" (click)="loadInitialData()">
+        <button class="mj-btn mj-btn-primary" (click)="loadInitialData()">
           <i class="fa-solid fa-refresh"></i>
           Try Again
         </button>
@@ -147,10 +147,10 @@
                   {{ getAppStatusLabel(app) }}
                 </span>
                 <div class="app-actions" (click)="$event.stopPropagation()">
-                  <button class="action-btn" (click)="editApplication(app)" title="Edit">
+                  <button class="mj-btn mj-btn-ghost mj-btn-sm" (click)="editApplication(app)" title="Edit">
                     <i class="fa-solid fa-edit"></i>
                   </button>
-                  <button class="action-btn action-btn-danger" (click)="confirmDeleteApplication(app)" title="Delete">
+                  <button class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger" (click)="confirmDeleteApplication(app)" title="Delete">
                     <i class="fa-solid fa-trash"></i>
                   </button>
                 </div>
@@ -222,6 +222,13 @@
     </div>
   }
 
+  <!-- Application Dialog -->
+  <mj-application-dialog
+    [visible]="showApplicationDialog"
+    [data]="applicationDialogData"
+    (result)="onApplicationDialogResult($event)"
+  ></mj-application-dialog>
+
   <!-- Delete Confirmation Dialog -->
   @if (showDeleteConfirm && selectedApp) {
     <div class="modal-backdrop" (click)="showDeleteConfirm = false">
@@ -243,10 +250,18 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="showDeleteConfirm = false">Cancel</button>
-          <button class="btn-danger" (click)="deleteApplication()">
-            <i class="fa-solid fa-trash"></i>
-            Delete Application
+          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+            <i class="fa-solid fa-times"></i>
+            Cancel
+          </button>
+          <button class="mj-btn mj-btn-danger" (click)="deleteApplication()" [disabled]="isLoading">
+            @if (isLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Deleting...
+            } @else {
+              <i class="fa-solid fa-trash"></i>
+              Delete Application
+            }
           </button>
         </div>
       </div>

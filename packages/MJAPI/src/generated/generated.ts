@@ -10,7 +10,7 @@
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
+            GetReadOnlyDataSource, GetReadWriteDataSource, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 

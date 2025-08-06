@@ -1,9 +1,9 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { Subject, Observable, BehaviorSubject, combineLatest } from 'rxjs';
-import { takeUntil, map, shareReplay } from 'rxjs/operators';
-import { Router } from '@angular/router';
-import { Metadata, RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity, AIAgentEntity } from '@memberjunction/core-entities';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Subject, Observable, combineLatest, interval, of, from, Subscription } from 'rxjs';
+import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
+import { RunView } from '@memberjunction/core';
+import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 
 export interface TimelineItem {
   id: string;
@@ -28,36 +28,46 @@ export interface TimelineItem {
 @Component({
   selector: 'mj-ai-agent-run-timeline',
   templateUrl: './ai-agent-run-timeline.component.html',
-  styleUrls: ['./ai-agent-run-timeline.component.css']
+  styleUrls: ['./ai-agent-run-timeline.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
   @Input() autoRefresh = false;
-  @Input() refreshInterval = 5000;
+  @Input() refreshInterval = 30000; // Minimum 30 seconds
+  @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() agentRunCompleted = new EventEmitter<string>();
 
   private destroy$ = new Subject<void>();
   
-  // Observable subjects
-  private stepsSubject$ = new BehaviorSubject<AIAgentRunStepEntity[]>([]);
-  private subRunsSubject$ = new BehaviorSubject<AIAgentRunEntity[]>([]);
-  private actionLogsSubject$ = new BehaviorSubject<ActionExecutionLogEntity[]>([]);
-  private promptRunsSubject$ = new BehaviorSubject<AIPromptRunEntity[]>([]);
+  // Public observables from data helper
+  steps$!: Observable<AIAgentRunStepEntity[]>;
+  subRuns$!: Observable<AIAgentRunEntity[]>;
+  actionLogs$!: Observable<ActionExecutionLogEntity[]>;
+  promptRuns$!: Observable<AIPromptRunEntity[]>;
   
-  // Public observables
-  steps$ = this.stepsSubject$.asObservable();
-  subRuns$ = this.subRunsSubject$.asObservable();
-  actionLogs$ = this.actionLogsSubject$.asObservable();
-  promptRuns$ = this.promptRunsSubject$.asObservable();
-  
-  timelineItems$: Observable<TimelineItem[]>;
+  timelineItems$!: Observable<TimelineItem[]>;
   
   loading = false;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
   
-  constructor(private router: Router) {
+  private refreshTimer: any;
+  private refreshSubscription: Subscription | null = null;
+  
+  constructor(
+    private cdr: ChangeDetectorRef
+  ) {}
+  
+  ngOnInit() {
+    // Initialize observables from the data helper
+    this.steps$ = this.dataHelper.steps$;
+    this.subRuns$ = this.dataHelper.subRuns$;
+    this.actionLogs$ = this.dataHelper.actionLogs$;
+    this.promptRuns$ = this.dataHelper.promptRuns$;
+    
     // Combine all data sources to build timeline
     this.timelineItems$ = combineLatest([
       this.steps$,
@@ -70,124 +80,84 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       ),
       shareReplay(1)
     );
-  }
-  
-  ngOnInit() {
-    if (this.aiAgentRunId) {
-      this.loadData();
-      
-      if (this.autoRefresh) {
-        this.startAutoRefresh();
-      }
+    
+    // Data loading is now handled by the parent component through the helper
+    // Subscribe to loading state from helper
+    this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
+      this.loading = loading;
+    });
+    
+    this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+      this.error = error;
+    });
+    
+    // Auto-refresh logic
+    if (this.autoRefresh) {
+      this.startAutoRefresh();
     }
   }
   
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+    }
   }
   
   private startAutoRefresh() {
-    const interval = setInterval(() => {
-      this.loadData();
-    }, this.refreshInterval);
+    // Ensure minimum 30 second interval
+    const refreshIntervalMs = Math.max(30000, this.refreshInterval);
     
-    this.destroy$.subscribe(() => clearInterval(interval));
+    // Don't create multiple subscriptions - subscribe once and use interval
+    this.refreshSubscription = interval(refreshIntervalMs)
+      .pipe(
+        takeUntil(this.destroy$),
+        // Get the latest agent run status
+        switchMap(() => {
+          if (!this.aiAgentRunId) return of(null);
+          
+          const rv = new RunView();
+          return from(rv.RunView({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID = '${this.aiAgentRunId}'`,
+            ResultType: 'simple'
+          }));
+        }),
+        filter(result => result !== null && result.Success && result.Results?.length > 0),
+        map(result => result!.Results[0])
+      )
+      .subscribe(agentRun => {
+        // Check if the agent run is still running
+        if (agentRun.Status === 'Running') {
+          // Reload data
+          this.dataHelper.loadAgentRunData(this.aiAgentRunId);
+        } else {
+          // Agent run completed/failed - stop refresh
+          console.log(`Agent run ${agentRun.Status} - stopping auto-refresh`);
+          this.stopAutoRefresh();
+          // Emit event to parent to update status
+          this.agentRunCompleted.emit(agentRun.Status);
+        }
+      });
   }
   
+  private stopAutoRefresh() {
+    if (this.refreshSubscription) {
+      this.refreshSubscription.unsubscribe();
+      this.refreshSubscription = null;
+    }
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+  
+  // This method is now just for compatibility - actual loading is done by parent
   async loadData() {
     if (!this.aiAgentRunId) return;
-    
-    this.loading = true;
-    this.error = null;
-    
-    try {
-      await this.loadStepsAndSubRuns();
-    } catch (error) {
-      this.error = 'Failed to load timeline data';
-      console.error('Error loading timeline:', error);
-    } finally {
-      this.loading = false;
-    }
-  }
-  
-  private async loadStepsAndSubRuns() {
-    const rv = new RunView();
-    const [stepsResult, subRunsResult] = await rv.RunViews([
-      {
-        EntityName: 'MJ: AI Agent Run Steps',
-        ExtraFilter: `AgentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StepNumber' 
-      },
-      {
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `ParentRunID='${this.aiAgentRunId}'`,
-        OrderBy: 'StartedAt' 
-      }
-    ]);
-    
-    if (stepsResult.Success) {
-      const steps = stepsResult.Results as AIAgentRunStepEntity[] || [];
-      this.stepsSubject$.next(steps);
-      
-      // Load action logs for action steps
-      const actionSteps = steps.filter(s => s.StepType === 'Actions');
-      if (actionSteps.length > 0) {
-        await this.loadActionLogs(actionSteps);
-      }
-      
-      // Load prompt runs for prompt steps
-      const promptSteps = steps.filter(s => s.StepType === 'Prompt');
-      if (promptSteps.length > 0) {
-        await this.loadPromptRuns(promptSteps);
-      }
-    }
-    
-    if (subRunsResult.Success) {
-      const subRuns = subRunsResult.Results as AIAgentRunEntity[] || [];
-      this.subRunsSubject$.next(subRuns);
-      
-      // For each sub-run that has its own sub-runs, we'll need to handle that in the component
-      // This creates the hierarchical structure
-    }
-  }
-  
-  private async loadActionLogs(steps: AIAgentRunStepEntity[]) {
-    const actionIds = steps
-      .map(s => s.TargetID)
-      .filter(id => id != null);
-      
-    if (actionIds.length === 0) return;
-    
-    const rv = new RunView();
-    const result = await rv.RunView<ActionExecutionLogEntity>({
-      EntityName: 'Action Execution Logs',
-      ExtraFilter: `ActionID IN ('${actionIds.join("','")}')`,
-      OrderBy: 'StartedAt' 
-    });
-    
-    if (result.Success) {
-      this.actionLogsSubject$.next(result.Results || []);
-    }
-  }
-  
-  private async loadPromptRuns(steps: AIAgentRunStepEntity[]) {
-    const promptIds = steps
-      .map(s => s.TargetID)
-      .filter(id => id != null);
-      
-    if (promptIds.length === 0) return;
-    
-    const rv = new RunView();
-    const result = await rv.RunView<AIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ID IN ('${promptIds.join("','")}')`,
-      OrderBy: '__mj_CreatedAt' 
-    });
-    
-    if (result.Success) {
-      this.promptRunsSubject$.next(result.Results || []);
-    }
+    // The parent component should handle data loading through the helper
+    return this.dataHelper.loadAgentRunData(this.aiAgentRunId);
   }
   
   private buildTimelineItems(
@@ -198,16 +168,10 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   ): TimelineItem[] {
     const items: TimelineItem[] = [];
     
-    console.log('🔍 Timeline: Building items with:', {
-      stepsCount: steps.length,
-      subRunsCount: subRuns.length,
-      actionLogsCount: actionLogs.length,
-      promptRunsCount: promptRuns.length
-    });
     
     // Build main timeline from steps
     steps.forEach(step => {
-      const item = this.createTimelineItemFromStep(step, 0);
+      const item = this.createTimelineItemFromStep(step, 0, promptRuns);
       
       // Don't load children immediately for sub-agents
       // They will be loaded on demand when expanded
@@ -218,12 +182,22 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     return items;
   }
   
-  private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number): TimelineItem {
+  private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number, promptRuns?: AIPromptRunEntity[]): TimelineItem {
+    let subtitle = `Type: ${step.StepType}`;
+    
+    // For prompt steps, try to find the associated prompt run to get model/vendor info
+    if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
+      const promptRun = promptRuns.find(pr => pr.ID === step.TargetLogID);
+      if (promptRun) {
+        subtitle = `Model: ${promptRun.Model || 'Unknown'} | Vendor: ${promptRun.Vendor || 'Unknown'}`;
+      }
+    }
+    
     return {
       id: step.ID,
       type: 'step',
       title: step.StepName || `Step ${step.StepNumber}`,
-      subtitle: `Type: ${step.StepType}`,
+      subtitle: subtitle,
       status: step.Status,
       startTime: step.StartedAt,
       endTime: step.CompletedAt || undefined,
@@ -237,57 +211,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     };
   }
   
-  private createTimelineItemFromSubRun(run: AIAgentRunEntity, level: number): TimelineItem {
-    return {
-      id: run.ID,
-      type: 'subrun',
-      title: `Sub-Agent Run`,
-      subtitle: `Agent: ${run.Agent || 'Unknown'}`,
-      status: run.Status,
-      startTime: run.StartedAt,
-      endTime: run.CompletedAt || undefined,
-      duration: this.calculateDuration(run.StartedAt, run.CompletedAt),
-      icon: 'fa-robot',
-      color: this.getStatusColor(run.Status),
-      data: run,
-      level,
-      isExpanded: false
-    };
-  }
-  
-  private createTimelineItemFromActionLog(log: ActionExecutionLogEntity, level: number): TimelineItem {
-    return {
-      id: log.ID,
-      type: 'action',
-      title: log.Action || 'Action',
-      subtitle: `Code: ${log.ResultCode || 'N/A'}`,
-      status: log.ResultCode === 'Success' ? 'Completed' : 'Failed',
-      startTime: log.StartedAt,
-      endTime: log.EndedAt || undefined,
-      duration: this.calculateDuration(log.StartedAt, log.EndedAt),
-      icon: 'fa-cog',
-      color: log.ResultCode === 'Success' ? 'success' : 'error',
-      data: log,
-      level
-    };
-  }
-  
-  private createTimelineItemFromPromptRun(run: AIPromptRunEntity, level: number): TimelineItem {
-    return {
-      id: run.ID,
-      type: 'prompt',
-      title: run.Prompt || 'Prompt Run',
-      subtitle: `Model: ${run.Model || 'Unknown'}`,
-      status: 'Completed',
-      startTime: run.__mj_CreatedAt,
-      endTime: run.__mj_UpdatedAt,
-      duration: this.calculateDuration(run.__mj_CreatedAt, run.__mj_UpdatedAt),
-      icon: 'fa-microchip',
-      color: 'info',
-      data: run,
-      level
-    };
-  }
   
   private getStepIcon(stepType: string): string {
     const iconMap: Record<string, string> = {
@@ -331,16 +254,6 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   async toggleItemExpansion(item: TimelineItem, event: Event) {
     event.stopPropagation();
-    console.log('🔄 Timeline: Toggling expansion for item:', {
-      id: item.id,
-      type: item.type,
-      title: item.title,
-      wasExpanded: item.isExpanded,
-      willBeExpanded: !item.isExpanded,
-      hasData: !!item.data,
-      dataId: item.data?.ID,
-      childrenLoaded: item.childrenLoaded
-    });
     
     // Toggle expansion state
     item.isExpanded = !item.isExpanded;
@@ -352,53 +265,40 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   }
   
   private async loadSubAgentChildren(item: TimelineItem) {
-    console.log('🔄 Timeline: Loading children for sub-agent step:', {
-      id: item.id,
-      targetId: item.data?.TargetID,
-      targetLogId: item.data?.TargetLogID,
-      stepType: item.data?.StepType
-    });
-    
     try {
-      const rv = new RunView();
-      
-      // For a sub-agent step, the TargetLogID contains the ID of the sub-agent run
-      // TargetID is the agent itself, TargetLogID is the actual run instance
       const subAgentRunId = item.data?.TargetLogID;
       
       if (!subAgentRunId) {
-        console.log('🔄 Timeline: No TargetLogID found for sub-agent step');
         item.hasNoChildren = true;
         item.children = [];
         item.childrenLoaded = true;
         return;
       }
       
-      // Load steps only from the specific sub-agent run
-      const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
-        EntityName: 'MJ: AI Agent Run Steps',
-        ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-        OrderBy: 'StepNumber' 
-      });
+      // Load sub-agent data through service
+      const data = await this.dataHelper.loadSubAgentData(subAgentRunId);
       
-      if (stepsResult.Success && stepsResult.Results && stepsResult.Results.length > 0) {
-        console.log(`🔄 Timeline: Found ${stepsResult.Results.length} steps for sub-agent run ${subAgentRunId}`);
-        
-        // Create timeline items directly from steps
-        item.children = stepsResult.Results.map(step => 
-          this.createTimelineItemFromStep(step, item.level + 1)
-        );
-      } else {
-        console.log('🔄 Timeline: No steps found for sub-agent run');
+      if (!data.steps || data.steps.length === 0) {
         item.hasNoChildren = true;
         item.children = [];
+        item.childrenLoaded = true;
+        return;
       }
       
+      // Create timeline items
+      item.children = data.steps.map(step => 
+        this.createTimelineItemFromStep(step, item.level + 1, data.promptRuns)
+      );
+      
       item.childrenLoaded = true;
+      // Trigger change detection after updating the data
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('🔄 Timeline: Error loading sub-agent children:', error);
       item.hasNoChildren = true;
       item.childrenLoaded = true;
+      // Trigger change detection for error state
+      this.cdr.markForCheck();
     }
   }
   
@@ -415,5 +315,17 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   navigateToPromptRun(runId: string, event: Event) {
     event.stopPropagation();
     this.navigateToEntity.emit({ entityName: 'MJ: AI Prompt Runs', recordId: runId });
+  }
+  
+  /**
+   * TrackBy function for timeline items
+   */
+  trackByItemId(index: number, item: TimelineItem): string {
+    return item.id;
+  }
+  
+  createSubRunDataHelper(): AIAgentRunDataHelper {
+    // Create a new data helper instance for sub-runs to prevent caching conflicts
+    return new AIAgentRunDataHelper();
   }
 }

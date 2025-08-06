@@ -7,6 +7,12 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { ActionExecutionLogFormComponent } from '../../generated/Entities/ActionExecutionLog/actionexecutionlog.form.component';
 
+interface ActionParameter {
+    Name: string;
+    Value: unknown;
+    Type: 'Input' | 'Output' | 'Both';
+}
+
 @RegisterClass(BaseFormComponent, 'Action Execution Logs')
 @Component({
     selector: 'mj-action-execution-log-form',
@@ -20,6 +26,11 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
     public action: ActionEntity | null = null;
     public user: UserEntity | null = null;
     
+    // Parameter counts for visibility
+    public hasInputParams = false;
+    public hasOutputParams = false;
+    public hasBothParams = false;
+    
     // Loading states
     public isLoadingAction = false;
     public isLoadingUser = false;
@@ -27,12 +38,18 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
     // Formatted JSON fields
     public formattedParams: string = '';
     public formattedMessage: string = '';
+    public formattedInputParams: string = '';
+    public formattedOutputParams: string = '';
+    public formattedBothParams: string = '';
     
     // UI state
     public expandedSections = {
         execution: true,
         input: true,
         output: true,
+        inputParams: true,
+        outputParams: true,
+        bothParams: true,
         metadata: false
     };
     
@@ -95,6 +112,7 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
         }
     }
 
+
     private formatJSONFields() {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
@@ -108,6 +126,11 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
                 const parsed = JSON.parse(this.record.Params);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
                 this.formattedParams = JSON.stringify(recursivelyParsed, null, 2);
+                
+                // Format parameter-specific views if params is an array of ActionParameter objects
+                if (Array.isArray(recursivelyParsed)) {
+                    this.formatParameterSections(recursivelyParsed as ActionParameter[]);
+                }
             } catch (e) {
                 this.formattedParams = this.record.Params;
             }
@@ -122,6 +145,51 @@ export class ActionExecutionLogFormComponentExtended extends ActionExecutionLogF
             } catch (e) {
                 this.formattedMessage = this.record.Message;
             }
+        }
+    }
+
+    private formatParameterSections(params: ActionParameter[]) {
+        // Reset visibility flags
+        this.hasInputParams = false;
+        this.hasOutputParams = false;
+        this.hasBothParams = false;
+        
+        // Arrays to collect parameters by type
+        const inputParams: ActionParameter[] = [];
+        const outputParams: ActionParameter[] = [];
+        const bothParams: ActionParameter[] = [];
+        
+        // Sort parameters by type
+        for (const param of params) {
+            switch (param.Type) {
+                case 'Input':
+                    inputParams.push(param);
+                    this.hasInputParams = true;
+                    break;
+                case 'Output':
+                    outputParams.push(param);
+                    this.hasOutputParams = true;
+                    break;
+                case 'Both':
+                    bothParams.push(param);
+                    this.hasBothParams = true;
+                    break;
+            }
+        }
+        
+        // Format input parameters
+        if (inputParams.length > 0) {
+            this.formattedInputParams = JSON.stringify(inputParams, null, 2);
+        }
+        
+        // Format output parameters
+        if (outputParams.length > 0) {
+            this.formattedOutputParams = JSON.stringify(outputParams, null, 2);
+        }
+        
+        // Format both parameters
+        if (bothParams.length > 0) {
+            this.formattedBothParams = JSON.stringify(bothParams, null, 2);
         }
     }
 

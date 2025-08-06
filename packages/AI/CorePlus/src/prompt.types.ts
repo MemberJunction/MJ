@@ -9,15 +9,16 @@
  * @since 2.50.0
  */
 
-import { AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
-import { ChatResult, ChatMessage } from '@memberjunction/ai';
+import { AIPromptEntity, AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity } from '@memberjunction/core-entities';
+import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 
 
 /**
  * Execution status enumeration for better type safety
+ * Values match the database CHECK constraint in AIPromptRun.Status
  */
-export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type ExecutionStatus = 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
 
 /**
  * Cancellation reason enumeration
@@ -229,6 +230,37 @@ export interface AIPromptRunResult<T = unknown> {
     cacheKey?: string;
     cacheSource?: string;
   };
+
+  /**
+   * Model selection information for debugging and analysis
+   */
+  modelSelectionInfo?: {
+    /** The configuration entity that was used, if any */
+    aiConfiguration?: AIConfigurationEntity;
+    /** All models that were considered for selection */
+    modelsConsidered: Array<{
+      /** The model entity */
+      model: AIModelEntityExtended;
+      /** The vendor entity, if a specific vendor was considered */
+      vendor?: AIVendorEntity;
+      /** Priority of this model/vendor combination */
+      priority: number;
+      /** Whether this model/vendor had an available API key */
+      available: boolean;
+      /** Reason why this model/vendor wasn't available */
+      unavailableReason?: string;
+    }>;
+    /** The model entity that was selected */
+    modelSelected: AIModelEntityExtended;
+    /** The vendor entity that was selected, if applicable */
+    vendorSelected?: AIVendorEntity;
+    /** Reason for the selection */
+    selectionReason: string;
+    /** Whether a fallback model was used */
+    fallbackUsed: boolean;
+    /** The selection strategy that was used */
+    selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
+  };
 }
 
 
@@ -309,6 +341,21 @@ export class AIPromptParams {
    * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
    */
   agentRunId?: string;
+
+  /**
+   * Optional ID of a previous prompt run to indicate this is a rerun.
+   * When provided, the new AIPromptRun record will have its RerunFromPromptRunID
+   * field set to this value, establishing a link between the original and rerun executions.
+   */
+  rerunFromPromptRunID?: string;
+
+  /**
+   * Optional system prompt override that bypasses template rendering.
+   * When provided, this exact system prompt will be used instead of rendering
+   * the prompt's template. This is useful for re-running prompts with the exact
+   * system prompt from a previous run.
+   */
+  systemPromptOverride?: string;
 
 
   /**
@@ -406,6 +453,89 @@ export class AIPromptParams {
    * Can also be controlled via MJ_AI_VERBOSE environment variable.
    */
   verbose?: boolean;
+
+  /**
+   * Optional API keys to use for this prompt execution.
+   * When provided, these keys will override the global API keys for the specified driver classes.
+   * This allows for runtime API key configuration without modifying environment variables
+   * or global settings.
+   * 
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.apiKeys = [
+   *   { driverClass: 'OpenAILLM', apiKey: 'sk-...' },
+   *   { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-...' }
+   * ];
+   * ```
+   */
+  apiKeys?: AIAPIKey[];
+
+  /**
+   * Whether to clean validation syntax from the AI result.
+   * When true, the AIPromptRunner will automatically remove validation syntax
+   * (like ?, *, :type, :[N+], :!empty) from JSON keys in the AI's response.
+   * 
+   * Note: For JSON outputs with an OutputExample defined, validation syntax
+   * is ALWAYS cleaned automatically before validation, regardless of this setting.
+   * This parameter is only needed for edge cases where you want cleaning
+   * without an OutputExample.
+   * 
+   * Default: false
+   * 
+   * @example
+   * ```typescript
+   * // If AI returns: { "name?": "John", "items:[2+]": ["a", "b"] }
+   * // With cleanValidationSyntax: true OR with OutputExample defined
+   * // Result becomes: { "name": "John", "items": ["a", "b"] }
+   * ```
+   */
+  cleanValidationSyntax?: boolean;
+
+
+  /**
+   * NOTE: Only applies when prompt.OutputType is 'object'
+   * 
+   * If this parameter is set to true, the runner will attempt to repair JSON parsing errors with a two
+   * step process, after a normal attempt to parse the JSON as-is where an error occurs:
+   * 1. We will use the JSON5 library to attempt to parse the JSON as-is. This is a fast
+   *    and deterministic method to parse JSON that handles some common invalid strict JSON issues such as
+   *    - Trailing commas
+   *    - Unquoted keys
+   *    - Single quotes around strings
+   *    - Unescaped control characters
+   *    - Comments    
+   * 2. If Step 1 fails, we will use a small LLM using a prompt called 'Repair JSON' within the `MJ: System` category
+   *    This prompt will attempt to fix the JSON with a small LLM that knows how to emit proper JSON
+   */
+  attemptJSONRepair?: boolean;
+
+  /**
+   * Optional callback fired immediately after the PromptRun record is created and saved.
+   * Provides the PromptRun ID for immediate tracking/monitoring purposes.
+   * 
+   * This callback is useful for:
+   * - Linking the PromptRun to parent records (e.g., AIAgentRunStep.TargetLogID)
+   * - Real-time monitoring and tracking
+   * - Early logging and debugging
+   * 
+   * The callback is invoked after the PromptRun is successfully saved but before
+   * the actual AI model execution begins. If the callback throws an error, it will
+   * be logged but won't fail the prompt execution.
+   * 
+   * @param promptRunId - The ID of the newly created AIPromptRun record
+   * 
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.onPromptRunCreated = async (promptRunId) => {
+   *   console.log(`Prompt run started: ${promptRunId}`);
+   *   // Update parent records, send monitoring events, etc.
+   * };
+   * ```
+   */
+  onPromptRunCreated?: (promptRunId: string) => void | Promise<void>;
 }
 
 

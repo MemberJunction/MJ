@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
-import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -9,9 +9,9 @@ import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreS
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { combineFiles, logIf } from '../Misc/util';
+import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 
 
@@ -44,6 +44,23 @@ export class SQLCodeGenBase {
      * Flag indicating whether to filter entities for forced regeneration based on entityWhereClause
      */
     protected filterEntitiesQualifiedForRegeneration: boolean = false;
+
+    /**
+     * Tracks cascade delete dependencies between entities.
+     * Key: Entity ID whose update/delete SP is called by other entities' delete SPs
+     * Value: Set of Entity IDs that have CascadeDeletes=true and call this entity's update/delete SP
+     */
+    protected cascadeDeleteDependencies: Map<string, Set<string>> = new Map();
+
+    /**
+     * Tracks entities that need their delete stored procedures regenerated due to cascade dependencies
+     */
+    protected entitiesNeedingDeleteSPRegeneration: Set<string> = new Set();
+    
+    /**
+     * Ordered list of entity IDs for delete SP regeneration (dependency order)
+     */
+    protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
     public async manageSQLScriptsAndExecution(pool: sql.ConnectionPool, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
@@ -86,6 +103,11 @@ export class SQLCodeGenBase {
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
+            // STEP 1.5 - Check for cascade delete dependencies that require regeneration
+            startSpinner('Analyzing cascade delete dependencies...');
+            await this.markEntitiesForCascadeDeleteRegeneration(pool, includedEntities);
+            succeedSpinner('Cascade delete dependency analysis completed');
+
             // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
             startSpinner('Cleaning generated files...');
             this.deleteGeneratedEntityFiles(directory, baselineEntities);
@@ -95,9 +117,16 @@ export class SQLCodeGenBase {
             startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
             const step2StartTime: Date = new Date();
 
+            // First, separate entities that need cascade delete regeneration from others
+            const entitiesWithoutCascadeRegeneration = includedEntities.filter(e => !this.entitiesNeedingDeleteSPRegeneration.has(e.ID));
+            const entitiesForCascadeRegeneration = this.orderedEntitiesForDeleteSPRegeneration
+                .map(id => includedEntities.find(e => e.ID === id))
+                .filter(e => e !== undefined) as EntityInfo[];
+
+            // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool, 
-                entities: includedEntities, 
+                entities: entitiesWithoutCascadeRegeneration, 
                 directory, 
                 onlyPermissions: false, 
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
@@ -108,6 +137,26 @@ export class SQLCodeGenBase {
             if (!genResult.Success) {
                 failSpinner('Failed to generate entity SQL files');
                 return false;
+            }
+            
+            // Generate SQL for cascade delete regenerations in dependency order (sequentially)
+            if (entitiesForCascadeRegeneration.length > 0) {
+                updateSpinner(`Regenerating ${entitiesForCascadeRegeneration.length} delete SPs in dependency order...`);
+                const cascadeGenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
+                    pool, 
+                    entities: entitiesForCascadeRegeneration, 
+                    directory, 
+                    onlyPermissions: false, 
+                    skipExecution: true,
+                    writeFiles: true, 
+                    batchSize: 1, // Process sequentially to maintain dependency order
+                    enableSQLLoggingForNewOrModifiedEntities: true
+                });
+                if (!cascadeGenResult.Success) {
+                    failSpinner('Failed to regenerate cascade delete SPs');
+                    return false;
+                }
+                genResult.Files.push(...cascadeGenResult.Files);
             }
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
@@ -401,6 +450,10 @@ export class SQLCodeGenBase {
             const isNewOrModified = !!ManageMetadataBase.newEntityList.find(e => e === entity.Name) || 
                                    !!ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name);
             
+            // Check if entity is being regenerated due to cascade dependencies
+            const isCascadeDependencyRegeneration = description.toLowerCase().includes('spdelete') && 
+                                                   this.entitiesNeedingDeleteSPRegeneration.has(entity.ID);
+            
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
@@ -418,6 +471,9 @@ export class SQLCodeGenBase {
             // Determine if we should log based on entity state and force regeneration settings
             if (isNewOrModified) {
                 // Always log new or modified entities
+                shouldLog = true;
+            } else if (isCascadeDependencyRegeneration) {
+                // Always log cascade dependency regenerations
                 shouldLog = true;
             } else if (isForceRegeneration) {
                 // For force regeneration, the specific type flags (spCreate, baseViews, etc.) 
@@ -582,9 +638,13 @@ export class SQLCodeGenBase {
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
                 if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                    options.entity.spDeleteGenerated && // Only generate if marked as generated (not custom)
+                    ((configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                     this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
+                    if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
+                        logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
+                    }
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPDelete(options.entity)
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
@@ -1215,7 +1275,7 @@ GO`;
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger: string = hasUpdatedAtField ? this.generateUpdatedAtTrigger(entity) : '';
-        let selectInsertedRecord = `SELECT
+        let selectUpdatedRecord = `SELECT
                                         *
                                     FROM
                                         [${entity.SchemaName}].[${entity.BaseView}]
@@ -1242,8 +1302,13 @@ BEGIN
     WHERE
         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
 
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    ${selectInsertedRecord}
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        ${selectUpdatedRecord}
 END
 GO
 ${permissions}
@@ -1286,7 +1351,6 @@ ${updatedAtTrigger}
     protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement; // Only exclude auto-increment PKs from insert
         let sOutput: string = '', isFirst: boolean = true;
-        const filteredFields = entityFields.filter(f => f.AllowUpdateAPI);
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
             const quotes: string = ef.NeedsQuotes ? "'" : "";
@@ -1399,6 +1463,14 @@ ${deleteCode}`
 ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
         }
 
+        // Build the NULL select statement for when no rows are affected
+        let sNullSelect: string = '';
+        for (let k of entity.PrimaryKeys) {
+            if (sNullSelect !== '')
+                sNullSelect += ', ';
+            sNullSelect += `NULL AS [${k.Name}]`;
+        }
+
         return `
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
@@ -1414,7 +1486,11 @@ BEGIN
 
 ${deleteCode}
 
-    SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT ${sNullSelect} -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT ${sSelect} -- Return the primary key values to indicate we successfully deleted the record
 END
 GO${permissions}
     `
@@ -1425,45 +1501,473 @@ GO${permissions}
         if (entity.CascadeDeletes) {
             const md = new Metadata();
 
-            // we need to find all of the fields in other entities that are foreign keys to this entity
-            // and generate DELETE statements for those tables
-            for (let i: number = 0; i < md.Entities.length; ++i) {
-                const e = md.Entities[i];
-                for (let j: number = 0; j < e.Fields.length; ++j) {
-                    const ef = e.Fields[j];
+            // Find all fields in other entities that are foreign keys to this entity
+            for (const e of md.Entities) {
+                for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
-                        let sql: string = '';
-                        if (ef.AllowsNull === false) {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and only those that are non-null. If they allow null we want to UPDATE those rows to be null
-                            // so we need to generate a DELETE statement for that table
-                            sql = `
-    -- Cascade delete from ${e.BaseTable}
-    DELETE FROM
-        [${e.SchemaName}].[${e.BaseTable}]
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
+                        const sql = this.generateSingleCascadeOperation(entity, e, ef);
+                        
+                        if (sql !== '') {
+                            if (sOutput !== '')
+                                sOutput += '\n    ';
+                            sOutput += sql;
                         }
-                        else {
-                            // we have a non-virtual field that is a foreign key to this entity
-                            // and this field ALLOWS nulls, which means we don't delete the rows, we just update them to be null
-                            // so they don't have an orphaned foreign key
-                            sql = `
-    -- Cascade update on ${e.BaseTable} - set FK to null before deleting rows in ${entity.BaseTable}
-    UPDATE
-        [${e.SchemaName}].[${e.BaseTable}]
-    SET
-        [${ef.CodeName}] = NULL
-    WHERE
-        [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
-                        }
-                        if (sOutput !== '')
-                            sOutput += '\n    ';
-                        sOutput += sql;
                     }
                 }
             }
         }
         return sOutput === '' ? '' : `${sOutput}\n    `;
+    }
+
+    protected generateSingleCascadeOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+        if (fkField.AllowsNull === false && relatedEntity.AllowDeleteAPI) {
+            // Non-nullable FK: generate cursor-based cascade delete
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'delete');
+        }
+        else if (fkField.AllowsNull && relatedEntity.AllowUpdateAPI) {
+            // Nullable FK: generate cursor-based update to set FK to null
+            return this.generateCascadeCursorOperation(parentEntity, relatedEntity, fkField, 'update');
+        }
+        else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
+            // Nullable FK but no update API - this is a configuration error
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause the delete operation to fail due to referential integrity`;
+        }
+        else if (!relatedEntity.AllowDeleteAPI) {
+            // Entity doesn't allow delete API, so we can't cascade delete
+            const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            logWarning(consoleMsg);
+            return `
+    -- ${sqlComment}
+    -- This will cause a referential integrity violation`;
+        }
+        
+        return '';
+    }
+
+    protected generateCascadeCursorOperation(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo, operation: 'delete' | 'update'): string {
+        // Build the WHERE clause for matching foreign key(s)
+        // TODO: Future enhancement to support composite foreign keys
+        const whereClause = `[${fkField.CodeName}] = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        
+        // Generate unique cursor name using entity code names
+        const cursorName = `cascade_${operation}_${relatedEntity.CodeName}_cursor`;
+        
+        // Determine which SP to call
+        const spType = operation === 'delete' ? SPType.Delete : SPType.Update;
+        const spName = this.getSPName(relatedEntity, spType);
+        
+        if (operation === 'update') {
+            // For update, we need to include all updateable fields
+            // Use the related entity's code name as prefix to ensure uniqueness
+            const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, relatedEntity.CodeName);
+            const spCallParams = updateParams.allParams;
+            
+            return `
+    -- Cascade update on ${relatedEntity.BaseTable} using cursor to call ${spName}
+    ${updateParams.declarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${updateParams.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @${relatedEntity.CodeName}_${fkField.CodeName} = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${spCallParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${updateParams.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+        }
+        
+        // For delete operation, use a simpler prefix for primary keys only
+        const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, relatedEntity.CodeName);
+        
+        return `
+    -- Cascade delete from ${relatedEntity.BaseTable} using cursor to call ${spName}
+    DECLARE ${pkComponents.varDeclarations}
+    DECLARE ${cursorName} CURSOR FOR 
+        SELECT ${pkComponents.selectFields}
+        FROM [${relatedEntity.SchemaName}].[${relatedEntity.BaseTable}]
+        WHERE ${whereClause}
+    
+    OPEN ${cursorName}
+    FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${relatedEntity.SchemaName}].[${spName}] ${pkComponents.spParams}
+        
+        FETCH NEXT FROM ${cursorName} INTO ${pkComponents.fetchInto}
+    END
+    
+    CLOSE ${cursorName}
+    DEALLOCATE ${cursorName}`;
+    }
+
+    protected buildPrimaryKeyComponents(entity: EntityInfo, prefix: string = ''): {
+        varDeclarations: string,
+        selectFields: string,
+        fetchInto: string,
+        spParams: string
+    } {
+        let varDeclarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let spParams = '';
+        
+        const varPrefix = prefix || 'Related';
+        
+        for (const pk of entity.PrimaryKeys) {
+            if (varDeclarations !== '')
+                varDeclarations += ', ';
+            varDeclarations += `@${varPrefix}${pk.CodeName} ${pk.SQLFullType}`;
+            
+            if (selectFields !== '')
+                selectFields += ', ';
+            selectFields += `[${pk.Name}]`;
+            
+            if (fetchInto !== '')
+                fetchInto += ', ';
+            fetchInto += `@${varPrefix}${pk.CodeName}`;
+            
+            if (spParams !== '')
+                spParams += ', ';
+            // Use named parameters: @ParamName = @VariableValue
+            spParams += `@${pk.CodeName} = @${varPrefix}${pk.CodeName}`;
+        }
+        
+        return { varDeclarations, selectFields, fetchInto, spParams };
+    }
+
+    protected buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+        declarations: string,
+        selectFields: string,
+        fetchInto: string,
+        allParams: string
+    } {
+        let declarations = '';
+        let selectFields = '';
+        let fetchInto = '';
+        let allParams = '';
+        
+        const varPrefix = prefix || entity.CodeName;
+        
+        // First, handle primary keys with the entity-specific prefix
+        const pkComponents = this.buildPrimaryKeyComponents(entity, varPrefix);
+        
+        // Add primary key declarations to the declarations string
+        // Need to add DECLARE keyword since buildPrimaryKeyComponents doesn't include it
+        declarations = pkComponents.varDeclarations.split(', ').map(decl => `DECLARE ${decl}`).join('\n    ');
+        
+        selectFields = pkComponents.selectFields;
+        fetchInto = pkComponents.fetchInto;
+        allParams = pkComponents.spParams;
+        
+        // Then, add all updateable fields with the same prefix
+        const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+        for (const ef of sortedFields) {
+            if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
+                if (declarations !== '')
+                    declarations += '\n    ';
+                declarations += `DECLARE @${varPrefix}_${ef.CodeName} ${ef.SQLFullType}`;
+                
+                if (selectFields !== '')
+                    selectFields += ', ';
+                selectFields += `[${ef.Name}]`;
+                
+                if (fetchInto !== '')
+                    fetchInto += ', ';
+                fetchInto += `@${varPrefix}_${ef.CodeName}`;
+                
+                if (allParams !== '')
+                    allParams += ', ';
+                // Use named parameters: @ParamName = @VariableValue
+                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
+            }
+        }
+        
+        return { declarations, selectFields, fetchInto, allParams };
+    }
+
+    /**
+     * Analyzes cascade delete dependencies without generating SQL.
+     * This method only tracks which entities depend on others for cascade operations.
+     */
+    protected analyzeCascadeDeleteDependencies(entity: EntityInfo): void {
+        if (entity.CascadeDeletes) {
+            const md = new Metadata();
+
+            // Find all fields in other entities that are foreign keys to this entity
+            for (const e of md.Entities) {
+                for (const ef of e.Fields) {
+                    if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                        // Check if this would generate a cascade operation
+                        const wouldGenerateOperation = 
+                            (ef.AllowsNull === false && e.AllowDeleteAPI) || // Non-nullable FK: cascade delete
+                            (ef.AllowsNull && e.AllowUpdateAPI); // Nullable FK: cascade update
+                        
+                        if (wouldGenerateOperation) {
+                            // Track the dependency: entity's delete SP depends on e's update/delete SP
+                            if (ef.AllowsNull && e.AllowUpdateAPI) {
+                                // entity's delete SP will call e's update SP
+                                if (!this.cascadeDeleteDependencies.has(e.ID)) {
+                                    this.cascadeDeleteDependencies.set(e.ID, new Set());
+                                }
+                                this.cascadeDeleteDependencies.get(e.ID)!.add(entity.ID);
+                            } else if (!ef.AllowsNull && e.AllowDeleteAPI) {
+                                // entity's delete SP will call e's delete SP
+                                if (!this.cascadeDeleteDependencies.has(e.ID)) {
+                                    this.cascadeDeleteDependencies.set(e.ID, new Set());
+                                }
+                                this.cascadeDeleteDependencies.get(e.ID)!.add(entity.ID);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Builds a complete map of cascade delete dependencies by analyzing all entities.
+     * This method populates the cascadeDeleteDependencies map without generating SQL.
+     */
+    protected async buildCascadeDeleteDependencies(entities: EntityInfo[]): Promise<void> {
+        // Clear existing dependencies
+        this.cascadeDeleteDependencies.clear();
+
+        logStatus(`Building cascade delete dependencies...`);
+        
+        // Analyze cascade deletes for each entity with CascadeDeletes=true
+        // This will populate the cascadeDeleteDependencies map WITHOUT generating SQL
+        let entitiesWithCascadeDeletes = 0;
+        for (const entity of entities) {
+            if (entity.CascadeDeletes) {
+                entitiesWithCascadeDeletes++;
+                if (entity.spDeleteGenerated) {
+                    logStatus(`  Analyzing cascade deletes for ${entity.Name}...`);
+                    this.analyzeCascadeDeleteDependencies(entity);
+                } else {
+                    logStatus(`  Skipping ${entity.Name} - has CascadeDeletes but spDeleteGenerated=false`);
+                }
+            }
+        }
+        logStatus(`Total entities with CascadeDeletes=true: ${entitiesWithCascadeDeletes}`)
+        
+        // Log the dependency map
+        logStatus(`Cascade delete dependency map built:`);
+        for (const [dependedOnEntityId, dependentEntityIds] of this.cascadeDeleteDependencies) {
+            const dependedOnEntity = entities.find(e => e.ID === dependedOnEntityId);
+            const dependentNames = Array.from(dependentEntityIds)
+                .map(id => entities.find(e => e.ID === id)?.Name || id)
+                .join(', ');
+            logStatus(`  ${dependedOnEntity?.Name || dependedOnEntityId} is depended on by: ${dependentNames}`);
+        }
+    }
+
+    /**
+     * Gets entities that had schema changes from the ManageMetadataBase tracking.
+     * Returns a map of entity names to their IDs for entities that had update-affecting changes.
+     */
+    protected async getModifiedEntitiesWithUpdateAPI(entities: EntityInfo[]): Promise<Map<string, string>> {
+        const modifiedEntitiesMap = new Map<string, string>();
+        
+        // Get the list of modified entity names from the metadata management phase
+        const modifiedEntityNames = ManageMetadataBase.modifiedEntityList;
+        
+        logStatus(`Modified entities from metadata phase: ${modifiedEntityNames.join(', ')}`);
+        
+        // Convert entity names to IDs and filter for those with update API
+        for (const entityName of modifiedEntityNames) {
+            const entity = entities.find(e => 
+                e.Name === entityName && 
+                e.AllowUpdateAPI && 
+                e.spUpdateGenerated
+            );
+            
+            if (entity) {
+                modifiedEntitiesMap.set(entity.Name, entity.ID);
+                logStatus(`  - ${entity.Name} (${entity.ID}) has update API and will be tracked`);
+            } else {
+                const nonUpdateEntity = entities.find(e => e.Name === entityName);
+                if (nonUpdateEntity) {
+                    logStatus(`  - ${entityName} found but AllowUpdateAPI=${nonUpdateEntity.AllowUpdateAPI}, spUpdateGenerated=${nonUpdateEntity.spUpdateGenerated}`);
+                } else {
+                    logStatus(`  - ${entityName} not found in entities list`);
+                }
+            }
+        }
+        
+        return modifiedEntitiesMap;
+    }
+
+    /**
+     * Identifies entities that need their delete stored procedures regenerated
+     * due to cascade dependencies on entities that had schema changes.
+     */
+    protected async getEntitiesRequiringCascadeDeleteRegeneration(
+        pool: sql.ConnectionPool, 
+        changedEntityIds: Set<string>
+    ): Promise<Set<string>> {
+        const entitiesNeedingRegeneration = new Set<string>();
+
+        // For each changed entity, find all entities that depend on it
+        for (const changedEntityId of changedEntityIds) {
+            const dependentEntities = this.cascadeDeleteDependencies.get(changedEntityId);
+            if (dependentEntities) {
+                for (const dependentEntityId of dependentEntities) {
+                    entitiesNeedingRegeneration.add(dependentEntityId);
+                }
+            }
+        }
+
+        return entitiesNeedingRegeneration;
+    }
+
+    /**
+     * Marks entities for delete stored procedure regeneration based on cascade dependencies.
+     * This should be called after metadata management and before SQL generation.
+     */
+    protected async markEntitiesForCascadeDeleteRegeneration(
+        pool: sql.ConnectionPool,
+        entities: EntityInfo[]
+    ): Promise<void> {
+        try {
+            // Build the cascade delete dependency map
+            await this.buildCascadeDeleteDependencies(entities);
+
+            // Get entities that were modified during metadata management
+            const modifiedEntitiesMap = await this.getModifiedEntitiesWithUpdateAPI(entities);
+            
+            if (modifiedEntitiesMap.size > 0) {
+                logStatus(`Found ${modifiedEntitiesMap.size} entities with schema changes affecting update SPs`);
+
+                // Convert map values to set of IDs
+                const changedEntityIds = new Set(modifiedEntitiesMap.values());
+
+                // Find entities that need delete SP regeneration
+                const entitiesNeedingRegeneration = await this.getEntitiesRequiringCascadeDeleteRegeneration(pool, changedEntityIds);
+                
+                if (entitiesNeedingRegeneration.size > 0) {
+                    logStatus(`Identified ${entitiesNeedingRegeneration.size} entities requiring delete SP regeneration due to cascade dependencies`);
+
+                    // Store the entity IDs that need regeneration (only if spDeleteGenerated=true)
+                    for (const entityId of entitiesNeedingRegeneration) {
+                        const entity = entities.find(e => e.ID === entityId);
+                        if (entity && entity.spDeleteGenerated) {
+                            this.entitiesNeedingDeleteSPRegeneration.add(entityId);
+                            logStatus(`  - Marked ${entity.Name} for delete SP regeneration (cascade dependency)`);
+                        } else if (entity && !entity.spDeleteGenerated) {
+                            logStatus(`  - Skipping ${entity.Name} - has cascade dependency but spDeleteGenerated=false (custom SP)`);
+                        }
+                    }
+                    
+                    // Order entities by dependencies for proper regeneration
+                    this.orderedEntitiesForDeleteSPRegeneration = this.orderEntitiesByDependencies(
+                        entities,
+                        this.entitiesNeedingDeleteSPRegeneration
+                    );
+                    
+                    if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
+                        logStatus(`Ordered entities for delete SP regeneration:`);
+                        this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
+                            const entity = entities.find(e => e.ID === entityId);
+                            logStatus(`  ${index + 1}. ${entity?.Name || entityId}`);
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            logError(`Error in cascade delete dependency analysis: ${error}`);
+            // Continue with normal processing even if dependency analysis fails
+        }
+    }
+    
+    /**
+     * Orders entities by their cascade delete dependencies using topological sort.
+     * Ensures that if Entity A's delete SP calls Entity B's update/delete SP,
+     * then Entity B is regenerated before Entity A.
+     * 
+     * @param entities All entities for name lookup
+     * @param entityIdsToOrder Set of entity IDs that need ordering
+     * @returns Array of entity IDs in dependency order
+     */
+    protected orderEntitiesByDependencies(entities: EntityInfo[], entityIdsToOrder: Set<string>): string[] {
+        const ordered: string[] = [];
+        const visited = new Set<string>();
+        const visiting = new Set<string>();
+        
+        // Build reverse dependency map for entities we're ordering
+        // If A depends on B, then reverseMap[A] contains B
+        const reverseMap = new Map<string, Set<string>>();
+        
+        for (const entityId of entityIdsToOrder) {
+            reverseMap.set(entityId, new Set<string>());
+        }
+        
+        // For each entity in our set, find what it depends on
+        for (const [dependedOnId, dependentIds] of this.cascadeDeleteDependencies) {
+            for (const dependentId of dependentIds) {
+                if (entityIdsToOrder.has(dependentId) && entityIdsToOrder.has(dependedOnId)) {
+                    // dependentId depends on dependedOnId
+                    reverseMap.get(dependentId)!.add(dependedOnId);
+                }
+            }
+        }
+        
+        // Topological sort using DFS
+        const visit = (entityId: string): boolean => {
+            if (visited.has(entityId)) {
+                return true;
+            }
+            
+            if (visiting.has(entityId)) {
+                // Circular dependency detected
+                const entity = entities.find(e => e.ID === entityId);
+                logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
+                return false;
+            }
+            
+            visiting.add(entityId);
+            
+            // Visit dependencies first
+            const dependencies = reverseMap.get(entityId) || new Set();
+            for (const depId of dependencies) {
+                if (!visit(depId)) {
+                    return false;
+                }
+            }
+            
+            visiting.delete(entityId);
+            visited.add(entityId);
+            ordered.push(entityId);
+            
+            return true;
+        };
+        
+        // Visit all entities that need ordering
+        for (const entityId of entityIdsToOrder) {
+            if (!visited.has(entityId)) {
+                visit(entityId);
+            }
+        }
+        
+        return ordered;
     }
 }

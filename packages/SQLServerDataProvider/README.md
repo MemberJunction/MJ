@@ -23,6 +23,7 @@ The `@memberjunction/sqlserver-dataprovider` package implements MemberJunction's
 - **Row-Level Security**: Enforce data access controls at the database level
 - **SQL Logging**: Real-time SQL statement capture for debugging and migration generation
 - **Session Management**: Multiple concurrent SQL logging sessions with user filtering
+- **Pattern Filtering**: Include/exclude SQL statements using simple wildcards or regex patterns ([details](#pattern-filtering))
 
 ## Installation
 
@@ -135,6 +136,10 @@ if (deleteResult.Success) {
 
 ### Transaction Management
 
+The SQL Server Data Provider supports comprehensive transaction management through both transaction groups and instance-level transactions.
+
+#### Transaction Groups
+
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { SQLServerTransactionGroup } from '@memberjunction/sqlserver-dataprovider';
@@ -192,6 +197,48 @@ if (success) {
   });
 }
 ```
+
+#### Instance-Level Transactions (Multi-User Environments)
+
+In multi-user server environments like MJServer, each request gets its own SQLServerDataProvider instance with isolated transaction state. This provides automatic transaction isolation without requiring transaction scope IDs:
+
+```typescript
+// Each request gets its own provider instance
+const dataProvider = new SQLServerDataProvider(connectionPool);
+await dataProvider.Config(config);
+
+try {
+  // Begin a transaction on this instance
+  await dataProvider.BeginTransaction();
+  
+  // Perform operations - all use this instance's transaction
+  await dataProvider.Save(entity1, contextUser);
+  await dataProvider.Save(entity2, contextUser);
+  
+  // Delete operations also participate in the transaction
+  await dataProvider.Delete(entity3, deleteOptions, contextUser);
+  
+  // Commit the transaction
+  await dataProvider.CommitTransaction();
+} catch (error) {
+  // Rollback on error
+  await dataProvider.RollbackTransaction();
+  throw error;
+}
+```
+
+**Key Features of Instance-Level Transactions:**
+- Each provider instance maintains its own transaction state
+- No transaction scope IDs needed - simpler API
+- Automatic isolation between concurrent requests (each has its own instance)
+- Supports nested transactions with SQL Server savepoints
+- Used automatically by MJServer for all GraphQL mutations
+
+**Best Practices for Multi-User Environments:**
+1. Create a new SQLServerDataProvider instance per request
+2. Configure with `ignoreExistingMetadata: false` to reuse cached metadata
+3. Let the instance be garbage collected after the request completes
+4. No need for explicit cleanup - transaction state is instance-scoped
 
 ### Running Views and Reports
 
@@ -274,9 +321,11 @@ console.log('User permissions:', spResult);
 
 // Using RunQuery for pre-defined queries
 const queryParams: RunQueryParams = {
-  QueryID: 'query-id-here', // or use QueryName
-  // CategoryID: 'optional-category-id',
-  // CategoryName: 'optional-category-name'
+  QueryID: 'query-id-here', // or use QueryName + Category identification
+  // Alternative: use QueryName with hierarchical CategoryPath
+  // QueryName: 'CalculateCost',
+  // CategoryPath: '/MJ/AI/Agents/'  // Hierarchical path notation
+  // CategoryID: 'optional-direct-category-id',
 };
 
 const queryResult = await dataProvider.RunQuery(queryParams);
@@ -285,6 +334,19 @@ if (queryResult.Success) {
   console.log('Query results:', queryResult.Results);
   console.log('Execution time:', queryResult.ExecutionTime, 'ms');
 }
+
+// Query lookup supports hierarchical category paths
+// Example: Query with name "CalculateCost" in category hierarchy "MJ" -> "AI" -> "Agents"
+const hierarchicalQueryParams: RunQueryParams = {
+  QueryName: 'CalculateCost',
+  CategoryPath: '/MJ/AI/Agents/'  // Full hierarchical path with leading/trailing slashes
+};
+
+// The CategoryPath is parsed as a path where:
+// - "/" separates category levels
+// - Each segment is matched case-insensitively against category names
+// - The path walks from root to leaf through the ParentID relationships
+// - Falls back to simple category name matching for backward compatibility
 ```
 
 ### User Management and Caching
@@ -425,14 +487,32 @@ The main class that implements IEntityDataProvider, IMetadataProvider, IRunViewP
 
 Configuration class for the SQL Server provider.
 
+#### Constructor Parameters
+
+```typescript
+constructor(
+  connectionPool: sql.ConnectionPool,
+  MJCoreSchemaName?: string,
+  checkRefreshIntervalSeconds: number = 0,
+  includeSchemas?: string[],
+  excludeSchemas?: string[],
+  ignoreExistingMetadata: boolean = true
+)
+```
+
 #### Properties
 
-- `DataSource: DataSource` - TypeORM DataSource instance
-- `CurrentUserEmail: string` - Email of the current user
+- `ConnectionPool: sql.ConnectionPool` - SQL Server connection pool instance
 - `CheckRefreshIntervalSeconds: number` - Interval for checking metadata refresh (0 to disable)
 - `MJCoreSchemaName: string` - Schema name for MJ core tables (default: '__mj')
 - `IncludeSchemas?: string[]` - List of schemas to include
 - `ExcludeSchemas?: string[]` - List of schemas to exclude
+- `IgnoreExistingMetadata: boolean` - Whether to ignore cached metadata and force a reload (default: true)
+
+**Important Note on `ignoreExistingMetadata`:**
+- Set to `false` in multi-user environments to reuse cached metadata across provider instances
+- This significantly improves performance when creating provider instances per request
+- The first instance loads metadata from the database, subsequent instances reuse it
 
 ### SQLServerTransactionGroup
 
@@ -479,6 +559,7 @@ The SQL Server Data Provider includes comprehensive SQL logging capabilities tha
 - **Automatic cleanup** - Sessions auto-expire and clean up empty files
 - **Concurrent sessions** - Support multiple active logging sessions
 - **Parameter capture** - Logs both SQL statements and their parameters
+- **Pattern filtering** - Include/exclude statements using simple wildcards or regex
 
 ### Programmatic Usage
 
@@ -509,6 +590,89 @@ console.log(`Session ${logger.id} has captured ${logger.statementCount} statemen
 // Clean up the logging session
 await logger.dispose();
 ```
+
+### Pattern Filtering
+
+SQL logging sessions support pattern-based filtering to include or exclude specific SQL statements. You can use either **regex patterns** for advanced matching or **simple wildcard patterns** for ease of use.
+
+#### Pattern Types
+
+1. **Simple Wildcard Patterns** (Recommended for most users):
+   - Use `*` as a wildcard character
+   - Case-insensitive by default
+   - Examples:
+     - `*AIPrompt*` - Matches anything containing "AIPrompt"
+     - `spCreate*` - Matches anything starting with "spCreate"
+     - `*Run` - Matches anything ending with "Run"
+     - `UserTable` - Exact match only
+
+2. **Regular Expression Patterns** (For advanced users):
+   - Full regex support with flags
+   - More powerful but requires regex knowledge
+   - Examples:
+     - `/spCreate.*Run/i` - Case-insensitive regex
+     - `/^SELECT.*FROM.*vw/` - Queries from views
+     - `/INSERT INTO (Users|Roles)/i` - Insert into Users or Roles
+
+#### Exclude Mode (Default)
+
+```typescript
+// Exclude specific patterns from logging
+const logger = await dataProvider.createSqlLogger('./logs/sql/filtered.sql', {
+  sessionName: 'Production Operations',
+  filterPatterns: [
+    /spCreateAIPromptRun/i,          // Regex: Exclude AI prompt runs
+    /spUpdateAIPromptRun/i,          // Regex: Exclude AI prompt updates
+    /^SELECT.*FROM.*vw.*Metadata/i,  // Regex: Exclude metadata view queries
+    /INSERT INTO EntityFieldValue/i   // Regex: Exclude field value inserts
+  ],
+  filterType: 'exclude'  // Default - exclude matching patterns
+});
+```
+
+#### Include Mode
+
+```typescript
+// Only log specific patterns
+const auditLogger = await dataProvider.createSqlLogger('./logs/sql/audit.sql', {
+  sessionName: 'User Audit Trail',
+  filterPatterns: [
+    /INSERT INTO Users/i,
+    /UPDATE Users/i,
+    /DELETE FROM Users/i,
+    /sp_ChangePassword/i
+  ],
+  filterType: 'include'  // Only log statements matching these patterns
+});
+```
+
+#### Using with MetadataSync
+
+When configuring SQL logging in MetadataSync's `.mj-sync.json`, you can use string patterns that support both formats:
+
+```json
+{
+  "sqlLogging": {
+    "enabled": true,
+    "filterPatterns": [
+      "*AIPrompt*",              // Simple: Exclude anything with "AIPrompt"
+      "/^EXEC sp_/i",            // Regex: Exclude stored procedures
+      "*EntityFieldValue*",      // Simple: Exclude EntityFieldValue operations
+      "/INSERT INTO (__mj|mj)/i" // Regex: Exclude system table inserts
+    ],
+    "filterType": "exclude"
+  }
+}
+```
+
+#### Filter Pattern Options
+- `filterPatterns`: Array of patterns (RegExp objects in code, strings in config)
+- `filterType`: 
+  - `'exclude'` (default): Skip logging if ANY pattern matches
+  - `'include'`: Only log if ANY pattern matches
+- If no patterns are specified, all SQL is logged (backward compatible)
+
+> **Note**: Filtering is applied to the actual SQL that will be logged. If `logRecordChangeMetadata` is false and a simplified SQL fallback is provided, the filtering tests against the simplified version.
 
 ### Runtime Control via GraphQL
 

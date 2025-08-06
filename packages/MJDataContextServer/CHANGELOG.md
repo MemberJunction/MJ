@@ -1,5 +1,175 @@
 # Change Log - @memberjunction/data-context-server
 
+## 2.81.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.81.0
+- @memberjunction/global@2.81.0
+
+## 2.80.1
+
+### Patch Changes
+
+- @memberjunction/data-context@2.80.1
+- @memberjunction/global@2.80.1
+
+## 2.80.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.80.0
+- @memberjunction/global@2.80.0
+
+## 2.79.0
+
+### Patch Changes
+
+- Updated dependencies [907e73f]
+  - @memberjunction/global@2.79.0
+  - @memberjunction/data-context@2.79.0
+
+## 2.78.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.78.0
+- @memberjunction/global@2.78.0
+
+## 2.77.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.77.0
+- @memberjunction/global@2.77.0
+
+## 2.76.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.76.0
+- @memberjunction/global@2.76.0
+
+## 2.75.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.75.0
+- @memberjunction/global@2.75.0
+
+## 2.74.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.74.0
+- @memberjunction/global@2.74.0
+
+## 2.73.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.73.0
+- @memberjunction/global@2.73.0
+
+## 2.72.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.72.0
+- @memberjunction/global@2.72.0
+
+## 2.71.0
+
+### Patch Changes
+
+- 5a127bb: Remove status badge dots
+- Updated dependencies [c5a409c]
+- Updated dependencies [5a127bb]
+  - @memberjunction/global@2.71.0
+  - @memberjunction/data-context@2.71.0
+
+## 2.70.0
+
+### Patch Changes
+
+- Updated dependencies [6f74409]
+- Updated dependencies [c9d86cd]
+  - @memberjunction/global@2.70.0
+  - @memberjunction/data-context@2.70.0
+
+## 2.69.1
+
+### Patch Changes
+
+- @memberjunction/data-context@2.69.1
+- @memberjunction/global@2.69.1
+
+## 2.69.0
+
+### Patch Changes
+
+- Updated dependencies [79e8509]
+  - @memberjunction/global@2.69.0
+  - @memberjunction/data-context@2.69.0
+
+## 2.68.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.68.0
+- @memberjunction/global@2.68.0
+
+## 2.67.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.67.0
+- @memberjunction/global@2.67.0
+
+## 2.66.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.66.0
+- @memberjunction/global@2.66.0
+
+## 2.65.0
+
+### Patch Changes
+
+- Updated dependencies [619488f]
+  - @memberjunction/global@2.65.0
+  - @memberjunction/data-context@2.65.0
+
+## 2.64.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.64.0
+- @memberjunction/global@2.64.0
+
+## 2.63.1
+
+### Patch Changes
+
+- Updated dependencies [59e2c4b]
+  - @memberjunction/global@2.63.1
+  - @memberjunction/data-context@2.63.1
+
+## 2.63.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.63.0
+- @memberjunction/global@2.63.0
+
+## 2.62.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.62.0
+- @memberjunction/global@2.62.0
+
 ## 2.61.0
 
 ### Patch Changes
