@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.81.0
+
+### Minor Changes
+
+- 971c5d4: feat: implement query audit logging and TTL-based caching
+
+  Add comprehensive audit logging and caching capabilities to the
+  MemberJunction Query system:
+
+  - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
+    granular audit control
+  - Implement TTL-based result caching with LRU eviction strategy for
+    improved performance
+  - Add cache configuration columns to Query and QueryCategory entities
+  - Support category-level cache configuration inheritance
+  - Update GraphQL resolvers to handle new audit and cache fields
+  - Refactor RunQuery method into logical helper methods for better
+    maintainability
+  - Follow established RunView pattern for fire-and-forget audit logging
+
+### Patch Changes
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/aiengine@2.81.0
+  - @memberjunction/ai-vector-dupe@2.81.0
+  - @memberjunction/actions@2.81.0
+  - @memberjunction/queue@2.81.0
+  - @memberjunction/ai@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

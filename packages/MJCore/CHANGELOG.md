@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/core
 
+## 2.81.0
+
+### Minor Changes
+
+- 971c5d4: feat: implement query audit logging and TTL-based caching
+
+  Add comprehensive audit logging and caching capabilities to the
+  MemberJunction Query system:
+
+  - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
+    granular audit control
+  - Implement TTL-based result caching with LRU eviction strategy for
+    improved performance
+  - Add cache configuration columns to Query and QueryCategory entities
+  - Support category-level cache configuration inheritance
+  - Update GraphQL resolvers to handle new audit and cache fields
+  - Refactor RunQuery method into logical helper methods for better
+    maintainability
+  - Follow established RunView pattern for fire-and-forget audit logging
+
+### Patch Changes
+
+- 6d2d478: feat: AI Agent UI improvements and server-side context fixes
+
+  - Enhanced AI Agent dialogs with resizable and draggable functionality
+    using Kendo UI Window component
+  - Improved dialog positioning with consistent center placement and proper
+    container context
+  - Fixed prompt selector in AI Agent form for better user experience
+  - Added missing contextUser parameter to GetEntityObject calls in
+    BaseResolver for proper multi-user isolation
+  - Fixed createRecordAccessAuditLogRecord calls in generated resolvers to
+    include provider argument
+  - Added JSDoc documentation to ViewInfo class properties for better code
+    documentation
+  - Applied consistent dialog styling across all AI Agent management
+    components
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

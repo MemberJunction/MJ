@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.81.0
+
+### Patch Changes
+
+- 42a6954: Add User Onboarding Flow Agent with role assignment improvements
+
+  - Add support for Flow Agent Type to execute flow-specific prompts
+    instead of system prompts
+  - Fix Flow Agent payload persistence across workflow steps
+  - Create assign-user-roles action to support multiple role assignments
+  - Update validate-email-unique action with better error handling
+  - Enable proper role mapping from user input to database role names
+
+  This enables deterministic workflow execution for user onboarding with
+  dynamic role assignment.
+
+- Updated dependencies [6d2d478]
+- Updated dependencies [e623f99]
+- Updated dependencies [971c5d4]
+  - @memberjunction/core@2.81.0
+  - @memberjunction/core-entities@2.81.0
+  - @memberjunction/core-entities-server@2.81.0
+  - @memberjunction/ai-core-plus@2.81.0
+  - @memberjunction/ai-vector-sync@2.81.0
+  - @memberjunction/actions@2.81.0
+  - @memberjunction/communication-engine@2.81.0
+  - @memberjunction/content-autotagging@2.81.0
+  - @memberjunction/external-change-detection@2.81.0
+  - @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

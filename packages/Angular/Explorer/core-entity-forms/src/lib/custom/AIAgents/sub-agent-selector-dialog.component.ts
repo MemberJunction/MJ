@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
@@ -66,7 +66,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
   ) {}
 

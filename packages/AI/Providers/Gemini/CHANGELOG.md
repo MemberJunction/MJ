@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.81.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.81.0
+- @memberjunction/global@2.81.0
+
 ## 2.80.1
 
 ### Patch Changes

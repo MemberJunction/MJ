@@ -1,5 +1,5 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { DialogService, DialogRef, WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
 import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntity } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
@@ -25,7 +25,10 @@ import { CreateSubAgentDialogComponent, CreateSubAgentConfig, CreateSubAgentResu
 })
 export class AIAgentManagementService {
 
-  constructor(private dialogService: DialogService) {}
+  constructor(
+    private dialogService: DialogService,
+    private windowService: WindowService
+  ) {}
 
   // === Action Management ===
 
@@ -41,19 +44,26 @@ export class AIAgentManagementService {
     existingActionIds: string[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<ActionEntity[]> {
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: `Add Actions to ${config.agentName}`,
       content: AddActionDialogComponent,
-      actions: [], // Component handles actions
       width: 1000,
       height: 700,
       minWidth: 800,
       minHeight: 600,
-      preventAction: () => false
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as AddActionDialogComponent;
+    const componentInstance = windowRef.content.instance as AddActionDialogComponent;
     componentInstance.agentId = config.agentId;
     componentInstance.agentName = config.agentName;
     componentInstance.existingActionIds = [...config.existingActionIds];
@@ -88,19 +98,26 @@ export class AIAgentManagementService {
       linkedPromptIds: config.linkedPromptIds || []
     };
 
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: selectorConfig.title,
       content: PromptSelectorDialogComponent,
-      actions: [], // Component handles actions
       width: 900,
       height: 600,
       minWidth: 600,
       minHeight: 400,
-      preventAction: () => false
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as PromptSelectorDialogComponent;
+    const componentInstance = windowRef.content.instance as PromptSelectorDialogComponent;
     componentInstance.config = selectorConfig;
 
     return componentInstance.result.asObservable();
@@ -159,19 +176,26 @@ export class AIAgentManagementService {
       parentAgentId: config.parentAgentId
     };
 
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: selectorConfig.title,
       content: SubAgentSelectorDialogComponent,
-      actions: [], // Component handles actions
       width: 1000,
       height: 700,
       minWidth: 800,
       minHeight: 600,
-      preventAction: () => false
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as SubAgentSelectorDialogComponent;
+    const componentInstance = windowRef.content.instance as SubAgentSelectorDialogComponent;
     componentInstance.config = selectorConfig;
 
     return componentInstance.result.asObservable();
@@ -190,19 +214,26 @@ export class AIAgentManagementService {
     allAgentPrompts: AIAgentPromptEntity[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<AgentPromptAdvancedSettingsFormData | null> {
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: `Advanced Settings - Prompt Configuration`,
       content: AgentPromptAdvancedSettingsDialogComponent,
-      actions: [], // Component handles actions
       width: 700,
       height: 600,
       minWidth: 500,
       minHeight: 400,
-      preventAction: () => false
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as AgentPromptAdvancedSettingsDialogComponent;
+    const componentInstance = windowRef.content.instance as AgentPromptAdvancedSettingsDialogComponent;
     componentInstance.agentPrompt = config.agentPrompt;
     componentInstance.allAgentPrompts = config.allAgentPrompts;
 
@@ -220,19 +251,26 @@ export class AIAgentManagementService {
     allSubAgents: AIAgentEntity[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<SubAgentAdvancedSettingsFormData | null> {
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: `Advanced Settings - ${config.subAgent.Name || 'Sub-Agent'}`,
       content: SubAgentAdvancedSettingsDialogComponent,
-      actions: [], // Component handles actions
       width: 700,
       height: 600,
       minWidth: 500,
       minHeight: 400,
-      preventAction: () => false
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as SubAgentAdvancedSettingsDialogComponent;
+    const componentInstance = windowRef.content.instance as SubAgentAdvancedSettingsDialogComponent;
     componentInstance.subAgent = config.subAgent;
     componentInstance.allSubAgents = config.allSubAgents;
 
@@ -260,23 +298,26 @@ export class AIAgentManagementService {
       initialTypeID: config.initialTypeID
     };
 
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: createConfig.title,
       content: CreatePromptDialogComponent,
-      actions: [], // Component handles actions
       width: 900,
       height: 700,
       minWidth: 700,
       minHeight: 500,
-      autoFocusedElement: undefined, // Allows ESC key to work
-      preventAction: (action) => {
-        // Allow ESC key to close the dialog
-        return action === 'close' ? false : false;
-      }
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as CreatePromptDialogComponent;
+    const componentInstance = windowRef.content.instance as CreatePromptDialogComponent;
     componentInstance.config = createConfig;
 
     return componentInstance.result.asObservable();
@@ -307,23 +348,26 @@ export class AIAgentManagementService {
       parentAgentName: config.parentAgentName
     };
 
-    const dialogRef: DialogRef = this.dialogService.open({
+    const windowSettings: WindowSettings = {
       title: createConfig.title,
       content: CreateSubAgentDialogComponent,
-      actions: [], // Component handles actions
       width: 1000,
       height: 800,
       minWidth: 800,
       minHeight: 600,
-      autoFocusedElement: undefined, // Allows ESC key to work
-      preventAction: (action) => {
-        // Allow ESC key to close the dialog
-        return action === 'close' ? false : false;
-      }
-    });
+      draggable: true,
+      resizable: true,
+      state: 'default'
+    };
+
+    if (config.viewContainerRef) {
+      windowSettings.appendTo = config.viewContainerRef;
+    }
+
+    const windowRef: WindowRef = this.windowService.open(windowSettings);
 
     // Pass configuration to the dialog component
-    const componentInstance = dialogRef.content.instance as CreateSubAgentDialogComponent;
+    const componentInstance = windowRef.content.instance as CreateSubAgentDialogComponent;
     componentInstance.config = createConfig;
 
     return componentInstance.result.asObservable();
@@ -398,4 +442,5 @@ export class AIAgentManagementService {
     // This will handle the hierarchy settings that were removed from Advanced Settings
     throw new Error('Sub-agent management dialog not yet implemented');
   }
+
 }

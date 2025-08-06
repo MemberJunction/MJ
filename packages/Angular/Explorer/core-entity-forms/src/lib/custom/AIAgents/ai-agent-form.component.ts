@@ -12,6 +12,7 @@ import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { firstValueFrom, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { PromptSelectorResult } from './prompt-selector-dialog.component';
 
 
 /**
@@ -164,6 +165,133 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         { text: 'Agent Type', value: 'Agent Type' },
         { text: 'Agent', value: 'Agent' }
     ];
+
+    /** Agent status options for the dropdown */
+    public statusOptions = [
+        { text: 'Active', value: 'Active' },
+        { text: 'Pending', value: 'Pending' },
+        { text: 'Disabled', value: 'Disabled' }
+    ];
+
+    /** Agent types loaded from the database */
+    public agentTypes: any[] = [];
+
+    /** Currently selected context compression prompt */
+    public selectedContextCompressionPrompt: any = null;
+
+    /**
+     * Loads agent types from the database for the dropdown
+     * @private
+     */
+    private async loadAgentTypes(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'MJ: AI Agent Types',
+                ExtraFilter: '',
+                OrderBy: 'Name ASC',
+                ResultType: 'entity_object'
+            });
+            
+            if (result.Success) {
+                this.agentTypes = result.Results || [];
+            } else {
+                console.error('Failed to load agent types:', result.ErrorMessage);
+                this.agentTypes = [];
+            }
+        } catch (error) {
+            console.error('Error loading agent types:', error);
+            this.agentTypes = [];
+        }
+    }
+
+    /**
+     * Loads the context compression prompt details for display
+     * @private
+     */
+    private async loadContextCompressionPrompt(): Promise<void> {
+        if (!this.record?.ContextCompressionPromptID) {
+            this.selectedContextCompressionPrompt = null;
+            return;
+        }
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'AI Prompts',
+                ExtraFilter: `ID = '${this.record.ContextCompressionPromptID}'`,
+                ResultType: 'entity_object',
+                MaxRows: 1
+            });
+
+            if (result.Success && result.Results && result.Results.length > 0) {
+                this.selectedContextCompressionPrompt = result.Results[0];
+            } else {
+                console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
+                this.selectedContextCompressionPrompt = null;
+            }
+        } catch (error) {
+            console.error('Error loading context compression prompt:', error);
+            this.selectedContextCompressionPrompt = null;
+        }
+    }
+
+    /**
+     * Opens the prompt selector dialog for context compression prompt
+     */
+    public async openContextCompressionPromptSelector(): Promise<void> {
+        try {
+            const { PromptSelectorDialogComponent } = await import('./prompt-selector-dialog.component');
+            
+            const dialogRef = this.dialogService.open({
+                title: 'Select Context Compression Prompt',
+                content: PromptSelectorDialogComponent,
+                width: 800,
+                height: 600
+            });
+
+            const promptSelector = dialogRef.content.instance;
+            
+            // Configure the prompt selector for single selection
+            promptSelector.config = {
+                title: 'Select Context Compression Prompt',
+                multiSelect: false,
+                selectedPromptIds: this.record.ContextCompressionPromptID ? [this.record.ContextCompressionPromptID] : [],
+                showCreateNew: false
+            };
+
+            // Subscribe to the result
+            promptSelector.result.subscribe({
+                next: (result: PromptSelectorResult | null) => {
+                    if (result && result.selectedPrompts.length > 0) {
+                        const selectedPrompt = result.selectedPrompts[0];
+                        this.record.ContextCompressionPromptID = selectedPrompt.ID;
+                        this.selectedContextCompressionPrompt = selectedPrompt;
+                        this.cdr.detectChanges();
+                    }
+                },
+                error: (error: any) => {
+                    console.error('Error in prompt selector dialog:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error opening context compression prompt selector:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Error opening prompt selector. Please try again.',
+                'error',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Clears the selected context compression prompt
+     */
+    public clearContextCompressionPrompt(): void {
+        this.record.ContextCompressionPromptID = null;
+        this.selectedContextCompressionPrompt = null;
+        this.cdr.detectChanges();
+    }
 
     // === Permission Checks for Related Entities ===
     /** Cache for permission checks to avoid repeated calculations */
@@ -353,8 +481,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * After view initialization, load any custom form section if defined
      */
-    async ngAfterViewInit() {
-        // Use Promise to defer loading to avoid change detection issues
+    async ngOnInit() {
+        await super.ngOnInit();
+        
+        // Load agent types for dropdown (needed for both new and existing records)
+        await this.loadAgentTypes();
+        
+        // Load context compression prompt if one is set
+        if (this.record?.ContextCompressionPromptID) {
+            await this.loadContextCompressionPrompt();
+        }
+        
         if (this.record?.ID) {
             await this.loadRelatedCounts();
             await this.loadAgentType();
@@ -424,6 +561,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     OrderBy: '__mj_CreatedAt DESC'
                 }
             ]);
+
+            // Load agent types for dropdown
+            await this.loadAgentTypes();
             
             // Process results in the same order as queries
             if (results.length >= 6) {
@@ -2045,6 +2185,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
 
         try {
+            // Reset context compression fields if EnableContextCompression is false
+            if (!this.record.EnableContextCompression) {
+                this.record.ContextCompressionMessageThreshold = null;
+                this.record.ContextCompressionPromptID = null;
+                this.record.ContextCompressionMessageRetentionCount = null;
+                this.selectedContextCompressionPrompt = null;
+            }
+
             const md = new Metadata();
             const transactionGroup = await md.CreateTransactionGroup();
 
@@ -2205,6 +2353,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             return false;
         }
     }
+
     
     /**
      * Component cleanup - critical for preventing memory leaks

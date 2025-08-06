@@ -1,0 +1,145 @@
+[
+  {
+    "fields": {
+      "Name": "User Onboarding Flow Agent - System Prompt",
+      "Description": "System prompt for the User Onboarding Flow Agent that manages the deterministic workflow for creating new users",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents?create&Description=Prompts for User Onboarding Agent System",
+      "TemplateText": "@file:templates/user-onboarding/user-onboarding-flow-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "OutputExample": "@file:output/user-onboarding/user-onboarding-flow-agent.example.json"
+    },
+    "primaryKey": {
+      "ID": "7D231A18-11CB-48E2-881F-6CC12DD9CD2D"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:38:33.324Z",
+      "checksum": "b9b5ccca96ae413d6085e8d7de12580863869bf93e713a8022e77deb87efa513"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collect User Information - Prompt Step",
+      "Description": "Interactive prompt for collecting user information from an administrator during the onboarding flow",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents?create&Description=Prompts for User Onboarding Agent System",
+      "TemplateText": "@file:templates/user-onboarding/collect-user-info-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "OutputExample": "@file:output/user-onboarding/collect-user-info-prompt.example.json"
+    },
+    "primaryKey": {
+      "ID": "003C2419-899C-48BB-B184-0A5CDEAAC4A9"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:38:34.022Z",
+      "checksum": "c7b976f2545010e1032ba2044f5f82166e13bd473a26613e69043adf4b2ddbfc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Generic Error Message",
+      "Description": "Generic error message prompt that can be customized based on the error context",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "TemplateText": "An error occurred: {{ payload.errorMessage }}\n\nPlease check the error details and try again.",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "primaryKey": {
+      "ID": "566D0D19-C986-4847-8EB0-1A1E59FAC06B"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:38:34.454Z",
+      "checksum": "1c25dc7cf28d7d52d4dbb9c55e2b4dc44418ba1e9e4726782bea4e0094173eec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prepare Welcome Email - User Onboarding",
+      "Description": "Prepares personalized welcome email content for newly created users",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/user-onboarding/prepare-welcome-email-prompt.template.md",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "PromptRole": "User",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DA7216B1-C842-4CE5-AEC7-6160E14F0C95"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:38:34.939Z",
+      "checksum": "454636421727039a526ed3ddb993bfae31ee5972779615ca48a1666d9a86891d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Permission Denied - Users",
+      "Description": "Error message shown when user lacks permissions to create or update Users entity",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
+      "TemplateText": "@file:templates/permission-denied-users.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "primaryKey": {
+      "ID": "38B15B99-E33E-400F-A762-E40699697983"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:22:23.305Z",
+      "checksum": "593f3244ee997036306a60babf2d63f9dc01a416b9171054ed79eefb557aef2e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Permission Denied - User Roles",
+      "Description": "Error message shown when user lacks permissions to create User Roles",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
+      "TemplateText": "@file:templates/permission-denied-roles.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "primaryKey": {
+      "ID": "12AC656C-62B8-459C-B6CD-80E4C18EC8AC"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:22:23.845Z",
+      "checksum": "0c575e2d0d525f748491361b61cc4f27ddec210ef04bdababb69bba3d5cfe7a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Permission Denied - Employees",
+      "Description": "Error message shown when user lacks permissions to create Employees",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=User Onboarding Agents",
+      "TemplateText": "@file:templates/permission-denied-employees.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "primaryKey": {
+      "ID": "BF027FCB-CE89-4D85-8CC5-83EA60A5A007"
+    },
+    "sync": {
+      "lastModified": "2025-08-04T20:22:24.232Z",
+      "checksum": "900acbf942e690c0b4dc022272ba7fe37aeef35d953107b65e87d52a47628ebf"
+    }
+  }
+]
