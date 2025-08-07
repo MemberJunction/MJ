@@ -42,7 +42,8 @@ export class ReactTestHarness {
       const lintResult = await this.componentRunner.lintComponent(
         spec.code,
         spec.name,
-        spec
+        spec,
+        options.isRootComponent
       );
 
       if (lintResult.hasErrors) {

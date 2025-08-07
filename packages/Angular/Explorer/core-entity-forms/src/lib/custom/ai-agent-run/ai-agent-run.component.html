@@ -60,6 +60,10 @@
           <span class="value" *ngIf="!costMetrics.isLoading">${{ costMetrics.totalCost | number:'1.2-4' }}</span>
           <span class="value loading" *ngIf="costMetrics.isLoading"><i class="fas fa-spinner fa-spin"></i></span>
         </div>
+        <div class="stat" *ngIf="record.EffortLevel">
+          <span class="label">Effort Level</span>
+          <span class="value">{{ record.EffortLevel }}</span>
+        </div>
       </div>
       
       <!-- Configuration Bar (shown below header stats when ConfigurationID exists) -->

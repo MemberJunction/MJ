@@ -25,6 +25,7 @@ export interface FixSuggestion {
 
 interface Rule {
   name: string;
+  appliesTo: 'all' | 'child' | 'root';
   test: (ast: t.File, componentName: string) => Violation[];
 }
 
@@ -39,6 +40,7 @@ export class ComponentLinter {
     // State Management Rules
     {
       name: 'full-state-ownership',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         let hasStateFromProps = false;
@@ -128,6 +130,7 @@ export class ComponentLinter {
     
     {
       name: 'no-use-reducer',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -161,6 +164,7 @@ export class ComponentLinter {
     // New rules for the controlled component pattern
     {
       name: 'no-data-prop',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -217,6 +221,7 @@ export class ComponentLinter {
     
     {
       name: 'saved-user-settings-pattern',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -261,6 +266,7 @@ export class ComponentLinter {
     
     {
       name: 'pass-standard-props',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const requiredProps = ['styles', 'utilities', 'components'];
@@ -305,6 +311,7 @@ export class ComponentLinter {
     
     {
       name: 'no-child-implementation',
+      appliesTo: 'root',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const rootFunctionName = componentName;
@@ -341,6 +348,7 @@ export class ComponentLinter {
     
     {
       name: 'undefined-component-usage',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const componentsFromProps = new Set<string>();
@@ -422,6 +430,7 @@ export class ComponentLinter {
     
     {
       name: 'unsafe-array-access',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -458,6 +467,7 @@ export class ComponentLinter {
 
     {
       name: 'array-reduce-safety',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -509,6 +519,7 @@ export class ComponentLinter {
     
     {
       name: 'parent-event-callback-usage',
+      appliesTo: 'child',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const eventCallbacks = new Map<string, { line: number; column: number }>();
@@ -652,6 +663,7 @@ export class ComponentLinter {
     
     {
       name: 'property-name-consistency',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const dataTransformations = new Map<string, { originalProps: Set<string>, transformedProps: Set<string>, location: { line: number, column: number } }>();
@@ -788,6 +800,7 @@ export class ComponentLinter {
     // New rules to align with AI linter
     {
       name: 'noisy-settings-updates',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -829,6 +842,7 @@ export class ComponentLinter {
     
     {
       name: 'prop-state-sync',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -870,6 +884,7 @@ export class ComponentLinter {
     
     {
       name: 'performance-memoization',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         const memoizedValues = new Set<string>();
@@ -956,6 +971,7 @@ export class ComponentLinter {
     
     {
       name: 'child-state-management',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -999,6 +1015,7 @@ export class ComponentLinter {
     
     {
       name: 'server-reload-on-client-operation',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
@@ -1033,13 +1050,97 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+
+    {
+      name: 'root-component-props-restriction',
+      appliesTo: 'root',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
+        
+        // This rule applies when testing root components
+        // We can identify this by checking if the component spec indicates it's a root component
+        // For now, we'll apply this rule universally and let the caller decide when to use it
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                const invalidProps: string[] = [];
+                const allProps: string[] = [];
+                
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+                    allProps.push(propName);
+                    if (!standardProps.has(propName)) {
+                      invalidProps.push(propName);
+                    }
+                  }
+                }
+                
+                // Only report if there are non-standard props
+                // This allows the rule to be selectively applied to root components
+                if (invalidProps.length > 0) {
+                  violations.push({
+                    rule: 'root-component-props-restriction',
+                    severity: 'error',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Also check arrow function components
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+              const init = path.node.init;
+              if (t.isArrowFunctionExpression(init) && init.params[0]) {
+                const param = init.params[0];
+                if (t.isObjectPattern(param)) {
+                  const invalidProps: string[] = [];
+                  const allProps: string[] = [];
+                  
+                  for (const prop of param.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const propName = prop.key.name;
+                      allProps.push(propName);
+                      if (!standardProps.has(propName)) {
+                        invalidProps.push(propName);
+                      }
+                    }
+                  }
+                  
+                  if (invalidProps.length > 0) {
+                    violations.push({
+                      rule: 'root-component-props-restriction',
+                      severity: 'error',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
   public static async lintComponent(
     code: string,
     componentName: string,
-    componentSpec?: any
+    componentSpec?: any,
+    isRootComponent?: boolean
   ): Promise<LintResult> {
     try {
       const ast = parser.parse(code, {
@@ -1049,7 +1150,16 @@ export class ComponentLinter {
       });
       
       // Use universal rules for all components in the new pattern
-      const rules = this.universalComponentRules;
+      let rules = this.universalComponentRules;
+      
+      // Filter rules based on component type and appliesTo property
+      if (isRootComponent) {
+        // Root components: include 'all' and 'root' rules
+        rules = rules.filter(rule => rule.appliesTo === 'all' || rule.appliesTo === 'root');
+      } else {
+        // Child components: include 'all' and 'child' rules
+        rules = rules.filter(rule => rule.appliesTo === 'all' || rule.appliesTo === 'child');
+      }
       
       const violations: Violation[] = [];
       
@@ -1931,6 +2041,44 @@ const sortedData = useMemo(() => {
   });
   return sorted;
 }, [data, sortBy, sortDirection]);`
+          });
+          break;
+          
+        case 'root-component-props-restriction':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Root components can only accept standard props. Load data internally.',
+            example: `// ❌ WRONG - Root component with additional props:
+function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
+  // Additional props will break hosting environment
+}
+
+// ✅ CORRECT - Root component with only standard props:
+function RootComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load ALL data internally using utilities
+  const [customers, setCustomers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
+  
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const result = await utilities.rv.RunView({
+          EntityName: 'Customers',
+          Fields: ['ID', 'Name', 'Status']
+        });
+        if (result?.Success) {
+          setCustomers(result.Results);
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      }
+    };
+    loadData();
+  }, []);
+  
+  return <div>{/* Use state, not props */}</div>;
+}`
           });
           break;
       }
