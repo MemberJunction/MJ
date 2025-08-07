@@ -1258,6 +1258,11 @@ if this limit is exceeded.`),
     *   * Fail
     *   * Warn
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
+    DefaultPromptEffortLevel: z.number().nullable().describe(`
+        * * Field Name: DefaultPromptEffortLevel
+        * * Display Name: Default Prompt Effort Level
+        * * SQL Data Type: int
+        * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1861,6 +1866,11 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(50)
         * * Default Value: All
         * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -16163,6 +16173,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * DefaultPromptEffortLevel: This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
     * * MinExecutionsPerRun: This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
     * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
@@ -16174,6 +16185,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateDefaultPromptEffortLevelWithinRange(result);
         this.ValidateMaxExecutionsPerRunIsNullOrPositive(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateEnableContextCompressionRequiresContextFields(result);
@@ -16181,6 +16193,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
         this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultPromptEffortLevelWithinRange(result: ValidationResult) {
+    	if (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -16735,6 +16759,19 @@ if this limit is exceeded.
     }
     set StartingPayloadValidationMode(value: 'Fail' | 'Warn') {
         this.Set('StartingPayloadValidationMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultPromptEffortLevel
+    * * Display Name: Default Prompt Effort Level
+    * * SQL Data Type: int
+    * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
+    */
+    get DefaultPromptEffortLevel(): number | null {
+        return this.Get('DefaultPromptEffortLevel');
+    }
+    set DefaultPromptEffortLevel(value: number | null) {
+        this.Set('DefaultPromptEffortLevel', value);
     }
 
     /**
@@ -17511,6 +17548,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * EffortLevel: This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
     * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
     * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
     * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
@@ -17527,6 +17565,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateEffortLevelIsWithinRange(result);
         this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
         this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
         this.ValidateFailoverStrategyAllowedValues(result);
@@ -17560,6 +17599,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsWithinRange(result: ValidationResult) {
+    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
 
@@ -18408,6 +18459,19 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set FailoverErrorScope(value: string) {
         this.Set('FailoverErrorScope', value);
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**

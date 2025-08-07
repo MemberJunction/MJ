@@ -2380,6 +2380,9 @@ if this limit is exceeded.`})
     @MaxLength(50)
     StartingPayloadValidationMode: string;
         
+    @Field(() => Int, {nullable: true, description: `Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`}) 
+    DefaultPromptEffortLevel?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2533,6 +2536,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     StartingPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPromptEffortLevel: number | null;
 }
     
 
@@ -2639,6 +2645,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     StartingPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPromptEffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4663,6 +4672,9 @@ export class AIPrompt_ {
     @MaxLength(100)
     FailoverErrorScope: string;
         
+    @Field(() => Int, {nullable: true, description: `Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`}) 
+    EffortLevel?: number;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -4863,6 +4875,9 @@ export class CreateAIPromptInput {
 
     @Field({ nullable: true })
     FailoverErrorScope?: string;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -5014,6 +5029,9 @@ export class UpdateAIPromptInput {
 
     @Field({ nullable: true })
     FailoverErrorScope?: string;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10142,11 +10160,11 @@ export class User_ {
     @Field(() => [ReportUserState_])
     MJ_ReportUserStates_UserIDArray: ReportUserState_[]; // Link to MJ_ReportUserStates
     
-    @Field(() => [DashboardUserState_])
-    MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
-    
     @Field(() => [DashboardUserPreference_])
     MJ_DashboardUserPreferences_UserIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
+    @Field(() => [DashboardUserState_])
+    MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
     
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
@@ -10715,17 +10733,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [DashboardUserState_])
-    async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [DashboardUserPreference_])
     async MJ_DashboardUserPreferences_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
@@ -10734,6 +10741,17 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserState_])
+    async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
         return result;
     }
         
@@ -37813,11 +37831,11 @@ export class ConversationArtifact_ {
     @MaxLength(200)
     ArtifactType: string;
         
-    @Field(() => [ConversationArtifactVersion_])
-    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
-    
     @Field(() => [ConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
+    
+    @Field(() => [ConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_ArtifactIDArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -37940,17 +37958,6 @@ export class ConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [ConversationArtifactVersion_])
-    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ConversationArtifactPermission_])
     async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
@@ -37959,6 +37966,17 @@ export class ConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
         return result;
     }
         
