@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.82.0
+
+### Minor Changes
+
+- 2186d7b: migration file for effort level stuff
+- 975e8d1: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.82.0
+- @memberjunction/global@2.82.0
+
 ## 2.81.0
 
 ### Minor Changes

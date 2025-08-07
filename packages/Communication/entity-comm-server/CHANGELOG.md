@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/entity-communications-server
 
+## 2.82.0
+
+### Patch Changes
+
+- Updated dependencies [2186d7b]
+- Updated dependencies [975e8d1]
+  - @memberjunction/core-entities@2.82.0
+  - @memberjunction/communication-engine@2.82.0
+  - @memberjunction/entity-communications-base@2.82.0
+  - @memberjunction/core@2.82.0
+  - @memberjunction/global@2.82.0
+
 ## 2.81.0
 
 ### Patch Changes

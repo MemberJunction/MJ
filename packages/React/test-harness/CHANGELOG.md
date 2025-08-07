@@ -1,5 +1,13 @@
 # @memberjunction/react-test-harness
 
+## 2.82.0
+
+### Patch Changes
+
+- 1d8ad58: improve static linter
+  - @memberjunction/interactive-component-types@2.82.0
+  - @memberjunction/react-runtime@2.82.0
+
 ## 2.81.0
 
 ### Patch Changes

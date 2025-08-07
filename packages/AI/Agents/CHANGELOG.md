@@ -1,5 +1,25 @@
 # @memberjunction/ai-agents
 
+## 2.82.0
+
+### Minor Changes
+
+- 975e8d1: migration
+
+### Patch Changes
+
+- Updated dependencies [2186d7b]
+- Updated dependencies [975e8d1]
+  - @memberjunction/core-entities@2.82.0
+  - @memberjunction/ai-core-plus@2.82.0
+  - @memberjunction/ai-prompts@2.82.0
+  - @memberjunction/aiengine@2.82.0
+  - @memberjunction/actions-base@2.82.0
+  - @memberjunction/actions@2.82.0
+  - @memberjunction/ai@2.82.0
+  - @memberjunction/core@2.82.0
+  - @memberjunction/global@2.82.0
+
 ## 2.81.0
 
 ### Patch Changes

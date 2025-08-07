@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-query-grid
 
+## 2.82.0
+
+### Patch Changes
+
+- Updated dependencies [2186d7b]
+- Updated dependencies [975e8d1]
+  - @memberjunction/core-entities@2.82.0
+  - @memberjunction/ng-shared@2.82.0
+  - @memberjunction/ng-compare-records@2.82.0
+  - @memberjunction/ng-container-directives@2.82.0
+  - @memberjunction/core@2.82.0
+  - @memberjunction/global@2.82.0
+
 ## 2.81.0
 
 ### Patch Changes
