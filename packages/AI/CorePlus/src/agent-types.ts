@@ -385,6 +385,42 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     onAgentRunCreated?: (agentRunId: string) => void | Promise<void>;
+
+    /**
+     * Optional effort level for all prompt executions in this agent run (1-100).
+     * 
+     * Higher values request more thorough reasoning and analysis from AI models.
+     * This effort level takes precedence over the agent's DefaultPromptEffortLevel
+     * and individual prompt EffortLevel settings for all prompts executed during
+     * this agent run.
+     * 
+     * Each provider maps the 1-100 scale to their specific effort parameters:
+     * - OpenAI: Maps to reasoning_effort (1-33=low, 34-66=medium, 67-100=high)
+     * - Anthropic: Maps to thinking mode with token budgets
+     * - Groq: Maps to reasoning_effort parameter (experimental)
+     * - Gemini: Controls reasoning mode intensity
+     * 
+     * This setting is inherited by all sub-agents unless they explicitly override it.
+     * 
+     * Precedence hierarchy (highest to lowest priority):
+     * 1. This effortLevel parameter (runtime override - highest priority)
+     * 2. Agent's DefaultPromptEffortLevel (agent default)
+     * 3. Prompt's EffortLevel property (prompt default)
+     * 4. No effort level (provider default behavior - lowest priority)
+     * 
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   effortLevel: 85, // High effort for thorough analysis across all prompts
+     *   contextUser: user
+     * };
+     * 
+     * const result = await agent.Execute(params);
+     * ```
+     */
+    effortLevel?: number;
 }
 
 /**

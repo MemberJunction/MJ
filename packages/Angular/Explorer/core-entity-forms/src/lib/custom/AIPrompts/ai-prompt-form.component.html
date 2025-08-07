@@ -107,6 +107,14 @@
                                     <span style="color: #28a745; font-weight: 500;">Caching Enabled</span>
                                 </div>
                             }
+                            
+                            @if (record.EffortLevel) {
+                                <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
+                                    <i class="fa-solid fa-tachometer-alt" style="color: #6c757d;"></i>
+                                    <span style="color: #6c757d;">Effort Level:</span>
+                                    <span style="color: #495057; font-weight: 500;">{{ record.EffortLevel }}</span>
+                                </div>
+                            }
                         </div>
                     </div>
                     
@@ -615,6 +623,16 @@
                                     [ShowLabel]="true"
                                     FieldName="OutputType"
                                     Type="dropdownlist"
+                                    [EditMode]="EditMode">
+                                </mj-form-field>
+                                
+                                <mj-form-field 
+                                    [record]="record"
+                                    [ShowLabel]="true"
+                                    FieldName="EffortLevel"
+                                    Type="numerictextbox"
+                                    Caption="Effort Level (1-100)"
+                                    Description="Higher values request more thorough reasoning"
                                     [EditMode]="EditMode">
                                 </mj-form-field>
                                 

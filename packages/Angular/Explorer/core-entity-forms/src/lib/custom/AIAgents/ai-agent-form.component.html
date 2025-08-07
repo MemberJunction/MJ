@@ -1154,6 +1154,31 @@
                                     <div class="config-card">
                                         <div class="config-card-header">
                                             <div class="config-card-icon">
+                                                <i class="fa-solid fa-tachometer-alt"></i>
+                                            </div>
+                                            <div class="config-card-info">
+                                                <h4>Default Effort Level</h4>
+                                                <p>Default effort level for all prompts (1-100)</p>
+                                            </div>
+                                        </div>
+                                        <div class="config-card-content">
+                                            <mj-form-field 
+                                                FieldName="DefaultPromptEffortLevel" 
+                                                Type="numerictextbox"
+                                                Caption=""
+                                                [EditMode]="EditMode"
+                                                [record]="record">
+                                            </mj-form-field>
+                                            <div class="config-card-hint">
+                                                <i class="fa-solid fa-info-circle"></i>
+                                                Higher values request more thorough reasoning (1=minimal, 100=maximum)
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="config-card">
+                                        <div class="config-card-header">
+                                            <div class="config-card-icon">
                                                 <i class="fa-solid fa-code"></i>
                                             </div>
                                             <div class="config-card-info">

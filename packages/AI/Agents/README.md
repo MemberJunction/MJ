@@ -22,6 +22,7 @@ The core execution engine that all agents use. Provides functionality for:
 - Running sub-agents recursively
 - Comprehensive execution tracking via AIAgentRun and AIAgentRunStep entities
 - Automatic context compression for long conversations
+- **Effort level management** with hierarchical precedence and inheritance
 
 ### BaseAgentType
 Abstract class that defines reusable agent behavior patterns:
@@ -933,6 +934,73 @@ const result = await runner.RunAgent({
 - **Fallback Support**: Agents continue to work even if specific models aren't configured
 
 For comprehensive details about how AI Configurations work, including model selection logic and fallback behavior, see the [AI Configuration System documentation](../Prompts/README.md#ai-configuration-system).
+
+## Effort Level Control in Agents
+
+Agents support sophisticated effort level management that controls how much reasoning effort AI models apply to each prompt execution. The effort level uses a 1-100 integer scale where higher values request more thorough analysis.
+
+### Effort Level Hierarchy
+
+The effort level is resolved using hierarchical precedence:
+
+1. **Runtime Override** (`ExecuteAgentParams.effortLevel`) - Highest priority
+2. **Agent Default** (`AIAgent.DefaultPromptEffortLevel`) - Medium priority
+3. **Prompt Setting** (`AIPrompt.EffortLevel`) - Lower priority
+4. **Provider Default** - Natural model behavior (lowest priority)
+
+### Agent Execution with Effort Level
+
+```typescript
+// Execute agent with high effort level for all prompts
+const result = await runner.RunAgent({
+    agent: myAnalysisAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    effortLevel: 85 // High effort - applies to all prompts in execution
+});
+
+// Execute with medium effort level
+const result = await runner.RunAgent({
+    agent: myQuickAgent,  
+    conversationMessages: messages,
+    contextUser: user,
+    effortLevel: 30 // Low effort - for quick responses
+});
+```
+
+### Sub-Agent Inheritance
+
+Sub-agents automatically inherit the effort level from their parent unless explicitly overridden:
+
+```typescript
+// Parent agent runs with effort level 70
+const parentResult = await runner.RunAgent({
+    agent: parentAgent,
+    effortLevel: 70, // Inherited by all sub-agents
+    // ...
+});
+
+// All sub-agents spawned during execution will use effort level 70
+// unless the sub-agent has its own DefaultPromptEffortLevel setting
+```
+
+### Agent Configuration
+
+You can configure default effort levels at the agent level:
+
+- **`AIAgent.DefaultPromptEffortLevel`**: Sets the default effort level for all prompts executed by this agent
+- This takes precedence over individual prompt effort levels but can be overridden at runtime
+
+### Provider-Specific Behavior
+
+Different AI providers handle effort levels differently:
+
+- **OpenAI**: Maps to reasoning_effort (low/medium/high)
+- **Anthropic**: Controls thinking mode and token budgets
+- **Groq**: Maps to experimental reasoning_effort parameter
+- **Other providers**: May ignore effort levels gracefully
+
+For detailed effort level documentation, see the [AI Core Plus documentation](../CorePlus/README.md#effort-level-control).
 
 ## License
 

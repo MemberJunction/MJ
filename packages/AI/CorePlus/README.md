@@ -62,6 +62,7 @@ Parameters for executing AI agents with support for:
 - Conversation context
 - Progress and streaming callbacks
 - Cancellation support
+- **Effort level control** - Override agent and prompt effort levels
 
 ### ExecuteAgentResult
 
@@ -70,6 +71,45 @@ Result of agent execution including:
 - Agent run tracking entity
 - Execution metadata
 - Error information
+
+## Effort Level Control
+
+MemberJunction supports granular control over AI model reasoning effort through a 1-100 integer scale. Higher values request more thorough reasoning and analysis from AI models that support effort levels.
+
+### Effort Level Hierarchy
+
+The effort level is resolved using the following precedence (highest to lowest priority):
+
+1. **`ExecuteAgentParams.effortLevel`** - Runtime override (highest priority)
+2. **`AIAgent.DefaultPromptEffortLevel`** - Agent default setting
+3. **`AIPrompt.EffortLevel`** - Individual prompt setting
+4. **Provider default** - Model's natural behavior (lowest priority)
+
+### Provider Support
+
+Different AI providers map the 1-100 scale to their specific parameters:
+
+- **OpenAI**: Maps to `reasoning_effort` (1-33=low, 34-66=medium, 67-100=high)
+- **Anthropic**: Maps to thinking mode with token budgets (1-100 → 25K-2M tokens)
+- **Groq**: Maps to experimental `reasoning_effort` parameter
+- **Gemini**: Controls reasoning mode intensity
+
+### Usage Examples
+
+```typescript
+// Agent execution with effort level override
+const params: ExecuteAgentParams = {
+  agent: myAgent,
+  conversationMessages: messages,
+  effortLevel: 85, // High effort for thorough analysis
+  contextUser: user
+};
+
+// Prompt execution with effort level
+const promptParams = new AIPromptParams();
+promptParams.prompt = myPrompt;
+promptParams.effortLevel = 50; // Medium effort level
+```
 
 ## System Placeholders
 

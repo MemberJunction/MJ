@@ -9,6 +9,31 @@ Advanced AI prompt execution engine with hierarchical template composition, inte
 
 ## Key Features
 
+### 🎯 Effort Level Control
+Granular control over AI model reasoning effort through a 1-100 integer scale. Higher values request more thorough reasoning and analysis from AI models that support effort levels.
+
+#### Effort Level Hierarchy
+The effort level is resolved using the following precedence (highest to lowest priority):
+
+1. **`AIPromptParams.effortLevel`** - Runtime override (highest priority)
+2. **`AIPrompt.EffortLevel`** - Individual prompt setting (lower priority)
+3. **Provider default** - Model's natural behavior (lowest priority)
+
+#### Provider Support
+Different AI providers map the 1-100 scale to their specific parameters:
+- **OpenAI**: Maps to `reasoning_effort` (1-33=low, 34-66=medium, 67-100=high)
+- **Anthropic**: Maps to thinking mode with token budgets (1-100 → 25K-2M tokens)
+- **Groq**: Maps to experimental `reasoning_effort` parameter
+- **Gemini**: Controls reasoning mode intensity
+
+```typescript
+const params = new AIPromptParams();
+params.prompt = myPrompt;
+params.effortLevel = 85; // High effort for thorough analysis
+
+const result = await AIPromptRunner.RunPrompt(params);
+```
+
 ### 🛡️ Intelligent Failover Support
 Automatic failover when AI providers experience outages, rate limits, or service degradation. The system intelligently switches between models and vendors to ensure reliable prompt execution.
 

@@ -800,6 +800,19 @@ export class BaseAgent {
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
+        // Apply effortLevel with precedence hierarchy
+        // 1. params.effortLevel (ExecuteAgentParams - highest priority)
+        // 2. agent.DefaultPromptEffortLevel (agent default - medium priority)  
+        // 3. prompt.EffortLevel (handled by AIPromptRunner - lowest priority)
+        if (params.effortLevel !== undefined && params.effortLevel !== null) {
+            promptParams.effortLevel = params.effortLevel;
+            this.logStatus(`🎯 Using runtime effort level: ${params.effortLevel}`, true, params);
+        } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+            promptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
+            this.logStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
+        }
+        // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
+
         // before we execute the prompt, we ask our Agent Type to inject the
         // payload - as the way a payload is injected is dependent on the agent type and its
         // prompting strategy. At this level in BaseAgent we don't know the format, location etc
@@ -823,6 +836,13 @@ export class BaseAgent {
                 verbose: params.verbose,
                 agentRunId: this.AgentRun?.ID
             };
+
+            // Pass through effortLevel to child prompt (same precedence hierarchy)
+            if (params.effortLevel !== undefined && params.effortLevel !== null) {
+                childPromptParams.effortLevel = params.effortLevel;
+            } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+                childPromptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
+            }
             
             // Pass through API keys to child prompt if provided
             if (params.apiKeys && params.apiKeys.length > 0) {
@@ -1820,6 +1840,9 @@ export class BaseAgent {
             if (subAgentRequest.templateParameters) {
                 this.logStatus(`📎 Template parameters: ${JSON.stringify(subAgentRequest.templateParameters)}`, true, params);
             }
+            if (params.effortLevel !== undefined && params.effortLevel !== null) {
+                this.logStatus(`🎯 Propagating effort level ${params.effortLevel} to sub-agent '${subAgentRequest.name}'`, true, params);
+            }
             
             // Execute the sub-agent with cancellation and streaming support
             const result = await runner.RunAgent<SC, SR>({
@@ -1834,6 +1857,7 @@ export class BaseAgent {
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
+                effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 data: {
                         ...subAgentRequest.templateParameters,
                         ...params.data, 
@@ -2062,6 +2086,14 @@ export class BaseAgent {
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
         this._agentRun.UserID = params.contextUser?.ID || null;
+        
+        // Resolve and save the effort level used (same precedence hierarchy as prompts)
+        if (params.effortLevel !== undefined && params.effortLevel !== null) {
+            this._agentRun.EffortLevel = params.effortLevel;
+        } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+            this._agentRun.EffortLevel = params.agent.DefaultPromptEffortLevel;
+        }
+        // If neither is set, EffortLevel remains null (no effort level override was used)
         
         // Set parent run ID if we're in a sub-agent context
         this._agentRun.ParentRunID = params.parentRun?.ID;
