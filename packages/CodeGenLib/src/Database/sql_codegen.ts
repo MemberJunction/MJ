@@ -638,8 +638,8 @@ export class SQLCodeGenBase {
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
                 if (!options.onlyPermissions && 
-                    options.entity.spDeleteGenerated && // Only generate if marked as generated (not custom)
-                    ((configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                    (options.entity.spDeleteGenerated || // Generate if marked as generated (not custom)
+                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
                      this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
