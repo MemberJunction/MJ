@@ -12,21 +12,21 @@
 -- Add EffortLevel column to AIPrompt table
 ALTER TABLE ${flyway:defaultSchema}.AIPrompt 
 ADD EffortLevel INT NULL;
-GO;
+GO
 
 -- Add DefaultPromptEffortLevel column to AIAgent table
 ALTER TABLE ${flyway:defaultSchema}.AIAgent 
 ADD DefaultPromptEffortLevel INT NULL;
-GO;
+GO
 
 -- Add CHECK constraints to enforce valid effort level range (1-100)
 ALTER TABLE ${flyway:defaultSchema}.AIPrompt 
 ADD CONSTRAINT CK_AIPrompt_EffortLevel CHECK (EffortLevel BETWEEN 1 AND 100);
-GO;
+GO
 
 ALTER TABLE ${flyway:defaultSchema}.AIAgent 
 ADD CONSTRAINT CK_AIAgent_DefaultPromptEffortLevel CHECK (DefaultPromptEffortLevel BETWEEN 1 AND 100);
-GO;
+GO
 
 -- Add extended property for AIPrompt.EffortLevel column
 EXEC sp_addextendedproperty 

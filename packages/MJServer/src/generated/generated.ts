@@ -1350,6 +1350,9 @@ each time the agent processes a prompt step.`})
     @Field(() => Boolean, {nullable: true, description: `Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`}) 
     Verbose?: boolean;
         
+    @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`}) 
+    EffortLevel?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1491,6 +1494,9 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Boolean, { nullable: true })
     Verbose?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -1600,6 +1606,9 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Boolean, { nullable: true })
     Verbose?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41219,6 +41228,9 @@ export class AIPromptRun_ {
     @Field({nullable: true, description: `JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`}) 
     ModelSpecificResponseDetails?: string;
         
+    @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`}) 
+    EffortLevel?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41497,6 +41509,9 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     ModelSpecificResponseDetails: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -41738,6 +41753,9 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     ModelSpecificResponseDetails?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
