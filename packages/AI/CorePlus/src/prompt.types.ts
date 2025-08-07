@@ -536,6 +536,33 @@ export class AIPromptParams {
    * ```
    */
   onPromptRunCreated?: (promptRunId: string) => void | Promise<void>;
+
+  /**
+   * Optional effort level override for this prompt execution (1-100).
+   * 
+   * Higher values request more thorough reasoning and analysis from AI models.
+   * Each provider maps the 1-100 scale to their specific effort parameters:
+   * - OpenAI: Maps to reasoning_effort (1-33=low, 34-66=medium, 67-100=high)
+   * - Anthropic: Maps to thinking mode with token budgets
+   * - Groq: Maps to reasoning_effort parameter (experimental)
+   * - Gemini: Controls reasoning mode intensity
+   * 
+   * Precedence hierarchy (highest to lowest priority):
+   * 1. This effortLevel parameter (runtime override)
+   * 2. Agent's DefaultPromptEffortLevel (if executed via agent)
+   * 3. Prompt's EffortLevel property (prompt default)
+   * 4. No effort level (provider default behavior)
+   * 
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.effortLevel = 85; // High effort for thorough analysis
+   * 
+   * const result = await AIPromptRunner.RunPrompt(params);
+   * ```
+   */
+  effortLevel?: number;
 }
 
 
