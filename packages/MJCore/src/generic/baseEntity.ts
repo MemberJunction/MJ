@@ -306,7 +306,7 @@ export class EntityField {
             if (ef.TSType === 'number') {
                 const typeLookup = EntityField.SQLTypeValueRanges[ef.Type.toLowerCase()];
                 if (typeLookup) {
-                    if (this.Value < -typeLookup.min || this.Value > typeLookup.max) {
+                    if (this.Value < typeLookup.min || this.Value > typeLookup.max) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is ${ef.SQLFullType} in the database and must be a valid number between ${-typeLookup.min} and ${typeLookup.max}. Current value is ${this.Value}`, this.Value));
                     }
