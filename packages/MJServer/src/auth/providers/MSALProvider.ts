@@ -1,10 +1,12 @@
 import { JwtPayload } from 'jsonwebtoken';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Microsoft Authentication Library (MSAL) provider implementation
  */
+@RegisterClass(BaseAuthProvider, 'msal')
 export class MSALProvider extends BaseAuthProvider {
   constructor(config: AuthProviderConfig) {
     super(config);

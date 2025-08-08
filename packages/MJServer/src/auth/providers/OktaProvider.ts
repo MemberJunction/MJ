@@ -1,10 +1,12 @@
 import { JwtPayload } from 'jsonwebtoken';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Okta authentication provider implementation
  */
+@RegisterClass(BaseAuthProvider, 'okta')
 export class OktaProvider extends BaseAuthProvider {
   constructor(config: AuthProviderConfig) {
     super(config);
