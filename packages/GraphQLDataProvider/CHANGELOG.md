@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.82.0
+
+### Patch Changes
+
+- c35f869: Fix: Remove non-existent ComputationEnabled field from Query operations
+
+  - Removed ComputationEnabled field from GraphQL mutations (CreateQuerySystemUser and UpdateQuerySystemUser) in GraphQLSystemUserClient
+  - Removed ComputationEnabled from QueryField TypeScript interface
+  - Fixed CreateQueryResolver to not set ComputationEnabled when mapping query fields
+  - This fixes GraphQL validation errors when creating or updating queries
+
+- Updated dependencies [2186d7b]
+- Updated dependencies [975e8d1]
+  - @memberjunction/core-entities@2.82.0
+  - @memberjunction/actions-base@2.82.0
+  - @memberjunction/core@2.82.0
+  - @memberjunction/global@2.82.0
+
 ## 2.81.0
 
 ### Patch Changes

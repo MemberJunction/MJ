@@ -1332,6 +1332,27 @@ export class AIAgentRun_ {
 each time the agent processes a prompt step.`}) 
     TotalPromptIterations: number;
         
+    @Field({nullable: true, description: `The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`}) 
+    @MaxLength(16)
+    ConfigurationID?: string;
+        
+    @Field({nullable: true, description: `Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`}) 
+    @MaxLength(16)
+    OverrideModelID?: string;
+        
+    @Field({nullable: true, description: `Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`}) 
+    @MaxLength(16)
+    OverrideVendorID?: string;
+        
+    @Field({nullable: true, description: `JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`}) 
+    Data?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`}) 
+    Verbose?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`}) 
+    EffortLevel?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1446,6 +1467,24 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalPromptIterations?: number;
+
+    @Field({ nullable: true })
+    ConfigurationID: string | null;
+
+    @Field({ nullable: true })
+    OverrideModelID: string | null;
+
+    @Field({ nullable: true })
+    OverrideVendorID: string | null;
+
+    @Field({ nullable: true })
+    Data: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Verbose?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -1540,6 +1579,24 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalPromptIterations?: number;
+
+    @Field({ nullable: true })
+    ConfigurationID?: string | null;
+
+    @Field({ nullable: true })
+    OverrideModelID?: string | null;
+
+    @Field({ nullable: true })
+    OverrideVendorID?: string | null;
+
+    @Field({ nullable: true })
+    Data?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Verbose?: boolean | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2292,6 +2349,9 @@ if this limit is exceeded.`})
     @MaxLength(50)
     StartingPayloadValidationMode: string;
         
+    @Field(() => Int, {nullable: true, description: `Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`}) 
+    DefaultPromptEffortLevel?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2445,6 +2505,9 @@ export class CreateAIAgentInput {
 
     @Field({ nullable: true })
     StartingPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPromptEffortLevel: number | null;
 }
     
 
@@ -2551,6 +2614,9 @@ export class UpdateAIAgentInput {
 
     @Field({ nullable: true })
     StartingPayloadValidationMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultPromptEffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4527,6 +4593,9 @@ export class AIPrompt_ {
     @MaxLength(100)
     FailoverErrorScope: string;
         
+    @Field(() => Int, {nullable: true, description: `Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`}) 
+    EffortLevel?: number;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -4727,6 +4796,9 @@ export class CreateAIPromptInput {
 
     @Field({ nullable: true })
     FailoverErrorScope?: string;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -4878,6 +4950,9 @@ export class UpdateAIPromptInput {
 
     @Field({ nullable: true })
     FailoverErrorScope?: string;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40949,6 +41024,71 @@ export class AIPromptRun_ {
     @MaxLength(16)
     RerunFromPromptRunID?: string;
         
+    @Field({nullable: true, description: `JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`}) 
+    ModelSelection?: string;
+        
+    @Field({description: `Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether this prompt run was cancelled before completion`}) 
+    Cancelled: boolean;
+        
+    @Field({nullable: true, description: `Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`}) 
+    CancellationReason?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`}) 
+    ModelPowerRank?: number;
+        
+    @Field({nullable: true, description: `Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`}) 
+    @MaxLength(100)
+    SelectionStrategy?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether this result was served from cache rather than executing a new model call`}) 
+    CacheHit: boolean;
+        
+    @Field({nullable: true, description: `Unique key used for caching this prompt result, typically a hash of the prompt and parameters`}) 
+    @MaxLength(1000)
+    CacheKey?: string;
+        
+    @Field({nullable: true, description: `ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`}) 
+    @MaxLength(16)
+    JudgeID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`}) 
+    JudgeScore?: number;
+        
+    @Field(() => Boolean, {description: `Indicates whether this result was selected as the best result when multiple models were run in parallel`}) 
+    WasSelectedResult: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates whether streaming was enabled for this prompt execution`}) 
+    StreamingEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds from request initiation to receiving the first token from the model`}) 
+    FirstTokenTime?: number;
+        
+    @Field({nullable: true, description: `Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`}) 
+    ErrorDetails?: string;
+        
+    @Field({nullable: true, description: `References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`}) 
+    @MaxLength(16)
+    ChildPromptID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`}) 
+    QueueTime?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`}) 
+    PromptTime?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`}) 
+    CompletionTime?: number;
+        
+    @Field({nullable: true, description: `JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`}) 
+    ModelSpecificResponseDetails?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`}) 
+    EffortLevel?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41162,6 +41302,66 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    ModelSelection: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Cancelled?: boolean;
+
+    @Field({ nullable: true })
+    CancellationReason: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ModelPowerRank: number | null;
+
+    @Field({ nullable: true })
+    SelectionStrategy: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheHit?: boolean;
+
+    @Field({ nullable: true })
+    CacheKey: string | null;
+
+    @Field({ nullable: true })
+    JudgeID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    JudgeScore: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSelectedResult?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    StreamingEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    FirstTokenTime: number | null;
+
+    @Field({ nullable: true })
+    ErrorDetails: string | null;
+
+    @Field({ nullable: true })
+    ChildPromptID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QueueTime: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PromptTime: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CompletionTime: number | null;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseDetails: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel: number | null;
 }
     
 
@@ -41346,6 +41546,66 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    ModelSelection?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Cancelled?: boolean;
+
+    @Field({ nullable: true })
+    CancellationReason?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ModelPowerRank?: number | null;
+
+    @Field({ nullable: true })
+    SelectionStrategy?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheHit?: boolean;
+
+    @Field({ nullable: true })
+    CacheKey?: string | null;
+
+    @Field({ nullable: true })
+    JudgeID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    JudgeScore?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    WasSelectedResult?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    StreamingEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    FirstTokenTime?: number | null;
+
+    @Field({ nullable: true })
+    ErrorDetails?: string | null;
+
+    @Field({ nullable: true })
+    ChildPromptID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QueueTime?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PromptTime?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CompletionTime?: number | null;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseDetails?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EffortLevel?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

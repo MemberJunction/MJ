@@ -16,6 +16,22 @@ import { z } from 'zod';
  */
 export class EntityField {
     /**
+     * Static object containing the value ranges for various SQL number types. 
+     * This is used to validate the value of the field when it is set or validated.
+     */
+    public static readonly SQLTypeValueRanges = {
+        "int": { min: -2147483648, max: 2147483647 },
+        "bigint": { min: -9223372036854775808, max: 9223372036854775807 },
+        "smallint": { min: -32768, max: 32767 },
+        "tinyint": { min: 0, max: 255 },
+        "decimal": { min: -7922816251426433759354395033, max: 79228162514264337593543950335 },
+        "numeric": { min: -7922816251426433759354395033, max: 79228162514264337593543950335 },
+        "float": { min: -1.7976931348623157e+308, max: 1.7976931348623157e+308 },   
+        "real": { min: -3.402823466e+38, max: 3.402823466e+38 },
+        "money": { min: -922337203685477.5808, max: 922337203685477.5807 },
+    }
+
+    /**
      * Indicates whether the active status of the field should be asserted when accessing or setting the value.
      * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
      * temporarily turned off to allow for legacy fields to be created without asserting the active status.
@@ -284,6 +300,17 @@ export class EntityField {
                 // invalid non-null date, but that is okay if we are a new record and we have a default value
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${this.Value} is not a valid date for ${ef.DisplayNameOrName}`, this.Value));
+            }
+            // add validation to ensure a number value is within range based on the
+            // underlying SQL type
+            if (ef.TSType === 'number') {
+                const typeLookup = EntityField.SQLTypeValueRanges[ef.Type.toLowerCase()];
+                if (typeLookup) {
+                    if (this.Value < typeLookup.min || this.Value > typeLookup.max) {
+                        result.Success = false;
+                        result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is ${ef.SQLFullType} in the database and must be a valid number between ${-typeLookup.min} and ${typeLookup.max}. Current value is ${this.Value}`, this.Value));
+                    }
+                }
             }
         }
 

@@ -1258,6 +1258,11 @@ if this limit is exceeded.`),
     *   * Fail
     *   * Warn
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
+    DefaultPromptEffortLevel: z.number().nullable().describe(`
+        * * Field Name: DefaultPromptEffortLevel
+        * * Display Name: Default Prompt Effort Level
+        * * SQL Data Type: int
+        * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1861,6 +1866,11 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(50)
         * * Default Value: All
         * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -7864,6 +7874,40 @@ export const AIAgentRunSchema = z.object({
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
 each time the agent processes a prompt step.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
+    OverrideModelID: z.string().nullable().describe(`
+        * * Field Name: OverrideModelID
+        * * Display Name: Override Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
+    OverrideVendorID: z.string().nullable().describe(`
+        * * Field Name: OverrideVendorID
+        * * Display Name: Override Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+        * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
+    Data: z.string().nullable().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
+    Verbose: z.boolean().nullable().describe(`
+        * * Field Name: Verbose
+        * * Display Name: Verbose
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8994,6 +9038,125 @@ export const AIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
+    ModelSelection: z.string().nullable().describe(`
+        * * Field Name: ModelSelection
+        * * Display Name: Model Selection
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
+    Status: z.union([z.literal('Pending'), z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+        * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`),
+    Cancelled: z.boolean().describe(`
+        * * Field Name: Cancelled
+        * * Display Name: Cancelled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this prompt run was cancelled before completion`),
+    CancellationReason: z.string().nullable().describe(`
+        * * Field Name: CancellationReason
+        * * Display Name: Cancellation Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`),
+    ModelPowerRank: z.number().nullable().describe(`
+        * * Field Name: ModelPowerRank
+        * * Display Name: Model Power Rank
+        * * SQL Data Type: int
+        * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`),
+    SelectionStrategy: z.union([z.literal('Default'), z.literal('Specific'), z.literal('ByPower')]).nullable().describe(`
+        * * Field Name: SelectionStrategy
+        * * Display Name: Selection Strategy
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
+        * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`),
+    CacheHit: z.boolean().describe(`
+        * * Field Name: CacheHit
+        * * Display Name: Cache Hit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this result was served from cache rather than executing a new model call`),
+    CacheKey: z.string().nullable().describe(`
+        * * Field Name: CacheKey
+        * * Display Name: Cache Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
+    JudgeID: z.string().nullable().describe(`
+        * * Field Name: JudgeID
+        * * Display Name: Judge ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
+    JudgeScore: z.number().nullable().describe(`
+        * * Field Name: JudgeScore
+        * * Display Name: Judge Score
+        * * SQL Data Type: float(53)
+        * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`),
+    WasSelectedResult: z.boolean().describe(`
+        * * Field Name: WasSelectedResult
+        * * Display Name: Was Selected Result
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel`),
+    StreamingEnabled: z.boolean().describe(`
+        * * Field Name: StreamingEnabled
+        * * Display Name: Streaming Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether streaming was enabled for this prompt execution`),
+    FirstTokenTime: z.number().nullable().describe(`
+        * * Field Name: FirstTokenTime
+        * * Display Name: First Token Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds from request initiation to receiving the first token from the model`),
+    ErrorDetails: z.string().nullable().describe(`
+        * * Field Name: ErrorDetails
+        * * Display Name: Error Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
+    ChildPromptID: z.string().nullable().describe(`
+        * * Field Name: ChildPromptID
+        * * Display Name: Child Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
+    QueueTime: z.number().nullable().describe(`
+        * * Field Name: QueueTime
+        * * Display Name: Queue Time
+        * * SQL Data Type: int
+        * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
+    PromptTime: z.number().nullable().describe(`
+        * * Field Name: PromptTime
+        * * Display Name: Prompt Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
+    CompletionTime: z.number().nullable().describe(`
+        * * Field Name: CompletionTime
+        * * Display Name: Completion Time
+        * * SQL Data Type: int
+        * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
+    ModelSpecificResponseDetails: z.string().nullable().describe(`
+        * * Field Name: ModelSpecificResponseDetails
+        * * Display Name: Model Specific Response Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -15919,6 +16082,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * DefaultPromptEffortLevel: This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
     * * MinExecutionsPerRun: This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
     * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
@@ -15930,6 +16094,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateDefaultPromptEffortLevelWithinRange(result);
         this.ValidateMaxExecutionsPerRunIsNullOrPositive(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
         this.ValidateEnableContextCompressionRequiresContextFields(result);
@@ -15937,6 +16102,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
         this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultPromptEffortLevelWithinRange(result: ValidationResult) {
+    	if (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -16491,6 +16668,19 @@ if this limit is exceeded.
     }
     set StartingPayloadValidationMode(value: 'Fail' | 'Warn') {
         this.Set('StartingPayloadValidationMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultPromptEffortLevel
+    * * Display Name: Default Prompt Effort Level
+    * * SQL Data Type: int
+    * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
+    */
+    get DefaultPromptEffortLevel(): number | null {
+        return this.Get('DefaultPromptEffortLevel');
+    }
+    set DefaultPromptEffortLevel(value: number | null) {
+        this.Set('DefaultPromptEffortLevel', value);
     }
 
     /**
@@ -17267,6 +17457,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * EffortLevel: This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
     * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
     * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
     * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
@@ -17283,6 +17474,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateEffortLevelIsWithinRange(result);
         this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
         this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
         this.ValidateFailoverStrategyAllowedValues(result);
@@ -17316,6 +17508,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsWithinRange(result: ValidationResult) {
+    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
 
@@ -18164,6 +18368,19 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set FailoverErrorScope(value: string) {
         this.Set('FailoverErrorScope', value);
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**
@@ -33203,6 +33420,32 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * EffortLevel: This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelWithinAllowedRange(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelWithinAllowedRange(result: ValidationResult) {
+    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -33631,6 +33874,88 @@ each time the agent processes a prompt step.
     }
     set TotalPromptIterations(value: number) {
         this.Set('TotalPromptIterations', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: OverrideModelID
+    * * Display Name: Override Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
+    */
+    get OverrideModelID(): string | null {
+        return this.Get('OverrideModelID');
+    }
+    set OverrideModelID(value: string | null) {
+        this.Set('OverrideModelID', value);
+    }
+
+    /**
+    * * Field Name: OverrideVendorID
+    * * Display Name: Override Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
+    */
+    get OverrideVendorID(): string | null {
+        return this.Get('OverrideVendorID');
+    }
+    set OverrideVendorID(value: string | null) {
+        this.Set('OverrideVendorID', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
+    */
+    get Data(): string | null {
+        return this.Get('Data');
+    }
+    set Data(value: string | null) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: Verbose
+    * * Display Name: Verbose
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
+    */
+    get Verbose(): boolean | null {
+        return this.Get('Verbose');
+    }
+    set Verbose(value: boolean | null) {
+        this.Set('Verbose', value);
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**
@@ -35987,6 +36312,7 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * EffortLevel: This rule ensures that the effort level must be a number between 1 and 100, inclusive.
     * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
     * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
     * @public
@@ -35995,10 +36321,23 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateEffortLevelWithinRange(result);
         this.ValidateCompletedAtIsNullOrAfterRunAt(result);
         this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the effort level must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelWithinRange(result: ValidationResult) {
+    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -36834,6 +37173,285 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set RerunFromPromptRunID(value: string | null) {
         this.Set('RerunFromPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: ModelSelection
+    * * Display Name: Model Selection
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
+    */
+    get ModelSelection(): string | null {
+        return this.Get('ModelSelection');
+    }
+    set ModelSelection(value: string | null) {
+        this.Set('ModelSelection', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled
+    */
+    get Status(): 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Cancelled
+    * * Display Name: Cancelled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this prompt run was cancelled before completion
+    */
+    get Cancelled(): boolean {
+        return this.Get('Cancelled');
+    }
+    set Cancelled(value: boolean) {
+        this.Set('Cancelled', value);
+    }
+
+    /**
+    * * Field Name: CancellationReason
+    * * Display Name: Cancellation Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit
+    */
+    get CancellationReason(): string | null {
+        return this.Get('CancellationReason');
+    }
+    set CancellationReason(value: string | null) {
+        this.Set('CancellationReason', value);
+    }
+
+    /**
+    * * Field Name: ModelPowerRank
+    * * Display Name: Model Power Rank
+    * * SQL Data Type: int
+    * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models
+    */
+    get ModelPowerRank(): number | null {
+        return this.Get('ModelPowerRank');
+    }
+    set ModelPowerRank(value: number | null) {
+        this.Set('ModelPowerRank', value);
+    }
+
+    /**
+    * * Field Name: SelectionStrategy
+    * * Display Name: Selection Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
+    * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)
+    */
+    get SelectionStrategy(): 'Default' | 'Specific' | 'ByPower' | null {
+        return this.Get('SelectionStrategy');
+    }
+    set SelectionStrategy(value: 'Default' | 'Specific' | 'ByPower' | null) {
+        this.Set('SelectionStrategy', value);
+    }
+
+    /**
+    * * Field Name: CacheHit
+    * * Display Name: Cache Hit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this result was served from cache rather than executing a new model call
+    */
+    get CacheHit(): boolean {
+        return this.Get('CacheHit');
+    }
+    set CacheHit(value: boolean) {
+        this.Set('CacheHit', value);
+    }
+
+    /**
+    * * Field Name: CacheKey
+    * * Display Name: Cache Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters
+    */
+    get CacheKey(): string | null {
+        return this.Get('CacheKey');
+    }
+    set CacheKey(value: string | null) {
+        this.Set('CacheKey', value);
+    }
+
+    /**
+    * * Field Name: JudgeID
+    * * Display Name: Judge ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
+    */
+    get JudgeID(): string | null {
+        return this.Get('JudgeID');
+    }
+    set JudgeID(value: string | null) {
+        this.Set('JudgeID', value);
+    }
+
+    /**
+    * * Field Name: JudgeScore
+    * * Display Name: Judge Score
+    * * SQL Data Type: float(53)
+    * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results
+    */
+    get JudgeScore(): number | null {
+        return this.Get('JudgeScore');
+    }
+    set JudgeScore(value: number | null) {
+        this.Set('JudgeScore', value);
+    }
+
+    /**
+    * * Field Name: WasSelectedResult
+    * * Display Name: Was Selected Result
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel
+    */
+    get WasSelectedResult(): boolean {
+        return this.Get('WasSelectedResult');
+    }
+    set WasSelectedResult(value: boolean) {
+        this.Set('WasSelectedResult', value);
+    }
+
+    /**
+    * * Field Name: StreamingEnabled
+    * * Display Name: Streaming Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether streaming was enabled for this prompt execution
+    */
+    get StreamingEnabled(): boolean {
+        return this.Get('StreamingEnabled');
+    }
+    set StreamingEnabled(value: boolean) {
+        this.Set('StreamingEnabled', value);
+    }
+
+    /**
+    * * Field Name: FirstTokenTime
+    * * Display Name: First Token Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds from request initiation to receiving the first token from the model
+    */
+    get FirstTokenTime(): number | null {
+        return this.Get('FirstTokenTime');
+    }
+    set FirstTokenTime(value: number | null) {
+        this.Set('FirstTokenTime', value);
+    }
+
+    /**
+    * * Field Name: ErrorDetails
+    * * Display Name: Error Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes
+    */
+    get ErrorDetails(): string | null {
+        return this.Get('ErrorDetails');
+    }
+    set ErrorDetails(value: string | null) {
+        this.Set('ErrorDetails', value);
+    }
+
+    /**
+    * * Field Name: ChildPromptID
+    * * Display Name: Child Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
+    */
+    get ChildPromptID(): string | null {
+        return this.Get('ChildPromptID');
+    }
+    set ChildPromptID(value: string | null) {
+        this.Set('ChildPromptID', value);
+    }
+
+    /**
+    * * Field Name: QueueTime
+    * * Display Name: Queue Time
+    * * SQL Data Type: int
+    * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
+    */
+    get QueueTime(): number | null {
+        return this.Get('QueueTime');
+    }
+    set QueueTime(value: number | null) {
+        this.Set('QueueTime', value);
+    }
+
+    /**
+    * * Field Name: PromptTime
+    * * Display Name: Prompt Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
+    */
+    get PromptTime(): number | null {
+        return this.Get('PromptTime');
+    }
+    set PromptTime(value: number | null) {
+        this.Set('PromptTime', value);
+    }
+
+    /**
+    * * Field Name: CompletionTime
+    * * Display Name: Completion Time
+    * * SQL Data Type: int
+    * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
+    */
+    get CompletionTime(): number | null {
+        return this.Get('CompletionTime');
+    }
+    set CompletionTime(value: number | null) {
+        this.Set('CompletionTime', value);
+    }
+
+    /**
+    * * Field Name: ModelSpecificResponseDetails
+    * * Display Name: Model Specific Response Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
+    */
+    get ModelSpecificResponseDetails(): string | null {
+        return this.Get('ModelSpecificResponseDetails');
+    }
+    set ModelSpecificResponseDetails(value: string | null) {
+        this.Set('ModelSpecificResponseDetails', value);
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
     }
 
     /**

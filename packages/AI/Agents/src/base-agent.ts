@@ -113,6 +113,28 @@ export class BaseAgent {
     private _metadata: Metadata = new Metadata();
 
     /**
+     * This is state information that is specific to the agent type. BaseAgent doesn't know what
+     * this contains or care, it is just responsible for keeping this, giving the Agent Type the 
+     * opportunity to initialize its state when a run starts, and passing the object along each 
+     * time the Agent Type is called to do something such as DetermineNextStep()
+     */
+    private _agentTypeState: any = null;
+    /**
+     * Overridable accessor for the current agent instance's agent-type state
+     */
+    protected get AgentTypeState(): any {
+        return this._agentTypeState;
+    }
+
+    private _agentTypeInstance: BaseAgentType;
+    /**
+     * Accessor for the agent's type instance
+     */
+    public get AgentTypeInstance(): BaseAgentType {
+        return this._agentTypeInstance;
+    }
+
+    /**
      * Map to track execution counts for actions and sub-agents.
      * Key is the item ID (action ID or sub-agent ID), value is the count.
      * @private
@@ -289,6 +311,17 @@ export class BaseAgent {
     }
 
     /**
+     * This overridable method is responsible for setting up any necessary one-time initalization of the 
+     * agent type. The base class sets up the AgentTypeInstance and also lets that agent type initialize
+     * its state.
+     * @param params 
+     */
+    protected async initializeAgentType(params: ExecuteAgentParams, config: AgentConfiguration) {
+        this._agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
+        this._agentTypeState = await this._agentTypeInstance.InitializeAgentTypeState(params);
+    }
+
+    /**
      * Executes an AI agent using hierarchical prompt composition.
      * 
      * This method orchestrates the entire agent execution process, from loading
@@ -327,7 +360,7 @@ export class BaseAgent {
             };
 
             await this.initializeStartingPayload(wrappedParams);
-            
+
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
                 this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled before start`, true, params);
@@ -384,6 +417,10 @@ export class BaseAgent {
                 return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
 
+            // now initialize the agent type which gets us the instance setup in our class plus also gets the agent type to initialize
+            // its state
+            await this.initializeAgentType(wrappedParams, config);
+
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
             const executionResult = await this.executeAgentInternal<R>(wrappedParams, config);
@@ -399,8 +436,18 @@ export class BaseAgent {
             // Finalize the agent run
             this.logStatus(`✅ Finalizing execution for agent '${params.agent.Name}'`, true, params);
 
-            // finalize the run, favor the new payload if we have one, otehrwise fall back to the previous payload
-            return await this.finalizeAgentRun<R>(executionResult.finalStep, executionResult.finalStep.newPayload || executionResult.finalStep.previousPayload, params.contextUser);
+            // To finalize the payload to return to our caller, we favor the new payload from the finalStep, if we have one.
+            // Otherwise, we fall back to the previous payload
+            const finalPayload = executionResult.finalStep.newPayload || executionResult.finalStep.previousPayload
+
+            // now that we have our finalPayload, if our parent is of a different agent type, we must normalize the payload
+            // meaning that we have our agent type strip away and "wrapper" that might be used for intra-agent communication
+            // that is agent-type specific. For example the Loop Agent Type has a special wrapper called LoopAgentResponseType
+            // which is purely for its internal execution between agent/sub-agent, but is NOT relevant to a parent agent if it
+            // is of a different type.
+            //const normalizedFinalPayload = this.normalizePayloadForParent(finalPayload, params.agent, params.parentRun?.AgentID);
+
+            return await this.finalizeAgentRun<R>(executionResult.finalStep, finalPayload, params.contextUser);
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
@@ -669,7 +716,7 @@ export class BaseAgent {
                 this._agentRun.Status = 'Failed';
                 this._agentRun.Success = false;
                 this._agentRun.FinalStep = 'Failed';
-                // Note: We don't save here as the agent run will be saved in finalizeAgentRun
+                // Note: We don't save here as the agent run will be saved in finalizeAgentRun()
             }
 
             return {
@@ -800,13 +847,35 @@ export class BaseAgent {
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
+        // Apply effortLevel with precedence hierarchy
+        // 1. params.effortLevel (ExecuteAgentParams - highest priority)
+        // 2. agent.DefaultPromptEffortLevel (agent default - medium priority)  
+        // 3. prompt.EffortLevel (handled by AIPromptRunner - lowest priority)
+        if (params.effortLevel !== undefined && params.effortLevel !== null) {
+            promptParams.effortLevel = params.effortLevel;
+            this.logStatus(`🎯 Using runtime effort level: ${params.effortLevel}`, true, params);
+        } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+            promptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
+            this.logStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
+        } else {
+            // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
+            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and 
+            // put it in place
+            if (childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
+                promptParams.effortLevel = childPrompt.EffortLevel;
+                this.logStatus(`🎯 Using child prompt effort level: ${childPrompt.EffortLevel}`, true, params);
+            }
+            // if the child prompt doesn't have an effort level defined, we default back
+            // to the parent prompt effort level, if any
+        }
+
         // before we execute the prompt, we ask our Agent Type to inject the
         // payload - as the way a payload is injected is dependent on the agent type and its
         // prompting strategy. At this level in BaseAgent we don't know the format, location etc
         // NOTE: We do this even if payload is empty, each agent type can have its own
         //       logic for handling empty payloads.
         const atInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-        await atInstance.InjectPayload<P>(payload, promptParams, {
+        await atInstance.InjectPayload<P>(payload, this.AgentTypeState, promptParams, {
             agentId: params.agent.ID,
             agentRunId: this._agentRun?.ID
         });
@@ -823,6 +892,13 @@ export class BaseAgent {
                 verbose: params.verbose,
                 agentRunId: this.AgentRun?.ID
             };
+
+            // Pass through effortLevel to child prompt (same precedence hierarchy)
+            if (params.effortLevel !== undefined && params.effortLevel !== null) {
+                childPromptParams.effortLevel = params.effortLevel;
+            } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+                childPromptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
+            }
             
             // Pass through API keys to child prompt if provided
             if (params.apiKeys && params.apiKeys.length > 0) {
@@ -905,11 +981,10 @@ export class BaseAgent {
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
         this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
-        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
 
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await agentTypeInstance.DetermineNextStep<P>(promptResult, params);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this._agentTypeState);
         return nextStep;
     }
 
@@ -1820,6 +1895,9 @@ export class BaseAgent {
             if (subAgentRequest.templateParameters) {
                 this.logStatus(`📎 Template parameters: ${JSON.stringify(subAgentRequest.templateParameters)}`, true, params);
             }
+            if (params.effortLevel !== undefined && params.effortLevel !== null) {
+                this.logStatus(`🎯 Propagating effort level ${params.effortLevel} to sub-agent '${subAgentRequest.name}'`, true, params);
+            }
             
             // Execute the sub-agent with cancellation and streaming support
             const result = await runner.RunAgent<SC, SR>({
@@ -1834,6 +1912,7 @@ export class BaseAgent {
                 parentRun: this._agentRun,
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
+                effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 data: {
                         ...subAgentRequest.templateParameters,
                         ...params.data, 
@@ -2062,6 +2141,14 @@ export class BaseAgent {
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
         this._agentRun.UserID = params.contextUser?.ID || null;
+        
+        // Resolve and save the effort level used (same precedence hierarchy as prompts)
+        if (params.effortLevel !== undefined && params.effortLevel !== null) {
+            this._agentRun.EffortLevel = params.effortLevel;
+        } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
+            this._agentRun.EffortLevel = params.agent.DefaultPromptEffortLevel;
+        }
+        // If neither is set, EffortLevel remains null (no effort level override was used)
         
         // Set parent run ID if we're in a sub-agent context
         this._agentRun.ParentRunID = params.parentRun?.ID;
@@ -2355,8 +2442,7 @@ export class BaseAgent {
         // Determine what to execute
         if (!previousDecision) {
             // First execution - ask the agent type what to do
-            const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-            const initialStep = await agentTypeInstance.DetermineInitialStep<P>(params);
+            const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
             
             if (initialStep) {
                 // Agent type provided an initial step
@@ -2367,19 +2453,17 @@ export class BaseAgent {
             return await this.executePromptStep(params, config);
         }
         
-        // Execute based on the previous decision
+        // First, ask agent type if it wants to handle the next step in a custom way
+        const customNextStep = await this.AgentTypeInstance.PreProcessNextStep(params, previousDecision, previousDecision.newPayload || previousDecision.previousPayload, this.AgentTypeState);
+
+        if (customNextStep) {
+            // Agent type provided custom handling
+            return customNextStep;
+        }
+
+        // Execute based on the previous decision using standard logic
         switch (previousDecision.step) {
             case 'Retry':
-                // Ask agent type if it wants to handle retry differently
-                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-                const customRetryStep = await agentTypeInstance.PreProcessRetryStep(params, previousDecision);
-                
-                if (customRetryStep) {
-                    // Agent type provided custom handling
-                    return customRetryStep;
-                }
-                
-                // Default behavior - execute prompt step
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
                 return await this.executeSubAgentStep<P, P>(params, previousDecision!);
@@ -2389,8 +2473,8 @@ export class BaseAgent {
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
                 const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
-                if (pd.previousPayload?.taskComplete === true && previousDecision.terminate) {
-                    // If task is complete and the parent agent previously requested to auto-terminate, after a successful
+                if (previousDecision.terminate) {
+                    // If parent agent previously requested to auto-terminate, after a successful
                     // sub-agent run, we can finalize the agent run                    
                     return { 
                         terminate: true,
@@ -2433,12 +2517,8 @@ export class BaseAgent {
         config: AgentConfiguration,
         previousDecision?: BaseAgentNextStep
     ): Promise<BaseAgentNextStep<P>> {
-        
-        // Get the agent type instance to check for custom prompt
-        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
-        
         // Ask the agent type if it has a custom prompt for this step
-        const promptToUse = await agentTypeInstance.GetPromptForStep(params, config, previousDecision);
+        const promptToUse = await this.AgentTypeInstance.GetPromptForStep(params, config, previousDecision?.newPayload || previousDecision?.previousPayload, this.AgentTypeState, previousDecision);
         const promptId = promptToUse?.ID;
         const promptName = promptToUse?.Name;
         
@@ -3079,14 +3159,13 @@ export class BaseAgent {
 
             // Call agent type's pre-processing for actions
             try {
-                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
                 const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
                 
-                
                 // Pre-process actions - this may modify the actions array in place
-                await agentTypeInstance.PreProcessActionStep(
+                await this.AgentTypeInstance.PreProcessActionStep(
                     actions,
                     currentPayload,
+                    this.AgentTypeState,
                     previousDecision
                 );
             } catch (error) {
@@ -3185,13 +3264,13 @@ export class BaseAgent {
             let finalPayload = currentPayload;
             
             try {
-                const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
                 const actionResultsOnly = actionResults.map(r => r.result).filter(r => r !== undefined) as ActionResult[];
                 
-                const payloadChangeRequest = await agentTypeInstance.PostProcessActionStep(
+                const payloadChangeRequest = await this.AgentTypeInstance.PostProcessActionStep(
                     actionResultsOnly,
                     actions,
                     currentPayload,
+                    this.AgentTypeState,
                     previousDecision
                 );
                 

@@ -1770,6 +1770,14 @@ export class AIPromptRunner {
         promptRun.AgentRunID = params.agentRunId;
       }
 
+      // Resolve and save the effort level used (same precedence as ChatParams resolution)
+      if (params.effortLevel !== undefined && params.effortLevel !== null) {
+        promptRun.EffortLevel = params.effortLevel;
+      } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
+        promptRun.EffortLevel = prompt.EffortLevel;
+      }
+      // If neither is set, EffortLevel remains null (provider default was used)
+
       // Set ParentID for hierarchical prompt execution tracking
       if (params.parentPromptRunId) {
         promptRun.ParentID = params.parentPromptRunId;
@@ -2382,6 +2390,18 @@ export class AIPromptRunner {
           chatParams.topLogProbs = params.additionalParameters.topLogProbs;
         }
       }
+
+      // Apply effortLevel with precedence hierarchy
+      // 1. params.effortLevel (runtime override - highest priority)
+      // 2. prompt.EffortLevel (prompt default - lower priority)
+      // 3. No effort level (provider default - lowest priority)
+      // Note: Agent DefaultPromptEffortLevel will be passed via params.effortLevel by BaseAgent
+      if (params.effortLevel !== undefined && params.effortLevel !== null) {
+        chatParams.effortLevel = params.effortLevel.toString();
+      } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
+        chatParams.effortLevel = prompt.EffortLevel.toString();
+      }
+      // If neither is set, effortLevel remains undefined and providers use their defaults
 
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {

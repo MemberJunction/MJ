@@ -408,7 +408,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param stepId - The ID of the step
      * @returns The step or null if not found
      */
-    public GetAgentStepById(stepId: string): AIAgentStepEntity | null {
+    public GetAgentStepByID(stepId: string): AIAgentStepEntity | null {
         return this._agentSteps.find(step => step.ID === stepId) || null;
     }
 

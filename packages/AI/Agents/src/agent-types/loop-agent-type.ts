@@ -53,6 +53,12 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
+    public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
+        // Loop agents do not require agent-type specific state initialization
+        // but can be extended in the future if needed
+        return {} as ATS; // Return an empty object for now
+    }
+
     /**
      * Determines the next step based on the structured response from the AI model.
      * 
@@ -65,9 +71,11 @@ export class LoopAgentType extends BaseAgentType {
      * 
      * @throws {Error} Implicitly through failed parsing, but returns failed step instead
      */
-    public async DetermineNextStep<P>(
+    public async DetermineNextStep<P = any, ATS = any>(
         promptResult: AIPromptRunResult | null, 
-        params: ExecuteAgentParams<any, P>
+        params: ExecuteAgentParams<any, P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P>> {
         try {
             // Ensure we have a successful result
@@ -296,8 +304,9 @@ export class LoopAgentType extends BaseAgentType {
      * @param {AIPromptParams} prompt - The prompt parameters to update
      * @param {object} agentInfo - Agent identification info (unused by LoopAgentType)
      */
-    public async InjectPayload<T = any>(
+    public async InjectPayload<T = any, ATS = any>(
         payload: T, 
+        agentTypeState: ATS,
         prompt: AIPromptParams,
         agentInfo: { agentId: string; agentRunId?: string }
     ): Promise<void> {
@@ -326,22 +335,24 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
-     * Pre-processes retry steps for loop agent types.
+     * Pre-processes steps for loop agent types.
      * 
-     * Loop agents use the default retry behavior which executes the prompt again.
+     * Loop agents use the default next step behavior which executes the prompt again.
      * 
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @param {BaseAgentNextStep} step - The step that needs to be preprocessed
      * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
      * 
      * @override
      * @since 2.76.0
      */
-    public async PreProcessRetryStep<P = any>(
+    public async PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>
+        step: BaseAgentNextStep<P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // Loop agents use default retry behavior (execute prompt)
+        // Loop agents use default next step behavior (execute prompt)
         return null;
     }
 
@@ -357,9 +368,11 @@ export class LoopAgentType extends BaseAgentType {
      * @override
      * @since 2.76.0
      */
-    public async GetPromptForStep<P = any>(
+    public async GetPromptForStep<P = any, ATS = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
+        payload: P,
+        agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
     ): Promise<AIPromptEntity | null> {
         // Loop agents always use the default prompt from configuration

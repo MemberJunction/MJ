@@ -110,6 +110,15 @@
                                 </div>
                             </div>
                         }
+                        @if (record.EffortLevel !== null && record.EffortLevel !== undefined) {
+                            <div class="metric-item">
+                                <i class="fa-solid fa-tachometer-alt"></i>
+                                <div class="metric-content">
+                                    <div class="metric-label">Effort Level</div>
+                                    <div class="metric-value">{{ record.EffortLevel }}</div>
+                                </div>
+                            </div>
+                        }
                         @if (record.ResponseFormat) {
                             <div class="metric-item">
                                 <i class="fa-solid fa-code"></i>
