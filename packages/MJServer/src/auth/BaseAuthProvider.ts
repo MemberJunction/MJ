@@ -4,6 +4,8 @@ import { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
 
 /**
  * Base implementation of IAuthProvider with common functionality
+ * Concrete providers should extend this class and use @RegisterClass decorator
+ * with BaseAuthProvider as the base class
  */
 export abstract class BaseAuthProvider implements IAuthProvider {
   name: string;

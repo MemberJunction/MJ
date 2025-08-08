@@ -19,7 +19,7 @@ export function initializeAuthProviders(): void {
       try {
         const provider = AuthProviderFactory.createProvider(providerConfig as AuthProviderConfig);
         registry.register(provider);
-        LogStatus(`Registered auth provider: ${provider.name}`);
+        LogStatus(`Registered auth provider: ${provider.name} (type: ${providerConfig.type})`);
       } catch (error) {
         LogError(`Failed to initialize auth provider ${providerConfig.name}: ${error}`);
       }

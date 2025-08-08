@@ -1,10 +1,12 @@
 import { JwtPayload } from 'jsonwebtoken';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Auth0 authentication provider implementation
  */
+@RegisterClass(BaseAuthProvider, 'auth0')
 export class Auth0Provider extends BaseAuthProvider {
   constructor(config: AuthProviderConfig) {
     super(config);

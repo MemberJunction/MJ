@@ -1,10 +1,12 @@
 import { JwtPayload } from 'jsonwebtoken';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * AWS Cognito authentication provider implementation
  */
+@RegisterClass(BaseAuthProvider, 'cognito')
 export class CognitoProvider extends BaseAuthProvider {
   constructor(config: AuthProviderConfig) {
     super(config);

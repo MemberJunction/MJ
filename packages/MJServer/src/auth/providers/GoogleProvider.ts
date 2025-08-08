@@ -1,10 +1,12 @@
 import { JwtPayload } from 'jsonwebtoken';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Google Identity Platform authentication provider implementation
  */
+@RegisterClass(BaseAuthProvider, 'google')
 export class GoogleProvider extends BaseAuthProvider {
   constructor(config: AuthProviderConfig) {
     super(config);

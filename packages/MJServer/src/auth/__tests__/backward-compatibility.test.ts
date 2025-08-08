@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { AuthProviderRegistry } from '../AuthProviderRegistry';
+import { IAuthProvider } from '../IAuthProvider';
 import { initializeAuthProviders } from '../initializeProviders';
 import { getLegacyIssuers, getLegacyValidationOptions } from '../migrationHelper';
 
@@ -103,7 +104,7 @@ describe('Authentication Provider Backward Compatibility', () => {
           const normalized = issuer.toLowerCase().replace(/\/$/, '');
           return normalized === 'https://test.provider.com/oauth2';
         }
-      };
+      } as IAuthProvider;
       
       registry.register(testProvider);
       
@@ -126,8 +127,8 @@ describe('Authentication Provider Backward Compatibility', () => {
         validateConfig: () => true,
         getSigningKey: jest.fn(),
         extractUserInfo: jest.fn(),
-        matchesIssuer: jest.fn((issuer: string) => issuer === 'https://test.provider.com')
-      };
+        matchesIssuer: jest.fn((issuer: string): boolean => issuer === 'https://test.provider.com')
+      } as IAuthProvider;
       
       registry.register(testProvider);
       
@@ -211,7 +212,7 @@ describe('Authentication Provider Backward Compatibility', () => {
         getSigningKey: jest.fn(),
         extractUserInfo: jest.fn(),
         matchesIssuer: jest.fn()
-      };
+      } as IAuthProvider;
       
       expect(() => registry.register(invalidProvider)).toThrow();
     });
