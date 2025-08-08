@@ -65,6 +65,15 @@ export abstract class BaseAgentType {
     public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
 
     /**
+     * This method allows each agent type to initialize its agent-run-specific state package as required. Not all agent
+     * types require this and are able to live off just the current payload or other properties passed to them to 
+     * DetermineNextStep(), but some require more complex internal state tracking.
+     * @param params - the agent execution params
+     * @returns the fully initialized initial agent-type state
+     */
+    public abstract InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS>;
+
+    /**
      * Analyzes the output from prompt execution to determine the next step.
      * 
      * This method is called after the hierarchical prompts have been executed
@@ -93,9 +102,11 @@ export abstract class BaseAgentType {
      * }
      * ```
      */
-    public abstract DetermineNextStep<P = any>(
+    public abstract DetermineNextStep<P = any, ATS = any>(
         promptResult: AIPromptRunResult | null, 
-        params: ExecuteAgentParams<any, P>
+        params: ExecuteAgentParams<any, P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P>>;
 
     /**
@@ -113,7 +124,7 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public abstract DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null>;
+    public abstract DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null>;
 
     /**
      * Pre-processes a retry step to allow agent types to customize retry behavior.
@@ -132,9 +143,11 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public abstract PreProcessRetryStep<P = any>(
+    public abstract PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>
+        step: BaseAgentNextStep<P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null>;
 
     // /**
@@ -150,8 +163,9 @@ export abstract class BaseAgentType {
      * @param prompt - The prompt parameters to update
      * @param agentInfo - Agent identification info including agent ID and run ID
      */
-    public abstract InjectPayload<P = any>(
-        payload: P, 
+    public abstract InjectPayload<P = any, ATS = any>(
+        payload: P,
+        agentTypeState: ATS,
         prompt: AIPromptParams,
         agentInfo: { agentId: string; agentRunId?: string }
     ): Promise<void>;
@@ -172,9 +186,11 @@ export abstract class BaseAgentType {
      * @abstract
      * @since 2.76.0
      */
-    public abstract GetPromptForStep<P = any>(
+    public abstract GetPromptForStep<P = any, ATS = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
+        payload: P,
+        agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
     ): Promise<AIPromptEntity | null>;
 
@@ -376,9 +392,10 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public async PreProcessActionStep<P>(
+    public async PreProcessActionStep<P = any, ATS = any>(
         actions: AgentAction[],
         currentPayload: P,
+        agentTypeState: ATS,
         currentStep: BaseAgentNextStep<P>
     ): Promise<void> {
         // Default implementation does nothing
@@ -401,10 +418,11 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public async PostProcessActionStep<P>(
+    public async PostProcessActionStep<P = any, ATS = any>(
         actionResults: ActionResult[],
         actions: AgentAction[],
         currentPayload: P,
+        agentTypeState: ATS,
         currentStep: BaseAgentNextStep<P>
     ): Promise<AgentPayloadChangeRequest<P> | null> {
         // Default implementation does nothing
@@ -428,10 +446,11 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public async PostProcessSubAgentStep<P>(
+    public async PostProcessSubAgentStep<P = any, ATS = any>(
         subAgentResult: any,
         subAgentRequest: AgentSubAgentRequest,
         currentPayload: P,
+        agentTypeState: ATS,
         currentStep: BaseAgentNextStep<P>
     ): Promise<AgentPayloadChangeRequest<P> | null> {
         // Default implementation does nothing

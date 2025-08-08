@@ -48,10 +48,7 @@ export class FlowExecutionState {
     
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
-    
-    /** The current payload state - CRITICAL for maintaining state across steps */
-    currentPayload?: unknown;
-    
+
     constructor(agentId: string) {
         this.agentId = agentId;
     }
@@ -64,37 +61,7 @@ interface ActionOutputMapping {
     [outputParam: string]: string; // Maps output param name to payload path
     '*'?: string; // Optional wildcard to capture entire result
 }
-
-/**
- * Response structure for Flow Agent prompt steps
- */
-interface FlowAgentPromptResponse {
-    /**
-     * The name or ID of the next step to execute
-     */
-    nextStepName?: string;
-    
-    /**
-     * Reasoning for the decision
-     */
-    reasoning?: string;
-    
-    /**
-     * Confidence level (0.0-1.0)
-     */
-    confidence?: number;
-    
-    /**
-     * Whether to terminate the flow
-     */
-    terminate?: boolean;
-    
-    /**
-     * Message to include with the decision
-     */
-    message?: string;
-}
-
+ 
 /**
  * Implementation of the Flow Agent Type pattern.
  * 
@@ -123,26 +90,18 @@ interface FlowAgentPromptResponse {
 export class FlowAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
     private _payloadManager = new PayloadManager();
-    
+         
     /**
-     * Static map to store flow execution state by agent run ID.
-     * This allows us to maintain state across multiple step executions.
+     * Handles the initialization of the flow agent state that is specialized, additional state information
+     * specific to the Flow Agent Type
+     * @param params 
+     * @returns 
      */
-    private static _flowStates = new Map<string, FlowExecutionState>();
-    
-    /**
-     * Gets or creates flow execution state for an agent run
-     */
-    private getOrCreateFlowState(agentRunId: string, agentId: string): FlowExecutionState {
-        let state = FlowAgentType._flowStates.get(agentRunId);
-        if (!state) {
-            state = new FlowExecutionState(agentId);
-            FlowAgentType._flowStates.set(agentRunId, state);
-        }
-        return state;
+    public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
+        const flowState = new FlowExecutionState(params.agent.ID);
+        return flowState as ATS;
     }
-    
-    
+
     /**
      * Determines the next step based on the flow graph structure.
      * 
@@ -157,22 +116,18 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @returns {Promise<BaseAgentNextStep<P>>} The next step to execute
      */
-    public async DetermineNextStep<P>(
+    public async DetermineNextStep<P = any, ATS = any>(
         promptResult: AIPromptRunResult | null, 
-        params: ExecuteAgentParams<any, P>
+        params: ExecuteAgentParams<any, P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P>> {
         try {
-            // Get agent run ID from parent run or generate a temporary one
-            const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
-            const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
-            
-            // CRITICAL FIX: Use stored payload from flow state to maintain state across steps
-            let currentPayload = (flowState.currentPayload as P) || params.payload || {} as P;
-            
+            const flowState = agentTypeState as FlowExecutionState;
             
             // If no current step, this should have been handled by DetermineInitialStep
             if (!flowState.currentStepId) {
-                const startingSteps = await this.getStartingSteps(flowState.agentId);
+                const startingSteps = await this.getStartingSteps(params.agent.ID);
                 
                 if (startingSteps.length === 0) {
                     return this.createNextStep('Failed', {
@@ -182,7 +137,7 @@ export class FlowAgentType extends BaseAgentType {
                 
                 // For now, execute the first starting step
                 // Future enhancement: support parallel starting steps
-                return await this.createStepForFlowNode(startingSteps[0], currentPayload, flowState);
+                return await this.createStepForFlowNode(params, startingSteps[0], payload, flowState);
             }
             
             // Get current step to check if it was a Prompt step
@@ -195,22 +150,17 @@ export class FlowAgentType extends BaseAgentType {
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
                 
                 if (promptResponse) {
-                    // Update the payload with the prompt result
                     // Merge the prompt response into the current payload
-                    currentPayload = {
-                        ...currentPayload,
-                        ...promptResponse
-                    } as P;
-                    
-                    // CRITICAL: Store the updated payload in flow state for subsequent steps
-                    flowState.currentPayload = currentPayload;
-                    
+                    // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
+                    // that key in the payload object
+                    for (const key in Object.keys(promptResponse)) {
+                        payload[key] = promptResponse[key];
+                    }
                 }
             }
             
             // Find valid paths from current step
-            const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState);
-            
+            const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState);
             
             if (paths.length === 0) {
                 // No valid paths - flow is complete
@@ -234,7 +184,7 @@ export class FlowAgentType extends BaseAgentType {
                 for (let i = 1; i < paths.length; i++) {
                     const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                     if (alternateStep && alternateStep.Status === 'Active') {
-                        return await this.createStepForFlowNode(alternateStep, currentPayload, flowState);
+                        return await this.createStepForFlowNode(params, alternateStep, payload, flowState);
                     }
                 }
                 
@@ -244,7 +194,7 @@ export class FlowAgentType extends BaseAgentType {
                 });
             }
             
-            return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
+            return await this.createStepForFlowNode(params, nextStep, payload, flowState);
             
         } catch (error) {
             LogError(`Error in FlowAgentType.DetermineNextStep: ${error.message}`);
@@ -261,8 +211,9 @@ export class FlowAgentType extends BaseAgentType {
      * @param {AIPromptParams} prompt - The prompt parameters to update
      * @param {object} agentInfo - Agent identification info
      */
-    public async InjectPayload<P = any>(
+    public async InjectPayload<P = any, ATS = any>(
         payload: P, 
+        agentState: ATS,
         prompt: AIPromptParams,
         agentInfo: { agentId: string; agentRunId?: string }
     ): Promise<void> {
@@ -279,8 +230,8 @@ export class FlowAgentType extends BaseAgentType {
         
         // Add flow-specific context from our state tracking
         if (agentInfo.agentRunId) {
-            const flowState = FlowAgentType._flowStates.get(agentInfo.agentRunId);
-            if (flowState) {
+            const flowState = agentState as FlowExecutionState;
+            if (agentState) {
                 prompt.data.flowContext = {
                     currentStepId: flowState.currentStepId,
                     completedSteps: Array.from(flowState.completedStepIds),
@@ -307,7 +258,7 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getStepById(stepId: string): Promise<AIAgentStepEntity | null> {
-        return AIEngine.Instance.GetAgentStepById(stepId);
+        return AIEngine.Instance.GetAgentStepByID(stepId);
     }
     
     /**
@@ -454,14 +405,17 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async createStepForFlowNode<P>(
+        params: ExecuteAgentParams<P>,
         node: AIAgentStepEntity,
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
-        
-        
+        const userMessages = params.conversationMessages.filter(m => m.role === 'user');
+        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1].content : "";
+        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage[0].content;
+
         switch (node.StepType) {
             case 'Action':
                 if (!node.ActionID) {
@@ -527,7 +481,7 @@ export class FlowAgentType extends BaseAgentType {
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: latestUserMessageString || node.Description || `Execute sub-agent: ${subAgentName}`,
                         terminateAfter: false
                     },
                     terminate: false,
@@ -621,37 +575,23 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public async PreProcessActionStep<P>(
+    public async PreProcessActionStep<P = any, ATS = any>(
         actions: AgentAction[],
         currentPayload: P,
+        agentTypeState: ATS,
         currentStep: BaseAgentNextStep<P>
     ): Promise<void> {
-        // CRITICAL FIX: For Flow agents, we need to use the payload from flow state
-        // because it contains the accumulated state from previous steps
-        let actualPayload = currentPayload;
-        
         // Try to find the flow state and use its payload if available
         const stepMetadata = currentStep as Record<string, unknown>;
         const stepId = stepMetadata.stepId as string | undefined;
-        
-        if (stepId) {
-            // Find the flow state that has this step as current
-            for (const [agentRunId, flowState] of FlowAgentType._flowStates) {
-                if (flowState.currentStepId === stepId && flowState.currentPayload) {
-                    actualPayload = flowState.currentPayload as P;
-                    break;
-                }
-            }
-        }
-        
-        
+                
         if (!stepId || actions.length === 0) {
             // No step ID or no actions to process
             return;
         }
         
         // Get the AIAgentStep from cached metadata
-        const stepEntity = AIEngine.Instance.GetAgentStepById(stepId);
+        const stepEntity = AIEngine.Instance.GetAgentStepByID(stepId);
         
         if (!stepEntity) {
             LogError(`Failed to find AIAgentStep for input mapping: ${stepId}`);
@@ -699,8 +639,7 @@ export class FlowAgentType extends BaseAgentType {
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
                 // Use recursive resolution to handle nested objects, arrays, and primitive values
-                const resolvedValue = this.resolveNestedValue(mappingValue, actualPayload);
-                
+                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -774,16 +713,17 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @override
      * @param {ActionResult[]} actionResults - The results from action execution
-     * @param {AgentAction[]} _actions - The actions that were executed
+     * @param {AgentAction[]} actions - The actions that were executed
      * @param {P} currentPayload - The current payload
      * @param {BaseAgentNextStep<P>} currentStep - The current step being executed
      * 
      * @returns {Promise<AgentPayloadChangeRequest<P> | null>} Payload changes from output mapping
      */
-    public async PostProcessActionStep<P>(
+    public async PostProcessActionStep<P = any, ATS = any>(
         actionResults: ActionResult[],
-        _actions: AgentAction[],
+        actions: AgentAction[],
         currentPayload: P,
+        agentTypeState: ATS,
         currentStep: BaseAgentNextStep<P>
     ): Promise<AgentPayloadChangeRequest<P> | null> {
         // Check if this step has action output mapping configured
@@ -819,37 +759,24 @@ export class FlowAgentType extends BaseAgentType {
         // Apply the mapping using our existing method
         const payloadChange = this.applyActionOutputMapping(outputParams, currentPayload, outputMapping);
         
-        // CRITICAL: Update flow state with the modified payload
+        // Update flow state with the modified payload
         // This ensures the payload persists when DetermineNextStep is called again
         if (payloadChange && payloadChange.updateElements) {
-            // Try to find the flow state - we need to iterate since we don't have the run ID here
-            // This is a temporary workaround - ideally we'd have the run ID passed through
-            for (const [agentRunId, flowState] of FlowAgentType._flowStates) {
-                if (flowState.currentStepId === stepId) {
-                    // CRITICAL FIX: Use PayloadManager to properly merge the payload changes
-                    // with the existing flow state payload
-                    const existingPayload = flowState.currentPayload || currentPayload || {};
-                    
-                    // Apply the payload change using PayloadManager's merge capabilities
-                    const mergeResult = this._payloadManager.applyAgentChangeRequest(
-                        existingPayload,
-                        payloadChange,
-                        {
-                            logChanges: false,
-                            verbose: IsVerboseLoggingEnabled()
-                        }
-                    );
-                    
-                    // Update the flow state with the merged result
-                    flowState.currentPayload = mergeResult.result;
-                    
-                    // Log any warnings if present
-                    if (mergeResult.warnings && mergeResult.warnings.length > 0) {
-                        LogError(`Warnings during payload merge in flow state: ${mergeResult.warnings.join(', ')}`);
-                    }
-                    
-                    break;
+            const existingPayload = currentPayload || {};
+            
+            // Apply the payload change using PayloadManager's merge capabilities
+            const mergeResult = this._payloadManager.applyAgentChangeRequest(
+                existingPayload,
+                payloadChange,
+                {
+                    logChanges: false,
+                    verbose: IsVerboseLoggingEnabled()
                 }
+            ); 
+            
+            // Log any warnings if present
+            if (mergeResult.warnings && mergeResult.warnings.length > 0) {
+                LogError(`Warnings during payload merge in flow state: ${mergeResult.warnings.join(', ')}`);
             }
         }
         
@@ -867,15 +794,10 @@ export class FlowAgentType extends BaseAgentType {
      * @override
      * @since 2.76.0
      */
-    public async DetermineInitialStep<P = any>(params: ExecuteAgentParams<P>): Promise<BaseAgentNextStep<P> | null> {
-        const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
-        const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
-        const payload = params.payload || {} as P;
-        
-        
-        // Store initial payload in flow state
-        flowState.currentPayload = payload;
-        
+    public async DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
+        const flowState = agentTypeState as FlowExecutionState;
+        const payloadToUse = payload || {} as P;
+                
         const startingSteps = await this.getStartingSteps(flowState.agentId);
         
         if (startingSteps.length === 0) {
@@ -886,63 +808,54 @@ export class FlowAgentType extends BaseAgentType {
         
         // Execute the first starting step
         // Future enhancement: support parallel starting steps
-        return await this.createStepForFlowNode(startingSteps[0], payload, flowState);
+        return await this.createStepForFlowNode(params, startingSteps[0], payloadToUse, flowState);
     }
 
     /**
-     * Pre-processes retry steps for flow agent types.
+     * Pre-processes steps for flow agent types.
      * 
      * For Flow agents, 'Retry' after actions means evaluate paths from the current step
      * and continue the flow based on the updated payload. The only exception is when
      * executing a Prompt step within the flow, which should execute normally.
      * 
+     * Also, 'Success' steps after sub-agents need to be evaluated in the same way as Retry after actions
+     * 
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @param {BaseAgentNextStep} step - The retry step that was returned
+     * @param {P} payload - The current payload
+     * @param {ATS} agentTypeState - The current agent type state
      * @returns {Promise<BaseAgentNextStep<P> | null>} The next flow step, or null for prompt execution
      * 
      * @override
      * @since 2.76.0
      */
-    public async PreProcessRetryStep<P = any>(
+    public async PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>
+        step: BaseAgentNextStep<P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
+        // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
+        if (step.step !== 'Retry' && step.step !== 'Success') {
+            // Not a retry or success step, use default processing
+            return null;
+        }
+
         // Check if this is a special flow prompt step marker
-        const flowRetryStep = retryStep as FlowAgentNextStep<P>;
-        if (flowRetryStep.flowPromptStepId) {
+        const flowStep = step as FlowAgentNextStep<P>;
+        if (flowStep.flowPromptStepId) {
             // This is a prompt step in the flow, let it execute normally
             return null;
         }
         
         // Get the updated payload (after action execution)
-        const payloadFromRetryStep = retryStep.newPayload || params.payload || {} as P;
-        const agentRunId = params.parentRun?.ID || `temp-${params.agent.ID}`;
-        const flowState = this.getOrCreateFlowState(agentRunId, params.agent.ID);
+        const payloadFromStep = payload || step.newPayload || params.payload || {} as P;
+        const flowState = agentTypeState as FlowExecutionState;
         
         // CRITICAL FIX: Don't overwrite the flow state's payload if it already has accumulated data
         // The retry step only contains the action's output mapping result, not the full payload
         // If flow state already has a payload with more data, keep it
-        let currentPayload = payloadFromRetryStep;
-        
-        if (flowState.currentPayload) {
-            // Check if the flow state has more complete data
-            const flowStateKeys = Object.keys(flowState.currentPayload as any || {});
-            const retryStepKeys = Object.keys(payloadFromRetryStep || {});
-            
-            // If flow state has more keys or different structure, it likely has the accumulated data
-            if (flowStateKeys.length > retryStepKeys.length || 
-                (flowStateKeys.includes('userData') && !retryStepKeys.includes('userData'))) {
-                // Flow state has more complete data - use it as the base
-                currentPayload = flowState.currentPayload as P;
-            } else {
-                // Update flow state with the new payload
-                flowState.currentPayload = currentPayload;
-            }
-        } else {
-            // No existing flow state payload, use what we got from retry step
-            flowState.currentPayload = currentPayload;
-        }
-        
+        let currentPayload = payloadFromStep;
         
         // We should have a current step ID from the flow state
         if (!flowState.currentStepId) {
@@ -980,7 +893,7 @@ export class FlowAgentType extends BaseAgentType {
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
-                    return await this.createStepForFlowNode(alternateStep, currentPayload, flowState);
+                    return await this.createStepForFlowNode(params, alternateStep, currentPayload, flowState);
                 }
             }
             
@@ -992,7 +905,7 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         // Create the next step based on the flow node
-        return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
+        return await this.createStepForFlowNode(params, nextStep, currentPayload, flowState);
     }
 
     /**
@@ -1007,9 +920,11 @@ export class FlowAgentType extends BaseAgentType {
      * @override
      * @since 2.76.0
      */
-    public async GetPromptForStep<P = any>(
+    public async GetPromptForStep<P = any, ATS = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
+        payload: P,
+        agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
     ): Promise<AIPromptEntity | null> {
         // Check if this is a flow prompt step with a specific prompt ID
