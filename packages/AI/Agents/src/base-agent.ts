@@ -810,8 +810,17 @@ export class BaseAgent {
         } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
             promptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
             this.logStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
+        } else {
+            // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
+            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and 
+            // put it in place
+            if (childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
+                promptParams.effortLevel = childPrompt.EffortLevel;
+                this.logStatus(`🎯 Using child prompt effort level: ${childPrompt.EffortLevel}`, true, params);
+            }
+            // if the child prompt doesn't have an effort level defined, we default back
+            // to the parent prompt effort level, if any
         }
-        // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
 
         // before we execute the prompt, we ask our Agent Type to inject the
         // payload - as the way a payload is injected is dependent on the agent type and its
