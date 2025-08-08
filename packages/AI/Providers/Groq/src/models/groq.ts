@@ -44,6 +44,40 @@ export class GroqLLM extends BaseLLM {
         return true;
     }
 
+    protected setGroqParamsEffortLevel(groqParams: any, params: ChatParams): void {
+        let convertedEffortLevel = params.effortLevel;
+        if (convertedEffortLevel) {
+            const isGptOSSModel = params.model.toLowerCase().includes("gpt-oss");
+            const isQwenModel = params.model.toLowerCase().includes("qwen");
+            const numericEffortLevel = Number.isNaN(params.effortLevel) ? null : Number.parseInt(params.effortLevel);
+            if (isGptOSSModel) {
+                // map our efforts as follows:
+                // 0-33 = "low"
+                // 34-66 = "medium"
+                // 67-100 = "high"
+                if (numericEffortLevel !== null) {
+                    if (numericEffortLevel >= 0 && numericEffortLevel <= 33) {
+                        convertedEffortLevel = "low";
+                    } else if (numericEffortLevel > 33 && numericEffortLevel <= 66) {
+                        convertedEffortLevel = "medium";
+                    } else if (numericEffortLevel > 66 && numericEffortLevel <= 100) {
+                        convertedEffortLevel = "high";
+                    }
+                }
+            }
+            else if (isQwenModel) {
+                // either default or none, map any non numeric value other than default as well as the number 0, to "none" and map anything else to "default"
+                if (convertedEffortLevel.trim().toLowerCase() !== "default") {
+                    convertedEffortLevel = numericEffortLevel ? "default" : "none";
+                }
+            }
+            if (isGptOSSModel || isQwenModel){
+                // right now, Groq only supports reasoning_effort with Qwen and GPT OSS models
+                groqParams.reasoning_effort = convertedEffortLevel;
+            }
+        }
+    }
+
     /**
      * Implementation of non-streaming chat completion for Groq
      */
@@ -80,7 +114,10 @@ export class GroqLLM extends BaseLLM {
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
-        
+
+        // Add reasoning_effort if supported by the model
+        this.setGroqParamsEffortLevel(groqParams, params);
+
         // Add sampling and generation parameters
         if (params.topP != null) {
             groqParams.top_p = params.topP;
@@ -204,10 +241,7 @@ export class GroqLLM extends BaseLLM {
         };
         
         // Add reasoning_effort if supported by the model
-        if (params.effortLevel) {
-            // Note: This is still experimental in Groq, so we add it only if explicitly requested
-            (groqParams as any).reasoning_effort = params.effortLevel;
-        }
+        this.setGroqParamsEffortLevel(groqParams, params);
         
         // Add sampling and generation parameters
         if (params.topP != null) {
