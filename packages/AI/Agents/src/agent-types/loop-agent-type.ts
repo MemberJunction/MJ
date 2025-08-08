@@ -335,22 +335,24 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
-     * Pre-processes retry steps for loop agent types.
+     * Pre-processes steps for loop agent types.
      * 
-     * Loop agents use the default retry behavior which executes the prompt again.
+     * Loop agents use the default next step behavior which executes the prompt again.
      * 
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @param {BaseAgentNextStep} step - The step that needs to be preprocessed
      * @returns {Promise<BaseAgentNextStep<P> | null>} Always returns null to use default behavior
      * 
      * @override
      * @since 2.76.0
      */
-    public async PreProcessRetryStep<P = any>(
+    public async PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>
+        step: BaseAgentNextStep<P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // Loop agents use default retry behavior (execute prompt)
+        // Loop agents use default next step behavior (execute prompt)
         return null;
     }
 

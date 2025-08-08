@@ -812,40 +812,50 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Pre-processes retry steps for flow agent types.
+     * Pre-processes steps for flow agent types.
      * 
      * For Flow agents, 'Retry' after actions means evaluate paths from the current step
      * and continue the flow based on the updated payload. The only exception is when
      * executing a Prompt step within the flow, which should execute normally.
      * 
+     * Also, 'Success' steps after sub-agents need to be evaluated in the same way as Retry after actions
+     * 
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @param {BaseAgentNextStep} retryStep - The retry step that was returned
+     * @param {BaseAgentNextStep} step - The retry step that was returned
+     * @param {P} payload - The current payload
+     * @param {ATS} agentTypeState - The current agent type state
      * @returns {Promise<BaseAgentNextStep<P> | null>} The next flow step, or null for prompt execution
      * 
      * @override
      * @since 2.76.0
      */
-    public async PreProcessRetryStep<P = any, ATS = any>(
+    public async PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>,
+        step: BaseAgentNextStep<P>,
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
+        // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
+        if (step.step !== 'Retry' && step.step !== 'Success') {
+            // Not a retry or success step, use default processing
+            return null;
+        }
+
         // Check if this is a special flow prompt step marker
-        const flowRetryStep = retryStep as FlowAgentNextStep<P>;
-        if (flowRetryStep.flowPromptStepId) {
+        const flowStep = step as FlowAgentNextStep<P>;
+        if (flowStep.flowPromptStepId) {
             // This is a prompt step in the flow, let it execute normally
             return null;
         }
         
         // Get the updated payload (after action execution)
-        const payloadFromRetryStep = retryStep.newPayload || params.payload || {} as P;
+        const payloadFromStep = payload || step.newPayload || params.payload || {} as P;
         const flowState = agentTypeState as FlowExecutionState;
         
         // CRITICAL FIX: Don't overwrite the flow state's payload if it already has accumulated data
         // The retry step only contains the action's output mapping result, not the full payload
         // If flow state already has a payload with more data, keep it
-        let currentPayload = payloadFromRetryStep;
+        let currentPayload = payloadFromStep;
         
         // We should have a current step ID from the flow state
         if (!flowState.currentStepId) {

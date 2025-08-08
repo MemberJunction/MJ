@@ -2453,18 +2453,17 @@ export class BaseAgent {
             return await this.executePromptStep(params, config);
         }
         
-        // Execute based on the previous decision
+        // First, ask agent type if it wants to handle the next step in a custom way
+        const customNextStep = await this.AgentTypeInstance.PreProcessNextStep(params, previousDecision, previousDecision.newPayload || previousDecision.previousPayload, this.AgentTypeState);
+
+        if (customNextStep) {
+            // Agent type provided custom handling
+            return customNextStep;
+        }
+
+        // Execute based on the previous decision using standard logic
         switch (previousDecision.step) {
             case 'Retry':
-                // Ask agent type if it wants to handle retry differently
-                const customRetryStep = await this.AgentTypeInstance.PreProcessRetryStep(params, previousDecision, previousDecision.newPayload || previousDecision.previousPayload, this.AgentTypeState);
-                
-                if (customRetryStep) {
-                    // Agent type provided custom handling
-                    return customRetryStep;
-                }
-                
-                // Default behavior - execute prompt step
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
                 return await this.executeSubAgentStep<P, P>(params, previousDecision!);
@@ -2474,8 +2473,8 @@ export class BaseAgent {
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
                 const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
-                if (pd.previousPayload?.taskComplete === true && previousDecision.terminate) {
-                    // If task is complete and the parent agent previously requested to auto-terminate, after a successful
+                if (previousDecision.terminate) {
+                    // If parent agent previously requested to auto-terminate, after a successful
                     // sub-agent run, we can finalize the agent run                    
                     return { 
                         terminate: true,
@@ -2519,7 +2518,7 @@ export class BaseAgent {
         previousDecision?: BaseAgentNextStep
     ): Promise<BaseAgentNextStep<P>> {
         // Ask the agent type if it has a custom prompt for this step
-        const promptToUse = await this.AgentTypeInstance.GetPromptForStep(params, config, previousDecision.newPayload || previousDecision.previousPayload, this.AgentTypeState, previousDecision);
+        const promptToUse = await this.AgentTypeInstance.GetPromptForStep(params, config, previousDecision?.newPayload || previousDecision?.previousPayload, this.AgentTypeState, previousDecision);
         const promptId = promptToUse?.ID;
         const promptName = promptToUse?.Name;
         

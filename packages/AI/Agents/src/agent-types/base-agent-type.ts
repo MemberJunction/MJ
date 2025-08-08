@@ -143,9 +143,9 @@ export abstract class BaseAgentType {
      * 
      * @since 2.76.0
      */
-    public abstract PreProcessRetryStep<P = any, ATS = any>(
+    public abstract PreProcessNextStep<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
-        retryStep: BaseAgentNextStep<P>,
+        step: BaseAgentNextStep<P>,
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null>;
