@@ -412,9 +412,9 @@ export class FlowAgentType extends BaseAgentType {
     ): Promise<BaseAgentNextStep<P>> {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
-        const userMessages = params.conversationMessages.filter(m => m.role === 'user').pop()?.content || '';
-        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1] : '';
-        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage.content;
+        const userMessages = params.conversationMessages.filter(m => m.role === 'user');
+        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1].content : "";
+        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage[0].content;
 
         switch (node.StepType) {
             case 'Action':
