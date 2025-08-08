@@ -137,7 +137,7 @@ export class FlowAgentType extends BaseAgentType {
                 
                 // For now, execute the first starting step
                 // Future enhancement: support parallel starting steps
-                return await this.createStepForFlowNode(startingSteps[0], payload, flowState);
+                return await this.createStepForFlowNode(params, startingSteps[0], payload, flowState);
             }
             
             // Get current step to check if it was a Prompt step
@@ -184,7 +184,7 @@ export class FlowAgentType extends BaseAgentType {
                 for (let i = 1; i < paths.length; i++) {
                     const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                     if (alternateStep && alternateStep.Status === 'Active') {
-                        return await this.createStepForFlowNode(alternateStep, payload, flowState);
+                        return await this.createStepForFlowNode(params, alternateStep, payload, flowState);
                     }
                 }
                 
@@ -194,7 +194,7 @@ export class FlowAgentType extends BaseAgentType {
                 });
             }
             
-            return await this.createStepForFlowNode(nextStep, payload, flowState);
+            return await this.createStepForFlowNode(params, nextStep, payload, flowState);
             
         } catch (error) {
             LogError(`Error in FlowAgentType.DetermineNextStep: ${error.message}`);
@@ -405,14 +405,17 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async createStepForFlowNode<P>(
+        params: ExecuteAgentParams<P>,
         node: AIAgentStepEntity,
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
-        
-        
+        const userMessages = params.conversationMessages.filter(m => m.role === 'user').pop()?.content || '';
+        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1] : '';
+        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage.content;
+
         switch (node.StepType) {
             case 'Action':
                 if (!node.ActionID) {
@@ -478,7 +481,7 @@ export class FlowAgentType extends BaseAgentType {
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: latestUserMessageString || node.Description || `Execute sub-agent: ${subAgentName}`,
                         terminateAfter: false
                     },
                     terminate: false,
@@ -805,7 +808,7 @@ export class FlowAgentType extends BaseAgentType {
         
         // Execute the first starting step
         // Future enhancement: support parallel starting steps
-        return await this.createStepForFlowNode(startingSteps[0], payloadToUse, flowState);
+        return await this.createStepForFlowNode(params, startingSteps[0], payloadToUse, flowState);
     }
 
     /**
@@ -880,7 +883,7 @@ export class FlowAgentType extends BaseAgentType {
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
-                    return await this.createStepForFlowNode(alternateStep, currentPayload, flowState);
+                    return await this.createStepForFlowNode(params, alternateStep, currentPayload, flowState);
                 }
             }
             
@@ -892,7 +895,7 @@ export class FlowAgentType extends BaseAgentType {
         }
         
         // Create the next step based on the flow node
-        return await this.createStepForFlowNode(nextStep, currentPayload, flowState);
+        return await this.createStepForFlowNode(params, nextStep, currentPayload, flowState);
     }
 
     /**
