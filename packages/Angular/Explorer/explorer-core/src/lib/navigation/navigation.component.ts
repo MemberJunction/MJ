@@ -858,7 +858,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const result = await wsItem.Save();
       if (!result) {
         // do a console error and display a simple notification
-        LogError(`Error saving workspace item ${wsItem.Name} to the database. ${wsItem.LatestResult.Message}`);
+        LogError(`Error saving workspace item ${wsItem.Name} to the database. ${wsItem.LatestResult.Message || wsItem.LatestResult.Error || wsItem.LatestResult.Errors?.join('\n')  }`);
         MJNotificationService.Instance.CreateSimpleNotification(`Error saving workspace item ${wsItem.Name} to the database. ${wsItem.LatestResult.Message}`, 'error', 5000);
         return false;
       }
