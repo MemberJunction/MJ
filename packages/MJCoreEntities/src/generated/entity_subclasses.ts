@@ -3843,7 +3843,7 @@ export const ConversationSchema = z.object({
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -4080,7 +4080,7 @@ export const DataContextItemSchema = z.object({
     DataContext: z.string().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(500)`),
     View: z.string().nullable().describe(`
         * * Field Name: View
         * * Display Name: View
@@ -4109,7 +4109,7 @@ export const DataContextSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(500)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -5050,11 +5050,6 @@ export const EntitySchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
-    DisplayName: z.string().nullable().describe(`
-        * * Field Name: DisplayName
-        * * Display Name: Display Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -7869,35 +7864,6 @@ export const AIAgentRunSchema = z.object({
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
 each time the agent processes a prompt step.`),
-    ConfigurationID: z.string().nullable().describe(`
-        * * Field Name: ConfigurationID
-        * * Display Name: Configuration ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
-        * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
-    OverrideModelID: z.string().nullable().describe(`
-        * * Field Name: OverrideModelID
-        * * Display Name: Override Model ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-        * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
-    OverrideVendorID: z.string().nullable().describe(`
-        * * Field Name: OverrideVendorID
-        * * Display Name: Override Vendor ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
-        * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
-    Data: z.string().nullable().describe(`
-        * * Field Name: Data
-        * * Display Name: Data
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
-    Verbose: z.boolean().nullable().describe(`
-        * * Field Name: Verbose
-        * * Display Name: Verbose
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -7910,18 +7876,6 @@ each time the agent processes a prompt step.`),
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Configuration: z.string().nullable().describe(`
-        * * Field Name: Configuration
-        * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(100)`),
-    OverrideModel: z.string().nullable().describe(`
-        * * Field Name: OverrideModel
-        * * Display Name: Override Model
-        * * SQL Data Type: nvarchar(50)`),
-    OverrideVendor: z.string().nullable().describe(`
-        * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor
-        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -8094,22 +8048,6 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Disabled')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Pending
-    *   * Disabled
-        * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`),
-    ActionInputMapping: z.string().nullable().describe(`
-        * * Field Name: ActionInputMapping
-        * * Display Name: Action Input Mapping
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8182,22 +8120,6 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`),
-    UIFormSectionKey: z.string().nullable().describe(`
-        * * Field Name: UIFormSectionKey
-        * * Display Name: UI Form Section Key
-        * * SQL Data Type: nvarchar(500)
-        * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`),
-    UIFormKey: z.string().nullable().describe(`
-        * * Field Name: UIFormKey
-        * * Display Name: UI Form Key
-        * * SQL Data Type: nvarchar(500)
-        * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`),
-    UIFormSectionExpandedByDefault: z.boolean().describe(`
-        * * Field Name: UIFormSectionExpandedByDefault
-        * * Display Name: UI Form Section Expanded By Default
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -8608,7 +8530,7 @@ export const AIModelVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TypeID: z.string().describe(`
+    TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
@@ -8622,7 +8544,7 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -9072,120 +8994,6 @@ export const AIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
-    ModelSelection: z.string().nullable().describe(`
-        * * Field Name: ModelSelection
-        * * Display Name: Model Selection
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`),
-    Status: z.union([z.literal('Pending'), z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Pending
-    *   * Running
-    *   * Completed
-    *   * Failed
-    *   * Cancelled
-        * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`),
-    Cancelled: z.boolean().describe(`
-        * * Field Name: Cancelled
-        * * Display Name: Cancelled
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates whether this prompt run was cancelled before completion`),
-    CancellationReason: z.string().nullable().describe(`
-        * * Field Name: CancellationReason
-        * * Display Name: Cancellation Reason
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`),
-    ModelPowerRank: z.number().nullable().describe(`
-        * * Field Name: ModelPowerRank
-        * * Display Name: Model Power Rank
-        * * SQL Data Type: int
-        * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`),
-    SelectionStrategy: z.union([z.literal('Default'), z.literal('Specific'), z.literal('ByPower')]).nullable().describe(`
-        * * Field Name: SelectionStrategy
-        * * Display Name: Selection Strategy
-        * * SQL Data Type: nvarchar(50)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Default
-    *   * Specific
-    *   * ByPower
-        * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`),
-    CacheHit: z.boolean().describe(`
-        * * Field Name: CacheHit
-        * * Display Name: Cache Hit
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates whether this result was served from cache rather than executing a new model call`),
-    CacheKey: z.string().nullable().describe(`
-        * * Field Name: CacheKey
-        * * Display Name: Cache Key
-        * * SQL Data Type: nvarchar(500)
-        * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
-    JudgeID: z.string().nullable().describe(`
-        * * Field Name: JudgeID
-        * * Display Name: Judge ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
-        * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
-    JudgeScore: z.number().nullable().describe(`
-        * * Field Name: JudgeScore
-        * * Display Name: Judge Score
-        * * SQL Data Type: float(53)
-        * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`),
-    WasSelectedResult: z.boolean().describe(`
-        * * Field Name: WasSelectedResult
-        * * Display Name: Was Selected Result
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel`),
-    StreamingEnabled: z.boolean().describe(`
-        * * Field Name: StreamingEnabled
-        * * Display Name: Streaming Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates whether streaming was enabled for this prompt execution`),
-    FirstTokenTime: z.number().nullable().describe(`
-        * * Field Name: FirstTokenTime
-        * * Display Name: First Token Time
-        * * SQL Data Type: int
-        * * Description: Time in milliseconds from request initiation to receiving the first token from the model`),
-    ErrorDetails: z.string().nullable().describe(`
-        * * Field Name: ErrorDetails
-        * * Display Name: Error Details
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
-    ChildPromptID: z.string().nullable().describe(`
-        * * Field Name: ChildPromptID
-        * * Display Name: Child Prompt ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
-        * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
-    QueueTime: z.number().nullable().describe(`
-        * * Field Name: QueueTime
-        * * Display Name: Queue Time
-        * * SQL Data Type: int
-        * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
-    PromptTime: z.number().nullable().describe(`
-        * * Field Name: PromptTime
-        * * Display Name: Prompt Time
-        * * SQL Data Type: int
-        * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
-    CompletionTime: z.number().nullable().describe(`
-        * * Field Name: CompletionTime
-        * * Display Name: Completion Time
-        * * SQL Data Type: int
-        * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
-    ModelSpecificResponseDetails: z.string().nullable().describe(`
-        * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Model Specific Response Details
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -9210,14 +9018,6 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: OriginalModel
         * * Display Name: Original Model
         * * SQL Data Type: nvarchar(50)`),
-    Judge: z.string().nullable().describe(`
-        * * Field Name: Judge
-        * * Display Name: Judge
-        * * SQL Data Type: nvarchar(255)`),
-    ChildPrompt: z.string().nullable().describe(`
-        * * Field Name: ChildPrompt
-        * * Display Name: Child Prompt
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -10051,28 +9851,6 @@ export const QuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`),
-    AuditQueryRuns: z.boolean().describe(`
-        * * Field Name: AuditQueryRuns
-        * * Display Name: Audit Query Runs
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`),
-    CacheEnabled: z.boolean().describe(`
-        * * Field Name: CacheEnabled
-        * * Display Name: Cache Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When true, query results will be cached in memory with TTL expiration`),
-    CacheTTLMinutes: z.number().nullable().describe(`
-        * * Field Name: CacheTTLMinutes
-        * * Display Name: Cache TTL Minutes
-        * * SQL Data Type: int
-        * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.`),
-    CacheMaxSize: z.number().nullable().describe(`
-        * * Field Name: CacheMaxSize
-        * * Display Name: Cache Max Size
-        * * SQL Data Type: int
-        * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -10118,28 +9896,6 @@ export const QueryCategorySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DefaultCacheEnabled: z.boolean().describe(`
-        * * Field Name: DefaultCacheEnabled
-        * * Display Name: Default Cache Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Default cache setting for queries in this category`),
-    DefaultCacheTTLMinutes: z.number().nullable().describe(`
-        * * Field Name: DefaultCacheTTLMinutes
-        * * Display Name: Default Cache TTL Minutes
-        * * SQL Data Type: int
-        * * Description: Default TTL in minutes for cached results of queries in this category`),
-    DefaultCacheMaxSize: z.number().nullable().describe(`
-        * * Field Name: DefaultCacheMaxSize
-        * * Display Name: Default Cache Max Size
-        * * SQL Data Type: int
-        * * Description: Default maximum cache size for queries in this category`),
-    CacheInheritanceEnabled: z.boolean().describe(`
-        * * Field Name: CacheInheritanceEnabled
-        * * Display Name: Cache Inheritance Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: When true, queries without cache config will inherit from this category`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -11305,7 +11061,7 @@ export const ReportSchema = z.object({
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(500)`),
     OutputTriggerType: z.string().nullable().describe(`
         * * Field Name: OutputTriggerType
         * * Display Name: Output Trigger Type
@@ -12022,6 +11778,9 @@ export const TemplateContentTypeSchema = z.object({
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
@@ -17008,32 +16767,32 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * * CostRank: This rule ensures that the CostRank value cannot be less than 0.
     * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
-    * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.  
+    * * SpeedRank: This rule ensures that the value for SpeedRank cannot be less than zero.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCostRank(result);
+        this.ValidateCostRankAtLeastZero(result);
         this.ValidatePowerRank(result);
-        this.ValidateSpeedRank(result);
+        this.ValidateSpeedRankAgainstMinimumZero(result);
 
         return result;
     }
 
     /**
-    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * This rule ensures that the CostRank value cannot be less than 0.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCostRank(result: ValidationResult) {
+    public ValidateCostRankAtLeastZero(result: ValidationResult) {
     	if (this.CostRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
-    	} 
+    		result.Errors.push(new ValidationErrorInfo("CostRank", "CostRank must not be less than zero.", this.CostRank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -17049,14 +16808,14 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * This rule ensures that the speed rank must be zero or a positive number.
+    * This rule ensures that the value for SpeedRank cannot be less than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateSpeedRank(result: ValidationResult) {
+    public ValidateSpeedRankAgainstMinimumZero(result: ValidationResult) {
     	if (this.SpeedRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("SpeedRank", "SpeedRank cannot be less than zero.", this.SpeedRank, ValidationErrorType.Failure));
     	}
     }
 
@@ -23690,7 +23449,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     /**
     * * Field Name: DataContext
     * * Display Name: Data Context
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(500)
     */
     get DataContext(): string | null {
         return this.Get('DataContext');
@@ -24291,7 +24050,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     /**
     * * Field Name: DataContext
     * * Display Name: Data Context
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(500)
     */
     get DataContext(): string {
         return this.Get('DataContext');
@@ -24372,7 +24131,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     /**
     * * Field Name: Name
     * * Display Name: Name
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(500)
     */
     get Name(): string {
         return this.Get('Name');
@@ -26721,19 +26480,6 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
     set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: DisplayName
-    * * Display Name: Display Name
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.
-    */
-    get DisplayName(): string | null {
-        return this.Get('DisplayName');
-    }
-    set DisplayName(value: string | null) {
-        this.Set('DisplayName', value);
     }
 
     /**
@@ -33888,75 +33634,6 @@ each time the agent processes a prompt step.
     }
 
     /**
-    * * Field Name: ConfigurationID
-    * * Display Name: Configuration ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
-    * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.
-    */
-    get ConfigurationID(): string | null {
-        return this.Get('ConfigurationID');
-    }
-    set ConfigurationID(value: string | null) {
-        this.Set('ConfigurationID', value);
-    }
-
-    /**
-    * * Field Name: OverrideModelID
-    * * Display Name: Override Model ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
-    * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
-    */
-    get OverrideModelID(): string | null {
-        return this.Get('OverrideModelID');
-    }
-    set OverrideModelID(value: string | null) {
-        this.Set('OverrideModelID', value);
-    }
-
-    /**
-    * * Field Name: OverrideVendorID
-    * * Display Name: Override Vendor ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
-    * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
-    */
-    get OverrideVendorID(): string | null {
-        return this.Get('OverrideVendorID');
-    }
-    set OverrideVendorID(value: string | null) {
-        this.Set('OverrideVendorID', value);
-    }
-
-    /**
-    * * Field Name: Data
-    * * Display Name: Data
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
-    */
-    get Data(): string | null {
-        return this.Get('Data');
-    }
-    set Data(value: string | null) {
-        this.Set('Data', value);
-    }
-
-    /**
-    * * Field Name: Verbose
-    * * Display Name: Verbose
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
-    */
-    get Verbose(): boolean | null {
-        return this.Get('Verbose');
-    }
-    set Verbose(value: boolean | null) {
-        this.Set('Verbose', value);
-    }
-
-    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -33981,33 +33658,6 @@ each time the agent processes a prompt step.
     */
     get User(): string | null {
         return this.Get('User');
-    }
-
-    /**
-    * * Field Name: Configuration
-    * * Display Name: Configuration
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Configuration(): string | null {
-        return this.Get('Configuration');
-    }
-
-    /**
-    * * Field Name: OverrideModel
-    * * Display Name: Override Model
-    * * SQL Data Type: nvarchar(50)
-    */
-    get OverrideModel(): string | null {
-        return this.Get('OverrideModel');
-    }
-
-    /**
-    * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor
-    * * SQL Data Type: nvarchar(50)
-    */
-    get OverrideVendor(): string | null {
-        return this.Get('OverrideVendor');
     }
 }
 
@@ -34519,38 +34169,6 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
 
     /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Active
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Pending
-    *   * Disabled
-    * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute
-    */
-    get Status(): 'Active' | 'Pending' | 'Disabled' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Active' | 'Pending' | 'Disabled') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: ActionInputMapping
-    * * Display Name: Action Input Mapping
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}
-    */
-    get ActionInputMapping(): string | null {
-        return this.Get('ActionInputMapping');
-    }
-    set ActionInputMapping(value: string | null) {
-        this.Set('ActionInputMapping', value);
-    }
-
-    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -34730,46 +34348,6 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
-    }
-
-    /**
-    * * Field Name: UIFormSectionKey
-    * * Display Name: UI Form Section Key
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass
-    */
-    get UIFormSectionKey(): string | null {
-        return this.Get('UIFormSectionKey');
-    }
-    set UIFormSectionKey(value: string | null) {
-        this.Set('UIFormSectionKey', value);
-    }
-
-    /**
-    * * Field Name: UIFormKey
-    * * Display Name: UI Form Key
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.
-    */
-    get UIFormKey(): string | null {
-        return this.Get('UIFormKey');
-    }
-    set UIFormKey(value: string | null) {
-        this.Set('UIFormKey', value);
-    }
-
-    /**
-    * * Field Name: UIFormSectionExpandedByDefault
-    * * Display Name: UI Form Section Expanded By Default
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).
-    */
-    get UIFormSectionExpandedByDefault(): boolean {
-        return this.Get('UIFormSectionExpandedByDefault');
-    }
-    set UIFormSectionExpandedByDefault(value: boolean) {
-        this.Set('UIFormSectionExpandedByDefault', value);
     }
 
     /**
@@ -35991,10 +35569,10 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
     */
-    get TypeID(): string {
+    get TypeID(): string | null {
         return this.Get('TypeID');
     }
-    set TypeID(value: string) {
+    set TypeID(value: string | null) {
         this.Set('TypeID', value);
     }
 
@@ -36021,7 +35599,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -37259,272 +36837,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
-    * * Field Name: ModelSelection
-    * * Display Name: Model Selection
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale
-    */
-    get ModelSelection(): string | null {
-        return this.Get('ModelSelection');
-    }
-    set ModelSelection(value: string | null) {
-        this.Set('ModelSelection', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Pending
-    *   * Running
-    *   * Completed
-    *   * Failed
-    *   * Cancelled
-    * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled
-    */
-    get Status(): 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: Cancelled
-    * * Display Name: Cancelled
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether this prompt run was cancelled before completion
-    */
-    get Cancelled(): boolean {
-        return this.Get('Cancelled');
-    }
-    set Cancelled(value: boolean) {
-        this.Set('Cancelled', value);
-    }
-
-    /**
-    * * Field Name: CancellationReason
-    * * Display Name: Cancellation Reason
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit
-    */
-    get CancellationReason(): string | null {
-        return this.Get('CancellationReason');
-    }
-    set CancellationReason(value: string | null) {
-        this.Set('CancellationReason', value);
-    }
-
-    /**
-    * * Field Name: ModelPowerRank
-    * * Display Name: Model Power Rank
-    * * SQL Data Type: int
-    * * Description: Power rank of the model that was selected for this run. Lower numbers indicate more powerful models
-    */
-    get ModelPowerRank(): number | null {
-        return this.Get('ModelPowerRank');
-    }
-    set ModelPowerRank(value: number | null) {
-        this.Set('ModelPowerRank', value);
-    }
-
-    /**
-    * * Field Name: SelectionStrategy
-    * * Display Name: Selection Strategy
-    * * SQL Data Type: nvarchar(50)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Default
-    *   * Specific
-    *   * ByPower
-    * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)
-    */
-    get SelectionStrategy(): 'Default' | 'Specific' | 'ByPower' | null {
-        return this.Get('SelectionStrategy');
-    }
-    set SelectionStrategy(value: 'Default' | 'Specific' | 'ByPower' | null) {
-        this.Set('SelectionStrategy', value);
-    }
-
-    /**
-    * * Field Name: CacheHit
-    * * Display Name: Cache Hit
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether this result was served from cache rather than executing a new model call
-    */
-    get CacheHit(): boolean {
-        return this.Get('CacheHit');
-    }
-    set CacheHit(value: boolean) {
-        this.Set('CacheHit', value);
-    }
-
-    /**
-    * * Field Name: CacheKey
-    * * Display Name: Cache Key
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters
-    */
-    get CacheKey(): string | null {
-        return this.Get('CacheKey');
-    }
-    set CacheKey(value: string | null) {
-        this.Set('CacheKey', value);
-    }
-
-    /**
-    * * Field Name: JudgeID
-    * * Display Name: Judge ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
-    * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
-    */
-    get JudgeID(): string | null {
-        return this.Get('JudgeID');
-    }
-    set JudgeID(value: string | null) {
-        this.Set('JudgeID', value);
-    }
-
-    /**
-    * * Field Name: JudgeScore
-    * * Display Name: Judge Score
-    * * SQL Data Type: float(53)
-    * * Description: Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results
-    */
-    get JudgeScore(): number | null {
-        return this.Get('JudgeScore');
-    }
-    set JudgeScore(value: number | null) {
-        this.Set('JudgeScore', value);
-    }
-
-    /**
-    * * Field Name: WasSelectedResult
-    * * Display Name: Was Selected Result
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether this result was selected as the best result when multiple models were run in parallel
-    */
-    get WasSelectedResult(): boolean {
-        return this.Get('WasSelectedResult');
-    }
-    set WasSelectedResult(value: boolean) {
-        this.Set('WasSelectedResult', value);
-    }
-
-    /**
-    * * Field Name: StreamingEnabled
-    * * Display Name: Streaming Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether streaming was enabled for this prompt execution
-    */
-    get StreamingEnabled(): boolean {
-        return this.Get('StreamingEnabled');
-    }
-    set StreamingEnabled(value: boolean) {
-        this.Set('StreamingEnabled', value);
-    }
-
-    /**
-    * * Field Name: FirstTokenTime
-    * * Display Name: First Token Time
-    * * SQL Data Type: int
-    * * Description: Time in milliseconds from request initiation to receiving the first token from the model
-    */
-    get FirstTokenTime(): number | null {
-        return this.Get('FirstTokenTime');
-    }
-    set FirstTokenTime(value: number | null) {
-        this.Set('FirstTokenTime', value);
-    }
-
-    /**
-    * * Field Name: ErrorDetails
-    * * Display Name: Error Details
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes
-    */
-    get ErrorDetails(): string | null {
-        return this.Get('ErrorDetails');
-    }
-    set ErrorDetails(value: string | null) {
-        this.Set('ErrorDetails', value);
-    }
-
-    /**
-    * * Field Name: ChildPromptID
-    * * Display Name: Child Prompt ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
-    * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
-    */
-    get ChildPromptID(): string | null {
-        return this.Get('ChildPromptID');
-    }
-    set ChildPromptID(value: string | null) {
-        this.Set('ChildPromptID', value);
-    }
-
-    /**
-    * * Field Name: QueueTime
-    * * Display Name: Queue Time
-    * * SQL Data Type: int
-    * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
-    */
-    get QueueTime(): number | null {
-        return this.Get('QueueTime');
-    }
-    set QueueTime(value: number | null) {
-        this.Set('QueueTime', value);
-    }
-
-    /**
-    * * Field Name: PromptTime
-    * * Display Name: Prompt Time
-    * * SQL Data Type: int
-    * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
-    */
-    get PromptTime(): number | null {
-        return this.Get('PromptTime');
-    }
-    set PromptTime(value: number | null) {
-        this.Set('PromptTime', value);
-    }
-
-    /**
-    * * Field Name: CompletionTime
-    * * Display Name: Completion Time
-    * * SQL Data Type: int
-    * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
-    */
-    get CompletionTime(): number | null {
-        return this.Get('CompletionTime');
-    }
-    set CompletionTime(value: number | null) {
-        this.Set('CompletionTime', value);
-    }
-
-    /**
-    * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Model Specific Response Details
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
-    */
-    get ModelSpecificResponseDetails(): string | null {
-        return this.Get('ModelSpecificResponseDetails');
-    }
-    set ModelSpecificResponseDetails(value: string | null) {
-        this.Set('ModelSpecificResponseDetails', value);
-    }
-
-    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -37576,24 +36888,6 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get OriginalModel(): string | null {
         return this.Get('OriginalModel');
-    }
-
-    /**
-    * * Field Name: Judge
-    * * Display Name: Judge
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Judge(): string | null {
-        return this.Get('Judge');
-    }
-
-    /**
-    * * Field Name: ChildPrompt
-    * * Display Name: Child Prompt
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ChildPrompt(): string | null {
-        return this.Get('ChildPrompt');
     }
 }
 
@@ -39738,41 +39032,6 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
-    * Queries - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
-    * @public
-    * @method
-    * @override
-    * @memberof QueryEntity
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
-            // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
-            
-            try {
-                await provider.BeginTransaction();
-                const result = await super.Delete(options);
-                
-                if (result) {
-                    await provider.CommitTransaction();
-                    return true;
-                } else {
-                    await provider.RollbackTransaction();
-                    return false;
-                }
-            } catch (error) {
-                await provider.RollbackTransaction();
-                throw error;
-            }
-        } else {
-            // For network providers, cascading deletes are handled server-side
-            return super.Delete(options);
-        }
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -39968,60 +39227,6 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
-    * * Field Name: AuditQueryRuns
-    * * Display Name: Audit Query Runs
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance
-    */
-    get AuditQueryRuns(): boolean {
-        return this.Get('AuditQueryRuns');
-    }
-    set AuditQueryRuns(value: boolean) {
-        this.Set('AuditQueryRuns', value);
-    }
-
-    /**
-    * * Field Name: CacheEnabled
-    * * Display Name: Cache Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When true, query results will be cached in memory with TTL expiration
-    */
-    get CacheEnabled(): boolean {
-        return this.Get('CacheEnabled');
-    }
-    set CacheEnabled(value: boolean) {
-        this.Set('CacheEnabled', value);
-    }
-
-    /**
-    * * Field Name: CacheTTLMinutes
-    * * Display Name: Cache TTL Minutes
-    * * SQL Data Type: int
-    * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.
-    */
-    get CacheTTLMinutes(): number | null {
-        return this.Get('CacheTTLMinutes');
-    }
-    set CacheTTLMinutes(value: number | null) {
-        this.Set('CacheTTLMinutes', value);
-    }
-
-    /**
-    * * Field Name: CacheMaxSize
-    * * Display Name: Cache Max Size
-    * * SQL Data Type: int
-    * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.
-    */
-    get CacheMaxSize(): number | null {
-        return this.Get('CacheMaxSize');
-    }
-    set CacheMaxSize(value: number | null) {
-        this.Set('CacheMaxSize', value);
-    }
-
-    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(50)
@@ -40143,60 +39348,6 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: DefaultCacheEnabled
-    * * Display Name: Default Cache Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Default cache setting for queries in this category
-    */
-    get DefaultCacheEnabled(): boolean {
-        return this.Get('DefaultCacheEnabled');
-    }
-    set DefaultCacheEnabled(value: boolean) {
-        this.Set('DefaultCacheEnabled', value);
-    }
-
-    /**
-    * * Field Name: DefaultCacheTTLMinutes
-    * * Display Name: Default Cache TTL Minutes
-    * * SQL Data Type: int
-    * * Description: Default TTL in minutes for cached results of queries in this category
-    */
-    get DefaultCacheTTLMinutes(): number | null {
-        return this.Get('DefaultCacheTTLMinutes');
-    }
-    set DefaultCacheTTLMinutes(value: number | null) {
-        this.Set('DefaultCacheTTLMinutes', value);
-    }
-
-    /**
-    * * Field Name: DefaultCacheMaxSize
-    * * Display Name: Default Cache Max Size
-    * * SQL Data Type: int
-    * * Description: Default maximum cache size for queries in this category
-    */
-    get DefaultCacheMaxSize(): number | null {
-        return this.Get('DefaultCacheMaxSize');
-    }
-    set DefaultCacheMaxSize(value: number | null) {
-        this.Set('DefaultCacheMaxSize', value);
-    }
-
-    /**
-    * * Field Name: CacheInheritanceEnabled
-    * * Display Name: Cache Inheritance Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: When true, queries without cache config will inherit from this category
-    */
-    get CacheInheritanceEnabled(): boolean {
-        return this.Get('CacheInheritanceEnabled');
-    }
-    set CacheInheritanceEnabled(value: boolean) {
-        this.Set('CacheInheritanceEnabled', value);
     }
 
     /**
@@ -43239,7 +42390,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     /**
     * * Field Name: DataContext
     * * Display Name: Data Context
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(500)
     */
     get DataContext(): string | null {
         return this.Get('DataContext');
@@ -45177,20 +44328,20 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
-    *   * Nunjucks
-    *   * JSON
-    *   * Python
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python' {
+    get CodeType(): 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
         return this.Get('CodeType');
     }
-    set CodeType(value: 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python') {
+    set CodeType(value: 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
         this.Set('CodeType', value);
     }
 

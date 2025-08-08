@@ -3,6 +3,7 @@ import { RegisterClass, MJGlobal } from '@memberjunction/global'
 import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity, ContentSourceParamEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
+import pdf2pic from 'pdf2pic'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams, StructuredPDFContent, TableStructure, TableColumn, ContentItemProcessParamsExtended } from './process.types'
@@ -10,7 +11,7 @@ import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
-import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
+import { BaseLLM, GetAIAPIKey, ChatMessage } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
 import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
 
@@ -108,6 +109,7 @@ export class AutotagBaseEngine extends AIEngine {
                 if (structuredData && structuredData.hasTabularData) {
                     processingParams.structuredData = structuredData;
                     processingParams.preserveTableStructure = true;
+                    processingParams.pdfBuffer = structuredData.pdfBuffer; // Pass PDF buffer for vision processing
                     console.log(`Using structured processing for content item: ${contentItem.Name}`);
                 }
 
@@ -150,24 +152,51 @@ export class AutotagBaseEngine extends AIEngine {
      * @param contextUser User context
      */
     public async ProcessContentItemTextEnhanced(params: ContentItemProcessParamsExtended, contextUser: UserInfo): Promise<void> {
-        let textForProcessing: string;
+        let LLMResults: JsonObject;
 
-        // If we have structured data and want to preserve structure, format it appropriately
-        if (params.structuredData && params.preserveTableStructure && params.structuredData.hasTabularData) {
-            textForProcessing = this.formatStructuredContentForLLM(params.structuredData);
+        // Check if we should use vision processing for tabular content
+        if (params.structuredData && params.preserveTableStructure && params.structuredData.hasTabularData && params.pdfBuffer) {
+            console.log('Using VISION MODEL processing for tabular PDF content');
+            
+            // Create processing params for vision model
+            const processParams: ContentItemProcessParams = {
+                text: params.text, // Still include text for fallback
+                modelID: params.modelID,
+                minTags: params.minTags,
+                maxTags: params.maxTags,
+                contentItemID: params.contentItemID,
+                contentTypeID: params.contentTypeID,
+                contentFileTypeID: params.contentFileTypeID,
+                contentSourceTypeID: params.contentSourceTypeID
+            };
+            
+            // Process with vision model instead of text
+            LLMResults = await this.processWithVisionModel(params.pdfBuffer, processParams, contextUser);
+            
+        } else if (params.structuredData && params.preserveTableStructure && params.structuredData.hasTabularData) {
             console.log('Using structured table format for LLM processing');
+            
+            // Format structured data for text-based LLM
+            const textForProcessing = this.formatStructuredContentForLLM(params.structuredData);
+            const processParams: ContentItemProcessParams = {
+                ...params,
+                text: textForProcessing
+            };
+            
+            LLMResults = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
+            
         } else {
+            console.log('Using regular text processing');
+            
             // Use regular text processing
-            textForProcessing = params.text;
+            const processParams: ContentItemProcessParams = {
+                ...params,
+                text: params.text
+            };
+            
+            LLMResults = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
         }
 
-        // Create updated params with the formatted text
-        const processParams: ContentItemProcessParams = {
-            ...params,
-            text: textForProcessing
-        };
-
-        const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
         await this.saveLLMResults(LLMResults, contextUser);
     }
 
@@ -1214,6 +1243,237 @@ export class AutotagBaseEngine extends AIEngine {
         console.log(`Assumed table structure - hasSteps: ${hasStepData}, hasNumericData: ${hasNumericData}`);
         
         return [table];
+    }
+
+    /**
+     * Convert PDF to high-resolution images for vision model processing
+     * @param pdfBuffer The PDF file as a buffer
+     * @returns Array of base64-encoded images (one per page)
+     */
+    public async convertPDFToImages(pdfBuffer: Buffer): Promise<string[]> {
+        console.log(`Converting PDF to images for vision processing...`);
+        
+        // First, get the total number of pages using pdf-parse
+        const pdfInfo = await pdfParse(pdfBuffer);
+        const totalPages = pdfInfo.numpages;
+        console.log(`PDF has ${totalPages} pages`);
+        
+        // Try multiple approaches for PDF to image conversion
+        const approaches = [
+            {
+                name: 'High Quality (300 DPI)',
+                options: {
+                    density: 300,
+                    format: "jpeg",
+                    width: 2000,
+                    height: 2800,
+                    quality: 95
+                }
+            },
+            {
+                name: 'Standard Quality (200 DPI)',
+                options: {
+                    density: 200,
+                    format: "jpeg",
+                    width: 1600,
+                    height: 2200,
+                    quality: 90
+                }
+            },
+            {
+                name: 'Low Quality (150 DPI)',
+                options: {
+                    density: 150,
+                    format: "png",
+                    quality: 85
+                }
+            },
+            {
+                name: 'Basic (defaults)',
+                options: {}
+            }
+        ];
+        
+        for (const approach of approaches) {
+            try {
+                console.log(`Trying ${approach.name} approach...`);
+                
+                const convert = pdf2pic.fromBuffer(pdfBuffer, approach.options);
+                const images: string[] = [];
+                
+                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                    try {
+                        console.log(`Converting page ${pageNum} with ${approach.name}...`);
+                        
+                        const result = await convert(pageNum, { responseType: 'buffer' });
+                        
+                        if (result && 'buffer' in result && result.buffer && 
+                            Buffer.isBuffer(result.buffer) && result.buffer.length > 0) {
+                            
+                            const base64String = result.buffer.toString('base64');
+                            const base64Image = `data:image/jpeg;base64,${base64String}`;
+                            images.push(base64Image);
+                            console.log(`✅ Page ${pageNum} converted (${result.buffer.length} bytes)`);
+                            
+                            // Save image to disk for debugging
+                            try {
+                                const debugImagePath = `/tmp/pdf_debug_page_${pageNum}.jpg`;
+                                await fs.promises.writeFile(debugImagePath, result.buffer);
+                                console.log(`🔍 Debug image saved to: ${debugImagePath}`);
+                            } catch (debugError) {
+                                // Try Windows temp path if /tmp doesn't exist
+                                try {
+                                    const windowsDebugPath = `C:\\temp\\pdf_debug_page_${pageNum}.jpg`;
+                                    await fs.promises.writeFile(windowsDebugPath, result.buffer);
+                                    console.log(`🔍 Debug image saved to: ${windowsDebugPath}`);
+                                } catch (windowsError) {
+                                    // Finally try current directory
+                                    try {
+                                        const localDebugPath = `./pdf_debug_page_${pageNum}.jpg`;
+                                        await fs.promises.writeFile(localDebugPath, result.buffer);
+                                        console.log(`🔍 Debug image saved to: ${localDebugPath}`);
+                                    } catch (localError) {
+                                        console.warn(`⚠️ Could not save debug image: ${localError.message}`);
+                                    }
+                                }
+                            }
+                        } else {
+                            console.warn(`⚠️ Page ${pageNum} returned empty buffer with ${approach.name}`);
+                            break; // Try next approach
+                        }
+                        
+                    } catch (pageError) {
+                        console.error(`❌ Page ${pageNum} failed with ${approach.name}:`, pageError.message);
+                        break; // Try next approach
+                    }
+                }
+                
+                if (images.length > 0) {
+                    console.log(`🎉 Success with ${approach.name}! Converted ${images.length} pages`);
+                    return images;
+                }
+                
+            } catch (approachError) {
+                console.warn(`❌ ${approach.name} approach failed:`, approachError.message);
+                // Continue to next approach
+            }
+        }
+        
+        // All approaches failed - provide helpful error message
+        console.error('🚨 All PDF conversion approaches failed!');
+        console.error('This usually indicates missing dependencies:');
+        console.error('- ImageMagick (https://imagemagick.org/script/download.php)');
+        console.error('- GraphicsMagick (http://www.graphicsmagick.org/download.html)');
+        console.error('- Poppler utils (for some systems)');
+        
+        throw new Error(
+            'PDF to image conversion failed with all approaches. ' +
+            'Please ensure ImageMagick or GraphicsMagick is installed and available in PATH. ' +
+            'Visit https://imagemagick.org/script/download.php for installation instructions.'
+        );
+    }
+
+    /**
+     * Process PDF using vision model with existing MJ prompt system
+     * @param pdfBuffer The PDF file buffer
+     * @param params Processing parameters that include prompts from database
+     * @param contextUser User context
+     * @returns Vision processing results as JSON
+     */
+    public async processWithVisionModel(
+        pdfBuffer: Buffer,
+        params: ContentItemProcessParams,
+        contextUser: UserInfo
+    ): Promise<JsonObject> {
+        try {
+            console.log(`Starting vision model processing...`);
+            
+            // Convert PDF to images
+            const images = await this.convertPDFToImages(pdfBuffer);
+            
+            // Get AI model and create LLM instance (same as text processing)
+            const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID);
+            if (!model) {
+                throw new Error(`AI Model with ID ${params.modelID} not found`);
+            }
+            
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+                BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)
+            );
+
+            // Use existing prompt system (same as text processing)
+            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, '', {}, contextUser);
+            
+            console.log('\n=== VISION MODEL DEBUGGING ===');
+            console.log('📝 System Prompt:');
+            console.log(systemPrompt.substring(0, 500) + '...');
+            console.log('\n📝 User Prompt:');
+            console.log(userPrompt.substring(0, 500) + '...');
+            console.log('\n🖼️ Images being sent:', images.length);
+            console.log('📏 Image sizes:', images.map((img, i) => `Page ${i+1}: ${img.length} chars`));
+            
+            // Create multimodal messages with all PDF pages as images
+            const messages: ChatMessage[] = [
+                {
+                    role: 'system' as const,
+                    content: systemPrompt
+                },
+                {
+                    role: 'user' as const,
+                    content: [
+                        {
+                            type: 'text',
+                            content: userPrompt
+                        },
+                        ...images.map(imageData => ({
+                            type: 'image_url' as const,
+                            content: imageData
+                        }))
+                    ]
+                }
+            ];
+
+            console.log(`\n🤖 Sending ${images.length} images to vision model: ${model.APIName}`);
+            console.log('⏳ Processing with vision model...');
+            
+            // Process with vision model
+            const response = await llm.ChatCompletion({
+                messages,
+                model: model.APIName,
+                temperature: 0.0
+            });
+
+            const visionResponse = response.data.choices[0]?.message?.content?.trim() || '';
+            console.log('\n📤 Vision Model Raw Response:');
+            console.log('='.repeat(80));
+            console.log(visionResponse);
+            console.log('='.repeat(80));
+            console.log('📊 Response length:', visionResponse.length, 'characters');
+            console.log('🔧 Parsing JSON response...');
+            
+            // Parse the vision model response (same error handling as text processing)
+            let visionResults: JsonObject;
+            try {
+                // Clean the response before parsing (same as text processing)
+                const cleanedResponse = visionResponse.replace(/(\d+)_(\d+)/g, '$1$2'); // Remove numeric separators
+                visionResults = JSON.parse(cleanedResponse);
+                visionResults.processedWithVision = true;
+                visionResults.totalPages = images.length;
+                visionResults.contentItemID = params.contentItemID;
+                
+                console.log(`Vision processing successful - extracted data from ${images.length} pages`);
+                return visionResults;
+                
+            } catch (parseError) {
+                console.error('Vision model JSON parse error:', parseError.message);
+                console.error('Raw vision response:', visionResponse.substring(0, 500));
+                throw new Error(`Vision model response is not valid JSON: ${parseError.message}`);
+            }
+            
+        } catch (error) {
+            console.error('Vision model processing failed:', error.message);
+            throw error;
+        }
     }
 
     /**

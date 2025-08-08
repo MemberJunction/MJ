@@ -1332,24 +1332,6 @@ export class AIAgentRun_ {
 each time the agent processes a prompt step.`}) 
     TotalPromptIterations: number;
         
-    @Field({nullable: true, description: `The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`}) 
-    @MaxLength(16)
-    ConfigurationID?: string;
-        
-    @Field({nullable: true, description: `Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`}) 
-    @MaxLength(16)
-    OverrideModelID?: string;
-        
-    @Field({nullable: true, description: `Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`}) 
-    @MaxLength(16)
-    OverrideVendorID?: string;
-        
-    @Field({nullable: true, description: `JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`}) 
-    Data?: string;
-        
-    @Field(() => Boolean, {nullable: true, description: `Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`}) 
-    Verbose?: boolean;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1361,18 +1343,6 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(200)
     User?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Configuration?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    OverrideModel?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    OverrideVendor?: string;
         
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
@@ -1476,21 +1446,6 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalPromptIterations?: number;
-
-    @Field({ nullable: true })
-    ConfigurationID: string | null;
-
-    @Field({ nullable: true })
-    OverrideModelID: string | null;
-
-    @Field({ nullable: true })
-    OverrideVendorID: string | null;
-
-    @Field({ nullable: true })
-    Data: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    Verbose?: boolean | null;
 }
     
 
@@ -1585,21 +1540,6 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     TotalPromptIterations?: number;
-
-    @Field({ nullable: true })
-    ConfigurationID?: string | null;
-
-    @Field({ nullable: true })
-    OverrideModelID?: string | null;
-
-    @Field({ nullable: true })
-    OverrideVendorID?: string | null;
-
-    @Field({ nullable: true })
-    Data?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    Verbose?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1767,9 +1707,6 @@ export class AIVendor_ {
     @Field(() => [AIModelCost_])
     MJ_AIModelCosts_VendorIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
     
-    @Field(() => [AIAgentRun_])
-    MJ_AIAgentRuns_OverrideVendorIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
-    
 }
 
 //****************************************************************************
@@ -1930,17 +1867,6 @@ export class AIVendorResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIAgentRun_])
-    async MJ_AIAgentRuns_OverrideVendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideVendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
-        return result;
-    }
-        
     @Mutation(() => AIVendor_)
     async CreateAIVendor(
         @Arg('input', () => CreateAIVendorInput) input: CreateAIVendorInput,
@@ -2031,9 +1957,6 @@ export class AIConfiguration_ {
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
-    
-    @Field(() => [AIAgentRun_])
-    MJ_AIAgentRuns_ConfigurationIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -2205,17 +2128,6 @@ export class AIConfigurationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIAgentRun_])
-    async MJ_AIAgentRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -2935,13 +2847,6 @@ export class AIAgentStep_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: `Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`}) 
-    @MaxLength(40)
-    Status: string;
-        
-    @Field({nullable: true, description: `JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`}) 
-    ActionInputMapping?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3021,12 +2926,6 @@ export class CreateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    ActionInputMapping: string | null;
 }
     
 
@@ -3085,12 +2984,6 @@ export class UpdateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    ActionInputMapping?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3755,17 +3648,6 @@ export class AIAgentType_ {
     @MaxLength(510)
     DriverClass?: string;
         
-    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`}) 
-    @MaxLength(1000)
-    UIFormSectionKey?: string;
-        
-    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`}) 
-    @MaxLength(1000)
-    UIFormKey?: string;
-        
-    @Field(() => Boolean, {description: `Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`}) 
-    UIFormSectionExpandedByDefault: boolean;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -3800,15 +3682,6 @@ export class CreateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
-
-    @Field({ nullable: true })
-    UIFormSectionKey: string | null;
-
-    @Field({ nullable: true })
-    UIFormKey: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    UIFormSectionExpandedByDefault?: boolean;
 }
     
 
@@ -3837,15 +3710,6 @@ export class UpdateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
-
-    @Field({ nullable: true })
-    UIFormSectionKey?: string | null;
-
-    @Field({ nullable: true })
-    UIFormKey?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    UIFormSectionExpandedByDefault?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4698,11 +4562,11 @@ export class AIPrompt_ {
     @Field(() => [AIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: AIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [AIPromptModel_])
-    MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
-    
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
+    
+    @Field(() => [AIPromptModel_])
+    MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -5132,17 +4996,6 @@ export class AIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptModel_])
-    async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIAgentPrompt_])
     async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
@@ -5151,6 +5004,17 @@ export class AIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptModel_])
+    async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
         
@@ -5519,6 +5383,9 @@ export class AIPromptCategory_ {
     @Field(() => [AIPromptCategory_])
     AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
+    @Field(() => [AIPromptCategory_])
+    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
+    
 }
 
 //****************************************************************************
@@ -5627,6 +5494,17 @@ export class AIPromptCategoryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptCategory_])
+    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', rows);
         return result;
     }
         
@@ -8973,10 +8851,6 @@ export class Entity_ {
     @MaxLength(50)
     Status: string;
         
-    @Field({nullable: true, description: `Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`}) 
-    @MaxLength(510)
-    DisplayName?: string;
-        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -9271,9 +9145,6 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
-
-    @Field({ nullable: true })
-    DisplayName: string | null;
 }
     
 
@@ -9437,9 +9308,6 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
-
-    @Field({ nullable: true })
-    DisplayName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10142,11 +10010,11 @@ export class User_ {
     @Field(() => [ReportUserState_])
     MJ_ReportUserStates_UserIDArray: ReportUserState_[]; // Link to MJ_ReportUserStates
     
-    @Field(() => [DashboardUserState_])
-    MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
-    
     @Field(() => [DashboardUserPreference_])
     MJ_DashboardUserPreferences_UserIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
+    @Field(() => [DashboardUserState_])
+    MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
     
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
@@ -10156,9 +10024,6 @@ export class User_ {
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_UserIDArray: ConversationDetail_[]; // Link to ConversationDetails
-    
-    @Field(() => [ResourcePermission_])
-    ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
     
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -10714,18 +10579,7 @@ export class UserResolverBase extends ResolverBase {
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Report User States', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [DashboardUserState_])
-    async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Report User States', rows);
         return result;
     }
         
@@ -10737,6 +10591,17 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserState_])
+    async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
         return result;
     }
         
@@ -10770,16 +10635,6 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [ResourcePermission_])
-    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Permissions', userPayload);
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', rows);
         return result;
     }
         
@@ -16856,6 +16711,9 @@ export class AIModel_ {
     @Field(() => [EntityAIAction_])
     EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
+    @Field(() => [AIResultCache_])
+    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
+    
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
@@ -16879,9 +16737,6 @@ export class AIModel_ {
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ModelIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
-    
-    @Field(() => [AIAgentRun_])
-    MJ_AIAgentRuns_OverrideModelIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -17079,6 +16934,17 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [ContentType_])
     async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Types', userPayload);
@@ -17164,17 +17030,6 @@ export class AIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIAgentRun_])
-    async MJ_AIAgentRuns_OverrideModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -19626,7 +19481,7 @@ export class Report_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(510)
+    @MaxLength(1000)
     DataContext?: string;
         
     @Field({nullable: true}) 
@@ -21790,7 +21645,7 @@ export class Conversation_ {
     LinkedEntity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(510)
+    @MaxLength(1000)
     DataContext?: string;
         
     @Field(() => [ConversationDetail_])
@@ -23308,18 +23163,6 @@ export class QueryCategory_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean, {description: `Default cache setting for queries in this category`}) 
-    DefaultCacheEnabled: boolean;
-        
-    @Field(() => Int, {nullable: true, description: `Default TTL in minutes for cached results of queries in this category`}) 
-    DefaultCacheTTLMinutes?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Default maximum cache size for queries in this category`}) 
-    DefaultCacheMaxSize?: number;
-        
-    @Field(() => Boolean, {description: `When true, queries without cache config will inherit from this category`}) 
-    CacheInheritanceEnabled: boolean;
-        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -23355,18 +23198,6 @@ export class CreateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultCacheEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheTTLMinutes: number | null;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheMaxSize: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheInheritanceEnabled?: boolean;
 }
     
 
@@ -23389,18 +23220,6 @@ export class UpdateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    DefaultCacheEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheTTLMinutes?: number | null;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheMaxSize?: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheInheritanceEnabled?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23571,18 +23390,6 @@ export class Query_ {
     @Field(() => Boolean, {nullable: true, description: `Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`}) 
     UsesTemplate?: boolean;
         
-    @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
-    AuditQueryRuns: boolean;
-        
-    @Field(() => Boolean, {description: `When true, query results will be cached in memory with TTL expiration`}) 
-    CacheEnabled: boolean;
-        
-    @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
-    CacheTTLMinutes?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
-    CacheMaxSize?: number;
-        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
@@ -23647,18 +23454,6 @@ export class CreateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
-
-    @Field(() => Boolean, { nullable: true })
-    AuditQueryRuns?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    CacheTTLMinutes: number | null;
-
-    @Field(() => Int, { nullable: true })
-    CacheMaxSize: number | null;
 }
     
 
@@ -23705,18 +23500,6 @@ export class UpdateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
-
-    @Field(() => Boolean, { nullable: true })
-    AuditQueryRuns?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    CacheTTLMinutes?: number | null;
-
-    @Field(() => Int, { nullable: true })
-    CacheMaxSize?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25292,7 +25075,7 @@ export class DataContextItem_ {
     CodeName?: string;
         
     @Field() 
-    @MaxLength(510)
+    @MaxLength(1000)
     DataContext: string;
         
     @Field({nullable: true}) 
@@ -25494,7 +25277,7 @@ export class DataContext_ {
     ID: string;
         
     @Field() 
-    @MaxLength(510)
+    @MaxLength(1000)
     Name: string;
         
     @Field({nullable: true}) 
@@ -32865,6 +32648,9 @@ export class Template_ {
     @Field(() => [AIPrompt_])
     AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
     
+    @Field(() => [AIPrompt_])
+    AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
+    
     @Field(() => [EntityDocument_])
     EntityDocuments_TemplateIDArray: EntityDocument_[]; // Link to EntityDocuments
     
@@ -33017,6 +32803,17 @@ export class TemplateResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPrompt_])
+    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
         
@@ -36539,9 +36336,9 @@ export class AIModelVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
+    @Field({nullable: true, description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
     @MaxLength(16)
-    TypeID: string;
+    TypeID?: string;
         
     @Field() 
     @MaxLength(100)
@@ -36551,9 +36348,9 @@ export class AIModelVendor_ {
     @MaxLength(100)
     Vendor: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Type: string;
+    Type?: string;
         
 }
 
@@ -36602,7 +36399,7 @@ export class CreateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID?: string;
+    TypeID: string | null;
 }
     
 
@@ -36651,7 +36448,7 @@ export class UpdateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID?: string;
+    TypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37826,11 +37623,11 @@ export class ConversationArtifact_ {
     @MaxLength(200)
     ArtifactType: string;
         
-    @Field(() => [ConversationArtifactVersion_])
-    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
-    
     @Field(() => [ConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
+    
+    @Field(() => [ConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_ArtifactIDArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -37953,17 +37750,6 @@ export class ConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [ConversationArtifactVersion_])
-    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ConversationArtifactPermission_])
     async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
@@ -37972,6 +37758,17 @@ export class ConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
         return result;
     }
         
@@ -41152,68 +40949,6 @@ export class AIPromptRun_ {
     @MaxLength(16)
     RerunFromPromptRunID?: string;
         
-    @Field({nullable: true, description: `JSON object containing detailed model selection information including all models considered, their scores, and the selection rationale`}) 
-    ModelSelection?: string;
-        
-    @Field({description: `Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`}) 
-    @MaxLength(100)
-    Status: string;
-        
-    @Field(() => Boolean, {description: `Indicates whether this prompt run was cancelled before completion`}) 
-    Cancelled: boolean;
-        
-    @Field({nullable: true, description: `Detailed reason for cancellation if the prompt run was cancelled. Could be user_requested, timeout, error, or resource_limit`}) 
-    CancellationReason?: string;
-        
-    @Field(() => Int, {nullable: true, description: `Power rank of the model that was selected for this run. Lower numbers indicate more powerful models`}) 
-    ModelPowerRank?: number;
-        
-    @Field({nullable: true, description: `Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`}) 
-    @MaxLength(100)
-    SelectionStrategy?: string;
-        
-    @Field(() => Boolean, {description: `Indicates whether this result was served from cache rather than executing a new model call`}) 
-    CacheHit: boolean;
-        
-    @Field({nullable: true, description: `Unique key used for caching this prompt result, typically a hash of the prompt and parameters`}) 
-    @MaxLength(1000)
-    CacheKey?: string;
-        
-    @Field({nullable: true, description: `ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`}) 
-    @MaxLength(16)
-    JudgeID?: string;
-        
-    @Field(() => Float, {nullable: true, description: `Score assigned by the judge prompt when evaluating multiple results. Higher scores indicate better results`}) 
-    JudgeScore?: number;
-        
-    @Field(() => Boolean, {description: `Indicates whether this result was selected as the best result when multiple models were run in parallel`}) 
-    WasSelectedResult: boolean;
-        
-    @Field(() => Boolean, {description: `Indicates whether streaming was enabled for this prompt execution`}) 
-    StreamingEnabled: boolean;
-        
-    @Field(() => Int, {nullable: true, description: `Time in milliseconds from request initiation to receiving the first token from the model`}) 
-    FirstTokenTime?: number;
-        
-    @Field({nullable: true, description: `Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`}) 
-    ErrorDetails?: string;
-        
-    @Field({nullable: true, description: `References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`}) 
-    @MaxLength(16)
-    ChildPromptID?: string;
-        
-    @Field(() => Int, {nullable: true, description: `Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`}) 
-    QueueTime?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`}) 
-    PromptTime?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`}) 
-    CompletionTime?: number;
-        
-    @Field({nullable: true, description: `JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`}) 
-    ModelSpecificResponseDetails?: string;
-        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41237,14 +40972,6 @@ export class AIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     OriginalModel?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Judge?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    ChildPrompt?: string;
         
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -41435,63 +41162,6 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID: string | null;
-
-    @Field({ nullable: true })
-    ModelSelection: string | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    Cancelled?: boolean;
-
-    @Field({ nullable: true })
-    CancellationReason: string | null;
-
-    @Field(() => Int, { nullable: true })
-    ModelPowerRank: number | null;
-
-    @Field({ nullable: true })
-    SelectionStrategy: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheHit?: boolean;
-
-    @Field({ nullable: true })
-    CacheKey: string | null;
-
-    @Field({ nullable: true })
-    JudgeID: string | null;
-
-    @Field(() => Float, { nullable: true })
-    JudgeScore: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    WasSelectedResult?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    StreamingEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    FirstTokenTime: number | null;
-
-    @Field({ nullable: true })
-    ErrorDetails: string | null;
-
-    @Field({ nullable: true })
-    ChildPromptID: string | null;
-
-    @Field(() => Int, { nullable: true })
-    QueueTime: number | null;
-
-    @Field(() => Int, { nullable: true })
-    PromptTime: number | null;
-
-    @Field(() => Int, { nullable: true })
-    CompletionTime: number | null;
-
-    @Field({ nullable: true })
-    ModelSpecificResponseDetails: string | null;
 }
     
 
@@ -41676,63 +41346,6 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     RerunFromPromptRunID?: string | null;
-
-    @Field({ nullable: true })
-    ModelSelection?: string | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    Cancelled?: boolean;
-
-    @Field({ nullable: true })
-    CancellationReason?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    ModelPowerRank?: number | null;
-
-    @Field({ nullable: true })
-    SelectionStrategy?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    CacheHit?: boolean;
-
-    @Field({ nullable: true })
-    CacheKey?: string | null;
-
-    @Field({ nullable: true })
-    JudgeID?: string | null;
-
-    @Field(() => Float, { nullable: true })
-    JudgeScore?: number | null;
-
-    @Field(() => Boolean, { nullable: true })
-    WasSelectedResult?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    StreamingEnabled?: boolean;
-
-    @Field(() => Int, { nullable: true })
-    FirstTokenTime?: number | null;
-
-    @Field({ nullable: true })
-    ErrorDetails?: string | null;
-
-    @Field({ nullable: true })
-    ChildPromptID?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    QueueTime?: number | null;
-
-    @Field(() => Int, { nullable: true })
-    PromptTime?: number | null;
-
-    @Field(() => Int, { nullable: true })
-    CompletionTime?: number | null;
-
-    @Field({ nullable: true })
-    ModelSpecificResponseDetails?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

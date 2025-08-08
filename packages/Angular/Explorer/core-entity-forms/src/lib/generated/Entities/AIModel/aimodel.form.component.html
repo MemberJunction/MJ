@@ -81,6 +81,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="AI Result Cache" [Visible]="record.IsSaved"> 
+                        AI Result Cache
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIModelID')"  
+                            [NewRecordValues]="NewRecordValues('AI Result Cache')"
+                            [AllowLoad]="IsCurrentTab('AI Result Cache')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Content Types" [Visible]="record.IsSaved"> 
                         Content Types
                     </mj-tab>
@@ -180,19 +193,6 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ModelID')"  
                             [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
-                        MJ: AI Agent Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','OverrideModelID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Runs')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

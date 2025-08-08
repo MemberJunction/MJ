@@ -56,9 +56,11 @@ export interface StructuredPDFContent {
     tables: TableStructure[];
     hasTabularData: boolean;
     contentType: 'tabular' | 'text' | 'mixed';
+    pdfBuffer?: Buffer; // For vision model processing
 }
 
 export class ContentItemProcessParamsExtended extends ContentItemProcessParams {
     structuredData?: StructuredPDFContent;
     preserveTableStructure?: boolean;
+    pdfBuffer?: Buffer; // For vision model processing
 }

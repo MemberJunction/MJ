@@ -3,6 +3,7 @@ import { ContactEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadContactDetailsComponent } from "./sections/details.component"
+import { LoadContactTopComponent } from "./sections/top.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Contacts') // Tell MemberJunction about this class
@@ -17,4 +18,5 @@ export class ContactFormComponent extends BaseFormComponent {
 
 export function LoadContactFormComponent() {
     LoadContactDetailsComponent();
+    LoadContactTopComponent();
 }

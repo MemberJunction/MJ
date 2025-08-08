@@ -165,8 +165,14 @@ export class AutotagLocalFileSystem extends AutotagBase {
         let text: string;
         let structuredData: StructuredPDFContent | null = null;
         
+        let pdfBuffer: Buffer | null = null;
+        
         if (shouldPreserveStructure && filePath.toLowerCase().endsWith('.pdf')) {
             console.log(`Using structured parsing for PDF: ${filePath}`);
+            
+            // Read PDF buffer for potential vision processing
+            pdfBuffer = await fs.promises.readFile(filePath);
+            
             const parsedContent = await this.engine.parseFileFromPathWithStructure(filePath, shouldPreserveStructure);
             if (typeof parsedContent === 'string') {
                 text = parsedContent;
@@ -198,6 +204,8 @@ export class AutotagLocalFileSystem extends AutotagBase {
             // Store structured data temporarily by file path (which is now the ContentItem URL)
             if (structuredData && structuredData.hasTabularData) {
                 console.log(`Storing structured data for file path: ${filePath} with ${structuredData.tables.length} tables`);
+                // Add PDF buffer to structured data for vision processing
+                structuredData.pdfBuffer = pdfBuffer;
                 this.pendingStructuredData.set(filePath, structuredData);
             }
             return contentItem;
@@ -291,9 +299,14 @@ export class AutotagLocalFileSystem extends AutotagBase {
         
         let text: string;
         let structuredData: StructuredPDFContent | null = null;
+        let pdfBuffer: Buffer | null = null;
         
         if (shouldPreserveStructure && filePath.toLowerCase().endsWith('.pdf')) {
             console.log(`Using structured parsing for updated PDF: ${filePath}`);
+            
+            // Read PDF buffer for potential vision processing
+            pdfBuffer = await fs.promises.readFile(filePath);
+            
             const parsedContent = await this.engine.parseFileFromPathWithStructure(filePath, shouldPreserveStructure);
             if (typeof parsedContent === 'string') {
                 text = parsedContent;
@@ -316,6 +329,8 @@ export class AutotagLocalFileSystem extends AutotagBase {
             // Store structured data temporarily by file path (which is now the ContentItem URL)
             if (structuredData && structuredData.hasTabularData) {
                 console.log(`Storing structured data for file path: ${filePath} with ${structuredData.tables.length} tables`);
+                // Add PDF buffer to structured data for vision processing
+                structuredData.pdfBuffer = pdfBuffer;
                 this.pendingStructuredData.set(filePath, structuredData);
             }
             return contentItem;
