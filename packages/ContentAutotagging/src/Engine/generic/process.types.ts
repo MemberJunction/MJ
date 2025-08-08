@@ -30,3 +30,35 @@ export class ContentItemProcessResults {
 export interface JsonObject {
     [key: string]: any;
 }
+
+export interface TableColumn {
+    name: string;
+    values: string[];
+    dataType?: 'number' | 'currency' | 'text' | 'date';
+}
+
+export interface TableStructure {
+    title?: string;
+    headers: string[];
+    rows: string[][];
+    columns: TableColumn[];
+    metadata?: {
+        totalRows: number;
+        totalColumns: number;
+        hasSteps?: boolean;
+        stepColumn?: string;
+        salaryColumns?: string[];
+    };
+}
+
+export interface StructuredPDFContent {
+    rawText: string;
+    tables: TableStructure[];
+    hasTabularData: boolean;
+    contentType: 'tabular' | 'text' | 'mixed';
+}
+
+export class ContentItemProcessParamsExtended extends ContentItemProcessParams {
+    structuredData?: StructuredPDFContent;
+    preserveTableStructure?: boolean;
+}

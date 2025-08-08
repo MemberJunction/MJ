@@ -5,7 +5,7 @@ import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
-import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
+import { ProcessRunParams, JsonObject, ContentItemProcessParams, StructuredPDFContent, TableStructure, TableColumn, ContentItemProcessParamsExtended } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
@@ -73,6 +73,67 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
+     * Enhanced version that can handle structured content for tabular data like salary schedules
+     * @param contentItems 
+     * @param contextUser 
+     * @param structuredDataMap Optional map of contentItemID -> StructuredPDFContent for items that have structured data
+     */
+    public async ExtractTextAndProcessWithLLMEnhanced(
+        contentItems: ContentItemEntity[], 
+        contextUser: UserInfo,
+        structuredDataMap?: Map<string, StructuredPDFContent>
+    ): Promise<void> {
+        if (!contentItems || contentItems.length === 0) {
+            console.log('No content items to process');
+            return;
+        }
+
+        const processRunParams = new ProcessRunParams();
+        processRunParams.sourceID = contentItems[0].ContentSourceID
+        processRunParams.startTime = new Date();
+        processRunParams.numItemsProcessed = contentItems.length;
+
+        for (const contentItem of contentItems) {
+            try {
+                const processingParams = new ContentItemProcessParamsExtended();
+                
+                // Parameters that depend on the content item
+                processingParams.text = contentItem.Text;
+                processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
+                processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
+                processingParams.contentTypeID = contentItem.ContentTypeID;
+
+                // Check if we have structured data for this content item
+                const structuredData = structuredDataMap?.get(contentItem.ID);
+                if (structuredData && structuredData.hasTabularData) {
+                    processingParams.structuredData = structuredData;
+                    processingParams.preserveTableStructure = true;
+                    console.log(`Using structured processing for content item: ${contentItem.Name}`);
+                }
+
+                // Parameters that depend on the content type
+                const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser) 
+                processingParams.modelID = modelID;
+                processingParams.minTags = minTags;
+                processingParams.maxTags = maxTags;
+                processingParams.contentItemID = contentItem.ID;
+
+                // Use enhanced processing method
+                await this.ProcessContentItemTextEnhanced(processingParams, contextUser);
+
+            }
+
+            catch (e) {
+                console.error(`Failed to process content source item: ${contentItem.Get('contentItemID')}`);
+                throw e;
+            }
+        }
+
+        processRunParams.endTime = new Date();
+        await this.saveProcessRun(processRunParams, contextUser);
+    }
+
+    /**
      * Given processing parameters that include the text from our content item, process the text with the LLM and extract the 
      * information related to that content type.
      * @param params 
@@ -80,6 +141,33 @@ export class AutotagBaseEngine extends AIEngine {
      */
     public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo): Promise<void> {
         const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
+        await this.saveLLMResults(LLMResults, contextUser);
+    }
+
+    /**
+     * Enhanced content processing that handles both structured and unstructured content
+     * @param params Enhanced processing parameters that may include structured data
+     * @param contextUser User context
+     */
+    public async ProcessContentItemTextEnhanced(params: ContentItemProcessParamsExtended, contextUser: UserInfo): Promise<void> {
+        let textForProcessing: string;
+
+        // If we have structured data and want to preserve structure, format it appropriately
+        if (params.structuredData && params.preserveTableStructure && params.structuredData.hasTabularData) {
+            textForProcessing = this.formatStructuredContentForLLM(params.structuredData);
+            console.log('Using structured table format for LLM processing');
+        } else {
+            // Use regular text processing
+            textForProcessing = params.text;
+        }
+
+        // Create updated params with the formatted text
+        const processParams: ContentItemProcessParams = {
+            ...params,
+            text: textForProcessing
+        };
+
+        const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
         await this.saveLLMResults(LLMResults, contextUser);
     }
 
@@ -122,7 +210,43 @@ export class AutotagBaseEngine extends AIEngine {
         });
 
         const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
-        const JSONQueryResponse: JsonObject = JSON.parse(queryResponse);
+        console.log('Raw LLM Response:');
+        console.log('='.repeat(80));
+        console.log(queryResponse);
+        console.log('='.repeat(80));
+        
+        let JSONQueryResponse: JsonObject;
+        try {
+            JSONQueryResponse = JSON.parse(queryResponse);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError.message);
+            console.error('Response length:', queryResponse.length);
+            console.error('Response at error position (±50 chars):');
+            
+            const errorMatch = parseError.message.match(/at position (\d+)/);
+            if (errorMatch) {
+                const position = parseInt(errorMatch[1]);
+                const start = Math.max(0, position - 50);
+                const end = Math.min(queryResponse.length, position + 50);
+                console.error(queryResponse.substring(start, end));
+                console.error(' '.repeat(Math.min(50, position - start)) + '^-- ERROR HERE');
+            }
+            
+            // Try to extract JSON from the response if it's wrapped in text
+            const jsonMatch = queryResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                console.log('Attempting to parse extracted JSON block...');
+                try {
+                    JSONQueryResponse = JSON.parse(jsonMatch[0]);
+                    console.log('Successfully parsed extracted JSON');
+                } catch (secondParseError) {
+                    console.error('Second parse attempt also failed:', secondParseError.message);
+                    throw new Error(`LLM response is not valid JSON: ${parseError.message}`);
+                }
+            } else {
+                throw new Error(`LLM response contains no valid JSON: ${parseError.message}`);
+            }
+        }
 
         // check if the response has info to add to LLMResults
         for (const key in JSONQueryResponse) {
@@ -631,6 +755,468 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
+     * Enhanced PDF parsing that preserves table structure for salary schedules and similar tabular data
+     * @param dataBuffer: The buffer of data to extract structured content from
+     * @param assumeTabularContent: If true, assumes content has tables without detection
+     * @returns StructuredPDFContent with tables and raw text
+     */
+    public async parsePDFWithStructure(dataBuffer: Buffer, assumeTabularContent: boolean = false): Promise<StructuredPDFContent> {
+        try {
+            // Get raw text using standard pdf-parse
+            const dataPDF = await pdfParse(dataBuffer);
+            const rawText = dataPDF.text;
+
+            let tables: TableStructure[] = [];
+            let hasTabularData = false;
+            let contentType: 'tabular' | 'text' | 'mixed' = 'text';
+
+            if (assumeTabularContent) {
+                // Skip complex detection - we know this has tabular data
+                console.log('Assuming tabular content - skipping table detection');
+                hasTabularData = true;
+                contentType = 'tabular';
+                
+                // Create a simple table structure from the text for better LLM formatting
+                tables = this.createAssumedTableStructure(rawText);
+            } else {
+                // Use complex detection logic
+                tables = this.detectTablesInText(rawText);
+                hasTabularData = tables && tables.length > 0;
+                contentType = hasTabularData ? 
+                    (tables.some(t => t.rows.length > 5) ? 'tabular' : 'mixed') : 'text';
+            }
+
+            return {
+                rawText,
+                tables: tables || [],
+                hasTabularData,
+                contentType
+            };
+
+        } catch (error) {
+            console.warn('Structured PDF parsing failed, falling back to text-only:', error.message);
+            // Fallback to regular text extraction
+            const dataPDF = await pdfParse(dataBuffer);
+            return {
+                rawText: dataPDF.text,
+                tables: [],
+                hasTabularData: false,
+                contentType: 'text'
+            };
+        }
+    }
+
+    /**
+     * Detect and extract table structures from raw PDF text using intelligent text analysis
+     * @param rawText The raw text extracted from the PDF
+     * @returns Array of TableStructure objects
+     */
+    private detectTablesInText(rawText: string): TableStructure[] {
+        try {
+            const tables: TableStructure[] = [];
+            const lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            // Look for tabular patterns in the text
+            let currentTable: {
+                startIndex: number;
+                lines: string[];
+                headers?: string[];
+            } | null = null;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Table detection logic
+                
+                // Detect potential table headers (contains common salary schedule terms)
+                if (this.isTableHeaderLine(line)) {
+                    // If we have a current table, finish it
+                    if (currentTable) {
+                        const table = this.parseTableFromLines(currentTable.lines, currentTable.headers);
+                        if (table) {
+                            tables.push(table);
+                        }
+                    }
+                    
+                    // Start new table
+                    currentTable = {
+                        startIndex: i,
+                        lines: [line],
+                        headers: this.extractHeadersFromLine(line)
+                    };
+                } else if (currentTable && this.isTableDataLine(line, currentTable.headers)) {
+                    // Add line to current table
+                    currentTable.lines.push(line);
+                } else if (currentTable) {
+                    // End current table if we hit non-tabular content
+                    const table = this.parseTableFromLines(currentTable.lines, currentTable.headers);
+                    if (table) {
+                        tables.push(table);
+                    }
+                    currentTable = null;
+                }
+            }
+            
+            // Handle any remaining table
+            if (currentTable) {
+                const table = this.parseTableFromLines(currentTable.lines, currentTable.headers);
+                if (table) {
+                    tables.push(table);
+                }
+            }
+            
+            // Table detection complete
+            
+            return tables;
+        } catch (error) {
+            console.warn('Table detection failed:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Check if a line appears to be a table header
+     */
+    private isTableHeaderLine(line: string): boolean {
+        const headerKeywords = [
+            'step', 'grade', 'level', 'range', 'classification', 'position',
+            'salary', 'annual', 'monthly', 'hourly', 'rate', 'pay',
+            'minimum', 'maximum', 'min', 'max', 'start', 'end'
+        ];
+        
+        const lowercaseLine = line.toLowerCase();
+        const matchedKeywords = headerKeywords.filter(keyword => lowercaseLine.includes(keyword));
+        const hasStructure = this.hasTabularStructure(line);
+        
+        const isHeader = matchedKeywords.length >= 2 && hasStructure;
+        
+        // Header detection complete
+        
+        return isHeader;
+    }
+
+    /**
+     * Check if a line has tabular structure (multiple separated values)
+     */
+    private hasTabularStructure(line: string): boolean {
+        // Look for patterns that suggest columnar data
+        const patterns = [
+            /\s{3,}/, // Multiple spaces (common column separator in extracted PDF text)
+            /\t/, // Tab characters
+            /\$[\d,]+/, // Currency values
+            /\b\d+\.\d+\b/, // Decimal numbers
+            /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/, // Dates
+        ];
+        
+        const separatorCount = (line.match(/\s{3,}/g) || []).length;
+        const patternMatches = patterns.filter(pattern => pattern.test(line)).length;
+        
+        return separatorCount >= 2 || patternMatches >= 2;
+    }
+
+    /**
+     * Extract potential column headers from a header line
+     */
+    private extractHeadersFromLine(line: string): string[] {
+        // Split on multiple spaces (common in PDF text extraction)
+        return line.split(/\s{3,}/)
+                  .map(header => header.trim())
+                  .filter(header => header.length > 0);
+    }
+
+    /**
+     * Check if a line appears to be table data
+     */
+    private isTableDataLine(line: string, headers?: string[]): boolean {
+        if (!headers || headers.length === 0) {
+            return this.hasTabularStructure(line);
+        }
+        
+        // Count columns by splitting on multiple spaces
+        const columns = line.split(/\s{3,}/).filter(col => col.trim().length > 0);
+        
+        // Should have similar number of columns as headers (allow some variance)
+        return Math.abs(columns.length - headers.length) <= 1 && columns.length >= 2;
+    }
+
+    /**
+     * Parse a complete table from collected lines
+     */
+    private parseTableFromLines(lines: string[], headers?: string[]): TableStructure | null {
+        if (lines.length < 2) {
+            return null;
+        }
+        
+        const [headerLine, ...dataLines] = lines;
+        const finalHeaders = headers || this.extractHeadersFromLine(headerLine);
+        
+        if (finalHeaders.length < 2) {
+            return null;
+        }
+        
+        // Parse data rows
+        const rows: string[][] = [];
+        const dataLinesToProcess = headers ? lines : dataLines;
+        
+        for (const dataLine of dataLinesToProcess) {
+            const columns = dataLine.split(/\s{3,}/)
+                                   .map(col => col.trim())
+                                   .filter(col => col.length > 0);
+            
+            if (columns.length >= 2) {
+                // Pad or truncate to match header count
+                while (columns.length < finalHeaders.length) {
+                    columns.push('');
+                }
+                if (columns.length > finalHeaders.length) {
+                    columns.splice(finalHeaders.length);
+                }
+                rows.push(columns);
+            }
+        }
+        
+        if (rows.length === 0) {
+            return null;
+        }
+        
+        // Build column structures
+        const columns: TableColumn[] = finalHeaders.map((header, colIndex) => {
+            const values = rows.map(row => row[colIndex] || '');
+            const dataType = this.detectColumnDataType(values);
+            
+            return {
+                name: header,
+                values,
+                dataType
+            };
+        });
+        
+        // Analyze for salary schedule patterns
+        const metadata = this.analyzeSalaryScheduleMetadata(finalHeaders, rows, columns);
+        
+        return {
+            title: 'Detected_Table',
+            headers: finalHeaders,
+            rows,
+            columns,
+            metadata: {
+                totalRows: rows.length,
+                totalColumns: finalHeaders.length,
+                ...metadata
+            }
+        };
+    }
+
+    /**
+     * Detect the data type of a column based on its values
+     * @param values Array of string values from the column
+     * @returns Detected data type
+     */
+    private detectColumnDataType(values: string[]): 'number' | 'currency' | 'text' | 'date' {
+        const nonEmptyValues = values.filter(v => v && v.trim());
+        if (nonEmptyValues.length === 0) return 'text';
+
+        // Check for currency (dollar signs, commas, decimal points)
+        const currencyPattern = /^\$?[\d,]+\.?\d*$/;
+        const currencyCount = nonEmptyValues.filter(v => currencyPattern.test(v.replace(/,/g, ''))).length;
+        if (currencyCount / nonEmptyValues.length > 0.7) return 'currency';
+
+        // Check for pure numbers
+        const numberPattern = /^\d+\.?\d*$/;
+        const numberCount = nonEmptyValues.filter(v => numberPattern.test(v)).length;
+        if (numberCount / nonEmptyValues.length > 0.7) return 'number';
+
+        // Check for dates
+        const datePattern = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/;
+        const dateCount = nonEmptyValues.filter(v => datePattern.test(v)).length;
+        if (dateCount / nonEmptyValues.length > 0.7) return 'date';
+
+        return 'text';
+    }
+
+    /**
+     * Analyze table structure for salary schedule specific metadata
+     * @param headers Column headers
+     * @param rows Table rows
+     * @param columns Column structures
+     * @returns Metadata specific to salary schedules
+     */
+    private analyzeSalaryScheduleMetadata(headers: string[], rows: any[][], columns: TableColumn[]) {
+        const metadata: any = {};
+
+        // Look for step columns (common in salary schedules)
+        const stepColumnKeywords = ['step', 'grade', 'level', 'range'];
+        const stepColumnIndex = headers.findIndex(header => 
+            stepColumnKeywords.some(keyword => 
+                header.toLowerCase().includes(keyword)
+            )
+        );
+
+        if (stepColumnIndex >= 0) {
+            metadata.hasSteps = true;
+            metadata.stepColumn = headers[stepColumnIndex];
+        }
+
+        // Identify salary/pay columns (currency data types)
+        const salaryColumns = columns
+            .filter(col => col.dataType === 'currency')
+            .map(col => col.name);
+        
+        if (salaryColumns.length > 0) {
+            metadata.salaryColumns = salaryColumns;
+        }
+
+        return metadata;
+    }
+
+    /**
+     * Format structured PDF content for LLM processing, preserving table relationships
+     * @param structuredContent The structured PDF content
+     * @returns Formatted text that preserves table structure
+     */
+    public formatStructuredContentForLLM(structuredContent: StructuredPDFContent): string {
+        if (!structuredContent.hasTabularData) {
+            return structuredContent.rawText;
+        }
+
+        let formattedContent = '=== STRUCTURED DOCUMENT CONTENT ===\n\n';
+
+        // Add tables in a structured format
+        structuredContent.tables.forEach((table, index) => {
+            formattedContent += `## Table ${index + 1}${table.title ? `: ${table.title}` : ''}\n\n`;
+            
+            // Add metadata about the table
+            if (table.metadata) {
+                formattedContent += `**Table Info:** ${table.metadata.totalRows} rows × ${table.metadata.totalColumns} columns\n`;
+                if (table.metadata.hasSteps) {
+                    formattedContent += `**Step Column:** ${table.metadata.stepColumn}\n`;
+                }
+                if (table.metadata.salaryColumns) {
+                    formattedContent += `**Salary Columns:** ${table.metadata.salaryColumns.join(', ')}\n`;
+                }
+                formattedContent += '\n';
+            }
+
+            // Format as markdown table for better LLM understanding
+            if (table.headers.length > 0 && table.rows.length > 0) {
+                // Headers
+                formattedContent += '| ' + table.headers.join(' | ') + ' |\n';
+                formattedContent += '| ' + table.headers.map(() => '---').join(' | ') + ' |\n';
+                
+                // Rows (limit to reasonable number for LLM)
+                const maxRows = Math.min(table.rows.length, 50);
+                for (let i = 0; i < maxRows; i++) {
+                    const row = table.rows[i];
+                    formattedContent += '| ' + row.join(' | ') + ' |\n';
+                }
+                
+                if (table.rows.length > maxRows) {
+                    formattedContent += `... (${table.rows.length - maxRows} more rows) ...\n`;
+                }
+            }
+            
+            // Add column analysis
+            formattedContent += '\n**Column Analysis:**\n';
+            table.columns.forEach(col => {
+                const min = col.dataType === 'currency' || col.dataType === 'number' ? 
+                    this.getColumnMinValue(col.values) : null;
+                const max = col.dataType === 'currency' || col.dataType === 'number' ? 
+                    this.getColumnMaxValue(col.values) : null;
+                
+                formattedContent += `- **${col.name}** (${col.dataType}): ${col.values.length} values`;
+                if (min !== null && max !== null) {
+                    formattedContent += `, Range: ${min} to ${max}`;
+                }
+                formattedContent += '\n';
+            });
+            
+            formattedContent += '\n---\n\n';
+        });
+
+        // Add raw text at the end for context
+        formattedContent += '## Raw Text Content\n\n';
+        formattedContent += structuredContent.rawText;
+
+        return formattedContent;
+    }
+
+    /**
+     * Get minimum numeric value from a column
+     */
+    private getColumnMinValue(values: string[]): number | null {
+        const numericValues = values
+            .map(v => parseFloat(v.replace(/[$,]/g, '')))
+            .filter(v => !isNaN(v));
+        
+        return numericValues.length > 0 ? Math.min(...numericValues) : null;
+    }
+
+    /**
+     * Get maximum numeric value from a column  
+     */
+    private getColumnMaxValue(values: string[]): number | null {
+        const numericValues = values
+            .map(v => parseFloat(v.replace(/[$,]/g, '')))
+            .filter(v => !isNaN(v));
+        
+        return numericValues.length > 0 ? Math.max(...numericValues) : null;
+    }
+
+    /**
+     * Create a simple table structure when we assume content has tabular data
+     * This is used when we know a document type has tables but don't want complex detection
+     * @param rawText The raw text from the PDF
+     * @returns Array of TableStructure objects
+     */
+    private createAssumedTableStructure(rawText: string): TableStructure[] {
+        console.log('Creating assumed table structure for better LLM formatting');
+        
+        // For assumed tabular content, we create a single "table" that represents
+        // the structured formatting of the document for the LLM
+        const table: TableStructure = {
+            title: 'Document_Content',
+            headers: ['Content'], // Simple single column
+            rows: [], // We'll populate this
+            columns: [{
+                name: 'Content',
+                values: [],
+                dataType: 'text'
+            }],
+            metadata: {
+                totalRows: 0,
+                totalColumns: 1,
+                hasSteps: false, // We'll detect this
+                salaryColumns: [] // We'll detect this
+            }
+        };
+
+        // Split content into logical sections for better LLM processing
+        const lines = rawText.split('\n').filter(line => line.trim().length > 0);
+        
+        // Look for numeric patterns that suggest salary data
+        const hasNumericData = lines.some(line => 
+            /\$[\d,]+/.test(line) || // Currency
+            /\b\d{4,}\b/.test(line)   // Large numbers (likely salaries)
+        );
+        
+        // Look for step patterns
+        const hasStepData = lines.some(line => 
+            /\bstep\s*\d+/i.test(line) || // "Step 1", "Step 2" etc
+            /\b\d+\s*-\s*\d+\b/.test(line) // Ranges like "1-25"
+        );
+
+        // Set metadata based on content analysis
+        table.metadata.hasSteps = hasStepData;
+        if (hasNumericData) {
+            table.metadata.salaryColumns = ['Salary Data'];
+        }
+
+        console.log(`Assumed table structure - hasSteps: ${hasStepData}, hasNumericData: ${hasNumericData}`);
+        
+        return [table];
+    }
+
+    /**
     * Given a buffer of data, this function extracts text from a DOCX file
     * @param dataBuffer: The buffer of data to extract text from
     * @returns The extracted text from the DOCX file
@@ -673,6 +1259,30 @@ export class AutotagBaseEngine extends AIEngine {
                 return await this.parsePDF(dataBuffer)
             case 'docx':
                 return await this.parseDOCX(dataBuffer)
+            default:
+                throw new Error('File type not supported');
+        }
+    }
+
+    /**
+     * Enhanced file parsing that supports structured content extraction
+     * @param filePath - The path to the file to extract content from
+     * @param assumeTabularContent - Whether to assume content has tabular structure (for PDFs)
+     * @returns - Either plain text or structured content based on assumeTabularContent flag
+     */
+    public async parseFileFromPathWithStructure(filePath: string, assumeTabularContent: boolean = false): Promise<string | StructuredPDFContent> {
+        const dataBuffer = await fs.promises.readFile(filePath);
+        const fileExtension = filePath.split('.').pop();
+        
+        switch (fileExtension) {
+            case 'pdf':
+                if (assumeTabularContent) {
+                    return await this.parsePDFWithStructure(dataBuffer, assumeTabularContent);
+                } else {
+                    return await this.parsePDF(dataBuffer);
+                }
+            case 'docx':
+                return await this.parseDOCX(dataBuffer);
             default:
                 throw new Error('File type not supported');
         }

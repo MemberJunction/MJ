@@ -1,4 +1,4 @@
-import { AutotagLocalFileSystem } from '@memberjunction/content-autotagging'
+import { AutotagLocalFileSystem } from '../../packages/ContentAutotagging/dist/src/LocalFileSystem/index.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { Metadata, UserInfo } from '@memberjunction/core';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
