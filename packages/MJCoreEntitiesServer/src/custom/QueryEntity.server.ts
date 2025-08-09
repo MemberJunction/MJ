@@ -219,7 +219,7 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query parameters
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
@@ -331,7 +331,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (this.IsSaved) {
                 // Get all existing query parameters
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -364,7 +364,7 @@ export class QueryEntityExtended extends QueryEntity {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                     EntityName: 'Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -484,7 +484,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get existing query entities
             const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
-                const rv = new RunView();
+                const rv = this.ProviderToUse as any as IRunViewProvider;
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -564,7 +564,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -592,7 +592,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
-            const rv = new RunView();
+            const rv = this.ProviderToUse as any as IRunViewProvider;
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
