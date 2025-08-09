@@ -64,7 +64,14 @@ export class RecordDependencyResolver {
       const md = new Metadata();
       const ck = new CompositeKey(ckInput.KeyValuePairs);
       const result = await md.GetRecordDependencies(entityName, ck);
-      return result;
+      
+      // Map PrimaryKey to CompositeKey for GraphQL response
+      return result.map(dep => ({
+        EntityName: dep.EntityName,
+        RelatedEntityName: dep.RelatedEntityName,
+        FieldName: dep.FieldName,
+        CompositeKey: dep.PrimaryKey // Map PrimaryKey to CompositeKey
+      }));
     } catch (e) {
       LogError(e);
       throw e;

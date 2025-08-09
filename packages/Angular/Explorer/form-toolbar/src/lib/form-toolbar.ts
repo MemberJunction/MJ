@@ -170,10 +170,18 @@ export class FormToolbarComponent implements OnInit {
     
     public async deleteRecord(): Promise<void> {
         this.toggleDeleteDialog(false);
-        let dependencies: RecordDependency[] = await this.form.GetRecordDependencies();
-        if(dependencies.length > 0){
-            SharedService.Instance.CreateSimpleNotification(`This record cannot be deleted because it is being used by ${dependencies.length} other records.`, 'error', 2000);
-            return;
+        
+        // Check if the entity has cascade deletes enabled
+        const entityInfo = this.form.record?.EntityInfo;
+        const hasCascadeDeletes = entityInfo?.CascadeDeletes === true;
+        
+        // Only check dependencies if cascade deletes are NOT enabled
+        if (!hasCascadeDeletes) {
+            let dependencies: RecordDependency[] = await this.form.GetRecordDependencies();
+            if(dependencies.length > 0){
+                SharedService.Instance.CreateSimpleNotification(`This record cannot be deleted because it is being used by ${dependencies.length} other records.`, 'error', 2000);
+                return;
+            }
         }
 
         const deleteResult: boolean = await this.form.record.Delete();

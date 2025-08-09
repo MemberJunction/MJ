@@ -1734,7 +1734,7 @@ export class SQLServerDataProvider
           const parts = kv.split(CompositeKey.DefaultValueDelimiter);
           pkeys[parts[0]] = parts[1];
         });
-        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, keyValues);
+        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
 
         const recordDependency: RecordDependency = {
           EntityName: r.EntityName,
