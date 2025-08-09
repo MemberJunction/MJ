@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewContainerRef } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
@@ -81,7 +81,8 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   constructor(
     private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
-    private agentManagementService: AIAgentManagementService
+    private agentManagementService: AIAgentManagementService,
+    private viewContainerRef: ViewContainerRef
   ) {
     this.subAgentForm = this.createForm();
   }
@@ -244,7 +245,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         selectedPromptIds: [],
         showCreateNew: true,
         linkedPromptIds: linkedPromptIds,
-        viewContainerRef: undefined // Will be top-level modal
+        viewContainerRef: this.viewContainerRef
       }).subscribe({
         next: async (result) => {
           if (result && result.selectedPrompts.length > 0) {
@@ -308,7 +309,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
       this.agentManagementService.openCreatePromptDialog({
         title: `Create New Prompt for ${this.subAgentEntity?.Name || 'Sub-Agent'}`,
         initialName: '',
-        viewContainerRef: undefined // Will be top-level modal
+        viewContainerRef: this.viewContainerRef
       }).subscribe({
         next: async (result) => {
           if (result && result.prompt) {
@@ -384,7 +385,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         agentId: this.subAgentEntity?.ID || '',
         agentName: this.subAgentEntity?.Name || 'Sub-Agent',
         existingActionIds: linkedActionIds,
-        viewContainerRef: undefined // Will be top-level modal
+        viewContainerRef: this.viewContainerRef
       }).subscribe({
         next: async (selectedActions) => {
           if (selectedActions && selectedActions.length > 0) {
