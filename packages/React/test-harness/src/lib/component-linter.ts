@@ -1053,6 +1053,144 @@ export class ComponentLinter {
     },
 
     {
+      name: 'runview-runquery-valid-properties',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        // Valid properties for RunView/RunViews
+        const validRunViewProps = new Set([
+          'EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 
+          'MaxRows', 'StartRow', 'ResultType'
+        ]);
+        
+        // Valid properties for RunQuery
+        const validRunQueryProps = new Set([
+          'QueryName', 'CategoryName', 'CategoryID', 'Parameters'
+        ]);
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for utilities.rv.RunView or utilities.rv.RunViews
+            if (t.isMemberExpression(callee) && 
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) && 
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) && 
+                callee.object.property.name === 'rv' &&
+                t.isIdentifier(callee.property)) {
+              
+              const methodName = callee.property.name;
+              
+              if (methodName === 'RunView' || methodName === 'RunViews') {
+                // Get the config object(s)
+                let configs: t.ObjectExpression[] = [];
+                
+                if (methodName === 'RunViews' && path.node.arguments[0]) {
+                  // RunViews takes an array of configs
+                  if (t.isArrayExpression(path.node.arguments[0])) {
+                    configs = path.node.arguments[0].elements
+                      .filter((e): e is t.ObjectExpression => t.isObjectExpression(e));
+                  }
+                } else if (methodName === 'RunView' && path.node.arguments[0]) {
+                  // RunView takes a single config
+                  if (t.isObjectExpression(path.node.arguments[0])) {
+                    configs = [path.node.arguments[0]];
+                  }
+                }
+                
+                // Check each config for invalid properties
+                for (const config of configs) {
+                  for (const prop of config.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const propName = prop.key.name;
+                      
+                      if (!validRunViewProps.has(propName)) {
+                        // Special error messages for common mistakes
+                        let message = `Invalid property '${propName}' on ${methodName}. Valid properties: ${Array.from(validRunViewProps).join(', ')}`;
+                        let fix = `Remove '${propName}' property`;
+                        
+                        if (propName === 'Parameters') {
+                          message = `${methodName} does not support 'Parameters'. Use 'ExtraFilter' for WHERE clauses.`;
+                          fix = `Replace 'Parameters' with 'ExtraFilter' and format as SQL WHERE clause`;
+                        } else if (propName === 'GroupBy') {
+                          message = `${methodName} does not support 'GroupBy'. Use RunQuery with a pre-defined query for aggregations.`;
+                          fix = `Remove 'GroupBy' and use RunQuery instead for aggregated data`;
+                        } else if (propName === 'Having') {
+                          message = `${methodName} does not support 'Having'. Use RunQuery with a pre-defined query.`;
+                          fix = `Remove 'Having' and use RunQuery instead`;
+                        }
+                        
+                        violations.push({
+                          rule: 'runview-runquery-valid-properties',
+                          severity: 'error',
+                          line: prop.loc?.start.line || 0,
+                          column: prop.loc?.start.column || 0,
+                          message,
+                          code: `${propName}: ...`
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Check for utilities.rq.RunQuery
+            if (t.isMemberExpression(callee) && 
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) && 
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) && 
+                callee.object.property.name === 'rq' &&
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'RunQuery') {
+              
+              if (path.node.arguments[0] && t.isObjectExpression(path.node.arguments[0])) {
+                const config = path.node.arguments[0];
+                
+                for (const prop of config.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+                    
+                    if (!validRunQueryProps.has(propName)) {
+                      let message = `Invalid property '${propName}' on RunQuery. Valid properties: ${Array.from(validRunQueryProps).join(', ')}`;
+                      let fix = `Remove '${propName}' property`;
+                      
+                      if (propName === 'ExtraFilter') {
+                        message = `RunQuery does not support 'ExtraFilter'. WHERE clauses should be in the pre-defined query or passed as Parameters.`;
+                        fix = `Remove 'ExtraFilter'. Add WHERE logic to the query definition or pass as Parameters`;
+                      } else if (propName === 'Fields') {
+                        message = `RunQuery does not support 'Fields'. The query definition determines returned fields.`;
+                        fix = `Remove 'Fields'. Modify the query definition to return desired fields`;
+                      } else if (propName === 'OrderBy') {
+                        message = `RunQuery does not support 'OrderBy'. ORDER BY should be in the query definition.`;
+                        fix = `Remove 'OrderBy'. Add ORDER BY to the query definition`;
+                      }
+                      
+                      violations.push({
+                        rule: 'runview-runquery-valid-properties',
+                        severity: 'error',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message,
+                        code: `${propName}: ...`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'root-component-props-restriction',
       appliesTo: 'root',
       test: (ast: t.File, componentName: string) => {
@@ -2041,6 +2179,41 @@ const sortedData = useMemo(() => {
   });
   return sorted;
 }, [data, sortBy, sortDirection]);`
+          });
+          break;
+          
+        case 'runview-runquery-valid-properties':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use only valid properties for RunView/RunViews and RunQuery',
+            example: `// ❌ WRONG - Invalid properties on RunView:
+await utilities.rv.RunView({
+  EntityName: 'MJ: AI Prompt Runs',
+  Parameters: { startDate, endDate },  // INVALID!
+  GroupBy: 'Status'                    // INVALID!
+});
+
+// ✅ CORRECT - Use ExtraFilter for WHERE clauses:
+await utilities.rv.RunView({
+  EntityName: 'MJ: AI Prompt Runs',
+  ExtraFilter: \`RunAt >= '\${startDate.toISOString()}' AND RunAt <= '\${endDate.toISOString()}'\`,
+  OrderBy: 'RunAt DESC',
+  Fields: ['RunAt', 'Status', 'Success']
+});
+
+// ✅ For aggregations, use RunQuery with a pre-defined query:
+await utilities.rq.RunQuery({
+  QueryName: 'Prompt Run Summary',
+  Parameters: { startDate, endDate }  // Parameters ARE valid for RunQuery
+});
+
+// Valid RunView properties:
+// - EntityName (required)
+// - ExtraFilter, OrderBy, Fields, MaxRows, StartRow, ResultType (optional)
+
+// Valid RunQuery properties:
+// - QueryName (required)
+// - CategoryName, CategoryID, Parameters (optional)`
           });
           break;
           
