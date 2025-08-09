@@ -4,7 +4,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { QueryFormComponent } from '../../generated/Entities/Query/query.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
@@ -51,7 +50,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     ];
     public categories: QueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
-    private isCategoriesLoaded = false;
     
     // Status options
     public statusOptions = [
@@ -239,7 +237,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 const results = await rv.RunView<QueryPermissionEntity>({
                     EntityName: 'Query Permissions',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'Type ASC',
+                    OrderBy: 'Role ASC',
                     ResultType: 'entity_object'
                 });
                 
