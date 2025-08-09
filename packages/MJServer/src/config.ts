@@ -102,6 +102,18 @@ const sqlLoggingSchema = z.object({
   sessionTimeout: z.number().optional().default(3600000), // 1 hour
 });
 
+const authProviderSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  issuer: z.string(),
+  audience: z.string(),
+  jwksUri: z.string(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  tenantId: z.string().optional(),
+  domain: z.string().optional(),
+}).passthrough(); // Allow additional provider-specific fields
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -109,6 +121,7 @@ const configInfoSchema = z.object({
   restApiOptions: restApiOptionsSchema.optional().default({}),
   askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
+  authProviders: z.array(authProviderSchema).optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -152,6 +165,7 @@ export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
 export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
+export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
