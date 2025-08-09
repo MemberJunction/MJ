@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.83.0
+
+### Minor Changes
+
+- e2e0415: Bump to version 2.83.0 to align with migration file versioning
+
+### Patch Changes
+
+- @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

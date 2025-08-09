@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.83.0
+
+### Patch Changes
+
+- 1eebeda: small changes no migration
+  - @memberjunction/ai@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

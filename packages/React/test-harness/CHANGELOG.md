@@ -1,5 +1,15 @@
 # @memberjunction/react-test-harness
 
+## 2.83.0
+
+### Patch Changes
+
+- 87f7308: registration improvements
+- 7fef004: Improved Static Linter
+- Updated dependencies [87f7308]
+  - @memberjunction/react-runtime@2.83.0
+  - @memberjunction/interactive-component-types@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

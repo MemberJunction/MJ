@@ -1,5 +1,15 @@
 # @memberjunction/react-runtime
 
+## 2.83.0
+
+### Patch Changes
+
+- 87f7308: registration improvements
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/interactive-component-types@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

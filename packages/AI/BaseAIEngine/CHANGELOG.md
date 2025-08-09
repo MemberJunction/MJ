@@ -1,5 +1,16 @@
 # @memberjunction/ai-engine-base
 
+## 2.83.0
+
+### Patch Changes
+
+- 1dc69bf: Agent Type State
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/ai@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes
