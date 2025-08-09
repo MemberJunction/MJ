@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
@@ -62,7 +62,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   viewMode: 'grid' | 'list' = 'list';
 
   constructor(
-    private dialogRef: DialogRef,
+    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
   ) {}
 
