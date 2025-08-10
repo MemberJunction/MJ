@@ -1725,9 +1725,8 @@ export class ComponentLinter {
     const unique: Violation[] = [];
     
     for (const violation of violations) {
-      // Create a key from rule and the core message (without line numbers)
-      const messageWithoutLineNumbers = violation.message.replace(/at line \d+/g, 'at line X');
-      const key = `${violation.rule}:${messageWithoutLineNumbers}`;
+      // Create a key from the complete violation details (case-insensitive for message)
+      const key = `${violation.rule}:${violation.severity}:${violation.line}:${violation.column}:${violation.message.toLowerCase()}`;
       
       if (!seen.has(key)) {
         seen.add(key);
