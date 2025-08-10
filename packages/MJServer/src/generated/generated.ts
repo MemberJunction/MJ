@@ -1365,6 +1365,18 @@ each time the agent processes a prompt step.`})
     @MaxLength(200)
     User?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Configuration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OverrideModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OverrideVendor?: string;
+        
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
     
@@ -1764,6 +1776,9 @@ export class AIVendor_ {
     @Field(() => [AIModelCost_])
     MJ_AIModelCosts_VendorIDArray: AIModelCost_[]; // Link to MJ_AIModelCosts
     
+    @Field(() => [AIAgentRun_])
+    MJ_AIAgentRuns_OverrideVendorIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
 }
 
 //****************************************************************************
@@ -1924,6 +1939,17 @@ export class AIVendorResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIAgentRun_])
+    async MJ_AIAgentRuns_OverrideVendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideVendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
     @Mutation(() => AIVendor_)
     async CreateAIVendor(
         @Arg('input', () => CreateAIVendorInput) input: CreateAIVendorInput,
@@ -2014,6 +2040,9 @@ export class AIConfiguration_ {
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
+    @Field(() => [AIAgentRun_])
+    MJ_AIAgentRuns_ConfigurationIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -2185,6 +2214,17 @@ export class AIConfigurationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRun_])
+    async MJ_AIAgentRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -2913,6 +2953,13 @@ export class AIAgentStep_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`}) 
+    ActionInputMapping?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -2992,6 +3039,12 @@ export class CreateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActionInputMapping: string | null;
 }
     
 
@@ -3050,6 +3103,12 @@ export class UpdateAIAgentStepInput {
 
     @Field(() => Int, { nullable: true })
     Height?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ActionInputMapping?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3714,6 +3773,17 @@ export class AIAgentType_ {
     @MaxLength(510)
     DriverClass?: string;
         
+    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`}) 
+    @MaxLength(1000)
+    UIFormSectionKey?: string;
+        
+    @Field({nullable: true, description: `Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`}) 
+    @MaxLength(1000)
+    UIFormKey?: string;
+        
+    @Field(() => Boolean, {description: `Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`}) 
+    UIFormSectionExpandedByDefault: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SystemPrompt?: string;
@@ -3748,6 +3818,15 @@ export class CreateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field({ nullable: true })
+    UIFormSectionKey: string | null;
+
+    @Field({ nullable: true })
+    UIFormKey: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UIFormSectionExpandedByDefault?: boolean;
 }
     
 
@@ -3776,6 +3855,15 @@ export class UpdateAIAgentTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    UIFormSectionKey?: string | null;
+
+    @Field({ nullable: true })
+    UIFormKey?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    UIFormSectionExpandedByDefault?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8926,6 +9014,10 @@ export class Entity_ {
     @MaxLength(50)
     Status: string;
         
+    @Field({nullable: true, description: `Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`}) 
+    @MaxLength(510)
+    DisplayName?: string;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -9220,6 +9312,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
 }
     
 
@@ -9383,6 +9478,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16792,9 +16890,6 @@ export class AIModel_ {
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
-    @Field(() => [AIResultCache_])
-    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
-    
     @Field(() => [AIAgentModel_])
     AIAgentModels_ModelIDArray: AIAgentModel_[]; // Link to AIAgentModels
     
@@ -16812,6 +16907,9 @@ export class AIModel_ {
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ModelIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
+    @Field(() => [AIAgentRun_])
+    MJ_AIAgentRuns_OverrideModelIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
 }
 
@@ -17009,17 +17107,6 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIResultCache_])
-    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Result Cache', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ContentType_])
     async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Types', userPayload);
@@ -17105,6 +17192,17 @@ export class AIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRun_])
+    async MJ_AIAgentRuns_OverrideModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -23238,6 +23336,18 @@ export class QueryCategory_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `Default cache setting for queries in this category`}) 
+    DefaultCacheEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Default TTL in minutes for cached results of queries in this category`}) 
+    DefaultCacheTTLMinutes?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Default maximum cache size for queries in this category`}) 
+    DefaultCacheMaxSize?: number;
+        
+    @Field(() => Boolean, {description: `When true, queries without cache config will inherit from this category`}) 
+    CacheInheritanceEnabled: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -23273,6 +23383,18 @@ export class CreateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultCacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLMinutes: number | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheMaxSize: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheInheritanceEnabled?: boolean;
 }
     
 
@@ -23295,6 +23417,18 @@ export class UpdateQueryCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultCacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLMinutes?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheMaxSize?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheInheritanceEnabled?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23465,6 +23599,18 @@ export class Query_ {
     @Field(() => Boolean, {nullable: true, description: `Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`}) 
     UsesTemplate?: boolean;
         
+    @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
+    AuditQueryRuns: boolean;
+        
+    @Field(() => Boolean, {description: `When true, query results will be cached in memory with TTL expiration`}) 
+    CacheEnabled: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
+    CacheTTLMinutes?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
+    CacheMaxSize?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
@@ -23529,6 +23675,18 @@ export class CreateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLMinutes: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CacheMaxSize: number | null;
 }
     
 
@@ -23575,6 +23733,18 @@ export class UpdateQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     UsesTemplate?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditQueryRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheEnabled?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLMinutes?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    CacheMaxSize?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36411,9 +36581,9 @@ export class AIModelVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
+    @Field({description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
     @MaxLength(16)
-    TypeID?: string;
+    TypeID: string;
         
     @Field() 
     @MaxLength(100)
@@ -36423,9 +36593,9 @@ export class AIModelVendor_ {
     @MaxLength(100)
     Vendor: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    Type?: string;
+    Type: string;
         
 }
 
@@ -36474,7 +36644,7 @@ export class CreateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID: string | null;
+    TypeID?: string;
 }
     
 
@@ -36523,7 +36693,7 @@ export class UpdateAIModelVendorInput {
     SupportsStreaming?: boolean;
 
     @Field({ nullable: true })
-    TypeID?: string | null;
+    TypeID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41112,6 +41282,14 @@ export class AIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     OriginalModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Judge?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ChildPrompt?: string;
         
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns

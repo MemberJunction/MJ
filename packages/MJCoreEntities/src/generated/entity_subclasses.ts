@@ -5060,6 +5060,11 @@ export const EntitySchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -7920,6 +7925,18 @@ each time the agent processes a prompt step.`),
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+    OverrideModel: z.string().nullable().describe(`
+        * * Field Name: OverrideModel
+        * * Display Name: Override Model
+        * * SQL Data Type: nvarchar(50)`),
+    OverrideVendor: z.string().nullable().describe(`
+        * * Field Name: OverrideVendor
+        * * Display Name: Override Vendor
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -8092,6 +8109,22 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+        * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`),
+    ActionInputMapping: z.string().nullable().describe(`
+        * * Field Name: ActionInputMapping
+        * * Display Name: Action Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8164,6 +8197,22 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: The class name used by the MemberJunction class factory to instantiate the specific agent type implementation. For example, "LoopAgentType" for a looping agent pattern. If not specified, defaults to using the agent type Name for the DriverClass lookup key.`),
+    UIFormSectionKey: z.string().nullable().describe(`
+        * * Field Name: UIFormSectionKey
+        * * Display Name: UI Form Section Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass`),
+    UIFormKey: z.string().nullable().describe(`
+        * * Field Name: UIFormKey
+        * * Display Name: UI Form Key
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.`),
+    UIFormSectionExpandedByDefault: z.boolean().describe(`
+        * * Field Name: UIFormSectionExpandedByDefault
+        * * Display Name: UI Form Section Expanded By Default
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -8574,7 +8623,7 @@ export const AIModelVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TypeID: z.string().nullable().describe(`
+    TypeID: z.string().describe(`
         * * Field Name: TypeID
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
@@ -8588,7 +8637,7 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().nullable().describe(`
+    Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -9181,6 +9230,14 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: OriginalModel
         * * Display Name: Original Model
         * * SQL Data Type: nvarchar(50)`),
+    Judge: z.string().nullable().describe(`
+        * * Field Name: Judge
+        * * Display Name: Judge
+        * * SQL Data Type: nvarchar(255)`),
+    ChildPrompt: z.string().nullable().describe(`
+        * * Field Name: ChildPrompt
+        * * Display Name: Child Prompt
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -10014,6 +10071,28 @@ export const QuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Automatically set to true when the SQL column contains Nunjucks template markers (e.g., {{ paramName }}). This flag is maintained by the QueryEntityServer for performance optimization and discovery purposes. It allows quick filtering of parameterized queries and enables the UI to show parameter inputs only when needed. The system will automatically update this flag when the SQL content changes.`),
+    AuditQueryRuns: z.boolean().describe(`
+        * * Field Name: AuditQueryRuns
+        * * Display Name: Audit Query Runs
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`),
+    CacheEnabled: z.boolean().describe(`
+        * * Field Name: CacheEnabled
+        * * Display Name: Cache Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, query results will be cached in memory with TTL expiration`),
+    CacheTTLMinutes: z.number().nullable().describe(`
+        * * Field Name: CacheTTLMinutes
+        * * Display Name: Cache TTL Minutes
+        * * SQL Data Type: int
+        * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.`),
+    CacheMaxSize: z.number().nullable().describe(`
+        * * Field Name: CacheMaxSize
+        * * Display Name: Cache Max Size
+        * * SQL Data Type: int
+        * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -10059,6 +10138,28 @@ export const QueryCategorySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultCacheEnabled: z.boolean().describe(`
+        * * Field Name: DefaultCacheEnabled
+        * * Display Name: Default Cache Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Default cache setting for queries in this category`),
+    DefaultCacheTTLMinutes: z.number().nullable().describe(`
+        * * Field Name: DefaultCacheTTLMinutes
+        * * Display Name: Default Cache TTL Minutes
+        * * SQL Data Type: int
+        * * Description: Default TTL in minutes for cached results of queries in this category`),
+    DefaultCacheMaxSize: z.number().nullable().describe(`
+        * * Field Name: DefaultCacheMaxSize
+        * * Display Name: Default Cache Max Size
+        * * SQL Data Type: int
+        * * Description: Default maximum cache size for queries in this category`),
+    CacheInheritanceEnabled: z.boolean().describe(`
+        * * Field Name: CacheInheritanceEnabled
+        * * Display Name: Cache Inheritance Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, queries without cache config will inherit from this category`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -26700,6 +26801,19 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
 
     /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional display name for the entity. If not provided, the entity Name will be used for display purposes.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -33984,6 +34098,33 @@ each time the agent processes a prompt step.
     get User(): string | null {
         return this.Get('User');
     }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+
+    /**
+    * * Field Name: OverrideModel
+    * * Display Name: Override Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideModel(): string | null {
+        return this.Get('OverrideModel');
+    }
+
+    /**
+    * * Field Name: OverrideVendor
+    * * Display Name: Override Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get OverrideVendor(): string | null {
+        return this.Get('OverrideVendor');
+    }
 }
 
 
@@ -34494,6 +34635,38 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
 
     /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Disabled
+    * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute
+    */
+    get Status(): 'Active' | 'Pending' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ActionInputMapping
+    * * Display Name: Action Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}
+    */
+    get ActionInputMapping(): string | null {
+        return this.Get('ActionInputMapping');
+    }
+    set ActionInputMapping(value: string | null) {
+        this.Set('ActionInputMapping', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -34673,6 +34846,46 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: UIFormSectionKey
+    * * Display Name: UI Form Section Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional Angular component key name for a subclass of BaseFormSectionComponent that provides a custom form section for this agent type. When specified, this component will be dynamically loaded and displayed as the first expandable section in the AI Agent form. This allows agent types to have specialized UI elements. The class must be registered with the MemberJunction class factory via @RegisterClass
+    */
+    get UIFormSectionKey(): string | null {
+        return this.Get('UIFormSectionKey');
+    }
+    set UIFormSectionKey(value: string | null) {
+        this.Set('UIFormSectionKey', value);
+    }
+
+    /**
+    * * Field Name: UIFormKey
+    * * Display Name: UI Form Key
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional Angular component key name for a subclass of BaseFormComponent that will completely overrides the default AI Agent form for this agent type. When specified, this component will be used instead of the standard AI Agent form, allowing for completely custom form implementations. The class must be registered with the MemberJunction class factory via @RegisterClass. If both UIFormClass and UIFormSectionClass are specified, UIFormClass takes precedence.
+    */
+    get UIFormKey(): string | null {
+        return this.Get('UIFormKey');
+    }
+    set UIFormKey(value: string | null) {
+        this.Set('UIFormKey', value);
+    }
+
+    /**
+    * * Field Name: UIFormSectionExpandedByDefault
+    * * Display Name: UI Form Section Expanded By Default
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).
+    */
+    get UIFormSectionExpandedByDefault(): boolean {
+        return this.Get('UIFormSectionExpandedByDefault');
+    }
+    set UIFormSectionExpandedByDefault(value: boolean) {
+        this.Set('UIFormSectionExpandedByDefault', value);
     }
 
     /**
@@ -35894,10 +36107,10 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
     */
-    get TypeID(): string | null {
+    get TypeID(): string {
         return this.Get('TypeID');
     }
-    set TypeID(value: string | null) {
+    set TypeID(value: string) {
         this.Set('TypeID', value);
     }
 
@@ -35924,7 +36137,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string | null {
+    get Type(): string {
         return this.Get('Type');
     }
 }
@@ -37506,6 +37719,24 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get OriginalModel(): string | null {
         return this.Get('OriginalModel');
+    }
+
+    /**
+    * * Field Name: Judge
+    * * Display Name: Judge
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Judge(): string | null {
+        return this.Get('Judge');
+    }
+
+    /**
+    * * Field Name: ChildPrompt
+    * * Display Name: Child Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ChildPrompt(): string | null {
+        return this.Get('ChildPrompt');
     }
 }
 
@@ -39650,6 +39881,41 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
+    * Queries - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof QueryEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -39845,6 +40111,60 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
+    * * Field Name: AuditQueryRuns
+    * * Display Name: Audit Query Runs
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, all executions of this query will be logged to the Audit Log system for tracking and compliance
+    */
+    get AuditQueryRuns(): boolean {
+        return this.Get('AuditQueryRuns');
+    }
+    set AuditQueryRuns(value: boolean) {
+        this.Set('AuditQueryRuns', value);
+    }
+
+    /**
+    * * Field Name: CacheEnabled
+    * * Display Name: Cache Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, query results will be cached in memory with TTL expiration
+    */
+    get CacheEnabled(): boolean {
+        return this.Get('CacheEnabled');
+    }
+    set CacheEnabled(value: boolean) {
+        this.Set('CacheEnabled', value);
+    }
+
+    /**
+    * * Field Name: CacheTTLMinutes
+    * * Display Name: Cache TTL Minutes
+    * * SQL Data Type: int
+    * * Description: Time-to-live in minutes for cached query results. NULL uses default TTL.
+    */
+    get CacheTTLMinutes(): number | null {
+        return this.Get('CacheTTLMinutes');
+    }
+    set CacheTTLMinutes(value: number | null) {
+        this.Set('CacheTTLMinutes', value);
+    }
+
+    /**
+    * * Field Name: CacheMaxSize
+    * * Display Name: Cache Max Size
+    * * SQL Data Type: int
+    * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.
+    */
+    get CacheMaxSize(): number | null {
+        return this.Get('CacheMaxSize');
+    }
+    set CacheMaxSize(value: number | null) {
+        this.Set('CacheMaxSize', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(50)
@@ -39966,6 +40286,60 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DefaultCacheEnabled
+    * * Display Name: Default Cache Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Default cache setting for queries in this category
+    */
+    get DefaultCacheEnabled(): boolean {
+        return this.Get('DefaultCacheEnabled');
+    }
+    set DefaultCacheEnabled(value: boolean) {
+        this.Set('DefaultCacheEnabled', value);
+    }
+
+    /**
+    * * Field Name: DefaultCacheTTLMinutes
+    * * Display Name: Default Cache TTL Minutes
+    * * SQL Data Type: int
+    * * Description: Default TTL in minutes for cached results of queries in this category
+    */
+    get DefaultCacheTTLMinutes(): number | null {
+        return this.Get('DefaultCacheTTLMinutes');
+    }
+    set DefaultCacheTTLMinutes(value: number | null) {
+        this.Set('DefaultCacheTTLMinutes', value);
+    }
+
+    /**
+    * * Field Name: DefaultCacheMaxSize
+    * * Display Name: Default Cache Max Size
+    * * SQL Data Type: int
+    * * Description: Default maximum cache size for queries in this category
+    */
+    get DefaultCacheMaxSize(): number | null {
+        return this.Get('DefaultCacheMaxSize');
+    }
+    set DefaultCacheMaxSize(value: number | null) {
+        this.Set('DefaultCacheMaxSize', value);
+    }
+
+    /**
+    * * Field Name: CacheInheritanceEnabled
+    * * Display Name: Cache Inheritance Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, queries without cache config will inherit from this category
+    */
+    get CacheInheritanceEnabled(): boolean {
+        return this.Get('CacheInheritanceEnabled');
+    }
+    set CacheInheritanceEnabled(value: boolean) {
+        this.Set('CacheInheritanceEnabled', value);
     }
 
     /**
