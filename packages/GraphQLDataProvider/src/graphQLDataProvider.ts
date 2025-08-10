@@ -425,6 +425,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // START ---- IRunViewProvider
     /**************************************************************************/
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // pre-process via the base-class 
+        await this.PreProcessRunView(params, contextUser);
+
         try {
             let qName: string = ''
             let paramType: string = ''
@@ -514,7 +517,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             })
                         })
                     }
-                    return viewData[qName];
+                    const result = viewData[qName];
+
+                    // post-process via the base class
+                    await this.PostProcessRunView(result, params, contextUser);
+
+                    return result;
                 }
             }
             else
@@ -529,6 +537,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // pre-process via the base class
+        await this.PreProcessRunViews(params, contextUser);
+
         try {
             let innerParams: any[] = [];
             let entityInfos: EntityInfo[] = [];
@@ -638,6 +649,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     });
                 }
 
+                // post-process via the base class
+                await this.PostProcessRunViews(results, params, contextUser);
+                
                 return results;
             }
 

@@ -131,22 +131,6 @@ export class RunView  {
         return this._provider || RunView.Provider;
     }
 
-    /**
-     * Used to check to see if the entity in question is active or not
-     * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
-     * either Deprecated or Disabled.
-     * @param entityName 
-     * @param callerName 
-     */
-    protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
-        const md = (this.ProviderToUse as any as IMetadataProvider);
-        const entityName = await RunView.GetEntityNameFromRunViewParams(params, md);
-        const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
-        if (!entity) {
-            throw new Error(`Entity ${entityName} not found in metadata`);
-        }
-        EntityInfo.AssertEntityActiveStatus(entity, callerName);
-    }
 
     /**
      * Runs a view based on the provided parameters, see documentation for RunViewParams for more
@@ -155,25 +139,9 @@ export class RunView  {
      * @returns 
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        this.EntityStatusCheck(params, 'RunView');
-
-        // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
-        // so that we can get the data to populate the entity object with.
-        if (params.ResultType === 'entity_object') {
-            // we need to get the entity definition and then get all the fields for it
-            const p = <IMetadataProvider><any>this.ProviderToUse;
-            const entity = p.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
-            if (!entity)
-                throw new Error(`Entity ${params.EntityName} not found in metadata`);
-            params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
-        }
-
-        // Run the view
-        const result = await this.ProviderToUse.RunView<T>(params, contextUser);
-        // Transform the result set into BaseEntity-derived objects, if needed
-        await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
-
-        return result;
+        // simple proxy to the provider, pre/post process moved to ProviderBase and called by each sub-class
+        // for validation and for optional transformation of the result
+        return await this.ProviderToUse.RunView<T>(params, contextUser);
     }
 
     /**
@@ -183,53 +151,9 @@ export class RunView  {
      * @returns 
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        if (params && params.length > 0) {
-            const p = <IMetadataProvider><any>this.ProviderToUse;
-        
-            for (const param of params) {
-                this.EntityStatusCheck(param, 'RunView');
-
-                // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
-                // so that we can get the data to populate the entity object with.
-                if (param.ResultType === 'entity_object') {
-                    // we need to get the entity definition and then get all the fields for it
-                    const entity: EntityInfo | undefined = p.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
-                    if (!entity){
-                        throw new Error(`Entity ${param.EntityName} not found in metadata`);
-                    }
-                    param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
-                }
-            }
-    
-            // NOW, run the view
-            const results: RunViewResult<T>[] = await this.ProviderToUse.RunViews<T>(params, contextUser);
-    
-            for(const [index, result] of results.entries()){
-                await this.TransformSimpleObjectToEntityObject(params[index], result, contextUser);
-            }
-    
-            return results;    
-        }
-        else {
-            return [];
-        }
-    }
-
-    protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
-        // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
-        if (param.ResultType === 'entity_object' && result && result.Success){
-            // we need to transform each of the items in the result set into a BaseEntity-derived object
-            const p = <IMetadataProvider><any>this.ProviderToUse;
-            
-            // Create entities and load data in parallel for better performance
-            const entityPromises = result.Results.map(async (item) => {
-                const entity = await p.GetEntityObject(param.EntityName, contextUser);
-                await entity.LoadFromData(item);
-                return entity;
-            });
-            
-            result.Results = await Promise.all(entityPromises);
-        }
+        // same as RunView, a simple proxy to the provider, pre/post processes are moved to
+        // ProviderBase as with RunView
+        return this.ProviderToUse.RunViews(params, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunViewProvider';
