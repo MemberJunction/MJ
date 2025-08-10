@@ -6,11 +6,15 @@ export interface LintResult {
   success: boolean;
   violations: Violation[];
   suggestions: FixSuggestion[];
+  criticalCount?: number;
+  highCount?: number;
+  mediumCount?: number;
+  lowCount?: number;
 }
 
 export interface Violation {
   rule: string;
-  severity: 'error' | 'warning';
+  severity: 'critical' | 'high' | 'medium' | 'low';
   line: number;
   column: number;
   message: string;
@@ -134,10 +138,17 @@ export class ComponentLinter {
           }
           
           // Check if it's a configuration prop (allowed)
+          // Be generous - configuration props are those that configure behavior, not manage state
           if (propName.endsWith('Config') || propName.endsWith('Settings') || propName.endsWith('Options') ||
               propName === 'pageSize' || propName === 'maxItems' || propName === 'minValue' || propName === 'maxValue' ||
               propName === 'placeholder' || propName === 'label' || propName === 'title' || propName === 'disabled' ||
-              propName === 'readonly' || propName === 'required' || propName === 'className' || propName === 'style') {
+              propName === 'readonly' || propName === 'required' || propName === 'className' || propName === 'style' ||
+              // Sort/filter configuration when not paired with state management handlers
+              ((propName.includes('sort') || propName.includes('Sort') || 
+                propName.includes('filter') || propName.includes('Filter') ||
+                propName === 'orderBy' || propName === 'groupBy') && 
+               !acceptedProps.has('onSortChange') && !acceptedProps.has('onFilterChange') &&
+               !acceptedProps.has('onChange'))) {
             continue;
           }
           
@@ -187,7 +198,7 @@ export class ComponentLinter {
         if (controlledStateProps.length > 0) {
           violations.push({
             rule: 'full-state-ownership',
-            severity: 'error',
+            severity: 'critical',  // This is critical as it breaks the architecture
             line: 1,
             column: 0,
             message: `Component "${componentName}" accepts controlled state props (${controlledStateProps.join(', ')}) instead of managing state internally. Use 'initial*' or 'default*' prefixes for initialization props (e.g., 'initialPage' instead of 'currentPage'). Each component must manage ALL its own state.`
@@ -222,7 +233,7 @@ export class ComponentLinter {
             ) {
               violations.push({
                 rule: 'no-use-reducer',
-                severity: 'error',
+                severity: 'high',  // High but not critical - it's a pattern violation
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
                 message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. Components should manage state with useState and persist important settings with onSaveUserSettings.`,
@@ -254,7 +265,7 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                     violations.push({
                       rule: 'no-data-prop',
-                      severity: 'error',
+                      severity: 'medium',  // It's a pattern issue, not critical
                       line: prop.loc?.start.line || 0,
                       column: prop.loc?.start.column || 0,
                       message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
@@ -277,7 +288,7 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                       violations.push({
                         rule: 'no-data-prop',
-                        severity: 'error',
+                        severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
                         message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
@@ -322,7 +333,7 @@ export class ComponentLinter {
                       if (ephemeralPatterns.some(pattern => key.toLowerCase().includes(pattern))) {
                         violations.push({
                           rule: 'saved-user-settings-pattern',
-                          severity: 'warning',
+                          severity: 'medium',  // Pattern issue but not breaking
                           line: prop.loc?.start.line || 0,
                           column: prop.loc?.start.column || 0,
                           message: `Saving ephemeral UI state "${key}" to savedUserSettings. Only save important user preferences.`
@@ -370,7 +381,7 @@ export class ComponentLinter {
                 // Only report if some props are passed (to avoid false positives on non-component JSX)
                 violations.push({
                   rule: 'pass-standard-props',
-                  severity: 'error',
+                  severity: 'critical',
                   line: openingElement.loc?.start.line || 0,
                   column: openingElement.loc?.start.column || 0,
                   message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All components must receive styles, utilities, and components props.`,
@@ -411,7 +422,7 @@ export class ComponentLinter {
         if (componentFunctions.length > 0) {
           violations.push({
             rule: 'no-child-implementation',
-            severity: 'error',
+            severity: 'critical',
             line: 1,
             column: 0,
             message: `Root component file contains child component implementations: ${componentFunctions.join(', ')}. Root should only reference child components, not implement them.`,
@@ -492,7 +503,7 @@ export class ComponentLinter {
           if (unusedComponents.length > 0) {
             violations.push({
               rule: 'undefined-component-usage',
-              severity: 'warning',
+              severity: 'low',
               line: 1,
               column: 0,
               message: `Component destructures ${unusedComponents.join(', ')} from components prop but never uses them. These may be missing from the component spec's dependencies array.`
@@ -525,7 +536,7 @@ export class ComponentLinter {
                 if (/\[\d+\]\.\w+/.test(code)) {
                   violations.push({
                     rule: 'unsafe-array-access',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
@@ -564,7 +575,7 @@ export class ComponentLinter {
               if (!hasInitialValue) {
                 violations.push({
                   rule: 'array-reduce-safety',
-                  severity: 'warning',
+                  severity: 'low',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
                   message: `reduce() without initial value may fail on empty arrays: ${code}`,
@@ -578,7 +589,7 @@ export class ComponentLinter {
                    (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
                 violations.push({
                   rule: 'array-reduce-safety',
-                  severity: 'error',
+                  severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
                   message: `reduce() on array element access is unsafe: ${code}`,
@@ -723,7 +734,7 @@ export class ComponentLinter {
             if (relatedHandlers.length > 0) {
               violations.push({
                 rule: 'parent-event-callback-usage',
-                severity: 'error',
+                severity: 'critical',
                 line: location.line,
                 column: location.column,
                 message: `Component receives '${callbackName}' event callback but never invokes it. Found state updates in ${relatedHandlers.join(', ')} but parent is not notified.`,
@@ -857,7 +868,7 @@ export class ComponentLinter {
                   
                   violations.push({
                     rule: 'property-name-consistency',
-                    severity: 'error',
+                    severity: 'critical',
                     line: transformation.location.line,
                     column: transformation.location.column,
                     message: `Property name mismatch: data transformed with different casing. Accessing '${accessedProp}' but property was transformed to '${transformedName || 'different name'}'`,
@@ -899,7 +910,7 @@ export class ComponentLinter {
                     if (!hasDebounce && !hasTimeout) {
                       violations.push({
                         rule: 'noisy-settings-updates',
-                        severity: 'error',
+                        severity: 'critical',
                         line: path.node.loc?.start.line || 0,
                         column: path.node.loc?.start.column || 0,
                         message: `Saving settings on every change/keystroke. Save on blur, submit, or after debouncing.`
@@ -942,7 +953,7 @@ export class ComponentLinter {
                 if (hasSetState && hasPropDeps && !bodyString.includes('async')) {
                   violations.push({
                     rule: 'prop-state-sync',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Syncing props to internal state with useEffect creates dual state management',
@@ -1003,7 +1014,7 @@ export class ComponentLinter {
                       if (!funcName || funcName === componentName) {
                         violations.push({
                           rule: 'performance-memoization',
-                          severity: 'warning',
+                          severity: 'low',  // Just a suggestion, not mandatory
                           line: path.node.loc?.start.line || 0,
                           column: path.node.loc?.start.column || 0,
                           message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
@@ -1029,7 +1040,7 @@ export class ComponentLinter {
                 if (!hasVariables || hasVariables.length < 3) { // Allow some property names
                   violations.push({
                     rule: 'performance-memoization',
-                    severity: 'warning',
+                    severity: 'low',  // Just a suggestion
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Static array/object recreated on every render. Consider using useMemo.',
@@ -1072,7 +1083,7 @@ export class ComponentLinter {
                   if (childPatterns.some(pattern => pattern.test(stateName))) {
                     violations.push({
                       rule: 'child-state-management',
-                      severity: 'error',
+                      severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
                       message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
@@ -1112,7 +1123,7 @@ export class ComponentLinter {
                      funcName.includes('handleSort') || funcName.includes('handleFilter'))) {
                   violations.push({
                     rule: 'server-reload-on-client-operation',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Reloading data from server on sort/filter. Use useMemo for client-side operations.',
@@ -1201,7 +1212,7 @@ export class ComponentLinter {
                         
                         violations.push({
                           rule: 'runview-runquery-valid-properties',
-                          severity: 'error',
+                          severity: 'critical',
                           line: prop.loc?.start.line || 0,
                           column: prop.loc?.start.column || 0,
                           message,
@@ -1248,7 +1259,7 @@ export class ComponentLinter {
                       
                       violations.push({
                         rule: 'runview-runquery-valid-properties',
-                        severity: 'error',
+                        severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
                         message,
@@ -1300,7 +1311,7 @@ export class ComponentLinter {
                 if (invalidProps.length > 0) {
                   violations.push({
                     rule: 'root-component-props-restriction',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
@@ -1333,7 +1344,7 @@ export class ComponentLinter {
                   if (invalidProps.length > 0) {
                     violations.push({
                       rule: 'root-component-props-restriction',
-                      severity: 'error',
+                      severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
                       message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
@@ -1389,13 +1400,26 @@ export class ComponentLinter {
         violations.push(...dataViolations);
       }
       
+      // Deduplicate violations - keep only unique rule+message combinations
+      const uniqueViolations = this.deduplicateViolations(violations);
+      
+      // Count violations by severity
+      const criticalCount = uniqueViolations.filter(v => v.severity === 'critical').length;
+      const highCount = uniqueViolations.filter(v => v.severity === 'high').length;
+      const mediumCount = uniqueViolations.filter(v => v.severity === 'medium').length;
+      const lowCount = uniqueViolations.filter(v => v.severity === 'low').length;
+      
       // Generate fix suggestions
-      const suggestions = this.generateFixSuggestions(violations);
+      const suggestions = this.generateFixSuggestions(uniqueViolations);
       
       return {
-        success: violations.filter(v => v.severity === 'error').length === 0,
-        violations,
-        suggestions
+        success: criticalCount === 0 && highCount === 0,  // Only fail on critical/high
+        violations: uniqueViolations,
+        suggestions,
+        criticalCount,
+        highCount,
+        mediumCount,
+        lowCount
       };
     } catch (error) {
       // If parsing fails, return a parse error
@@ -1403,7 +1427,7 @@ export class ComponentLinter {
         success: false,
         violations: [{
           rule: 'parse-error',
-          severity: 'error',
+          severity: 'critical',
           line: 0,
           column: 0,
           message: `Failed to parse component: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -1525,7 +1549,7 @@ export class ComponentLinter {
                     
                     violations.push({
                       rule: 'entity-name-mismatch',
-                      severity: 'error',
+                      severity: 'critical',
                       line: prop.value.loc?.start.line || 0,
                       column: prop.value.loc?.start.column || 0,
                       message: `Entity "${usedEntity}" not found in dataRequirements. ${
@@ -1553,7 +1577,7 @@ export class ComponentLinter {
                             if (/COUNT\s*\(|SUM\s*\(|AVG\s*\(|MAX\s*\(|MIN\s*\(/i.test(fieldName)) {
                               violations.push({
                                 rule: 'runview-sql-function',
-                                severity: 'error',
+                                severity: 'critical',
                                 line: fieldElement.loc?.start.line || 0,
                                 column: fieldElement.loc?.start.column || 0,
                                 message: `RunView does not support SQL aggregations. Use RunQuery for aggregations or fetch raw data and aggregate in JavaScript.`,
@@ -1568,7 +1592,7 @@ export class ComponentLinter {
                               if (!isAllowed) {
                                 violations.push({
                                   rule: 'field-not-in-requirements',
-                                  severity: 'error',
+                                  severity: 'critical',
                                   line: fieldElement.loc?.start.line || 0,
                                   column: fieldElement.loc?.start.column || 0,
                                   message: `Field "${fieldName}" not found in dataRequirements for entity "${usedEntity}". Available fields: ${
@@ -1595,7 +1619,7 @@ export class ComponentLinter {
                         if (!entityFields.sortFields.has(orderByField)) {
                           violations.push({
                             rule: 'orderby-field-not-sortable',
-                            severity: 'error',
+                            severity: 'critical',
                             line: orderByProperty.value.loc?.start.line || 0,
                             column: orderByProperty.value.loc?.start.column || 0,
                             message: `OrderBy field "${orderByField}" not in sortFields for entity "${usedEntity}". Available sort fields: ${
@@ -1646,7 +1670,7 @@ export class ComponentLinter {
                   
                   violations.push({
                     rule: 'query-name-mismatch',
-                    severity: 'error',
+                    severity: 'critical',
                     line: prop.value.loc?.start.line || 0,
                     column: prop.value.loc?.start.column || 0,
                     message: `Query "${usedQuery}" not found in dataRequirements. ${
@@ -1694,6 +1718,32 @@ export class ComponentLinter {
     }
     
     return null;
+  }
+  
+  private static deduplicateViolations(violations: Violation[]): Violation[] {
+    const seen = new Set<string>();
+    const unique: Violation[] = [];
+    
+    for (const violation of violations) {
+      // Create a key from rule and the core message (without line numbers)
+      const messageWithoutLineNumbers = violation.message.replace(/at line \d+/g, 'at line X');
+      const key = `${violation.rule}:${messageWithoutLineNumbers}`;
+      
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(violation);
+      }
+    }
+    
+    // Sort by severity (critical > high > medium > low) and then by line number
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    unique.sort((a, b) => {
+      const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
+      if (severityDiff !== 0) return severityDiff;
+      return a.line - b.line;
+    });
+    
+    return unique;
   }
   
   private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
