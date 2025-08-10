@@ -10,13 +10,17 @@ import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCom
 export class OpenAILLM extends BaseLLM {
     private _openAI: OpenAI;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, baseURL?: string) {
         super(apiKey);
 
         // now create the OpenAI instance
-        this._openAI = new OpenAI({
-            apiKey: apiKey,
-        });
+        const params: Record<string, any> = {
+            apiKey
+        }
+        if (baseURL && baseURL.length > 0) {
+            params.baseURL = baseURL; // OpenAI base URL is optional, lots of sub-classes and users might use other providers that are Open AI compatible
+        }
+        this._openAI = new OpenAI(params);
     }
 
     /**
