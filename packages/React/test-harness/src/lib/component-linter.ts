@@ -43,12 +43,12 @@ export class ComponentLinter {
       appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
-        let hasStateFromProps = false;
-        let hasSavedUserSettings = false;
-        let usesUseState = false;
-        const stateProps: string[] = [];
+        const controlledStateProps: string[] = [];
+        const initializationProps: string[] = [];
+        const eventHandlers: string[] = [];
+        const acceptedProps = new Map<string, { line: number, column: number }>();
         
-        // First pass: check if component expects state from props and uses useState
+        // First pass: collect all props
         traverse(ast, {
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
             if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
@@ -57,14 +57,14 @@ export class ComponentLinter {
                 for (const prop of param.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
-                    // Check for state-like props
-                    const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
-                    if (statePatterns.some(pattern => propName.includes(pattern))) {
-                      hasStateFromProps = true;
-                      stateProps.push(propName);
-                    }
-                    if (propName === 'savedUserSettings') {
-                      hasSavedUserSettings = true;
+                    acceptedProps.set(propName, {
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0
+                    });
+                    
+                    // Categorize props
+                    if (/^on[A-Z]/.test(propName) && propName !== 'onSaveUserSettings') {
+                      eventHandlers.push(propName);
                     }
                   }
                 }
@@ -82,46 +82,122 @@ export class ComponentLinter {
                   for (const prop of param.properties) {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
-                      const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
-                      if (statePatterns.some(pattern => propName.includes(pattern))) {
-                        hasStateFromProps = true;
-                        stateProps.push(propName);
-                      }
-                      if (propName === 'savedUserSettings') {
-                        hasSavedUserSettings = true;
+                      acceptedProps.set(propName, {
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0
+                      });
+                      
+                      // Categorize props
+                      if (/^on[A-Z]/.test(propName) && propName !== 'onSaveUserSettings') {
+                        eventHandlers.push(propName);
                       }
                     }
                   }
                 }
               }
             }
-          },
-          
-          // Check for useState usage
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            if (
-              (t.isIdentifier(callee) && callee.name === 'useState') ||
-              (t.isMemberExpression(callee) && 
-               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
-               t.isIdentifier(callee.property) && callee.property.name === 'useState')
-            ) {
-              usesUseState = true;
-            }
           }
         });
         
-        // CRITICAL: Components must manage ALL their own state
-        // State props are NOT allowed - each component is generated separately
-        if (hasStateFromProps) {
+        // Analyze props for controlled component patterns
+        const controlledPatterns = [
+          { stateProp: 'value', handler: 'onChange' },
+          { stateProp: 'checked', handler: 'onChange' },
+          { stateProp: 'selectedId', handler: 'onSelect' },
+          { stateProp: 'selectedIds', handler: 'onSelectionChange' },
+          { stateProp: 'selectedItems', handler: 'onSelectionChange' },
+          { stateProp: 'activeTab', handler: 'onTabChange' },
+          { stateProp: 'currentPage', handler: 'onPageChange' },
+          { stateProp: 'expanded', handler: 'onExpand' },
+          { stateProp: 'collapsed', handler: 'onCollapse' },
+          { stateProp: 'open', handler: 'onOpenChange' },
+          { stateProp: 'visible', handler: 'onVisibilityChange' }
+        ];
+        
+        // Check each accepted prop
+        for (const [propName, location] of acceptedProps) {
+          // Skip standard props
+          if (['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings'].includes(propName)) {
+            continue;
+          }
+          
+          // Skip data props (arrays, objects that are clearly data)
+          if (propName.endsWith('Data') || propName === 'items' || propName === 'options' || 
+              propName === 'rows' || propName === 'columns' || propName === 'records') {
+            continue;
+          }
+          
+          // Check if it's an initialization prop (allowed)
+          if (propName.startsWith('initial') || propName.startsWith('default')) {
+            initializationProps.push(propName);
+            continue;
+          }
+          
+          // Check if it's a configuration prop (allowed)
+          if (propName.endsWith('Config') || propName.endsWith('Settings') || propName.endsWith('Options') ||
+              propName === 'pageSize' || propName === 'maxItems' || propName === 'minValue' || propName === 'maxValue' ||
+              propName === 'placeholder' || propName === 'label' || propName === 'title' || propName === 'disabled' ||
+              propName === 'readonly' || propName === 'required' || propName === 'className' || propName === 'style') {
+            continue;
+          }
+          
+          // Check for controlled component pattern (both state prop and handler present)
+          let isControlled = false;
+          for (const pattern of controlledPatterns) {
+            if (propName === pattern.stateProp) {
+              // Check if the corresponding handler exists
+              if (acceptedProps.has(pattern.handler) || eventHandlers.includes(pattern.handler)) {
+                controlledStateProps.push(propName);
+                isControlled = true;
+                break;
+              }
+              // If state prop exists without handler, it's still problematic
+              // unless it's clearly for initialization
+              if (!propName.startsWith('initial') && !propName.startsWith('default')) {
+                controlledStateProps.push(propName);
+                isControlled = true;
+                break;
+              }
+            }
+          }
+          
+          // Check for state-like props that aren't initialization
+          if (!isControlled) {
+            const statePatterns = [
+              'selectedId', 'selectedItemId', 'selectedItem', 'selection',
+              'filters', 'sortBy', 'sortField', 'sortDirection', 'orderBy',
+              'currentPage', 'pageNumber', 'page',
+              'activeTab', 'activeIndex', 'activeKey',
+              'expandedItems', 'collapsedItems',
+              'searchTerm', 'searchQuery', 'query',
+              'formData', 'formValues', 'values'
+            ];
+            
+            for (const pattern of statePatterns) {
+              if (propName === pattern || propName.toLowerCase() === pattern.toLowerCase()) {
+                // This is a state prop without proper initialization naming
+                controlledStateProps.push(propName);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Generate violations for controlled state props
+        if (controlledStateProps.length > 0) {
           violations.push({
             rule: 'full-state-ownership',
             severity: 'error',
             line: 1,
             column: 0,
-            message: `Component "${componentName}" expects state from props (${stateProps.join(', ')}) instead of managing internally. Each component is generated separately and MUST manage ALL its own state.`
+            message: `Component "${componentName}" accepts controlled state props (${controlledStateProps.join(', ')}) instead of managing state internally. Use 'initial*' or 'default*' prefixes for initialization props (e.g., 'initialPage' instead of 'currentPage'). Each component must manage ALL its own state.`
           });
+        }
+        
+        // Add warning for initialization props (informational)
+        if (initializationProps.length > 0 && violations.length === 0) {
+          // This is actually OK, but we can log it for awareness
+          // Don't create a violation, just note it's using the correct pattern
         }
         
         return violations;
@@ -1628,36 +1704,66 @@ export class ComponentLinter {
         case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must manage ALL their own state internally. No state props allowed.',
-            example: `// ❌ WRONG - Expecting state from props:
-function Component({ selectedId, filters, sortBy, onStateChange }) {
-  // This component expects parent to manage its state - WRONG!
+            suggestion: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
+            example: `// ❌ WRONG - Controlled state props:
+function PaginationControls({ currentPage, filters, sortBy, onPageChange }) {
+  // These props suggest parent controls the state - WRONG!
 }
 
-// ✅ CORRECT - Component owns ALL its state:
-function Component({ data, savedUserSettings, onSaveUserSettings }) {
-  // Component manages ALL its own state internally
-  const [selectedId, setSelectedId] = useState(
-    savedUserSettings?.selectedId || null
+// ❌ WRONG - State props without handlers (still controlled):
+function Component({ selectedId, activeTab }) {
+  // Parent is managing this component's state
+}
+
+// ✅ CORRECT - Using initialization props:
+function PaginationControls({ initialPage, defaultPageSize, onPageChange, savedUserSettings, onSaveUserSettings }) {
+  // Component owns ALL its state, initialized from props
+  const [currentPage, setCurrentPage] = useState(
+    savedUserSettings?.currentPage || initialPage || 1
   );
-  const [filters, setFilters] = useState(
-    savedUserSettings?.filters || {}
-  );
-  const [sortBy, setSortBy] = useState(
-    savedUserSettings?.sortBy || 'name'
-  );
+  const [pageSize] = useState(defaultPageSize || 10);
   
-  // Handle selection
-  const handleSelect = (id) => {
-    setSelectedId(id);  // Update internal state
+  const handlePageChange = (page) => {
+    setCurrentPage(page);  // Update internal state
+    onPageChange?.(page);  // Notify parent if needed
     onSaveUserSettings?.({
       ...savedUserSettings,
-      selectedId: id
+      currentPage: page
     });
   };
-  
-  // Each component is generated separately - it must be self-contained
-}`
+}
+
+// ✅ CORRECT - Configuration props are allowed:
+function DataTable({ 
+  items,              // Data prop - allowed
+  pageSize,           // Configuration - allowed
+  maxItems,           // Configuration - allowed
+  initialSortBy,      // Initialization - allowed
+  defaultFilters,     // Initialization - allowed
+  onSelectionChange,  // Event handler - allowed
+  savedUserSettings,
+  onSaveUserSettings 
+}) {
+  // Component manages its own state
+  const [sortBy, setSortBy] = useState(initialSortBy || 'name');
+  const [filters, setFilters] = useState(defaultFilters || {});
+  const [selectedItems, setSelectedItems] = useState(
+    savedUserSettings?.selectedItems || []
+  );
+}
+
+// Naming conventions:
+// ✅ ALLOWED props:
+// - initial* (initialPage, initialValue, initialSelection)
+// - default* (defaultTab, defaultSortBy, defaultFilters)  
+// - Configuration (pageSize, maxItems, minValue, disabled)
+// - Data props (items, options, data, rows, columns)
+// - Event handlers (onChange, onSelect, onPageChange)
+
+// ❌ DISALLOWED props (suggest controlled component):
+// - Direct state names (currentPage, selectedId, activeTab)
+// - State without 'initial'/'default' prefix (sortBy, filters, searchTerm)
+// - Controlled patterns (value + onChange, checked + onChange)`
           });
           break;
           
