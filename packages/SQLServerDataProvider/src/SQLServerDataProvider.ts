@@ -1070,6 +1070,10 @@ export class SQLServerDataProvider
   // START ---- IRunViewProvider
   /**************************************************************************/
   public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // add call to pre-processor that was previously in the @memberjunction/core RunView class but now
+    // is handled in ProviderBase when sub-classes like this one invoke the pre/post process properly
+    await this.PreProcessRunView(params, contextUser);
+
     const startTime = new Date();
     try {
       if (params) {
@@ -1272,7 +1276,7 @@ export class SQLServerDataProvider
           );
         }
 
-        return {
+        const result =  {
           RowCount:
             params.ResultType === 'count_only'
               ? rowCount
@@ -1284,7 +1288,16 @@ export class SQLServerDataProvider
           Success: true,
           ErrorMessage: null,
         };
-      } else return null;
+
+        // add call to post-processor that was previously in the @memberjunction/core RunView class but now
+        // is handled in ProviderBase when sub-classes like this one invoke the post process properly
+        await this.PostProcessRunView(result, params, contextUser); 
+
+        return result;
+      } 
+      else {
+        return null;
+      }
     } catch (e) {
       const exceptionStopTime = new Date();
       LogError(e);
@@ -1301,8 +1314,17 @@ export class SQLServerDataProvider
   }
 
   public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    // pre-process in base class
+    await this.PreProcessRunViews(params, contextUser);
+
+    // do the work
     const promises = params.map((p) => this.RunView<T>(p, contextUser));
-    return Promise.all(promises);
+    const results = await Promise.all(promises);
+
+    // post-process in base class
+    await this.PostProcessRunViews(results, params, contextUser);
+
+    return results;
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {

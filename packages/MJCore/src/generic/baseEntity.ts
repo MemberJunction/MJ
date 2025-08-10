@@ -1,6 +1,6 @@
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -573,6 +573,27 @@ export abstract class BaseEntity<T = unknown> {
      */
     public get ProviderToUse(): IEntityDataProvider {
         return this._provider || BaseEntity.Provider;
+    }
+
+    /**
+     * Returns the RunViewProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunViewProviderToUse(): IRunViewProvider {
+        return this.ProviderToUse as any as IRunViewProvider;
+    }
+
+    /**
+     * Returns the RunQueryProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunQueryProviderToUse(): IRunQueryProvider {
+        return this.ProviderToUse as any as IRunQueryProvider;
+    }
+
+    /**
+     * Returns the RunReportProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunReportProviderToUse(): IRunReportProvider {
+        return this.ProviderToUse as any as IRunReportProvider;
     }
 
     /**
