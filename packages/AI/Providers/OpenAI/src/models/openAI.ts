@@ -50,7 +50,33 @@ export class OpenAILLM extends BaseLLM {
         };
         
         if (params.effortLevel) {
-            openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+            // check to see if params.effortLevel is a number
+            const numValue = Number.parseInt(params.effortLevel);
+            if (isNaN(numValue)) {
+                // not a number so check to see if strings match to low/medium/high
+                switch (params.effortLevel.trim().toLowerCase()) {
+                    case 'low':
+                        openAIParams.reasoning_effort = 'low';
+                        break;
+                    case 'medium':
+                        openAIParams.reasoning_effort = 'medium';
+                        break;
+                    case 'high':
+                        openAIParams.reasoning_effort = 'high';
+                        break;
+                    default:
+                        throw new Error(`Invalid effortLevel: ${params.effortLevel}`);
+                }
+            }
+            else {
+                // we map the number ranges as follows:
+                if (numValue <= 33)
+                    openAIParams.reasoning_effort = 'low';
+                else if (numValue <= 66)
+                    openAIParams.reasoning_effort = 'medium';
+                else
+                    openAIParams.reasoning_effort = 'high';
+            }
         }
 
         // Add sampling and generation parameters
