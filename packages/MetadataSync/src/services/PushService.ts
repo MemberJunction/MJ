@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { BaseEntity, Metadata, UserInfo, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -411,21 +411,31 @@ export class PushService {
     let isNew = false;
     
     if (primaryKey && Object.keys(primaryKey).length > 0) {
-      // Try to load existing record
-      const compositeKey = new CompositeKey();
-      compositeKey.LoadFromSimpleObject(primaryKey);
-      exists = await entity.InnerLoad(compositeKey);
+      // First check if the record exists using the sync engine's loadEntity method
+      // This avoids the "Error in BaseEntity.Load" message for missing records
+      const existingEntity = await this.syncEngine.loadEntity(entityName, primaryKey);
       
-      if (!exists) {
+      if (existingEntity) {
+        // Record exists, use the loaded entity
+        entity = existingEntity;
+        exists = true;
+      } else {
+        // Record doesn't exist in database
         const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
+        const pkDisplay = Object.entries(primaryKey)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
+        
         if (!autoCreate) {
-          const pkDisplay = Object.entries(primaryKey)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(', ');
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           this.warnings.push(warning);
           callbacks?.onWarn?.(warning);
           return { status: 'error' };
+        } else {
+          // Log that we're creating the missing record
+          if (options.verbose) {
+            callbacks?.onLog?.(`📝 Creating missing ${entityName} record with primaryKey {${pkDisplay}}`);
+          }
         }
       }
     }
