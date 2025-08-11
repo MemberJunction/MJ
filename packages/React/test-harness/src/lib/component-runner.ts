@@ -9,7 +9,7 @@ import {
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
-import { ComponentLinter, FixSuggestion } from './component-linter';
+import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface ComponentExecutionOptions {
@@ -29,14 +29,14 @@ export interface ComponentExecutionOptions {
 export interface ComponentExecutionResult {
   success: boolean;
   html: string;
-  errors: string[];
-  warnings: string[];
+  errors: Violation[];
+  warnings: Violation[];
   criticalWarnings: string[];
   console: { type: string; text: string }[];
   screenshot?: Buffer;
   executionTime: number;
   renderCount?: number;
-  lintViolations?: string[];
+  lintViolations?: Violation[];
   fixSuggestions?: FixSuggestion[];
 }
 
@@ -76,7 +76,7 @@ export class ComponentRunner {
     componentName: string,
     componentSpec?: any,
     isRootComponent?: boolean
-  ): Promise<{ violations: string[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
+  ): Promise<{ violations: Violation[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentName,
@@ -84,11 +84,10 @@ export class ComponentRunner {
       isRootComponent
     );
 
-    const violations = lintResult.violations.map(v => v.message);
-    const hasErrors = lintResult.violations.some(v => v.severity === 'error');
+    const hasErrors = lintResult.violations.some(v => v.severity === 'critical' || v.severity === 'high');
 
     return {
-      violations,
+      violations: lintResult.violations,
       suggestions: lintResult.suggestions,
       hasErrors
     };
@@ -151,8 +150,18 @@ export class ComponentRunner {
       return {
         success,
         html,
-        errors,
-        warnings,
+        errors: errors.map(e => {
+          return {
+            message: e,
+            severity: 'critical'
+          } as Violation; // Ensure Violation type
+        }),
+        warnings: warnings.map(w => {
+          return {
+            message: w,
+            severity: 'low'
+          } as Violation; // Ensure Violation type
+        }),
         criticalWarnings,
         console: consoleLogs,
         screenshot,
@@ -164,8 +173,18 @@ export class ComponentRunner {
       return {
         success: false,
         html: '',
-        errors,
-        warnings,
+        errors: errors.map(e => {
+          return {
+            message: e,
+            severity: 'critical'
+          } as Violation; // Ensure Violation type
+        }),
+        warnings: warnings.map(w => {
+          return {
+            message: w,
+            severity: 'low'
+          } as Violation; // Ensure Violation type
+        }),
         criticalWarnings,
         console: consoleLogs,
         executionTime: Date.now() - startTime,

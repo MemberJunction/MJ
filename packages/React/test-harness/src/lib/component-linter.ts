@@ -6,11 +6,15 @@ export interface LintResult {
   success: boolean;
   violations: Violation[];
   suggestions: FixSuggestion[];
+  criticalCount?: number;
+  highCount?: number;
+  mediumCount?: number;
+  lowCount?: number;
 }
 
 export interface Violation {
   rule: string;
-  severity: 'error' | 'warning';
+  severity: 'critical' | 'high' | 'medium' | 'low';
   line: number;
   column: number;
   message: string;
@@ -43,12 +47,12 @@ export class ComponentLinter {
       appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
-        let hasStateFromProps = false;
-        let hasSavedUserSettings = false;
-        let usesUseState = false;
-        const stateProps: string[] = [];
+        const controlledStateProps: string[] = [];
+        const initializationProps: string[] = [];
+        const eventHandlers: string[] = [];
+        const acceptedProps = new Map<string, { line: number, column: number }>();
         
-        // First pass: check if component expects state from props and uses useState
+        // First pass: collect all props
         traverse(ast, {
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
             if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
@@ -57,14 +61,14 @@ export class ComponentLinter {
                 for (const prop of param.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
-                    // Check for state-like props
-                    const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
-                    if (statePatterns.some(pattern => propName.includes(pattern))) {
-                      hasStateFromProps = true;
-                      stateProps.push(propName);
-                    }
-                    if (propName === 'savedUserSettings') {
-                      hasSavedUserSettings = true;
+                    acceptedProps.set(propName, {
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0
+                    });
+                    
+                    // Categorize props
+                    if (/^on[A-Z]/.test(propName) && propName !== 'onSaveUserSettings') {
+                      eventHandlers.push(propName);
                     }
                   }
                 }
@@ -82,46 +86,129 @@ export class ComponentLinter {
                   for (const prop of param.properties) {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
-                      const statePatterns = ['selectedId', 'selectedItemId', 'filters', 'sortBy', 'sortField', 'currentPage', 'activeTab'];
-                      if (statePatterns.some(pattern => propName.includes(pattern))) {
-                        hasStateFromProps = true;
-                        stateProps.push(propName);
-                      }
-                      if (propName === 'savedUserSettings') {
-                        hasSavedUserSettings = true;
+                      acceptedProps.set(propName, {
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0
+                      });
+                      
+                      // Categorize props
+                      if (/^on[A-Z]/.test(propName) && propName !== 'onSaveUserSettings') {
+                        eventHandlers.push(propName);
                       }
                     }
                   }
                 }
               }
             }
-          },
-          
-          // Check for useState usage
-          CallExpression(path: NodePath<t.CallExpression>) {
-            const callee = path.node.callee;
-            
-            if (
-              (t.isIdentifier(callee) && callee.name === 'useState') ||
-              (t.isMemberExpression(callee) && 
-               t.isIdentifier(callee.object) && callee.object.name === 'React' &&
-               t.isIdentifier(callee.property) && callee.property.name === 'useState')
-            ) {
-              usesUseState = true;
-            }
           }
         });
         
-        // CRITICAL: Components must manage ALL their own state
-        // State props are NOT allowed - each component is generated separately
-        if (hasStateFromProps) {
+        // Analyze props for controlled component patterns
+        const controlledPatterns = [
+          { stateProp: 'value', handler: 'onChange' },
+          { stateProp: 'checked', handler: 'onChange' },
+          { stateProp: 'selectedId', handler: 'onSelect' },
+          { stateProp: 'selectedIds', handler: 'onSelectionChange' },
+          { stateProp: 'selectedItems', handler: 'onSelectionChange' },
+          { stateProp: 'activeTab', handler: 'onTabChange' },
+          { stateProp: 'currentPage', handler: 'onPageChange' },
+          { stateProp: 'expanded', handler: 'onExpand' },
+          { stateProp: 'collapsed', handler: 'onCollapse' },
+          { stateProp: 'open', handler: 'onOpenChange' },
+          { stateProp: 'visible', handler: 'onVisibilityChange' }
+        ];
+        
+        // Check each accepted prop
+        for (const [propName, location] of acceptedProps) {
+          // Skip standard props
+          if (['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings'].includes(propName)) {
+            continue;
+          }
+          
+          // Skip data props (arrays, objects that are clearly data)
+          if (propName.endsWith('Data') || propName === 'items' || propName === 'options' || 
+              propName === 'rows' || propName === 'columns' || propName === 'records') {
+            continue;
+          }
+          
+          // Check if it's an initialization prop (allowed)
+          if (propName.startsWith('initial') || propName.startsWith('default')) {
+            initializationProps.push(propName);
+            continue;
+          }
+          
+          // Check if it's a configuration prop (allowed)
+          // Be generous - configuration props are those that configure behavior, not manage state
+          if (propName.endsWith('Config') || propName.endsWith('Settings') || propName.endsWith('Options') ||
+              propName === 'pageSize' || propName === 'maxItems' || propName === 'minValue' || propName === 'maxValue' ||
+              propName === 'placeholder' || propName === 'label' || propName === 'title' || propName === 'disabled' ||
+              propName === 'readonly' || propName === 'required' || propName === 'className' || propName === 'style' ||
+              // Sort/filter configuration when not paired with state management handlers
+              ((propName.includes('sort') || propName.includes('Sort') || 
+                propName.includes('filter') || propName.includes('Filter') ||
+                propName === 'orderBy' || propName === 'groupBy') && 
+               !acceptedProps.has('onSortChange') && !acceptedProps.has('onFilterChange') &&
+               !acceptedProps.has('onChange'))) {
+            continue;
+          }
+          
+          // Check for controlled component pattern (both state prop and handler present)
+          let isControlled = false;
+          for (const pattern of controlledPatterns) {
+            if (propName === pattern.stateProp) {
+              // Check if the corresponding handler exists
+              if (acceptedProps.has(pattern.handler) || eventHandlers.includes(pattern.handler)) {
+                controlledStateProps.push(propName);
+                isControlled = true;
+                break;
+              }
+              // If state prop exists without handler, it's still problematic
+              // unless it's clearly for initialization
+              if (!propName.startsWith('initial') && !propName.startsWith('default')) {
+                controlledStateProps.push(propName);
+                isControlled = true;
+                break;
+              }
+            }
+          }
+          
+          // Check for state-like props that aren't initialization
+          if (!isControlled) {
+            const statePatterns = [
+              'selectedId', 'selectedItemId', 'selectedItem', 'selection',
+              'filters', 'sortBy', 'sortField', 'sortDirection', 'orderBy',
+              'currentPage', 'pageNumber', 'page',
+              'activeTab', 'activeIndex', 'activeKey',
+              'expandedItems', 'collapsedItems',
+              'searchTerm', 'searchQuery', 'query',
+              'formData', 'formValues', 'values'
+            ];
+            
+            for (const pattern of statePatterns) {
+              if (propName === pattern || propName.toLowerCase() === pattern.toLowerCase()) {
+                // This is a state prop without proper initialization naming
+                controlledStateProps.push(propName);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Generate violations for controlled state props
+        if (controlledStateProps.length > 0) {
           violations.push({
             rule: 'full-state-ownership',
-            severity: 'error',
+            severity: 'critical',  // This is critical as it breaks the architecture
             line: 1,
             column: 0,
-            message: `Component "${componentName}" expects state from props (${stateProps.join(', ')}) instead of managing internally. Each component is generated separately and MUST manage ALL its own state.`
+            message: `Component "${componentName}" accepts controlled state props (${controlledStateProps.join(', ')}) instead of managing state internally. Use 'initial*' or 'default*' prefixes for initialization props (e.g., 'initialPage' instead of 'currentPage'). Each component must manage ALL its own state.`
           });
+        }
+        
+        // Add warning for initialization props (informational)
+        if (initializationProps.length > 0 && violations.length === 0) {
+          // This is actually OK, but we can log it for awareness
+          // Don't create a violation, just note it's using the correct pattern
         }
         
         return violations;
@@ -146,7 +233,7 @@ export class ComponentLinter {
             ) {
               violations.push({
                 rule: 'no-use-reducer',
-                severity: 'error',
+                severity: 'high',  // High but not critical - it's a pattern violation
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
                 message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. Components should manage state with useState and persist important settings with onSaveUserSettings.`,
@@ -178,7 +265,7 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                     violations.push({
                       rule: 'no-data-prop',
-                      severity: 'error',
+                      severity: 'medium',  // It's a pattern issue, not critical
                       line: prop.loc?.start.line || 0,
                       column: prop.loc?.start.column || 0,
                       message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
@@ -201,7 +288,7 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                       violations.push({
                         rule: 'no-data-prop',
-                        severity: 'error',
+                        severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
                         message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
@@ -246,7 +333,7 @@ export class ComponentLinter {
                       if (ephemeralPatterns.some(pattern => key.toLowerCase().includes(pattern))) {
                         violations.push({
                           rule: 'saved-user-settings-pattern',
-                          severity: 'warning',
+                          severity: 'medium',  // Pattern issue but not breaking
                           line: prop.loc?.start.line || 0,
                           column: prop.loc?.start.column || 0,
                           message: `Saving ephemeral UI state "${key}" to savedUserSettings. Only save important user preferences.`
@@ -294,7 +381,7 @@ export class ComponentLinter {
                 // Only report if some props are passed (to avoid false positives on non-component JSX)
                 violations.push({
                   rule: 'pass-standard-props',
-                  severity: 'error',
+                  severity: 'critical',
                   line: openingElement.loc?.start.line || 0,
                   column: openingElement.loc?.start.column || 0,
                   message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All components must receive styles, utilities, and components props.`,
@@ -335,7 +422,7 @@ export class ComponentLinter {
         if (componentFunctions.length > 0) {
           violations.push({
             rule: 'no-child-implementation',
-            severity: 'error',
+            severity: 'critical',
             line: 1,
             column: 0,
             message: `Root component file contains child component implementations: ${componentFunctions.join(', ')}. Root should only reference child components, not implement them.`,
@@ -416,7 +503,7 @@ export class ComponentLinter {
           if (unusedComponents.length > 0) {
             violations.push({
               rule: 'undefined-component-usage',
-              severity: 'warning',
+              severity: 'low',
               line: 1,
               column: 0,
               message: `Component destructures ${unusedComponents.join(', ')} from components prop but never uses them. These may be missing from the component spec's dependencies array.`
@@ -449,7 +536,7 @@ export class ComponentLinter {
                 if (/\[\d+\]\.\w+/.test(code)) {
                   violations.push({
                     rule: 'unsafe-array-access',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
@@ -488,7 +575,7 @@ export class ComponentLinter {
               if (!hasInitialValue) {
                 violations.push({
                   rule: 'array-reduce-safety',
-                  severity: 'warning',
+                  severity: 'low',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
                   message: `reduce() without initial value may fail on empty arrays: ${code}`,
@@ -502,7 +589,7 @@ export class ComponentLinter {
                    (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
                 violations.push({
                   rule: 'array-reduce-safety',
-                  severity: 'error',
+                  severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
                   message: `reduce() on array element access is unsafe: ${code}`,
@@ -647,7 +734,7 @@ export class ComponentLinter {
             if (relatedHandlers.length > 0) {
               violations.push({
                 rule: 'parent-event-callback-usage',
-                severity: 'error',
+                severity: 'critical',
                 line: location.line,
                 column: location.column,
                 message: `Component receives '${callbackName}' event callback but never invokes it. Found state updates in ${relatedHandlers.join(', ')} but parent is not notified.`,
@@ -781,7 +868,7 @@ export class ComponentLinter {
                   
                   violations.push({
                     rule: 'property-name-consistency',
-                    severity: 'error',
+                    severity: 'critical',
                     line: transformation.location.line,
                     column: transformation.location.column,
                     message: `Property name mismatch: data transformed with different casing. Accessing '${accessedProp}' but property was transformed to '${transformedName || 'different name'}'`,
@@ -823,7 +910,7 @@ export class ComponentLinter {
                     if (!hasDebounce && !hasTimeout) {
                       violations.push({
                         rule: 'noisy-settings-updates',
-                        severity: 'error',
+                        severity: 'critical',
                         line: path.node.loc?.start.line || 0,
                         column: path.node.loc?.start.column || 0,
                         message: `Saving settings on every change/keystroke. Save on blur, submit, or after debouncing.`
@@ -866,7 +953,7 @@ export class ComponentLinter {
                 if (hasSetState && hasPropDeps && !bodyString.includes('async')) {
                   violations.push({
                     rule: 'prop-state-sync',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Syncing props to internal state with useEffect creates dual state management',
@@ -927,7 +1014,7 @@ export class ComponentLinter {
                       if (!funcName || funcName === componentName) {
                         violations.push({
                           rule: 'performance-memoization',
-                          severity: 'warning',
+                          severity: 'low',  // Just a suggestion, not mandatory
                           line: path.node.loc?.start.line || 0,
                           column: path.node.loc?.start.column || 0,
                           message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
@@ -953,7 +1040,7 @@ export class ComponentLinter {
                 if (!hasVariables || hasVariables.length < 3) { // Allow some property names
                   violations.push({
                     rule: 'performance-memoization',
-                    severity: 'warning',
+                    severity: 'low',  // Just a suggestion
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Static array/object recreated on every render. Consider using useMemo.',
@@ -996,7 +1083,7 @@ export class ComponentLinter {
                   if (childPatterns.some(pattern => pattern.test(stateName))) {
                     violations.push({
                       rule: 'child-state-management',
-                      severity: 'error',
+                      severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
                       message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
@@ -1036,7 +1123,7 @@ export class ComponentLinter {
                      funcName.includes('handleSort') || funcName.includes('handleFilter'))) {
                   violations.push({
                     rule: 'server-reload-on-client-operation',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: 'Reloading data from server on sort/filter. Use useMemo for client-side operations.',
@@ -1125,7 +1212,7 @@ export class ComponentLinter {
                         
                         violations.push({
                           rule: 'runview-runquery-valid-properties',
-                          severity: 'error',
+                          severity: 'critical',
                           line: prop.loc?.start.line || 0,
                           column: prop.loc?.start.column || 0,
                           message,
@@ -1172,7 +1259,7 @@ export class ComponentLinter {
                       
                       violations.push({
                         rule: 'runview-runquery-valid-properties',
-                        severity: 'error',
+                        severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
                         message,
@@ -1224,7 +1311,7 @@ export class ComponentLinter {
                 if (invalidProps.length > 0) {
                   violations.push({
                     rule: 'root-component-props-restriction',
-                    severity: 'error',
+                    severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
@@ -1257,7 +1344,7 @@ export class ComponentLinter {
                   if (invalidProps.length > 0) {
                     violations.push({
                       rule: 'root-component-props-restriction',
-                      severity: 'error',
+                      severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
                       message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
@@ -1313,13 +1400,26 @@ export class ComponentLinter {
         violations.push(...dataViolations);
       }
       
+      // Deduplicate violations - keep only unique rule+message combinations
+      const uniqueViolations = this.deduplicateViolations(violations);
+      
+      // Count violations by severity
+      const criticalCount = uniqueViolations.filter(v => v.severity === 'critical').length;
+      const highCount = uniqueViolations.filter(v => v.severity === 'high').length;
+      const mediumCount = uniqueViolations.filter(v => v.severity === 'medium').length;
+      const lowCount = uniqueViolations.filter(v => v.severity === 'low').length;
+      
       // Generate fix suggestions
-      const suggestions = this.generateFixSuggestions(violations);
+      const suggestions = this.generateFixSuggestions(uniqueViolations);
       
       return {
-        success: violations.filter(v => v.severity === 'error').length === 0,
-        violations,
-        suggestions
+        success: criticalCount === 0 && highCount === 0,  // Only fail on critical/high
+        violations: uniqueViolations,
+        suggestions,
+        criticalCount,
+        highCount,
+        mediumCount,
+        lowCount
       };
     } catch (error) {
       // If parsing fails, return a parse error
@@ -1327,7 +1427,7 @@ export class ComponentLinter {
         success: false,
         violations: [{
           rule: 'parse-error',
-          severity: 'error',
+          severity: 'critical',
           line: 0,
           column: 0,
           message: `Failed to parse component: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -1449,7 +1549,7 @@ export class ComponentLinter {
                     
                     violations.push({
                       rule: 'entity-name-mismatch',
-                      severity: 'error',
+                      severity: 'critical',
                       line: prop.value.loc?.start.line || 0,
                       column: prop.value.loc?.start.column || 0,
                       message: `Entity "${usedEntity}" not found in dataRequirements. ${
@@ -1477,7 +1577,7 @@ export class ComponentLinter {
                             if (/COUNT\s*\(|SUM\s*\(|AVG\s*\(|MAX\s*\(|MIN\s*\(/i.test(fieldName)) {
                               violations.push({
                                 rule: 'runview-sql-function',
-                                severity: 'error',
+                                severity: 'critical',
                                 line: fieldElement.loc?.start.line || 0,
                                 column: fieldElement.loc?.start.column || 0,
                                 message: `RunView does not support SQL aggregations. Use RunQuery for aggregations or fetch raw data and aggregate in JavaScript.`,
@@ -1492,7 +1592,7 @@ export class ComponentLinter {
                               if (!isAllowed) {
                                 violations.push({
                                   rule: 'field-not-in-requirements',
-                                  severity: 'error',
+                                  severity: 'critical',
                                   line: fieldElement.loc?.start.line || 0,
                                   column: fieldElement.loc?.start.column || 0,
                                   message: `Field "${fieldName}" not found in dataRequirements for entity "${usedEntity}". Available fields: ${
@@ -1519,7 +1619,7 @@ export class ComponentLinter {
                         if (!entityFields.sortFields.has(orderByField)) {
                           violations.push({
                             rule: 'orderby-field-not-sortable',
-                            severity: 'error',
+                            severity: 'critical',
                             line: orderByProperty.value.loc?.start.line || 0,
                             column: orderByProperty.value.loc?.start.column || 0,
                             message: `OrderBy field "${orderByField}" not in sortFields for entity "${usedEntity}". Available sort fields: ${
@@ -1570,7 +1670,7 @@ export class ComponentLinter {
                   
                   violations.push({
                     rule: 'query-name-mismatch',
-                    severity: 'error',
+                    severity: 'critical',
                     line: prop.value.loc?.start.line || 0,
                     column: prop.value.loc?.start.column || 0,
                     message: `Query "${usedQuery}" not found in dataRequirements. ${
@@ -1620,6 +1720,31 @@ export class ComponentLinter {
     return null;
   }
   
+  private static deduplicateViolations(violations: Violation[]): Violation[] {
+    const seen = new Set<string>();
+    const unique: Violation[] = [];
+    
+    for (const violation of violations) {
+      // Create a key from the complete violation details (case-insensitive for message)
+      const key = `${violation.rule}:${violation.severity}:${violation.line}:${violation.column}:${violation.message.toLowerCase()}`;
+      
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(violation);
+      }
+    }
+    
+    // Sort by severity (critical > high > medium > low) and then by line number
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    unique.sort((a, b) => {
+      const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
+      if (severityDiff !== 0) return severityDiff;
+      return a.line - b.line;
+    });
+    
+    return unique;
+  }
+  
   private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
     const suggestions: FixSuggestion[] = [];
     
@@ -1628,36 +1753,66 @@ export class ComponentLinter {
         case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Components must manage ALL their own state internally. No state props allowed.',
-            example: `// ❌ WRONG - Expecting state from props:
-function Component({ selectedId, filters, sortBy, onStateChange }) {
-  // This component expects parent to manage its state - WRONG!
+            suggestion: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
+            example: `// ❌ WRONG - Controlled state props:
+function PaginationControls({ currentPage, filters, sortBy, onPageChange }) {
+  // These props suggest parent controls the state - WRONG!
 }
 
-// ✅ CORRECT - Component owns ALL its state:
-function Component({ data, savedUserSettings, onSaveUserSettings }) {
-  // Component manages ALL its own state internally
-  const [selectedId, setSelectedId] = useState(
-    savedUserSettings?.selectedId || null
+// ❌ WRONG - State props without handlers (still controlled):
+function Component({ selectedId, activeTab }) {
+  // Parent is managing this component's state
+}
+
+// ✅ CORRECT - Using initialization props:
+function PaginationControls({ initialPage, defaultPageSize, onPageChange, savedUserSettings, onSaveUserSettings }) {
+  // Component owns ALL its state, initialized from props
+  const [currentPage, setCurrentPage] = useState(
+    savedUserSettings?.currentPage || initialPage || 1
   );
-  const [filters, setFilters] = useState(
-    savedUserSettings?.filters || {}
-  );
-  const [sortBy, setSortBy] = useState(
-    savedUserSettings?.sortBy || 'name'
-  );
+  const [pageSize] = useState(defaultPageSize || 10);
   
-  // Handle selection
-  const handleSelect = (id) => {
-    setSelectedId(id);  // Update internal state
+  const handlePageChange = (page) => {
+    setCurrentPage(page);  // Update internal state
+    onPageChange?.(page);  // Notify parent if needed
     onSaveUserSettings?.({
       ...savedUserSettings,
-      selectedId: id
+      currentPage: page
     });
   };
-  
-  // Each component is generated separately - it must be self-contained
-}`
+}
+
+// ✅ CORRECT - Configuration props are allowed:
+function DataTable({ 
+  items,              // Data prop - allowed
+  pageSize,           // Configuration - allowed
+  maxItems,           // Configuration - allowed
+  initialSortBy,      // Initialization - allowed
+  defaultFilters,     // Initialization - allowed
+  onSelectionChange,  // Event handler - allowed
+  savedUserSettings,
+  onSaveUserSettings 
+}) {
+  // Component manages its own state
+  const [sortBy, setSortBy] = useState(initialSortBy || 'name');
+  const [filters, setFilters] = useState(defaultFilters || {});
+  const [selectedItems, setSelectedItems] = useState(
+    savedUserSettings?.selectedItems || []
+  );
+}
+
+// Naming conventions:
+// ✅ ALLOWED props:
+// - initial* (initialPage, initialValue, initialSelection)
+// - default* (defaultTab, defaultSortBy, defaultFilters)  
+// - Configuration (pageSize, maxItems, minValue, disabled)
+// - Data props (items, options, data, rows, columns)
+// - Event handlers (onChange, onSelect, onPageChange)
+
+// ❌ DISALLOWED props (suggest controlled component):
+// - Direct state names (currentPage, selectedId, activeTab)
+// - State without 'initial'/'default' prefix (sortBy, filters, searchTerm)
+// - Controlled patterns (value + onChange, checked + onChange)`
           });
           break;
           
