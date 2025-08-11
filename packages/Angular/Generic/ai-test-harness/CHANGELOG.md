@@ -1,5 +1,18 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/graphql-dataprovider@2.84.0
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ng-shared@2.84.0
+  - @memberjunction/ng-notifications@2.84.0
+  - @memberjunction/ng-code-editor@2.84.0
+  - @memberjunction/ng-container-directives@2.84.0
+  - @memberjunction/core-entities@2.84.0
+
 ## 2.83.0
 
 ### Patch Changes

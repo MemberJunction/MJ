@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/communication-sendgrid
 
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/communication-types@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/global@2.84.0
+
 ## 2.83.0
 
 ### Patch Changes

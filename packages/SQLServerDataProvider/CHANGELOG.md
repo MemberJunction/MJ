@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.84.0
+
+### Minor Changes
+
+- 0b9d691: Changes to MJCore/SQLServerDataProvider/GraphQLDataProvider to ensure that calls handle pre/post processing of RunView/RunViews properly regardless of entry point to the provider.
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/aiengine@2.84.0
+  - @memberjunction/ai-vector-dupe@2.84.0
+  - @memberjunction/actions@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/queue@2.84.0
+  - @memberjunction/ai@2.84.0
+  - @memberjunction/global@2.84.0
+
 ## 2.83.0
 
 ### Patch Changes

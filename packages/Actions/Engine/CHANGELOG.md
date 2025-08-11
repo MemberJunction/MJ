@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/actions
 
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ai-core-plus@2.84.0
+  - @memberjunction/aiengine@2.84.0
+  - @memberjunction/ai-prompts@2.84.0
+  - @memberjunction/actions-base@2.84.0
+  - @memberjunction/doc-utils@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/ai@2.84.0
+  - @memberjunction/global@2.84.0
+
 ## 2.83.0
 
 ### Patch Changes

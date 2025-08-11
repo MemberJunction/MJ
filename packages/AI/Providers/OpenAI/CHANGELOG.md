@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-openai
 
+## 2.84.0
+
+### Minor Changes
+
+- 75badca: migration
+- 25e3697: mark as minor for migration change
+
+### Patch Changes
+
+- @memberjunction/ai@2.84.0
+- @memberjunction/global@2.84.0
+
 ## 2.83.0
 
 ### Patch Changes

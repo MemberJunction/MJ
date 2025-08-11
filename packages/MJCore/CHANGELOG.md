@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.84.0
+
+### Minor Changes
+
+- 0b9d691: Changes to MJCore/SQLServerDataProvider/GraphQLDataProvider to ensure that calls handle pre/post processing of RunView/RunViews properly regardless of entry point to the provider.
+
+### Patch Changes
+
+- @memberjunction/global@2.84.0
+
 ## 2.83.0
 
 ### Minor Changes
