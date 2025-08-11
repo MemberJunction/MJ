@@ -1,10 +1,13 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
+import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
+import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
+import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
+import { LoadLocalEmbedding } from "@memberjunction/ai-local-embeddings";
+
+LoadLocalEmbedding(); // Ensure local embedding model is registered
 
 interface ExtractedParameter {
     name: string;
@@ -60,9 +63,20 @@ export class QueryEntityExtended extends QueryEntity {
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            // Check if this is a new record or if SQL has changed
+            // Check if this is a new record or if SQL/Description has changed
             const sqlField = this.GetFieldByName('SQL');
+            const descriptionField = this.GetFieldByName('Description');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
+            const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
+            
+            // Generate embedding for Description if needed, before saving
+            if (shouldGenerateEmbedding && this.Description && this.Description.trim().length > 0) {
+                await this.generateDescriptionEmbedding();
+            } else if (!this.Description || this.Description.trim().length === 0) {
+                // Clear embedding if description is empty
+                this.EmbeddingVector = null;
+                this.EmbeddingModelID = null;
+            }
             
             // Save the query first without AI processing (no transaction needed for basic save)
             const saveResult = await super.Save(options);
@@ -76,30 +90,108 @@ export class QueryEntityExtended extends QueryEntity {
                 // AI processing happens asynchronously after the main save operation
                 // This ensures the connection is released quickly for the primary operation
                 await this.extractAndSyncDataAsync();
-                // setImmediate(() => {
-                //     this.extractAndSyncDataAsync().catch(e => {
-                //         LogError('Background AI processing failed for query:', e);
-                //     });
-                // });
+                await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 // If SQL is empty, ensure UsesTemplate is false and remove all related data
                 // This can also happen asynchronously since it's cleanup work
                 this.UsesTemplate = false;
                 await this.cleanupEmptyQueryAsync();
-                // setImmediate(() => {
-                //     this.cleanupEmptyQueryAsync().catch(e => {
-                //         LogError('Background cleanup failed for query:', e);
-                //     });
-                // });
+                await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             }
-
-            await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
 
             return true;
         } catch (e) {
             LogError('Failed to save query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
+        }
+    }
+    
+    /**
+     * Generates an embedding vector for the query description using the configured embedding model.
+     * This method:
+     * 1. Finds the highest-ranked embedding model in the system
+     * 2. Creates an embedding instance using the model's driver
+     * 3. Generates a vector embedding for the Description field
+     * 4. Stores the vector as JSON in EmbeddingVector field
+     * 5. Stores the model ID in EmbeddingModelID field for tracking
+     * 
+     * The embedding generation is optional and will not fail the save operation if:
+     * - No embedding models are configured
+     * - No API key is available
+     * - The embedding generation fails
+     */
+    private async generateDescriptionEmbedding(): Promise<void> {
+        try {
+            // Ensure AIEngine is configured
+            await AIEngine.Instance.Config(false, this.ContextCurrentUser);
+            
+            // Find an embedding model - prioritize models with AIModelType = 'Embedding'
+            const embeddingModels = AIEngine.Instance.Models.filter(m => 
+                m.AIModelType && m.AIModelType.trim().toLowerCase() === 'embeddings'
+            );
+            
+            if (embeddingModels.length === 0) {
+                // No embedding models configured, skip embedding generation
+                console.warn('No embedding models configured in the system. Skipping embedding generation.');
+                return;
+            }
+            
+            // Sort by PowerRank (higher is better) and select the most powerful embedding model
+            const sortedModels = embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
+            const embeddingModel = sortedModels[0];
+            
+            // Get the API key for the embedding model
+            // Note: Some models like LocalEmbedding don't require an API key
+            const apiKey = GetAIAPIKey(embeddingModel.DriverClass);
+            
+            // Check if this is a model type that doesn't require an API key
+            const driverClassLower = embeddingModel.DriverClass.toLowerCase();
+            const isLocalModel = driverClassLower === 'localembedding' || 
+                                 driverClassLower === 'local-embedding' ||
+                                 driverClassLower === 'local_embedding';
+            
+            if (!apiKey && !isLocalModel) {
+                console.warn(`No API key configured for embedding model ${embeddingModel.Name} (${embeddingModel.DriverClass}). Skipping embedding generation.`);
+                return;
+            }
+            
+            if (isLocalModel) {
+                console.log(`Using local embedding model ${embeddingModel.Name} - no API key required`);
+            }
+            
+            // Create the embedding instance
+            // For local embeddings that don't need an API key, pass 'local' or let the constructor handle it
+            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings, 
+                embeddingModel.DriverClass, 
+                apiKey || 'local'
+            );
+            
+            if (!embedding) {
+                console.warn(`Failed to create embedding instance for model ${embeddingModel.Name}. Skipping embedding generation.`);
+                return;
+            }
+            
+            // Generate the embedding for the description
+            const params: EmbedTextParams = {
+                text: this.Description,
+                model: embeddingModel.APIName
+            };
+            
+            const result = await embedding.EmbedText(params);
+            
+            if (result && result.vector) {
+                // Store the embedding vector as JSON and the model ID
+                this.EmbeddingVector = JSON.stringify(result.vector);
+                this.EmbeddingModelID = embeddingModel.ID;
+            } else {
+                console.warn('Failed to generate embedding: No vector returned');
+            }
+        } catch (e) {
+            // Log error but don't fail the save operation
+            LogError('Error generating description embedding:', e.message);
+            // Don't throw - embedding generation is optional and shouldn't block saving
         }
     }
     
@@ -219,7 +311,7 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query parameters
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
@@ -331,7 +423,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (this.IsSaved) {
                 // Get all existing query parameters
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -364,7 +456,7 @@ export class QueryEntityExtended extends QueryEntity {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                     EntityName: 'Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -484,7 +576,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get existing query entities
             const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -564,7 +656,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -592,7 +684,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,
