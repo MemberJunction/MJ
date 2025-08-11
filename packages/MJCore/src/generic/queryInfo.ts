@@ -520,10 +520,6 @@ export class QueryEntityInfo extends BaseInfo {
      */
     public EntityID: string = null
     /**
-     * Order sequence for multiple entities in a query
-     */
-    public Sequence: number = null
-    /**
      * How this entity association was detected: AI (automatic) or Manual (user-specified)
      */
     public DetectionMethod: 'AI' | 'Manual' = 'Manual'

@@ -216,9 +216,6 @@ export class QueryEntityType {
 
     @Field(() => String, { nullable: true })
     EntityName?: string;
-
-    @Field(() => Number)
-    Sequence!: number;
 }
 
 @ObjectType()
@@ -518,8 +515,7 @@ export class QueryResolverExtended extends QueryResolver {
                 ID: e.ID,
                 QueryID: e.QueryID,
                 EntityID: e.EntityID,
-                EntityName: e.Entity || undefined, // Property is called Entity, not EntityName
-                Sequence: e.Sequence || 0
+                EntityName: e.Entity || undefined // Property is called Entity, not EntityName
             }));
             
             const permissions: QueryPermissionType[] = queryEntity.QueryPermissions.map(p => ({
