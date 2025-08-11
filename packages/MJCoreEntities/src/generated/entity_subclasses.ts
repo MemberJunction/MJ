@@ -10093,6 +10093,11 @@ export const QuerySchema = z.object({
         * * Display Name: Cache Max Size
         * * SQL Data Type: int
         * * Description: Maximum number of cached result sets for this query. NULL uses default size limit.`),
+    EmbeddingVector: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVector
+        * * Display Name: Embedding Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -40162,6 +40167,19 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
     set CacheMaxSize(value: number | null) {
         this.Set('CacheMaxSize', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVector
+    * * Display Name: Embedding Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis
+    */
+    get EmbeddingVector(): string | null {
+        return this.Get('EmbeddingVector');
+    }
+    set EmbeddingVector(value: string | null) {
+        this.Set('EmbeddingVector', value);
     }
 
     /**

@@ -23597,6 +23597,9 @@ export class Query_ {
     @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
     CacheMaxSize?: number;
         
+    @Field({nullable: true, description: `Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`}) 
+    EmbeddingVector?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
@@ -23673,6 +23676,9 @@ export class CreateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector: string | null;
 }
     
 
@@ -23731,6 +23737,9 @@ export class UpdateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize?: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
