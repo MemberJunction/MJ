@@ -9,6 +9,7 @@ import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
+import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
@@ -326,61 +327,46 @@ export class PushService {
         const records = Array.isArray(fileData) ? fileData : [fileData];
         const isArray = Array.isArray(fileData);
         
-        for (let i = 0; i < records.length; i++) {
-          const recordData = records[i];
-          
-          if (!this.isValidRecordData(recordData)) {
-            callbacks?.onWarn?.(`Invalid record format in ${filePath}${isArray ? ` at index ${i}` : ''}`);
-            errors++;
-            continue;
+        // Analyze dependencies and get sorted records
+        const analyzer = new RecordDependencyAnalyzer();
+        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        
+        if (analysisResult.circularDependencies.length > 0) {
+          callbacks?.onWarn?.(`⚠️  Circular dependencies detected in ${filePath}`);
+          for (const cycle of analysisResult.circularDependencies) {
+            callbacks?.onWarn?.(`   Cycle: ${cycle.join(' → ')}`);
           }
-          
+        }
+        
+        if (options.verbose) {
+          callbacks?.onLog?.(`   Analyzed ${analysisResult.sortedRecords.length} records (including nested)`);
+        }
+        
+        // Create batch context for in-memory entity resolution
+        const batchContext = new Map<string, BaseEntity>();
+        
+        // Process all flattened records in dependency order
+        for (const flattenedRecord of analysisResult.sortedRecords) {
           try {
-            // For arrays, work with a deep copy to avoid modifying the original
-            const recordToProcess = isArray ? JSON.parse(JSON.stringify(recordData)) : recordData;
-            
-            const result = await this.processRecord(
-              recordToProcess,
+            const result = await this.processFlattenedRecord(
+              flattenedRecord,
               entityConfig,
               entityDir,
               options,
+              batchContext,
               callbacks,
               filePath,
-              isArray ? i : undefined
+              isArray
             );
             
-            // Don't count duplicates in stats
+            // Update stats
             if (!result.isDuplicate) {
               if (result.status === 'created') created++;
               else if (result.status === 'updated') updated++;
               else if (result.status === 'unchanged') unchanged++;
             }
-            
-            // Add related entity stats
-            created += result.relatedStats.created;
-            updated += result.relatedStats.updated;
-            unchanged += result.relatedStats.unchanged;
-            
-            // For arrays, update the original record's primaryKey, sync, and relatedEntities
-            if (isArray) {
-              // Update primaryKey if it exists (for new records)
-              if (recordToProcess.primaryKey) {
-                records[i].primaryKey = recordToProcess.primaryKey;
-              }
-              // Update sync metadata only if it was updated (dirty records only)
-              if (recordToProcess.sync) {
-                records[i].sync = recordToProcess.sync;
-              }
-              // Update relatedEntities to capture primaryKey/sync changes in nested entities
-              if (recordToProcess.relatedEntities) {
-                records[i].relatedEntities = recordToProcess.relatedEntities;
-              }
-            }
-            
-            // Record tracking is now handled inside processRecord
-            
           } catch (recordError) {
-            const errorMsg = `Error processing record in ${filePath}${isArray ? ` at index ${i}` : ''}: ${recordError}`;
+            const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
             callbacks?.onError?.(errorMsg);
             errors++;
           }
@@ -400,6 +386,157 @@ export class PushService {
     return { created, updated, unchanged, errors };
   }
   
+  private async processFlattenedRecord(
+    flattenedRecord: FlattenedRecord,
+    entityConfig: any,
+    entityDir: string,
+    options: PushOptions,
+    batchContext: Map<string, BaseEntity>,
+    callbacks?: PushCallbacks,
+    filePath?: string,
+    isArray?: boolean
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; isDuplicate?: boolean }> {
+    const metadata = new Metadata();
+    const { record, entityName, parentContext } = flattenedRecord;
+    
+    // Build lookup key for batch context
+    const lookupKey = this.buildBatchContextKey(entityName, record);
+    
+    // Check if already in batch context
+    let entity = batchContext.get(lookupKey);
+    if (entity) {
+      // Already processed
+      return { status: 'unchanged', isDuplicate: true };
+    }
+    
+    // Get or create entity instance
+    entity = await metadata.GetEntityObject(entityName, this.contextUser);
+    if (!entity) {
+      throw new Error(`Failed to create entity object for ${entityName}`);
+    }
+    
+    // Check if record exists
+    const primaryKey = record.primaryKey;
+    let exists = false;
+    let isNew = false;
+    
+    if (primaryKey && Object.keys(primaryKey).length > 0) {
+      // Try to load existing record
+      const compositeKey = new CompositeKey();
+      compositeKey.LoadFromSimpleObject(primaryKey);
+      exists = await entity.InnerLoad(compositeKey);
+      
+      if (!exists) {
+        const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
+        if (!autoCreate) {
+          const pkDisplay = Object.entries(primaryKey)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(', ');
+          const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
+          this.warnings.push(warning);
+          callbacks?.onWarn?.(warning);
+          return { status: 'error' };
+        }
+      }
+    }
+    
+    if (!exists) {
+      entity.NewRecord();
+      isNew = true;
+      
+      // Set primary key values for new records if provided
+      if (primaryKey) {
+        for (const [pkField, pkValue] of Object.entries(primaryKey)) {
+          entity.Set(pkField, pkValue);
+        }
+      }
+    }
+    
+    // Get parent entity from context if available
+    let parentEntity: BaseEntity | null = null;
+    if (parentContext) {
+      const parentKey = this.buildBatchContextKey(parentContext.entityName, parentContext.record);
+      parentEntity = batchContext.get(parentKey) || null;
+    }
+    
+    // Process field values with parent context and batch context
+    for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
+      const processedValue = await this.syncEngine.processFieldValue(
+        fieldValue,
+        entityDir,
+        parentEntity,
+        null, // rootRecord
+        0,
+        batchContext // Pass batch context for lookups
+      );
+      entity.Set(fieldName, processedValue);
+    }
+    
+    // Add to batch context AFTER fields are set
+    batchContext.set(lookupKey, entity);
+    
+    if (options.dryRun) {
+      if (exists) {
+        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
+        return { status: 'updated' };
+      } else {
+        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        return { status: 'created' };
+      }
+    }
+    
+    // Save the record
+    const saveResult = await entity.Save();
+    if (!saveResult) {
+      throw new Error(`Failed to save ${entityName} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
+    }
+    
+    // Update primaryKey for new records
+    if (isNew) {
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      if (entityInfo) {
+        const newPrimaryKey: Record<string, any> = {};
+        for (const pk of entityInfo.PrimaryKeys) {
+          newPrimaryKey[pk.Name] = entity.Get(pk.Name);
+        }
+        record.primaryKey = newPrimaryKey;
+      }
+    }
+    
+    // Update sync metadata
+    record.sync = {
+      lastModified: new Date().toISOString(),
+      checksum: await this.syncEngine.calculateChecksumWithFileContent(record.fields, entityDir)
+    };
+    
+    return { 
+      status: isNew ? 'created' : (entity.Dirty ? 'updated' : 'unchanged'),
+      isDuplicate: false
+    };
+  }
+  
+  private buildBatchContextKey(entityName: string, record: RecordData): string {
+    // Build a unique key for the batch context based on entity name and identifying fields
+    const keyParts = [entityName];
+    
+    // Use primary key if available
+    if (record.primaryKey) {
+      for (const [field, value] of Object.entries(record.primaryKey)) {
+        keyParts.push(`${field}=${value}`);
+      }
+    } else {
+      // Use a combination of important fields as fallback
+      const identifyingFields = ['Name', 'ID', 'Code', 'Email'];
+      for (const field of identifyingFields) {
+        if (record.fields[field]) {
+          keyParts.push(`${field}=${record.fields[field]}`);
+        }
+      }
+    }
+    
+    return keyParts.join('|');
+  }
+
   private async processRecord(
     recordData: RecordData,
     entityConfig: any,

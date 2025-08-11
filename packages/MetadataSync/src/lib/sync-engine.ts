@@ -105,7 +105,7 @@ export class SyncEngine {
    * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
-  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0, batchContext?: Map<string, BaseEntity>): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
     if (depth > MAX_RECURSION_DEPTH) {
@@ -205,7 +205,8 @@ export class SyncEngine {
           baseDir, 
           parentRecord, 
           rootRecord,
-          depth + 1
+          depth + 1,
+          batchContext
         );
         
         lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
@@ -230,13 +231,14 @@ export class SyncEngine {
               baseDir, 
               parentRecord, 
               rootRecord,
-              depth + 1
+              depth + 1,
+              batchContext
             );
           }
         }
       }
       
-      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields);
+      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext);
     }
     
     // Check for @env: reference
@@ -281,10 +283,41 @@ export class SyncEngine {
     entityName: string, 
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
-    createFields: Record<string, any> = {}
+    createFields: Record<string, any> = {},
+    batchContext?: Map<string, BaseEntity>
   ): Promise<string> {
-    // Debug logging handled by caller if needed
+    // First check batch context for in-memory entities
+    if (batchContext) {
+      // Try to find the entity in batch context
+      for (const [, entity] of batchContext) {
+        // Check if this is the right entity type
+        if (entity.EntityInfo?.Name === entityName) {
+          // Check if all lookup fields match
+          let allMatch = true;
+          for (const {fieldName, fieldValue} of lookupFields) {
+            const entityValue = entity.Get(fieldName);
+            const normalizedEntityValue = entityValue?.toString() || '';
+            const normalizedLookupValue = fieldValue?.toString() || '';
+            
+            if (normalizedEntityValue !== normalizedLookupValue) {
+              allMatch = false;
+              break;
+            }
+          }
+          
+          if (allMatch) {
+            // Found in batch context, return primary key
+            const entityInfo = this.metadata.EntityByName(entityName);
+            if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+              const pkeyField = entityInfo.PrimaryKeys[0].Name;
+              return entity.Get(pkeyField);
+            }
+          }
+        }
+      }
+    }
     
+    // Not found in batch context, check database
     const rv = new RunView();
     const entityInfo = this.metadata.EntityByName(entityName);
     if (!entityInfo) {
