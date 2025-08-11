@@ -231,38 +231,95 @@ export class SimpleVectorService {
   }
   
   /**
-   * Calculates cosine similarity between two vectors.
-   * Returns a value between -1 and 1, where 1 means identical direction,
-   * 0 means perpendicular, and -1 means opposite direction.
+   * Calculates cosine similarity between two vectors using the formula:
+   * similarity = (A · B) / (||A|| × ||B||)
    * 
-   * @param {number[]} a - First vector
-   * @param {number[]} b - Second vector
-   * @returns {number} Cosine similarity score
-   * @throws {Error} If vectors have different dimensions
+   * ## What is Cosine Similarity?
+   * Cosine similarity measures the cosine of the angle between two vectors in multi-dimensional space.
+   * It tells us how similar two vectors are regardless of their magnitude (length).
+   * 
+   * ## Return Values:
+   * - **1.0**: Vectors point in exactly the same direction (identical)
+   * - **0.0**: Vectors are perpendicular (orthogonal/unrelated)
+   * - **-1.0**: Vectors point in opposite directions (completely different)
+   * - **0.7-1.0**: High similarity (vectors are closely related)
+   * - **0.3-0.7**: Moderate similarity
+   * - **< 0.3**: Low similarity
+   * 
+   * ## Why Use Cosine Similarity for Embeddings?
+   * Text embeddings encode semantic meaning as vectors. Cosine similarity is ideal because:
+   * - It focuses on direction (meaning) rather than magnitude (importance)
+   * - It's normalized between -1 and 1, making scores comparable
+   * - It works well in high-dimensional spaces (384-1536 dimensions)
+   * 
+   * ## Mathematical Formula:
+   * ```
+   * cosine_similarity = dot_product(A, B) / (magnitude(A) * magnitude(B))
+   * 
+   * Where:
+   * - dot_product(A, B) = Σ(a[i] * b[i]) for all i
+   * - magnitude(A) = √(Σ(a[i]²)) for all i
+   * ```
+   * 
+   * @param {number[]} a - First vector (e.g., embedding of document A)
+   * @param {number[]} b - Second vector (e.g., embedding of document B)
+   * @returns {number} Cosine similarity score between -1 and 1
+   * @throws {Error} If vectors have different dimensions (must be same length)
+   * 
+   * @example
+   * ```typescript
+   * // Two identical vectors have similarity of 1
+   * const similarity1 = CosineSimilarity([1, 2, 3], [1, 2, 3]); // ≈ 1.0
+   * 
+   * // Perpendicular vectors have similarity of 0
+   * const similarity2 = CosineSimilarity([1, 0], [0, 1]); // = 0.0
+   * 
+   * // Opposite vectors have similarity of -1
+   * const similarity3 = CosineSimilarity([1, 2], [-1, -2]); // = -1.0
+   * ```
    * 
    * @protected
    * @method
    */
   protected CosineSimilarity(a: number[], b: number[]): number {
+    // Vectors must have the same number of dimensions to be compared
+    // For embeddings, this means both texts were processed by the same model
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
     
+    // Initialize our three accumulator variables:
+    // - dotProduct: Sum of element-wise products (measures alignment)
+    // - normA: Sum of squares for vector A (used to calculate magnitude)
+    // - normB: Sum of squares for vector B (used to calculate magnitude)
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
     
+    // Single pass through both vectors to calculate all needed values
+    // This is more efficient than multiple loops
     for (let i = 0; i < a.length; i++) {
+      // Dot product: Multiply corresponding elements and sum them
+      // This measures how much the vectors "agree" at each dimension
       dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+      
+      // Calculate sum of squares for each vector
+      // These will be used to normalize the dot product
+      normA += a[i] * a[i];  // Same as Math.pow(a[i], 2) but faster
+      normB += b[i] * b[i];  // Same as Math.pow(b[i], 2) but faster
     }
     
-    // Handle zero vectors
+    // Handle edge case: Zero vectors (all elements are 0)
+    // A zero vector has no direction, so similarity is undefined
+    // We return 0 by convention (neither similar nor dissimilar)
     if (normA === 0 || normB === 0) {
       return 0;
     }
     
+    // Final calculation: Normalize the dot product by the magnitudes
+    // Math.sqrt(normA) = magnitude of vector A (||A||)
+    // Math.sqrt(normB) = magnitude of vector B (||B||)
+    // This gives us the cosine of the angle between the vectors
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
   
