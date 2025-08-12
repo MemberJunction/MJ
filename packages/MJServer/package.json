@@ -38,6 +38,7 @@
     "@memberjunction/ai-openrouter": "2.84.0",
     "@memberjunction/ai-ollama": "2.84.0",
     "@memberjunction/ai-vectors-pinecone": "2.84.0",
+    "@memberjunction/ai-local-embeddings": "2.84.0",
     "@memberjunction/core": "2.84.0",
     "@memberjunction/core-actions": "2.84.0",
     "@memberjunction/actions-apollo": "2.84.0",
