@@ -1,0 +1,78 @@
+[
+  {
+    "fields": {
+      "Name": "dayjs",
+      "DisplayName": "Day.js",
+      "Version": "1.11.10",
+      "GlobalVariable": "dayjs",
+      "Category": "utility",
+      "CDNUrl": "https://unpkg.com/dayjs@1.11.10/dayjs.min.js",
+      "CDNCssUrl": null,
+      "Description": "Fast 2KB alternative to Moment.js with the same modern API"
+    },
+    "primaryKey": {
+      "ID": "A56B41F5-2B8B-4FFC-85DD-89BD5E950C00"
+    },
+    "sync": {
+      "lastModified": "2025-08-12T19:54:44.147Z",
+      "checksum": "e27043fe769305817a3166184f755ca1e4f347233dcce6ad5d34291c4fd1cc7e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "antd",
+      "DisplayName": "Ant Design",
+      "Version": "5.20.2",
+      "GlobalVariable": "antd",
+      "Category": "ui",
+      "CDNUrl": "https://unpkg.com/antd@5.20.2/dist/antd.min.js",
+      "CDNCssUrl": "https://unpkg.com/antd@5.20.2/dist/reset.css",
+      "Description": "Enterprise-class UI design language and React components"
+    },
+    "primaryKey": {
+      "ID": "D5BE17F8-A4F4-420C-80F0-CC8CBF38B49C"
+    },
+    "sync": {
+      "lastModified": "2025-08-12T19:54:44.156Z",
+      "checksum": "fbe6f965f79fc81eccb19514e02075bc54c136bacc2d443057e25e3ef5e9c0a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "d3",
+      "DisplayName": "D3.js",
+      "Version": "7.8.5",
+      "GlobalVariable": "d3",
+      "Category": "charting",
+      "CDNUrl": "https://unpkg.com/d3@7.8.5/dist/d3.min.js",
+      "CDNCssUrl": null,
+      "Description": "Data visualization library for creating custom charts"
+    },
+    "primaryKey": {
+      "ID": "2F89DFD3-FE02-4B9D-92ED-6FDA0317632B"
+    },
+    "sync": {
+      "lastModified": "2025-08-12T19:54:44.163Z",
+      "checksum": "a79e3843652ae72576588bb97d799105098b3cc01cbb8b5c93010ee288d13494"
+    }
+  },
+  {
+    "fields": {
+      "Name": "chart.js",
+      "DisplayName": "Chart.js",
+      "Version": "4.4.1",
+      "GlobalVariable": "Chart",
+      "Category": "charting",
+      "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
+      "CDNCssUrl": null,
+      "Description": "Simple yet flexible JavaScript charting library"
+    },
+    "primaryKey": {
+      "ID": "198F2348-1BC4-4553-AAC4-7042C501CFA6"
+    },
+    "sync": {
+      "lastModified": "2025-08-12T19:54:44.169Z",
+      "checksum": "32b9d07f2dfb5adb9fb88c8b4cae3c6ae31828093060dfed4493c6ca1a41fe27"
+    }
+  }
+]
