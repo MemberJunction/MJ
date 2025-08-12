@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.85.0
+
+### Minor Changes
+
+- a96c1a7: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

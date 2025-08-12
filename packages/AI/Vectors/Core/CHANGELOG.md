@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 2.85.0
+
+### Minor Changes
+
+- dbef064: migration for queries
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-vectordb@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

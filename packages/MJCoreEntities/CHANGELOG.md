@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.85.0
+
+### Minor Changes
+
+- 747455a: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.85.0
+- @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

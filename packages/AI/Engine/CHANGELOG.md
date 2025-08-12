@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/ai-engine-base@2.85.0
+  - @memberjunction/ai-core-plus@2.85.0
+  - @memberjunction/actions-base@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

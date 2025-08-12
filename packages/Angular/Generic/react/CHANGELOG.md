@@ -1,5 +1,13 @@
 # @memberjunction/ng-react
 
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.85.0
+- @memberjunction/react-runtime@2.85.0
+- @memberjunction/core@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes
