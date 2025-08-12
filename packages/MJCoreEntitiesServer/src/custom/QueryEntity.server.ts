@@ -87,8 +87,6 @@ export class QueryEntityExtended extends QueryEntity {
             // Extract and sync parameters AFTER saving, outside of any transaction
             // This prevents connection pool exhaustion from long-running AI operations
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                // AI processing happens asynchronously after the main save operation
-                // This ensures the connection is released quickly for the primary operation
                 await this.extractAndSyncDataAsync();
                 await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             } else if (!this.SQL || this.SQL.trim().length === 0) {
@@ -128,12 +126,13 @@ export class QueryEntityExtended extends QueryEntity {
             
             // Find an embedding model - prioritize models with AIModelType = 'Embedding'
             const embeddingModels = AIEngine.Instance.Models.filter(m => 
-                m.AIModelType && m.AIModelType.trim().toLowerCase() === 'embeddings'
+                m.AIModelType && m.AIModelType.trim().toLowerCase() === 'embeddings' &&
+                m.Vendor && m.Vendor.trim().toLowerCase() === 'localembeddings' // Only use local embedding models
             );
             
             if (embeddingModels.length === 0) {
                 // No embedding models configured, skip embedding generation
-                console.warn('No embedding models configured in the system. Skipping embedding generation.');
+                console.warn('No local embedding models configured in the system. Skipping embedding generation.');
                 return;
             }
             
@@ -141,31 +140,12 @@ export class QueryEntityExtended extends QueryEntity {
             const sortedModels = embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
             const embeddingModel = sortedModels[0];
             
-            // Get the API key for the embedding model
-            // Note: Some models like LocalEmbedding don't require an API key
-            const apiKey = GetAIAPIKey(embeddingModel.DriverClass);
-            
-            // Check if this is a model type that doesn't require an API key
-            const driverClassLower = embeddingModel.DriverClass.toLowerCase();
-            const isLocalModel = driverClassLower === 'localembedding' || 
-                                 driverClassLower === 'local-embedding' ||
-                                 driverClassLower === 'local_embedding';
-            
-            if (!apiKey && !isLocalModel) {
-                console.warn(`No API key configured for embedding model ${embeddingModel.Name} (${embeddingModel.DriverClass}). Skipping embedding generation.`);
-                return;
-            }
-            
-            if (isLocalModel) {
-                console.log(`Using local embedding model ${embeddingModel.Name} - no API key required`);
-            }
-            
             // Create the embedding instance
             // For local embeddings that don't need an API key, pass 'local' or let the constructor handle it
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings, 
                 embeddingModel.DriverClass, 
-                apiKey || 'local'
+                null, // No API key needed for local embeddings
             );
             
             if (!embedding) {
