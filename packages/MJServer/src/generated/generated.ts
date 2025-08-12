@@ -37930,6 +37930,21 @@ export class Component_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Complete JSON specification object for the component`}) 
+    Specification: string;
+        
+    @Field({nullable: true, description: `Functional requirements describing what the component should accomplish`}) 
+    FunctionalRequirements?: string;
+        
+    @Field({nullable: true, description: `Technical design describing how the component is implemented`}) 
+    TechnicalDesign?: string;
+        
+    @Field({nullable: true, description: `Vector embedding of the functional requirements for similarity search`}) 
+    FunctionalRequirementsVector?: string;
+        
+    @Field({nullable: true, description: `Vector embedding of the technical design for similarity search`}) 
+    TechnicalDesignVector?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceRegistry?: string;
@@ -37994,6 +38009,21 @@ export class CreateComponentInput {
 
     @Field({ nullable: true })
     LastSyncedAt: Date | null;
+
+    @Field({ nullable: true })
+    Specification?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVector: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVector: string | null;
 }
     
 
@@ -38046,6 +38076,21 @@ export class UpdateComponentInput {
 
     @Field({ nullable: true })
     LastSyncedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Specification?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign?: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVector?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVector?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

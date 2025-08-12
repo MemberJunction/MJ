@@ -9801,6 +9801,31 @@ export const ComponentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Specification: z.string().describe(`
+        * * Field Name: Specification
+        * * Display Name: Specification
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Complete JSON specification object for the component`),
+    FunctionalRequirements: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirements
+        * * Display Name: Functional Requirements
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Functional requirements describing what the component should accomplish`),
+    TechnicalDesign: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesign
+        * * Display Name: Technical Design
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Technical design describing how the component is implemented`),
+    FunctionalRequirementsVector: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirementsVector
+        * * Display Name: Functional Requirements Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Vector embedding of the functional requirements for similarity search`),
+    TechnicalDesignVector: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesignVector
+        * * Display Name: Technical Design Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Vector embedding of the technical design for similarity search`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -39585,6 +39610,71 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Specification
+    * * Display Name: Specification
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Complete JSON specification object for the component
+    */
+    get Specification(): string {
+        return this.Get('Specification');
+    }
+    set Specification(value: string) {
+        this.Set('Specification', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirements
+    * * Display Name: Functional Requirements
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Functional requirements describing what the component should accomplish
+    */
+    get FunctionalRequirements(): string | null {
+        return this.Get('FunctionalRequirements');
+    }
+    set FunctionalRequirements(value: string | null) {
+        this.Set('FunctionalRequirements', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesign
+    * * Display Name: Technical Design
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Technical design describing how the component is implemented
+    */
+    get TechnicalDesign(): string | null {
+        return this.Get('TechnicalDesign');
+    }
+    set TechnicalDesign(value: string | null) {
+        this.Set('TechnicalDesign', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirementsVector
+    * * Display Name: Functional Requirements Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Vector embedding of the functional requirements for similarity search
+    */
+    get FunctionalRequirementsVector(): string | null {
+        return this.Get('FunctionalRequirementsVector');
+    }
+    set FunctionalRequirementsVector(value: string | null) {
+        this.Set('FunctionalRequirementsVector', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesignVector
+    * * Display Name: Technical Design Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Vector embedding of the technical design for similarity search
+    */
+    get TechnicalDesignVector(): string | null {
+        return this.Get('TechnicalDesignVector');
+    }
+    set TechnicalDesignVector(value: string | null) {
+        this.Set('TechnicalDesignVector', value);
     }
 
     /**
