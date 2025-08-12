@@ -121,16 +121,18 @@ INSERT INTO ${flyway:defaultSchema}.Dashboard (
     CategoryID,
     DriverClass,
 	UIConfigDetails,
-	UserID
+	UserID,
+    Type
 )
 VALUES (
     @DashboardID,
-    N'Component Viewer',
+    N'Component Studio',
     N'Browse, preview, and test reusable components from your component registry',
     @AppID,
     @DashboardCategoryID,
     'ComponentStudioDashboard',
 	'',
-	@SystemUserID
+	@SystemUserID,
+    'Code'
 );
  
