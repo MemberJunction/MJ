@@ -1,0 +1,281 @@
+<div class="component-studio-dashboard">
+  <!-- Dialog container for Kendo dialogs -->
+  <div kendoDialogContainer></div>
+  
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
+        </div>
+        <div class="loading-text">Loading Component Studio...</div>
+      </div>
+    </div>
+  }
+  
+  @if (!isLoading) {
+    <div class="dashboard-wrapper">
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-left">
+          <h1 class="dashboard-title">
+            <i class="fa-solid fa-puzzle-piece"></i>
+            Component Studio
+          </h1>
+          <div class="dashboard-subtitle">
+            Discover, preview, and test reusable components
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-actions">
+            <button kendoButton 
+              [icon]="viewMode === 'grid' ? 'fa-solid fa-list' : 'fa-solid fa-th'"
+              [fillMode]="'flat'"
+              (click)="toggleViewMode()"
+              title="Toggle view mode">
+            </button>
+            <button kendoButton 
+              [icon]="showFilterPanel ? 'fa-solid fa-filter-circle-xmark' : 'fa-solid fa-filter'"
+              [fillMode]="'flat'"
+              (click)="toggleFilterPanel()"
+              title="Toggle filters">
+            </button>
+            <button kendoButton 
+              [icon]="'fa-solid fa-sync'"
+              [fillMode]="'flat'"
+              (click)="refreshData()"
+              title="Refresh">
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content Area -->
+      <div class="dashboard-content">
+        <!-- Left Filter Panel -->
+        @if (showFilterPanel && activeTab === 'browse') {
+          <div class="filter-panel">
+            <div class="filter-header">
+              <h3>Filters</h3>
+              <button kendoButton 
+                [fillMode]="'flat'"
+                [size]="'small'"
+                (click)="clearFilters()">
+                Clear All
+              </button>
+            </div>
+            
+            <!-- Search -->
+            <div class="filter-section">
+              <label class="filter-label">Search</label>
+              <kendo-textbox 
+                [value]="searchQuery$.value"
+                (valueChange)="onSearchChange($event)"
+                placeholder="Search components..."
+                [clearButton]="true">
+                <ng-template kendoTextBoxPrefixTemplate>
+                  <i class="fa-solid fa-search"></i>
+                </ng-template>
+              </kendo-textbox>
+            </div>
+
+            <!-- Type Filter -->
+            <div class="filter-section">
+              <label class="filter-label">Component Type</label>
+              <div class="filter-options">
+                @for (type of componentTypes; track type) {
+                  <label class="checkbox-label">
+                    <input type="checkbox" 
+                      [checked]="selectedTypes$.value.has(type)"
+                      (change)="onTypeFilterChange(type, $any($event.target).checked)">
+                    <span class="type-indicator" [style.background-color]="getComponentTypeColor(type)"></span>
+                    {{ type }}
+                  </label>
+                }
+              </div>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="filter-section">
+              <label class="filter-label">Status</label>
+              <div class="filter-options">
+                @for (status of componentStatuses; track status) {
+                  <label class="checkbox-label">
+                    <input type="checkbox" 
+                      [checked]="selectedStatuses$.value.has(status)"
+                      (change)="onStatusFilterChange(status, $any($event.target).checked)">
+                    <span class="status-badge" [ngClass]="getStatusBadgeClass(status)">{{ status }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+
+            <!-- Source Filter -->
+            <div class="filter-section">
+              <label class="filter-label">Source</label>
+              <div class="filter-options">
+                <label class="checkbox-label">
+                  <input type="checkbox" 
+                    [checked]="selectedSources$.value.has('Local')"
+                    (change)="onSourceFilterChange('Local', $any($event.target).checked)">
+                  <i class="fa-solid fa-house"></i> Local
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" 
+                    [checked]="selectedSources$.value.has('Registry')"
+                    (change)="onSourceFilterChange('Registry', $any($event.target).checked)">
+                  <i class="fa-solid fa-cloud"></i> Registry
+                </label>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Center Content Area -->
+        <div class="content-area">
+          <!-- Tab Content -->
+          @if (activeTab === 'browse') {
+            <div class="browse-content">
+              <!-- Results Summary -->
+              <div class="results-summary">
+                <span class="result-count">
+                  {{ filteredComponents$.value.length }} components found
+                </span>
+              </div>
+
+              <!-- Component Grid/List -->
+              @if (viewMode === 'grid') {
+                <div class="component-grid">
+                  @for (component of filteredComponents$.value; track component.ID) {
+                    <div class="component-card" 
+                      [class.selected]="selectedComponentId === component.ID"
+                      (click)="selectComponent(component)">
+                      <div class="card-header">
+                        <div class="card-type" [style.background-color]="getComponentTypeColor(component.Type || 'Other')">
+                          {{ component.Type || 'Other' }}
+                        </div>
+                        <div class="card-status" [ngClass]="getStatusBadgeClass(component.Status || 'Draft')">
+                          {{ component.Status }}
+                        </div>
+                      </div>
+                      <div class="card-body">
+                        <h4 class="card-title">{{ component.Name }}</h4>
+                        <div class="card-version">v{{ component.Version }}</div>
+                        <p class="card-description">{{ component.Description || 'No description available' }}</p>
+                        <div class="card-namespace">
+                          <i class="fa-solid fa-folder-tree"></i>
+                          {{ component.Namespace || 'root' }}
+                        </div>
+                      </div>
+                      <div class="card-footer">
+                        <div class="card-developer">
+                          <i class="fa-solid fa-user"></i>
+                          {{ component.DeveloperOrganization || component.DeveloperName || 'Unknown' }}
+                        </div>
+                        <div class="card-source">
+                          @if (!component.SourceRegistryID) {
+                            <i class="fa-solid fa-house" title="Local"></i>
+                          } @else {
+                            <i class="fa-solid fa-cloud" title="Registry"></i>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <!-- List View -->
+                <kendo-grid 
+                  [data]="filteredComponents$.value"
+                  [pageSize]="20"
+                  [pageable]="true"
+                  [sortable]="true"
+                  [filterable]="false"
+                  [resizable]="true"
+                  [selectable]="true"
+                  (selectionChange)="selectComponent($event.selectedRows && $event.selectedRows[0] ? $event.selectedRows[0].dataItem : null)">
+                  <kendo-grid-column field="Name" title="Component" [width]="250">
+                    <ng-template kendoGridCellTemplate let-dataItem>
+                      <div class="component-name">
+                        <span class="type-dot" [style.background-color]="getComponentTypeColor(dataItem.Type || 'Other')"></span>
+                        {{ dataItem.Name }}
+                      </div>
+                    </ng-template>
+                  </kendo-grid-column>
+                  <kendo-grid-column field="Version" title="Version" [width]="80"></kendo-grid-column>
+                  <kendo-grid-column field="Type" title="Type" [width]="100"></kendo-grid-column>
+                  <kendo-grid-column field="Status" title="Status" [width]="100">
+                    <ng-template kendoGridCellTemplate let-dataItem>
+                      <span class="status-badge" [ngClass]="getStatusBadgeClass(dataItem.Status || 'Draft')">
+                        {{ dataItem.Status }}
+                      </span>
+                    </ng-template>
+                  </kendo-grid-column>
+                  <kendo-grid-column field="Namespace" title="Namespace" [width]="200"></kendo-grid-column>
+                  <kendo-grid-column field="DeveloperOrganization" title="Developer" [width]="150"></kendo-grid-column>
+                  <kendo-grid-column field="Description" title="Description"></kendo-grid-column>
+                </kendo-grid>
+              }
+            </div>
+          }
+
+          @if (activeTab === 'preview') {
+            <div class="preview-content">
+              @if (selectedComponent) {
+                <mj-component-preview 
+                  [component]="selectedComponent"
+                  [componentSpec]="componentSpec"
+                  (openEntityRecord)="onOpenEntityRecord($event)">
+                </mj-component-preview>
+              } @else {
+                <div class="empty-state">
+                  <i class="fa-solid fa-eye fa-4x"></i>
+                  <h3>No Component Selected</h3>
+                  <p>Select a component from the Browse tab to preview it</p>
+                </div>
+              }
+            </div>
+          }
+
+          @if (activeTab === 'dependencies') {
+            <div class="dependencies-content">
+              @if (selectedComponent) {
+                <mj-component-dependencies
+                  [component]="selectedComponent"
+                  (openEntityRecord)="onOpenEntityRecord($event)">
+                </mj-component-dependencies>
+              } @else {
+                <div class="empty-state">
+                  <i class="fa-solid fa-sitemap fa-4x"></i>
+                  <h3>No Component Selected</h3>
+                  <p>Select a component to view its dependencies</p>
+                </div>
+              }
+            </div>
+          }
+
+          @if (activeTab === 'settings') {
+            <div class="settings-content">
+              <mj-component-studio-settings
+                (openEntityRecord)="onOpenEntityRecord($event)">
+              </mj-component-studio-settings>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Bottom Navigation -->
+      <div class="dashboard-navigation">
+        @for (navItem of navigationConfig; track $index) {
+          <div 
+            class="nav-item"
+            [class.active]="navItem.selected"
+            (click)="onTabChange(navigationItems[$index])">
+            <i [class]="navItem.icon"></i>
+            <span>{{ navItem.text }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
