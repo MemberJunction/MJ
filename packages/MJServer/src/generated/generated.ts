@@ -16897,6 +16897,9 @@ export class AIModel_ {
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_OverrideModelIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
+    @Field(() => [Query_])
+    Queries_EmbeddingModelIDArray: Query_[]; // Link to Queries
+    
 }
 
 //****************************************************************************
@@ -17189,6 +17192,17 @@ export class AIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [Query_])
+    async Queries_EmbeddingModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Queries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Queries', rows);
         return result;
     }
         
@@ -23597,9 +23611,20 @@ export class Query_ {
     @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
     CacheMaxSize?: number;
         
+    @Field({nullable: true, description: `Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`}) 
+    EmbeddingVector?: string;
+        
+    @Field({nullable: true, description: `The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`}) 
+    @MaxLength(16)
+    EmbeddingModelID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    EmbeddingModel?: string;
         
     @Field(() => [QueryField_])
     QueryFields_QueryIDArray: QueryField_[]; // Link to QueryFields
@@ -23673,6 +23698,12 @@ export class CreateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
 }
     
 
@@ -23731,6 +23762,12 @@ export class UpdateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize?: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -27,6 +27,7 @@
     "@memberjunction/ai-prompts": "2.84.0",
     "@memberjunction/skip-types": "2.84.0",
     "@memberjunction/aiengine": "2.84.0",
+    "@memberjunction/ai-local-embeddings": "2.84.0",
     "@memberjunction/sqlserver-dataprovider": "2.84.0",
     "zod": "^3.23.8"
   }

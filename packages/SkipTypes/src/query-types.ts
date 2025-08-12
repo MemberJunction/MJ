@@ -111,6 +111,19 @@ export class SkipQueryInfo {
     categoryPath: string;
     fields: SkipQueryFieldInfo[];
     params: SkipQueryParamInfo[];
+
+    /**
+     * Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis
+     */
+    embeddingVector?: string;
+    /**
+     * The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
+     */
+    embeddingModelID?: string;
+    /**
+     * The name of the AI Model used to generate the embedding vector for this query.
+     */
+    embeddingModelName?: string; 
 }
 
 /**
