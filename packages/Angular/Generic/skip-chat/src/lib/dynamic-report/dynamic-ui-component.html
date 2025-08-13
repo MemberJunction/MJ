@@ -142,7 +142,6 @@
                 <mj-react-component
                   *ngIf="!currentError && componentOptions[i] && i === selectedReportOptionIndex"
                   [component]="componentOptions[i].option"
-                  [utilities]="utilities"
                   [styles]="componentStyles || undefined"
                   (stateChange)="onStateChange(i, $event)"
                   (componentEvent)="onComponentEvent(i, $event)"
@@ -406,7 +405,6 @@
           <mj-react-component
             *ngIf="componentOptions[0]"
             [component]="componentOptions[0].option"
-            [utilities]="utilities"
             [styles]="componentStyles || undefined"
             (stateChange)="onStateChange(0, $event)"
             (componentEvent)="onComponentEvent(0, $event)"

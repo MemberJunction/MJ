@@ -1,12 +1,13 @@
 import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView } from '@memberjunction/core';
+import { RunView, CompositeKey } from '@memberjunction/core';
 import { ComponentEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ReactComponentEvent } from '@memberjunction/ng-react';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-component-studio-dashboard',
@@ -20,10 +21,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public components: ComponentEntity[] = [];
   public filteredComponents: ComponentEntity[] = [];
   public selectedComponent: ComponentEntity | null = null;
+  public expandedComponent: ComponentEntity | null = null; // Track which card is expanded
   public componentSpec: ComponentSpec | null = null;
   public isLoading = false;
   public searchQuery = '';
-  public showPreview = false;
+  public isRunning = false; // Track if component is currently running
   
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
@@ -92,18 +94,31 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     }
   }
 
-  public selectComponent(component: ComponentEntity): void {
-    this.selectedComponent = component;
-    this.componentSpec = JSON.parse(component.Specification);
+  public toggleComponentExpansion(component: ComponentEntity): void {
+    // Toggle expansion - if clicking the same component, collapse it
+    if (this.expandedComponent?.ID === component.ID) {
+      this.expandedComponent = null;
+    } else {
+      this.expandedComponent = component;
+    }
+    this.cdr.detectChanges();
   }
 
-  public runComponent(): void {
-    if (this.selectedComponent && this.componentSpec) {
-      this.showPreview = true;
-      this.currentError = null; // Clear any previous errors
-      console.log('Running component:', this.selectedComponent.Name);
-      this.cdr.detectChanges();
-    }
+  public runComponent(component: ComponentEntity): void {
+    this.selectedComponent = component;
+    this.componentSpec = JSON.parse(component.Specification);
+    this.isRunning = true;
+    this.currentError = null; // Clear any previous errors
+    console.log('Running component:', component.Name);
+    this.cdr.detectChanges();
+  }
+
+  public stopComponent(): void {
+    this.isRunning = false;
+    this.selectedComponent = null;
+    this.componentSpec = null;
+    this.currentError = null;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -121,16 +136,26 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   /**
+   * Handle open entity record event from React components
+   */
+  public onOpenEntityRecord(event: { entityName: string; key: CompositeKey }): void {
+    // Use SharedService to open the entity record in a new window/tab
+    SharedService.Instance.OpenEntityRecord(event.entityName, event.key);
+  }
+
+  /**
    * Retry running the current component
    */
   public retryComponent(): void {
-    this.currentError = null;
-    this.showPreview = false;
-    this.cdr.detectChanges();
-    // Small delay to reset the component
-    setTimeout(() => {
-      this.runComponent();
-    }, 100);
+    if (this.selectedComponent) {
+      this.currentError = null;
+      this.isRunning = false;
+      this.cdr.detectChanges();
+      // Small delay to reset the component
+      setTimeout(() => {
+        this.runComponent(this.selectedComponent!);
+      }, 100);
+    }
   }
 
   /**

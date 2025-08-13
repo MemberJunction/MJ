@@ -1,4 +1,4 @@
-<div class="component-studio-simple">
+<div class="component-studio">
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-content">
@@ -12,7 +12,7 @@
   <!-- Main Content with Splitter -->
   <kendo-splitter orientation="horizontal" style="flex: 1; height: auto;">
     <!-- Left Panel - Component List -->
-    <kendo-splitter-pane [min]="'300px'" [max]="'600px'">
+    <kendo-splitter-pane [min]="'350px'" [max]="'600px'" [size]="'400px'">
       <div class="components-panel">
         <div class="panel-header">
           <h3>Components</h3>
@@ -40,16 +40,89 @@
             </div>
           } @else {
             @for (component of filteredComponents; track component.ID) {
-              <div class="component-item" 
-                [class.selected]="selectedComponent?.ID === component.ID"
-                (click)="selectComponent(component)">
-                <div class="component-icon" [style.color]="getComponentTypeColor(component.Type)">
-                  <i class="fa-solid" [ngClass]="getComponentTypeIcon(component.Type)"></i>
+              <div class="component-card" 
+                [class.expanded]="expandedComponent?.ID === component.ID"
+                [class.running]="selectedComponent?.ID === component.ID && isRunning">
+                
+                <!-- Card Header - Always visible -->
+                <div class="card-header" (click)="toggleComponentExpansion(component)">
+                  <div class="card-icon" [style.color]="getComponentTypeColor(component.Type)">
+                    <i class="fa-solid" [ngClass]="getComponentTypeIcon(component.Type)"></i>
+                  </div>
+                  <div class="card-info">
+                    <div class="card-name">{{ component.Name }}</div>
+                    <div class="card-meta">
+                      <span class="card-type">{{ component.Type || 'Component' }}</span>
+                      <span class="card-version">v{{ component.Version || '1.0.0' }}</span>
+                      @if (component.Status === 'Published') {
+                        <span class="status-badge published">Published</span>
+                      } @else {
+                        <span class="status-badge draft">Draft</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="card-chevron">
+                    @if (expandedComponent?.ID === component.ID) {
+                      <i class="fa-solid fa-chevron-up"></i>
+                    } @else {
+                      <i class="fa-solid fa-chevron-down"></i>
+                    }
+                  </div>
                 </div>
-                <div class="component-info">
-                  <div class="component-name">{{ component.Name }}</div>
-                  <div class="component-type">{{ component.Type || 'Unknown' }} • v{{ component.Version || '1.0.0' }}</div>
-                </div>
+                
+                <!-- Card Details - Only visible when expanded -->
+                @if (expandedComponent?.ID === component.ID) {
+                  <div class="card-details">
+                    @if (component.Description) {
+                      <div class="detail-section">
+                        <label>Description</label>
+                        <p>{{ component.Description }}</p>
+                      </div>
+                    }
+                    
+                    <div class="detail-section">
+                      <label>Component Info</label>
+                      <div class="info-grid">
+                        <div class="info-item">
+                          <span class="info-label">Type:</span>
+                          <span class="info-value">{{ component.Type || 'Unknown' }}</span>
+                        </div>
+                        <div class="info-item">
+                          <span class="info-label">Version:</span>
+                          <span class="info-value">{{ component.Version || '1.0.0' }}</span>
+                        </div>
+                        <div class="info-item">
+                          <span class="info-label">Status:</span>
+                          <span class="info-value">{{ component.Status || 'Draft' }}</span>
+                        </div>
+                        @if (component.__mj_UpdatedAt) {
+                          <div class="info-item">
+                            <span class="info-label">Updated:</span>
+                            <span class="info-value">{{ component.__mj_UpdatedAt | date:'short' }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                    
+                    <div class="card-actions">
+                      @if (selectedComponent?.ID === component.ID && isRunning) {
+                        <button kendoButton 
+                          [icon]="'fa-solid fa-stop'" 
+                          [themeColor]="'error'"
+                          (click)="stopComponent(); $event.stopPropagation()">
+                          Stop Component
+                        </button>
+                      } @else {
+                        <button kendoButton 
+                          [icon]="'fa-solid fa-play'" 
+                          [themeColor]="'primary'"
+                          (click)="runComponent(component); $event.stopPropagation()">
+                          Run Component
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
               </div>
             }
           }
@@ -57,110 +130,71 @@
       </div>
     </kendo-splitter-pane>
 
-    <!-- Right Panel - Component Preview -->
+    <!-- Right Panel - Component Display -->
     <kendo-splitter-pane [min]="'400px'">
-      <div class="preview-panel">
-        @if (selectedComponent) {
-          <div class="preview-header">
-            <h3>{{ selectedComponent.Name }}</h3>
-            <div class="preview-actions">
-              <button kendoButton 
-                [icon]="'fa-solid fa-play'" 
-                [themeColor]="'primary'"
-                (click)="runComponent()">
-                Run Component
-              </button>
-            </div>
-          </div>
-          
-          <div class="preview-content">
-            <div class="component-details">
-              <div class="detail-row">
-                <label>Type:</label>
-                <span>{{ selectedComponent.Type || 'Unknown' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Version:</label>
-                <span>{{ selectedComponent.Version || '1.0.0' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Status:</label>
-                <span class="status-badge" [class.published]="selectedComponent.Status === 'Published'">
-                  {{ selectedComponent.Status || 'Draft' }}
-                </span>
-              </div>
-              @if (selectedComponent.Description) {
-                <div class="detail-row full-width">
-                  <label>Description:</label>
-                  <p>{{ selectedComponent.Description }}</p>
+      <div class="component-display">
+        @if (isRunning && selectedComponent && componentSpec) {
+          @if (currentError) {
+            <!-- Error Display -->
+            <div class="error-display">
+              <div class="error-container">
+                <div class="error-header">
+                  <i class="fa-solid fa-exclamation-triangle"></i>
+                  <h3>Component Error</h3>
+                  <button class="copy-button" (click)="copyErrorToClipboard()" title="Copy error details">
+                    <i class="fa-solid fa-copy"></i>
+                  </button>
                 </div>
-              }
-            </div>
-            
-            @if (showPreview && componentSpec) {
-              <div class="component-runtime">
-                <div class="runtime-header">
-                  <h4>Component Preview</h4>
-                </div>
-                <div class="runtime-container">
-                  @if (currentError) {
-                    <!-- Error display -->
-                    <div class="error-display">
-                      <div class="error-container">
-                        <div class="error-header">
-                          <i class="fa-solid fa-exclamation-triangle"></i>
-                          <h3>Component Error</h3>
-                          <button class="copy-button" (click)="copyErrorToClipboard()" title="Copy error details">
-                            <i class="fa-solid fa-copy"></i>
-                          </button>
-                        </div>
-                        
-                        <p class="error-intro">
-                          The component could not be rendered due to the following error:
-                        </p>
-                        
-                        <div class="error-details">
-                          <strong>Error Type:</strong> {{ currentError.type }}<br>
-                          <strong>Message:</strong> {{ currentError.message }}
-                          @if (currentError.technicalDetails) {
-                            <details class="technical-details">
-                              <summary>Technical Details (click to expand)</summary>
-                              <pre>{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
-                            </details>
-                          }
-                        </div>
-                        
-                        <div class="error-help">
-                          <strong>What to do:</strong>
-                          <ol>
-                            <li>Check that the component code is valid JavaScript/React</li>
-                            <li>Ensure all required dependencies are available</li>
-                            <li>Review the technical details for specific error information</li>
-                            <li>Contact your system administrator if the issue persists</li>
-                          </ol>
-                        </div>
-                        
-                        <div class="error-actions">
-                          <button kendoButton (click)="retryComponent()" [icon]="'fa-solid fa-rotate'">
-                            Retry
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  } @else {
-                    <mj-react-component 
-                      [component]="componentSpec"
-                      (componentEvent)="onComponentEvent($event)">
-                    </mj-react-component>
+                
+                <p class="error-intro">
+                  The component could not be rendered due to the following error:
+                </p>
+                
+                <div class="error-details">
+                  <strong>Error Type:</strong> {{ currentError.type }}<br>
+                  <strong>Message:</strong> {{ currentError.message }}
+                  @if (currentError.technicalDetails) {
+                    <details class="technical-details">
+                      <summary>Technical Details (click to expand)</summary>
+                      <pre>{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
+                    </details>
                   }
                 </div>
+                
+                <div class="error-help">
+                  <strong>What to do:</strong>
+                  <ol>
+                    <li>Check that the component code is valid JavaScript/React</li>
+                    <li>Ensure all required dependencies are available</li>
+                    <li>Review the technical details for specific error information</li>
+                    <li>Contact your system administrator if the issue persists</li>
+                  </ol>
+                </div>
+                
+                <div class="error-actions">
+                  <button kendoButton (click)="retryComponent()" [icon]="'fa-solid fa-rotate'">
+                    Retry
+                  </button>
+                  <button kendoButton (click)="stopComponent()" [icon]="'fa-solid fa-stop'" [themeColor]="'error'">
+                    Stop
+                  </button>
+                </div>
               </div>
-            }
-          </div>
+            </div>
+          } @else {
+            <!-- React Component -->
+            <mj-react-component 
+              [component]="componentSpec"
+              (componentEvent)="onComponentEvent($event)"
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-react-component>
+          }
         } @else {
-          <div class="no-selection">
-            <i class="fa-solid fa-hand-pointer fa-3x"></i>
-            <p>Select a component from the list to preview</p>
+          <!-- Empty State -->
+          <div class="empty-state">
+            <i class="fa-solid fa-rocket fa-3x"></i>
+            <h2>Ready to Test Components</h2>
+            <p>Select a component from the list and click "Run Component" to see it in action</p>
           </div>
         }
       </div>
