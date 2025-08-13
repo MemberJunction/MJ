@@ -296,24 +296,59 @@ export class RecordDependencyAnalyzer {
                              candidate.record.primaryKey?.[field];
         let lookupValue = value;
         
-        // Handle special case where candidate has @parent:ID and lookup has resolved value
-        if (candidateValue === '@parent:ID' && candidate.parentContext && !lookupValue.startsWith('@')) {
-          // Get the parent record's ID
-          const parentRecord = candidate.parentContext.record;
-          candidateValue = parentRecord.primaryKey?.ID || parentRecord.fields?.ID;
-          
-          // If parent ID is not yet set (new record), we can't match yet
-          if (!candidateValue) {
-            allMatch = false;
-            break;
-          }
-        }
-        
-        // Also check if @parent:<field> syntax
+        // Resolve candidate value if it's a @parent reference
         if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:') && candidate.parentContext) {
           const parentField = candidateValue.substring(8);
           const parentRecord = candidate.parentContext.record;
           candidateValue = parentRecord.fields?.[parentField] || parentRecord.primaryKey?.[parentField];
+          
+          // If the parent field is also a @parent reference, resolve it recursively
+          if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:')) {
+            // Find the candidate's parent in our flattened list
+            const candidateParent = this.flattenedRecords.find(r => 
+              r.record === candidate.parentContext!.record && 
+              r.entityName === candidate.parentContext!.entityName
+            );
+            if (candidateParent?.parentContext) {
+              const grandParentField = candidateValue.substring(8);
+              candidateValue = candidateParent.parentContext.record.fields?.[grandParentField] || 
+                              candidateParent.parentContext.record.primaryKey?.[grandParentField];
+            }
+          }
+        }
+        
+        // Resolve lookup value if it contains @parent reference
+        if (typeof lookupValue === 'string' && lookupValue.includes('@parent:')) {
+          // Handle cases like "@parent:AgentID" or embedded references
+          if (lookupValue.startsWith('@parent:') && currentRecord.parentContext) {
+            const parentField = lookupValue.substring(8);
+            lookupValue = currentRecord.parentContext.record.fields?.[parentField] || 
+                         currentRecord.parentContext.record.primaryKey?.[parentField];
+            
+            // If still a reference, try to resolve from the parent's parent
+            if (typeof lookupValue === 'string' && lookupValue.startsWith('@parent:')) {
+              const currentParent = this.flattenedRecords.find(r => 
+                r.record === currentRecord.parentContext!.record && 
+                r.entityName === currentRecord.parentContext!.entityName
+              );
+              if (currentParent?.parentContext) {
+                const grandParentField = lookupValue.substring(8);
+                lookupValue = currentParent.parentContext.record.fields?.[grandParentField] || 
+                             currentParent.parentContext.record.primaryKey?.[grandParentField];
+              }
+            }
+          }
+        }
+        
+        // Special case: if both values are @parent references pointing to the same parent field,
+        // and they have the same parent context, they match
+        if (value.startsWith('@parent:') && candidateValue === value && 
+            currentRecord.parentContext && candidate.parentContext) {
+          // Check if they share the same parent
+          if (currentRecord.parentContext.record === candidate.parentContext.record) {
+            // Same parent, same reference - they will resolve to the same value
+            continue; // This criterion matches
+          }
         }
         
         if (candidateValue !== lookupValue) {
