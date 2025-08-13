@@ -6,7 +6,7 @@ import { DrillDownInfo } from '../drill-down-info';
 import { DomSanitizer } from '@angular/platform-browser';
 import { marked } from 'marked';
 import { MJReactComponent, StateChangeEvent, ReactComponentEvent, AngularAdapterService } from '@memberjunction/ng-react';
-import { createRuntimeUtilities, SetupStyles } from '@memberjunction/react-runtime';
+import { SetupStyles } from '@memberjunction/react-runtime';
 import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
 
 @Component({
@@ -50,7 +50,7 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     
     // Cache for user states only - component specs come from data
     public userStates = new Map<number, any>();
-    public utilities: ComponentUtilities | null = null;
+    // Note: utilities are now auto-initialized by mj-react-component if not provided
     public componentStyles: ComponentStyles | null = null;
     
     // Memoized flattened data context to prevent ExpressionChangedAfterItHasBeenCheckedError
@@ -433,9 +433,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             this.setupReportOptions(this.SkipData);
         }
         
-        // Initialize utilities and styles once using React runtime
-        const runtimeUtils = createRuntimeUtilities();
-        this.utilities = runtimeUtils.buildUtilities();
+        // Initialize styles once using React runtime
+        // Note: utilities are now auto-initialized by mj-react-component
         this.componentStyles = SetupStyles();
         
         // Initialize user states for all options
