@@ -12,7 +12,7 @@ import { Step } from '../../models/step.model';
     <div class="step" [class.selected]="selected" [class.executing]="executing" (click)="onStepClick($event)">
       <div class="step-header">
         <div class="step-title">
-          <i class="fas" [ngClass]="step.config.icon" [style.color]="step.config.color"></i>
+          <i [class]="getStepIcon()" [style.color]="getStepIconColor()"></i>
           <span>{{ step.name }}</span>
         </div>
         <div class="step-actions">
@@ -248,5 +248,33 @@ export class StepComponent {
   onStepClick(event: MouseEvent) {
     event.stopPropagation();
     this.stepSelected.emit(this.step);
+  }
+  
+  getStepIcon(): string {
+    // Return icon class based on step type
+    switch (this.step.type) {
+      case 'prompt':
+        return 'fas fa-comment-dots'; // Chat bubble for prompts
+      case 'action':
+        return 'fas fa-bolt'; // Lightning bolt for actions
+      case 'agent':
+        return 'fas fa-robot'; // Robot for sub-agents
+      default:
+        return 'fas fa-cog'; // Default gear icon
+    }
+  }
+  
+  getStepIconColor(): string {
+    // Return color based on step type
+    switch (this.step.type) {
+      case 'prompt':
+        return '#3B82F6'; // Blue for prompts
+      case 'action':
+        return '#F59E0B'; // Amber for actions
+      case 'agent':
+        return '#8B5CF6'; // Purple for sub-agents
+      default:
+        return '#6B7280'; // Gray default
+    }
   }
 }

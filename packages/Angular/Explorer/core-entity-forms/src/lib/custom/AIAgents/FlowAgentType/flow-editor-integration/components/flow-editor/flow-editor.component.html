@@ -24,6 +24,13 @@
       </button>
       <button 
         class="control-button" 
+        (click)="onAutoArrange()"
+        title="Auto Arrange Steps">
+        <i class="fas fa-project-diagram"></i>
+        <span>Auto Arrange</span>
+      </button>
+      <button 
+        class="control-button" 
         (click)="toggleExecutionPanel()"
         title="Toggle Execution Panel">
         <i class="fas fa-play-circle"></i>
@@ -42,11 +49,20 @@
   <div #reteEditor class="rete-container">
     <div class="canvas-wrapper">
       <svg class="connections-layer">
+        <!-- Define arrow markers for backward connections -->
+        <defs>
+          <marker id="backward-arrow" markerWidth="10" markerHeight="10" 
+                  refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#EF4444" />
+          </marker>
+        </defs>
         <g *ngFor="let connection of connections">
           <path [attr.d]="getConnectionPath(connection)" 
                 class="connection-path"
                 fill="none"
-                stroke="#007bff"
+                [attr.stroke]="getConnectionColor(connection)"
+                [attr.stroke-dasharray]="getConnectionDashArray(connection)"
+                [attr.marker-end]="getConnectionMarker(connection)"
                 stroke-width="3"
                 style="cursor: pointer; pointer-events: stroke"
                 (click)="onConnectionClick($event, connection)"/>

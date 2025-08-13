@@ -58,7 +58,9 @@ import { MJStep, MJConnection } from './flow-editor-integration/models/mj-extend
 
         <!-- Flow Editor Canvas -->
         <div class="canvas-container">
-          <app-flow-editor #flowEditor (toggleExecution)="toggleExecutionPanel()"></app-flow-editor>
+          <app-flow-editor #flowEditor 
+                          (toggleExecution)="toggleExecutionPanel()"
+                          (stepMoved)="onStepMoved($event)"></app-flow-editor>
         </div>
 
         <!-- Properties Panel -->
@@ -367,6 +369,19 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
       this.paths
     );
     
+    // Load saved positions from LocalStorage if available
+    if (this.agentId) {
+      const savedPositions = this.loadPositionsFromLocalStorage();
+      if (savedPositions) {
+        transformedSteps.forEach(step => {
+          const savedPos = savedPositions[step.id];
+          if (savedPos) {
+            step.position = [savedPos.x, savedPos.y];
+          }
+        });
+      }
+    }
+    
     // Load transformed data into the flow editor
     
     // Load into flow editor service
@@ -533,6 +548,13 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
   
   onStepDragEnd() {
     // Handle drag end
+    // Save positions when step dragging ends
+    this.savePositionsToLocalStorage();
+  }
+  
+  onStepMoved(step: Step) {
+    // Save positions to LocalStorage when a step is moved
+    this.savePositionsToLocalStorage();
   }
   
   onStepUpdated(updatedStep: MJStep) {
@@ -567,5 +589,45 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
     const connections = ((this.flowEditorService as any).connections || []) as MJConnection[];
     
     await this.flowExecutorService.executeFlow(steps, connections);
+  }
+  
+  private loadPositionsFromLocalStorage(): { [stepId: string]: { x: number, y: number } } | null {
+    if (!this.agentId) return null;
+    
+    const storageKey = `flow-positions-${this.agentId}`;
+    const savedData = localStorage.getItem(storageKey);
+    
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        return parsed.steps || null;
+      } catch (e) {
+        console.error('Failed to parse saved positions:', e);
+        return null;
+      }
+    }
+    
+    return null;
+  }
+  
+  private savePositionsToLocalStorage() {
+    if (!this.agentId || !this.flowEditorComponent) return;
+    
+    const positions: { [stepId: string]: { x: number, y: number } } = {};
+    
+    this.flowEditorComponent.steps.forEach(step => {
+      positions[step.id] = {
+        x: step.position[0],
+        y: step.position[1]
+      };
+    });
+    
+    const storageKey = `flow-positions-${this.agentId}`;
+    const dataToSave = {
+      steps: positions,
+      timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem(storageKey, JSON.stringify(dataToSave));
   }
 }

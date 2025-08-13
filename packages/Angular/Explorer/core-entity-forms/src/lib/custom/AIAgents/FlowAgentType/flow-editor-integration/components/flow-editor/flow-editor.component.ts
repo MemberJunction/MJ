@@ -18,6 +18,7 @@ import { Connection, BooleanCondition } from '../../models/connection.model';
 export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('reteEditor', { static: true }) reteEditor!: ElementRef<HTMLDivElement>;
   @Output() toggleExecution = new EventEmitter<void>();
+  @Output() stepMoved = new EventEmitter<Step>();
 
   steps: Step[] = [];
   connections: Connection[] = [];
@@ -343,14 +344,21 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return { x: 0, y: 0 };
     }
     
-    const stepWidth = 240; // Match step component min-width
-    const sourceHeight = 120; // Default height
-    const targetHeight = 120;
+    // Match the dimensions from getConnectionPath
+    const stepWidth = 300; // Actual width with padding
+    const stepTotalHeight = 80; // Approximate total height
     
     const x1 = source.position[0] + stepWidth;
-    const y1 = source.position[1] + (sourceHeight / 2);
+    const y1 = source.position[1] + (stepTotalHeight / 2);
     const x2 = target.position[0];
-    const y2 = target.position[1] + (targetHeight / 2);
+    const y2 = target.position[1] + (stepTotalHeight / 2);
+    
+    // For backward connections, adjust midpoint to be on the curve
+    if (this.isBackwardConnection(connection)) {
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2 + 50; // Offset down to match the curve
+      return { x: midX, y: midY };
+    }
     
     // Return the midpoint of the connection
     const midpoint = {
@@ -358,7 +366,6 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       y: (y1 + y2) / 2
     };
     
-    // Removed console.log to prevent change detection loops
     return midpoint;
   }
   
@@ -404,6 +411,57 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const estimatedWidth = Math.max(80, Math.min(140, label.length * 7 + 30));
     return estimatedWidth;
   }
+  
+  getConnectionColor(connection: Connection): string {
+    // Check if this is a backward connection
+    if (this.isBackwardConnection(connection)) {
+      return '#EF4444'; // Red for backward connections
+    }
+    
+    // Define a palette of distinct colors for forward connections
+    const colorPalette = [
+      '#3B82F6', // Blue
+      '#10B981', // Green
+      '#F59E0B', // Amber
+      '#8B5CF6', // Purple
+      '#EC4899', // Pink
+      '#14B8A6', // Teal
+      '#F97316', // Orange
+      '#06B6D4', // Cyan
+    ];
+    
+    // Get all forward connections from the same source
+    const sourceConnections = this.connections
+      .filter(c => c.source === connection.source && !this.isBackwardConnection(c))
+      .sort((a, b) => (a.id || '').localeCompare(b.id || '')); // Sort by ID for consistency
+    
+    // Find the index of this connection among connections from the same source
+    const connectionIndex = sourceConnections.findIndex(c => c.id === connection.id);
+    
+    // Use modulo to cycle through colors if there are more connections than colors
+    return colorPalette[connectionIndex % colorPalette.length];
+  }
+  
+  isBackwardConnection(connection: Connection): boolean {
+    // A connection is backward if the target step is positioned to the left of the source step
+    const sourceStep = this.steps.find(s => s.id === connection.source);
+    const targetStep = this.steps.find(s => s.id === connection.target);
+    
+    if (!sourceStep || !targetStep) return false;
+    
+    // Check if target is to the left of source (backward in the flow)
+    return targetStep.position[0] < sourceStep.position[0];
+  }
+  
+  getConnectionDashArray(connection: Connection): string {
+    // Return dash array for backward connections, solid for forward
+    return this.isBackwardConnection(connection) ? '10,5' : '';
+  }
+  
+  getConnectionMarker(connection: Connection): string {
+    // Add arrow marker for backward connections
+    return this.isBackwardConnection(connection) ? 'url(#backward-arrow)' : '';
+  }
 
   updateStep(step: Step) {
     // Step updated, trigger any necessary updates
@@ -445,6 +503,11 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private handleMouseUp = () => {
+    if (this.isDragging && this.currentDraggedStep) {
+      // Emit an event that the step position has changed
+      this.stepMoved.emit(this.currentDraggedStep);
+    }
+    
     this.isDragging = false;
     this.currentDraggedStep = null;
     document.removeEventListener('mousemove', this.handleMouseMove);
@@ -463,21 +526,44 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return '';
     }
     
-    // Use fixed heights to prevent change detection issues
-    // DOM queries during template evaluation cause ExpressionChangedAfterItHasBeenCheckedError
-    const sourceHeight = 120; // Fixed height for steps
-    const targetHeight = 120;
-    const stepWidth = 240; // Fixed width to match min-width in step component
+    // Step dimensions - based on actual rendered sizes
+    const stepWidth = 300; // Actual width with padding 
     
-    // Calculate socket positions
-    // Output socket is on the right edge, input socket is on the left edge
-    // Sockets are positioned at 50% height
-    const x1 = source.position[0] + stepWidth;
-    const y1 = source.position[1] + (sourceHeight / 2);
-    const x2 = target.position[0];
-    const y2 = target.position[1] + (targetHeight / 2);
+    // Height calculation based on rendered element:
+    // The socket is positioned at top: 50% of the step
+    // We need to find the actual center of the step
+    const stepTotalHeight = 80; // Approximate total height
     
-    // Create a smooth bezier curve
+    // Socket positions - sockets are at 50% of total step height
+    // The sockets are 16px diameter circles centered at edges
+    // Output socket center is at right: -8px (so extends from right edge)
+    // Input socket center is at left: -8px (so extends from left edge)
+    
+    const x1 = source.position[0] + stepWidth; // Right edge of source step
+    const y1 = source.position[1] + (stepTotalHeight / 2); // 50% of step height
+    const x2 = target.position[0]; // Left edge of target step
+    const y2 = target.position[1] + (stepTotalHeight / 2); // 50% of step height
+    
+    // Check if this is a backward connection
+    if (this.isBackwardConnection(connection)) {
+      // For backward connections, create a more pronounced curve that goes below
+      const dx = x2 - x1;
+      
+      // Make the curve go below the steps for better visibility
+      const curveOffset = 100; // How far below to curve
+      const midX = (x1 + x2) / 2;
+      const midY = Math.max(y1, y2) + curveOffset;
+      
+      // Create a path that curves below with a smoother quadratic curve
+      const cp1x = x1 + 50;
+      const cp1y = y1 + curveOffset / 2;
+      const cp2x = x2 - 50;
+      const cp2y = y2 + curveOffset / 2;
+      
+      return `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+    }
+    
+    // For forward connections, use the standard bezier curve
     const dx = x2 - x1;
     const controlPointOffset = Math.max(50, Math.min(150, Math.abs(dx) * 0.4));
     
@@ -498,6 +584,121 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   onResetView() {
     this.currentScale = 1;
     this.canvasOffset = { x: 0, y: 0 };
+    this.updateCanvasTransform();
+  }
+  
+  onAutoArrange() {
+    // Recalculate optimal positions for all steps
+    this.autoArrangeSteps();
+    
+    // Fit all steps in view
+    this.fitToView();
+  }
+  
+  private autoArrangeSteps() {
+    if (this.steps.length === 0) return;
+    
+    // Build adjacency map for BFS traversal
+    const adjacencyMap = new Map<number, number[]>();
+    const incomingEdges = new Map<number, number>();
+    
+    this.steps.forEach(step => {
+      adjacencyMap.set(step.id, []);
+      incomingEdges.set(step.id, 0);
+    });
+    
+    this.connections.forEach(conn => {
+      const sourceSteps = adjacencyMap.get(conn.source) || [];
+      sourceSteps.push(conn.target);
+      adjacencyMap.set(conn.source, sourceSteps);
+      
+      const targetCount = incomingEdges.get(conn.target) || 0;
+      incomingEdges.set(conn.target, targetCount + 1);
+    });
+    
+    // Find starting nodes (no incoming edges or marked as starting)
+    const startingSteps = this.steps.filter(step => 
+      incomingEdges.get(step.id) === 0 || (step as any).mjData?.startingStep
+    );
+    
+    // Use BFS to assign levels
+    const levels = new Map<number, number>();
+    const queue = [...startingSteps];
+    startingSteps.forEach(step => levels.set(step.id, 0));
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentLevel = levels.get(current.id) || 0;
+      
+      const neighbors = adjacencyMap.get(current.id) || [];
+      neighbors.forEach(neighborId => {
+        if (!levels.has(neighborId)) {
+          levels.set(neighborId, currentLevel + 1);
+          const neighborStep = this.steps.find(s => s.id === neighborId);
+          if (neighborStep) queue.push(neighborStep);
+        }
+      });
+    }
+    
+    // Group steps by level
+    const stepsByLevel = new Map<number, Step[]>();
+    this.steps.forEach(step => {
+      const level = levels.get(step.id) || 0;
+      if (!stepsByLevel.has(level)) {
+        stepsByLevel.set(level, []);
+      }
+      stepsByLevel.get(level)!.push(step);
+    });
+    
+    // Calculate positions
+    const horizontalSpacing = 450;
+    const verticalSpacing = 180;
+    const startX = 100;
+    const startY = 50;
+    
+    stepsByLevel.forEach((stepsInLevel, level) => {
+      const x = startX + (level * horizontalSpacing);
+      const totalHeight = (stepsInLevel.length - 1) * verticalSpacing;
+      const startYForLevel = startY + Math.max(0, (400 - totalHeight) / 2);
+      
+      stepsInLevel.forEach((step, index) => {
+        const y = startYForLevel + (index * verticalSpacing);
+        step.position = [x, y];
+      });
+    });
+  }
+  
+  private fitToView() {
+    if (this.steps.length === 0) return;
+    
+    // Find bounds of all steps
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    this.steps.forEach(step => {
+      minX = Math.min(minX, step.position[0]);
+      minY = Math.min(minY, step.position[1]);
+      maxX = Math.max(maxX, step.position[0] + 300); // Approximate step width
+      maxY = Math.max(maxY, step.position[1] + 120); // Approximate step height
+    });
+    
+    // Calculate required scale and offset to fit all steps
+    const padding = 50;
+    const viewportWidth = this.reteEditor.nativeElement.clientWidth - padding * 2;
+    const viewportHeight = this.reteEditor.nativeElement.clientHeight - padding * 2;
+    
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    
+    // Calculate scale to fit content
+    const scaleX = viewportWidth / contentWidth;
+    const scaleY = viewportHeight / contentHeight;
+    this.currentScale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 100%
+    
+    // Center the content
+    this.canvasOffset.x = padding - minX * this.currentScale;
+    this.canvasOffset.y = padding - minY * this.currentScale;
+    
     this.updateCanvasTransform();
   }
   
