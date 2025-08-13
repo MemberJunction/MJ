@@ -31,7 +31,7 @@ import {
   SetupStyles,
   createRuntimeUtilities
 } from '@memberjunction/react-runtime';
-import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 
 /**
  * Event emitted by React components
@@ -577,7 +577,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private createCallbacks(): ComponentCallbacks {
     return {
-      OpenEntityRecord: (entityName: string, key: CompositeKey) => {
+      OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
           keyToUse = CompositeKey.FromKeyValuePairs(key);
@@ -595,6 +595,52 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           }
         }
         if (keyToUse) {
+          // now in some cases we have key/value pairs that the component we are hosting
+          // use, but are not the pkey, so if that is the case, we'll run a quick view to try
+          // and get the pkey so that we can emit the openEntityRecord call with the pkey
+          const md = new Metadata();
+          const e = md.EntityByName(entityName);
+          let shouldRunView = false;
+          // now check each key in the keyToUse to see if it is a pkey
+          for (const singleKey of keyToUse.KeyValuePairs) {
+            const field = e.Fields.find(f => f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
+            if (!field) {
+              // if we get here this is a problem, the component has given us a non-matching field, this shouldn't ever happen
+              // but if it doesn't log warning to console and exit
+              console.warn(`Non-matching field found for key: ${JSON.stringify(keyToUse)}`);
+              return;
+            }
+            else if (!field.IsPrimaryKey) {
+              // if we get here that means we have a non-pkey so we'll want to do a lookup via a RunView
+              // to get the actual pkey value
+              shouldRunView = true;
+              break;
+            }
+          }
+
+          // if we get here and shouldRunView is true, we need to run a view using the info provided
+          // by our contained component to get the pkey
+          if (shouldRunView) {
+            const rv = new RunView();
+            const result = await rv.RunView({
+              EntityName: entityName,
+              ExtraFilter: keyToUse.ToWhereClause()
+            })
+            if (result && result.Success && result.Results.length > 0) {
+              // we have a match, use the first row and update our keyToUse
+              const kvPairs: KeyValuePair[] = [];
+              e.PrimaryKeys.forEach(pk => {
+                kvPairs.push(
+                  {
+                    FieldName: pk.Name,
+                    Value: result.Results[0][pk.Name]
+                  }
+                )
+              })
+              keyToUse = CompositeKey.FromKeyValuePairs(kvPairs);
+            }
+          }
+
           this.openEntityRecord.emit({ entityName, key: keyToUse });
         }  
       } 
