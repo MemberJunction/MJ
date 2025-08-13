@@ -28,7 +28,8 @@ import {
   resourceManager,
   reactRootManager,
   ResolvedComponents,
-  SetupStyles
+  SetupStyles,
+  createRuntimeUtilities
 } from '@memberjunction/react-runtime';
 import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 
@@ -125,7 +126,22 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
-  @Input() utilities: any = {};
+  
+  // Auto-initialize utilities if not provided
+  private _utilities: any;
+  @Input()
+  set utilities(value: any) {
+    this._utilities = value;
+  }
+  get utilities(): any {
+    // Lazy initialization - only create default utilities when needed
+    if (!this._utilities) {
+      const runtimeUtils = createRuntimeUtilities();
+      this._utilities = runtimeUtils.buildUtilities();
+      console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
+    }
+    return this._utilities;
+  }
   
   // Auto-initialize styles if not provided
   private _styles?: Partial<ComponentStyles>;
@@ -485,7 +501,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Build props with savedUserSettings pattern
     const props = {
-      utilities: this.utilities || {},
+      utilities: this.utilities, // Now uses getter which auto-initializes if needed
       callbacks: this.currentCallbacks,
       components,
       styles: this.styles as any,
