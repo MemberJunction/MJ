@@ -1,5 +1,17 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/actions-base@2.87.0
+  - @memberjunction/actions@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/ai-agent-manager@2.87.0
+  - @memberjunction/global@2.87.0
+
 ## 2.86.0
 
 ### Patch Changes
