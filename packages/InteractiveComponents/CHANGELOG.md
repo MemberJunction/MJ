@@ -1,5 +1,12 @@
 # @memberjunction/interactive-component-types
 
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.86.0
+- @memberjunction/core@2.86.0
+
 ## 2.85.0
 
 ### Patch Changes
