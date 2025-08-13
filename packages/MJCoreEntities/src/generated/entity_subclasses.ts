@@ -9826,6 +9826,30 @@ export const ComponentSchema = z.object({
         * * Display Name: Technical Design Vector
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Vector embedding of the technical design for similarity search`),
+    HasCustomProps: z.boolean().describe(`
+        * * Field Name: HasCustomProps
+        * * Display Name: Has Custom Props
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if the component has custom properties defined in its specification. Components with custom props cannot be used directly by deterministic containers.`),
+    HasCustomEvents: z.boolean().describe(`
+        * * Field Name: HasCustomEvents
+        * * Display Name: Has Custom Events
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if the component has custom events defined in its specification. Components with custom events may have limited functionality in generic containers.`),
+    RequiresData: z.boolean().describe(`
+        * * Field Name: RequiresData
+        * * Display Name: Requires Data
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if the component requires data access (utilities object with md, rv, rq). Used to determine if component needs data context.`),
+    DependencyCount: z.number().describe(`
+        * * Field Name: DependencyCount
+        * * Display Name: Dependency Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of component dependencies defined in the specification. Used to assess component complexity.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -39675,6 +39699,62 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     }
     set TechnicalDesignVector(value: string | null) {
         this.Set('TechnicalDesignVector', value);
+    }
+
+    /**
+    * * Field Name: HasCustomProps
+    * * Display Name: Has Custom Props
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if the component has custom properties defined in its specification. Components with custom props cannot be used directly by deterministic containers.
+    */
+    get HasCustomProps(): boolean {
+        return this.Get('HasCustomProps');
+    }
+    set HasCustomProps(value: boolean) {
+        this.Set('HasCustomProps', value);
+    }
+
+    /**
+    * * Field Name: HasCustomEvents
+    * * Display Name: Has Custom Events
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if the component has custom events defined in its specification. Components with custom events may have limited functionality in generic containers.
+    */
+    get HasCustomEvents(): boolean {
+        return this.Get('HasCustomEvents');
+    }
+    set HasCustomEvents(value: boolean) {
+        this.Set('HasCustomEvents', value);
+    }
+
+    /**
+    * * Field Name: RequiresData
+    * * Display Name: Requires Data
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if the component requires data access (utilities object with md, rv, rq). Used to determine if component needs data context.
+    */
+    get RequiresData(): boolean {
+        return this.Get('RequiresData');
+    }
+    set RequiresData(value: boolean) {
+        this.Set('RequiresData', value);
+    }
+
+    /**
+    * * Field Name: DependencyCount
+    * * Display Name: Dependency Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of component dependencies defined in the specification. Used to assess component complexity.
+    */
+    get DependencyCount(): number {
+        return this.Get('DependencyCount');
+    }
+    set DependencyCount(value: number) {
+        this.Set('DependencyCount', value);
     }
 
     /**
