@@ -1,0 +1,35 @@
+{
+  "entity": "MJ: Components",
+  "filePattern": ".*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".components.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": null,
+    "externalizeFields": [],
+    "lookupFields": {
+      "SourceRegistryID": {
+        "entity": "MJ: Component Registries",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Component Dependencies": {
+        "entity": "MJ: Component Dependencies",
+        "foreignKey": "ComponentID"
+      },
+      "MJ: Component Libraries": {
+        "entity": "MJ: Component Libraries",
+        "foreignKey": "ComponentID"
+      }
+    }
+  }
+}

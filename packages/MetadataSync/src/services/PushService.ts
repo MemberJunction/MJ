@@ -365,9 +365,14 @@ export class PushService {
           }
         }
         
-        // Write back the entire file if it's an array (after processing all records)
-        if (isArray && !options.dryRun) {
-          await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+        // Write back to file (handles both single records and arrays)
+        if (!options.dryRun) {
+          if (isArray) {
+            await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+          } else {
+            // For single record files, write back the single record
+            await JsonWriteHelper.writeOrderedRecordData(filePath, records[0]);
+          }
         }
       } catch (fileError) {
         const errorMsg = `Error reading file ${filePath}: ${fileError}`;
@@ -387,10 +392,11 @@ export class PushService {
     callbacks?: PushCallbacks
   ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
-    const { record, entityName, parentContext } = flattenedRecord;
+    const { record, entityName, parentContext, id: recordId } = flattenedRecord;
     
-    // Build lookup key for batch context
-    const lookupKey = this.buildBatchContextKey(entityName, record);
+    // Use the unique record ID from the flattened record for batch context
+    // This ensures we can properly find parent entities even when they're new
+    const lookupKey = recordId;
     
     // Check if already in batch context
     let entity = batchContext.get(lookupKey);
@@ -452,11 +458,23 @@ export class PushService {
       }
     }
     
+    // Store original field values to preserve @ references
+    const originalFields = { ...record.fields };
+    
     // Get parent entity from context if available
     let parentEntity: BaseEntity | null = null;
     if (parentContext) {
-      const parentKey = this.buildBatchContextKey(parentContext.entityName, parentContext.record);
-      parentEntity = batchContext.get(parentKey) || null;
+      // Find the parent's flattened record ID
+      // The parent record was flattened before this child, so it should have a lower ID number
+      const parentRecordId = flattenedRecord.dependencies.values().next().value;
+      if (parentRecordId) {
+        parentEntity = batchContext.get(parentRecordId) || null;
+      }
+      
+      if (!parentEntity) {
+        // Parent should have been processed before child due to dependency ordering
+        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
+      }
     }
     
     // Process field values with parent context and batch context
@@ -472,8 +490,19 @@ export class PushService {
       entity.Set(fieldName, processedValue);
     }
     
-    // Add to batch context AFTER fields are set
-    batchContext.set(lookupKey, entity);
+    // Check if the record is actually dirty before considering it changed
+    let isDirty = entity.Dirty;
+    
+    // Also check if file content has changed (for @file references)
+    if (!isDirty && !isNew && record.sync) {
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      if (currentChecksum !== record.sync.checksum) {
+        isDirty = true;
+        if (options.verbose) {
+          callbacks?.onLog?.(`📄 File content changed for ${entityName} record (checksum mismatch)`);
+        }
+      }
+    }
     
     if (options.dryRun) {
       if (exists) {
@@ -485,11 +514,43 @@ export class PushService {
       }
     }
     
+    // If updating an existing record that's dirty, show what changed
+    if (!isNew && isDirty) {
+      const changes = entity.GetChangesSinceLastSave();
+      const changeKeys = Object.keys(changes);
+      if (changeKeys.length > 0) {
+        // Get primary key info for display
+        const entityInfo = this.syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay: string[] = [];
+        if (entityInfo) {
+          for (const pk of entityInfo.PrimaryKeys) {
+            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+          }
+        }
+        
+        callbacks?.onLog?.(`📝 Updating ${entityName} record:`);
+        if (primaryKeyDisplay.length > 0) {
+          callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+        }
+        callbacks?.onLog?.(`   Changes:`);
+        for (const fieldName of changeKeys) {
+          const field = entity.GetFieldByName(fieldName);
+          const oldValue = field ? field.OldValue : undefined;
+          const newValue = (changes as any)[fieldName];
+          callbacks?.onLog?.(`     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
+        }
+      }
+    }
+    
     // Save the record
     const saveResult = await entity.Save();
     if (!saveResult) {
       throw new Error(`Failed to save ${entityName} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
     }
+    
+    // Add to batch context AFTER save so it has an ID for child @parent:ID references
+    // Use the recordId (lookupKey) as the key so child records can find this parent
+    batchContext.set(lookupKey, entity);
     
     // Update primaryKey for new records
     if (isNew) {
@@ -503,16 +564,41 @@ export class PushService {
       }
     }
     
-    // Update sync metadata
-    record.sync = {
-      lastModified: new Date().toISOString(),
-      checksum: await this.syncEngine.calculateChecksumWithFileContent(record.fields, entityDir)
-    };
+    // Only update sync metadata if the record was actually dirty (changed)
+    if (isNew || isDirty) {
+      record.sync = {
+        lastModified: new Date().toISOString(),
+        checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
+      };
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ✓ Updated sync metadata (record was ${isNew ? 'new' : 'changed'})`);
+      }
+    } else if (options.verbose) {
+      callbacks?.onLog?.(`   - Skipped sync metadata update (no changes detected)`);
+    }
+    
+    // Restore original field values to preserve @ references
+    record.fields = originalFields;
     
     return { 
-      status: isNew ? 'created' : (entity.Dirty ? 'updated' : 'unchanged'),
+      status: isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'),
       isDuplicate: false
     };
+  }
+  
+  private formatFieldValue(value: any): string {
+    if (value === null || value === undefined) return 'null';
+    if (typeof value === 'string') {
+      // Truncate long strings and show quotes
+      if (value.length > 50) {
+        return `"${value.substring(0, 47)}..."`;
+      }
+      return `"${value}"`;
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    return String(value);
   }
   
   private buildBatchContextKey(entityName: string, record: RecordData): string {

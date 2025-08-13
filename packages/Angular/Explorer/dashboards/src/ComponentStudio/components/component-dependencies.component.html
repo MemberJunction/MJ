@@ -1,0 +1,50 @@
+<div class="component-dependencies">
+  <div class="dependencies-header">
+    <h2>{{ component.Name }} Dependencies</h2>
+  </div>
+  
+  <div class="dependencies-content">
+    <div class="dependency-section">
+      <h3><i class="fa-solid fa-puzzle-piece"></i> Component Dependencies</h3>
+      @if (componentDependencies.length > 0) {
+        <ul class="dependency-list">
+          @for (dep of componentDependencies; track dep.ID) {
+            <li>
+              <span class="dep-name">{{ dep.DependencyComponentID }}</span>
+              <button kendoButton [icon]="'fa-solid fa-arrow-up-right-from-square'" 
+                [fillMode]="'flat'" [size]="'small'"
+                (click)="viewComponent(dep.DependencyComponentID)">
+              </button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="no-dependencies">No component dependencies</p>
+      }
+    </div>
+    
+    <div class="dependency-section">
+      <h3><i class="fa-solid fa-book"></i> Library Dependencies</h3>
+      @if (libraryDependencies.length > 0) {
+        <ul class="dependency-list">
+          @for (lib of libraryDependencies; track lib.ID) {
+            <li>
+              <span class="dep-name">{{ lib.Name }}</span>
+              <span class="dep-version">{{ lib.Version }}</span>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="no-dependencies">No library dependencies</p>
+      }
+    </div>
+    
+    <div class="dependency-tree">
+      <h3><i class="fa-solid fa-sitemap"></i> Dependency Tree</h3>
+      <div class="tree-container">
+        <!-- TODO: Implement tree visualization -->
+        <p class="coming-soon">Tree visualization coming soon</p>
+      </div>
+    </div>
+  </div>
+</div>
