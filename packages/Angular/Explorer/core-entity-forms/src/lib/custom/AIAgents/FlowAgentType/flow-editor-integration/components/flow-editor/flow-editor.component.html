@@ -1,5 +1,42 @@
 <div class="flow-editor">
   <div class="canvas-header">
+    <!-- Connection Legend -->
+    <div class="legend-panel" [class.collapsed]="legendCollapsed">
+      <div class="legend-header" (click)="legendCollapsed = !legendCollapsed">
+        <i class="fas" [class.fa-chevron-down]="!legendCollapsed" [class.fa-chevron-right]="legendCollapsed"></i>
+        <span>Connection Legend</span>
+      </div>
+      <div class="legend-content" *ngIf="!legendCollapsed">
+        <div class="legend-item">
+          <svg width="30" height="2">
+            <line x1="0" y1="1" x2="30" y2="1" stroke="#3B82F6" stroke-width="2"/>
+          </svg>
+          <span>First output from a step</span>
+        </div>
+        <div class="legend-item">
+          <svg width="30" height="2">
+            <line x1="0" y1="1" x2="30" y2="1" stroke="#10B981" stroke-width="2"/>
+          </svg>
+          <span>Second output from a step</span>
+        </div>
+        <div class="legend-item">
+          <svg width="30" height="2">
+            <line x1="0" y1="1" x2="30" y2="1" stroke="#F59E0B" stroke-width="2"/>
+          </svg>
+          <span>Third output from a step</span>
+        </div>
+        <div class="legend-item">
+          <svg width="30" height="2">
+            <line x1="0" y1="1" x2="30" y2="1" stroke="#EF4444" stroke-width="2"/>
+          </svg>
+          <span>Backward connection (loop)</span>
+        </div>
+        <div class="legend-note">
+          Colors help distinguish multiple paths from the same source step
+        </div>
+      </div>
+    </div>
+    
     <div class="canvas-controls">
       <button 
         class="control-button" 
@@ -35,13 +72,6 @@
         title="Toggle Execution Panel">
         <i class="fas fa-play-circle"></i>
         <span>{{ showExecutionPanel ? 'Hide' : 'Show' }} Execution</span>
-      </button>
-      <button 
-        class="control-button" 
-        (click)="testConnection()"
-        title="Test Connection">
-        <i class="fas fa-link"></i>
-        <span>Test Connection</span>
       </button>
     </div>
   </div>

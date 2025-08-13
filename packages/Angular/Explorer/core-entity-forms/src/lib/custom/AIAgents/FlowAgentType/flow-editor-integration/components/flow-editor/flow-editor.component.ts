@@ -25,6 +25,11 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedStepId: number | null = null;
   executingStepId: number | null = null;
   showExecutionPanel = false;
+  legendCollapsed = false;
+  
+  // Fixed dimensions for all steps
+  private readonly STEP_WIDTH = 320;
+  private readonly STEP_HEIGHT = 140;
   
   private nextStepId = 1;
   private isDragging = false;
@@ -344,14 +349,14 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return { x: 0, y: 0 };
     }
     
-    // Match the dimensions from getConnectionPath
-    const stepWidth = 300; // Actual width with padding
-    const stepTotalHeight = 80; // Approximate total height
+    // Use fixed dimensions for all steps
+    const sourceDimensions = { width: this.STEP_WIDTH, height: this.STEP_HEIGHT };
+    const targetDimensions = { width: this.STEP_WIDTH, height: this.STEP_HEIGHT };
     
-    const x1 = source.position[0] + stepWidth;
-    const y1 = source.position[1] + (stepTotalHeight / 2);
-    const x2 = target.position[0];
-    const y2 = target.position[1] + (stepTotalHeight / 2);
+    const x1 = source.position[0] + sourceDimensions.width; // Output socket center at edge
+    const y1 = source.position[1] + (sourceDimensions.height / 2);
+    const x2 = target.position[0]; // Input socket center at edge
+    const y2 = target.position[1] + (targetDimensions.height / 2);
     
     // For backward connections, adjust midpoint to be on the curve
     if (this.isBackwardConnection(connection)) {
@@ -526,23 +531,22 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return '';
     }
     
-    // Step dimensions - based on actual rendered sizes
-    const stepWidth = 300; // Actual width with padding 
-    
-    // Height calculation based on rendered element:
-    // The socket is positioned at top: 50% of the step
-    // We need to find the actual center of the step
-    const stepTotalHeight = 80; // Approximate total height
+    // Use fixed dimensions for all steps
+    const sourceDimensions = { width: this.STEP_WIDTH, height: this.STEP_HEIGHT };
+    const targetDimensions = { width: this.STEP_WIDTH, height: this.STEP_HEIGHT };
     
     // Socket positions - sockets are at 50% of total step height
     // The sockets are 16px diameter circles centered at edges
-    // Output socket center is at right: -8px (so extends from right edge)
-    // Input socket center is at left: -8px (so extends from left edge)
+    // Output socket center is at right edge (the socket extends beyond with right: -8px)
+    // Input socket center is at left edge (the socket extends beyond with left: -8px)
     
-    const x1 = source.position[0] + stepWidth; // Right edge of source step
-    const y1 = source.position[1] + (stepTotalHeight / 2); // 50% of step height
-    const x2 = target.position[0]; // Left edge of target step
-    const y2 = target.position[1] + (stepTotalHeight / 2); // 50% of step height
+    // Socket positioning: sockets are 16px diameter circles
+    // With right: -8px, the socket center is at the step edge (not beyond)
+    // With left: -8px, the socket center is at the step edge (not beyond)
+    const x1 = source.position[0] + sourceDimensions.width; // Output socket center at right edge
+    const y1 = source.position[1] + (sourceDimensions.height / 2); // 50% of step height
+    const x2 = target.position[0]; // Input socket center at left edge
+    const y2 = target.position[1] + (targetDimensions.height / 2); // 50% of step height
     
     // Check if this is a backward connection
     if (this.isBackwardConnection(connection)) {
@@ -598,6 +602,10 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private autoArrangeSteps() {
     if (this.steps.length === 0) return;
     
+    // Spacing adjusted for larger step dimensions
+    const horizontalSpacing = 420;
+    const verticalSpacing = 200;
+    
     // Build adjacency map for BFS traversal
     const adjacencyMap = new Map<number, number[]>();
     const incomingEdges = new Map<number, number>();
@@ -651,8 +659,6 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     
     // Calculate positions
-    const horizontalSpacing = 450;
-    const verticalSpacing = 180;
     const startX = 100;
     const startY = 50;
     
@@ -707,15 +713,6 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.toggleExecution.emit();
   }
   
-  testConnection() {
-    // Test if we have steps to connect
-    if (this.steps.length >= 2) {
-      this.createConnection(this.steps[0].id, this.steps[1].id);
-      // Test connection created
-    } else {
-      alert('Need at least 2 steps to create a connection');
-    }
-  }
 
   runFlow() {
     // Run the flow with current steps and connections
@@ -835,22 +832,14 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const source = this.tempConnection.source;
     const sourceType = this.tempConnection.sourceType;
     
-    // Get actual step height
-    let sourceHeight = 120; // Default height
-    const sourceElement = this.reteEditor.nativeElement.querySelector(`[data-step-id="${source.id}"] .step`) as HTMLElement;
-    if (sourceElement) {
-      sourceHeight = sourceElement.offsetHeight;
-    }
-    
     let x1: number, y1: number;
-    const stepWidth = 240; // Match step component min-width
-    const socketY = source.position[1] + (sourceHeight / 2);
+    const socketY = source.position[1] + (this.STEP_HEIGHT / 2);
     
     if (sourceType === 'output') {
-      x1 = source.position[0] + stepWidth;
+      x1 = source.position[0] + this.STEP_WIDTH; // Output socket center at edge
       y1 = socketY;
     } else {
-      x1 = source.position[0];
+      x1 = source.position[0]; // Input socket center at edge
       y1 = socketY;
     }
     
@@ -867,4 +856,5 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return `M ${x1} ${y1} C ${x1 - controlPointOffset} ${y1}, ${x2 + controlPointOffset} ${y2}, ${x2} ${y2}`;
     }
   }
+  
 }

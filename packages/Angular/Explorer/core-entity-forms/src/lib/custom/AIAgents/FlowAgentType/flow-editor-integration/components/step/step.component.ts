@@ -52,13 +52,15 @@ import { Step } from '../../models/step.model';
   `,
   styles: [`
     .step {
-      min-width: 240px;
+      width: 320px;
+      height: 140px;
       position: relative;
       background: var(--white-color);
       border: 1px solid var(--gray-700);
       border-radius: var(--border-radius);
       transition: all var(--transition-time);
       box-shadow: var(--shadow);
+      overflow: visible; /* Changed to visible so sockets can extend outside */
     }
 
     .step:hover {
@@ -97,6 +99,7 @@ import { Step } from '../../models/step.model';
       align-items: center;
       background: var(--gray-600);
       border-radius: calc(var(--border-radius) - 2px) calc(var(--border-radius) - 2px) 0 0;
+      overflow: hidden; /* Keep text from overflowing */
     }
 
     .step-title {
@@ -105,6 +108,14 @@ import { Step } from '../../models/step.model';
       gap: 0.5rem;
       font-weight: 600;
       font-size: 0.875rem;
+      flex: 1;
+      overflow: hidden;
+    }
+    
+    .step-title span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .step-actions {
@@ -113,11 +124,15 @@ import { Step } from '../../models/step.model';
     }
 
     .step-content {
-      padding: 0.75rem;
+      padding: 1rem;
+      height: calc(100% - 41px); /* Subtract header height */
+      display: flex;
+      align-items: center;
     }
 
     .step-dropdown {
       width: 100%;
+      margin: 0.5rem 0;
     }
     
     :host ::ng-deep .k-combobox {

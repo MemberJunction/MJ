@@ -93,7 +93,7 @@
       <div *ngIf="selectedStep.selectedOption && getOptionProperties().length > 0" 
            class="editable-properties-section">
         <h4 class="section-title">
-          {{ selectedStep.selectedOption?.startsWith('custom_') ? 'Custom Prompt Configuration' : getSelectedOption()?.name + ' Properties' }}
+          {{ selectedStep.selectedOption.startsWith('custom_') ? 'Custom Prompt Configuration' : getSelectedOption()?.name + ' Properties' }}
           <span class="edit-indicator">All properties are editable</span>
         </h4>
         
