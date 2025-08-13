@@ -1,5 +1,5 @@
 ---
-"@memberjunction/core": patch
+"@memberjunction/core": minor
 ---
 
 Removed broken migration
