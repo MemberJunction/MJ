@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.86.0
+
+### Patch Changes
+
+- 8846ccc: Add SkipQueryEntityInfo type to track entity-query relationships
+
+  - Added new SkipQueryEntityInfo type to represent entities referenced by queries
+  - Includes detection method tracking (AI vs Manual) and confidence scores
+  - Updated SkipQueryInfo to include optional entities array
+  - Implemented population of entities in AskSkipResolver's BuildSkipQueries method
+  - Helps Skip better understand which entities are involved in each query
+  - @memberjunction/data-context@2.86.0
+  - @memberjunction/interactive-component-types@2.86.0
+  - @memberjunction/core@2.86.0
+
 ## 2.85.0
 
 ### Minor Changes

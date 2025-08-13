@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.86.0
+
+### Minor Changes
+
+- 7dd2409: migration for new entiites
+
+### Patch Changes
+
+- @memberjunction/core@2.86.0
+- @memberjunction/global@2.86.0
+
 ## 2.85.0
 
 ### Minor Changes
