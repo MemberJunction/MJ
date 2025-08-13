@@ -27,7 +27,8 @@ import {
   HierarchyRegistrationResult,
   resourceManager,
   reactRootManager,
-  ResolvedComponents
+  ResolvedComponents,
+  SetupStyles
 } from '@memberjunction/react-runtime';
 import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 
@@ -125,7 +126,21 @@ export interface UserSettingsChangedEvent {
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
   @Input() utilities: any = {};
-  @Input() styles?: Partial<ComponentStyles>;
+  
+  // Auto-initialize styles if not provided
+  private _styles?: Partial<ComponentStyles>;
+  @Input()
+  set styles(value: Partial<ComponentStyles> | undefined) {
+    this._styles = value;
+  }
+  get styles(): Partial<ComponentStyles> {
+    // Lazy initialization - only create default styles when needed
+    if (!this._styles) {
+      this._styles = SetupStyles();
+      console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
+    }
+    return this._styles;
+  }
   
   private _savedUserSettings: any = {};
   @Input()
