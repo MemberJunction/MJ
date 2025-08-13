@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/actions@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/core-entities-server@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/ai@2.87.0
+  - @memberjunction/ai-anthropic@2.87.0
+  - @memberjunction/ai-groq@2.87.0
+  - @memberjunction/ai-mistral@2.87.0
+  - @memberjunction/ai-openai@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/core-entities-server@2.86.0
+  - @memberjunction/aiengine@2.86.0
+  - @memberjunction/actions@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/ai@2.86.0
+  - @memberjunction/ai-anthropic@2.86.0
+  - @memberjunction/ai-groq@2.86.0
+  - @memberjunction/ai-mistral@2.86.0
+  - @memberjunction/ai-openai@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-anthropic@2.85.0
+  - @memberjunction/ai-groq@2.85.0
+  - @memberjunction/ai-mistral@2.85.0
+  - @memberjunction/ai-openai@2.85.0
+  - @memberjunction/actions@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/core-entities-server@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

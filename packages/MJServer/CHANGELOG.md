@@ -1,5 +1,151 @@
 # Change Log - @memberjunction/server
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ai-agent-manager-actions@2.87.0
+  - @memberjunction/ai-agents@2.87.0
+  - @memberjunction/ai-core-plus@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/ai-prompts@2.87.0
+  - @memberjunction/ai-vectors-pinecone@2.87.0
+  - @memberjunction/actions-apollo@2.87.0
+  - @memberjunction/actions-bizapps-accounting@2.87.0
+  - @memberjunction/actions-bizapps-crm@2.87.0
+  - @memberjunction/actions-bizapps-lms@2.87.0
+  - @memberjunction/actions-bizapps-social@2.87.0
+  - @memberjunction/core-actions@2.87.0
+  - @memberjunction/actions@2.87.0
+  - @memberjunction/entity-communications-server@2.87.0
+  - @memberjunction/doc-utils@2.87.0
+  - @memberjunction/external-change-detection@2.87.0
+  - @memberjunction/graphql-dataprovider@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/core-entities-server@2.87.0
+  - @memberjunction/data-context@2.87.0
+  - @memberjunction/queue@2.87.0
+  - @memberjunction/storage@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/skip-types@2.87.0
+  - @memberjunction/templates@2.87.0
+  - @memberjunction/data-context-server@2.87.0
+  - @memberjunction/ai@2.87.0
+  - @memberjunction/ai-anthropic@2.87.0
+  - @memberjunction/ai-cerebras@2.87.0
+  - @memberjunction/ai-groq@2.87.0
+  - @memberjunction/ai-lmstudio@2.87.0
+  - @memberjunction/ai-local-embeddings@2.87.0
+  - @memberjunction/ai-mistral@2.87.0
+  - @memberjunction/ai-ollama@2.87.0
+  - @memberjunction/ai-openai@2.87.0
+  - @memberjunction/ai-openrouter@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- 8846ccc: Add SkipQueryEntityInfo type to track entity-query relationships
+
+  - Added new SkipQueryEntityInfo type to represent entities referenced by queries
+  - Includes detection method tracking (AI vs Manual) and confidence scores
+  - Updated SkipQueryInfo to include optional entities array
+  - Implemented population of entities in AskSkipResolver's BuildSkipQueries method
+  - Helps Skip better understand which entities are involved in each query
+
+- Updated dependencies [8846ccc]
+- Updated dependencies [7dd2409]
+  - @memberjunction/skip-types@2.86.0
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/core-entities-server@2.86.0
+  - @memberjunction/ai-agent-manager-actions@2.86.0
+  - @memberjunction/ai-agents@2.86.0
+  - @memberjunction/ai-core-plus@2.86.0
+  - @memberjunction/aiengine@2.86.0
+  - @memberjunction/ai-prompts@2.86.0
+  - @memberjunction/actions-apollo@2.86.0
+  - @memberjunction/actions-bizapps-accounting@2.86.0
+  - @memberjunction/actions-bizapps-lms@2.86.0
+  - @memberjunction/actions-bizapps-social@2.86.0
+  - @memberjunction/core-actions@2.86.0
+  - @memberjunction/actions@2.86.0
+  - @memberjunction/entity-communications-server@2.86.0
+  - @memberjunction/doc-utils@2.86.0
+  - @memberjunction/external-change-detection@2.86.0
+  - @memberjunction/graphql-dataprovider@2.86.0
+  - @memberjunction/data-context@2.86.0
+  - @memberjunction/queue@2.86.0
+  - @memberjunction/storage@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/templates@2.86.0
+  - @memberjunction/ai-vectors-pinecone@2.86.0
+  - @memberjunction/actions-bizapps-crm@2.86.0
+  - @memberjunction/data-context-server@2.86.0
+  - @memberjunction/ai@2.86.0
+  - @memberjunction/ai-anthropic@2.86.0
+  - @memberjunction/ai-cerebras@2.86.0
+  - @memberjunction/ai-groq@2.86.0
+  - @memberjunction/ai-lmstudio@2.86.0
+  - @memberjunction/ai-local-embeddings@2.86.0
+  - @memberjunction/ai-mistral@2.86.0
+  - @memberjunction/ai-ollama@2.86.0
+  - @memberjunction/ai-openai@2.86.0
+  - @memberjunction/ai-openrouter@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Minor Changes
+
+- a96c1a7: migration
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/ai-lmstudio@2.85.0
+  - @memberjunction/ai-ollama@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/skip-types@2.85.0
+  - @memberjunction/ai-agents@2.85.0
+  - @memberjunction/ai-core-plus@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-prompts@2.85.0
+  - @memberjunction/ai-anthropic@2.85.0
+  - @memberjunction/ai-cerebras@2.85.0
+  - @memberjunction/ai-groq@2.85.0
+  - @memberjunction/ai-local-embeddings@2.85.0
+  - @memberjunction/ai-mistral@2.85.0
+  - @memberjunction/ai-openai@2.85.0
+  - @memberjunction/ai-openrouter@2.85.0
+  - @memberjunction/actions@2.85.0
+  - @memberjunction/queue@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/templates@2.85.0
+  - @memberjunction/ai-agent-manager-actions@2.85.0
+  - @memberjunction/actions-apollo@2.85.0
+  - @memberjunction/actions-bizapps-accounting@2.85.0
+  - @memberjunction/actions-bizapps-lms@2.85.0
+  - @memberjunction/actions-bizapps-social@2.85.0
+  - @memberjunction/core-actions@2.85.0
+  - @memberjunction/entity-communications-server@2.85.0
+  - @memberjunction/doc-utils@2.85.0
+  - @memberjunction/external-change-detection@2.85.0
+  - @memberjunction/graphql-dataprovider@2.85.0
+  - @memberjunction/core-entities-server@2.85.0
+  - @memberjunction/data-context@2.85.0
+  - @memberjunction/storage@2.85.0
+  - @memberjunction/ai-vectors-pinecone@2.85.0
+  - @memberjunction/actions-bizapps-crm@2.85.0
+  - @memberjunction/data-context-server@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

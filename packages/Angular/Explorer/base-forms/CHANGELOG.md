@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ng-link-directives@2.87.0
+  - @memberjunction/ng-record-changes@2.87.0
+  - @memberjunction/ng-shared@2.87.0
+  - @memberjunction/ng-base-types@2.87.0
+  - @memberjunction/ng-code-editor@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-tabstrip@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.86.0
+- @memberjunction/ng-base-types@2.86.0
+- @memberjunction/ng-code-editor@2.86.0
+- @memberjunction/ng-record-changes@2.86.0
+- @memberjunction/ng-link-directives@2.86.0
+- @memberjunction/ng-container-directives@2.86.0
+- @memberjunction/ng-tabstrip@2.86.0
+- @memberjunction/core@2.86.0
+- @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.85.0
+- @memberjunction/ng-base-types@2.85.0
+- @memberjunction/ng-code-editor@2.85.0
+- @memberjunction/ng-record-changes@2.85.0
+- @memberjunction/ng-link-directives@2.85.0
+- @memberjunction/ng-container-directives@2.85.0
+- @memberjunction/ng-tabstrip@2.85.0
+- @memberjunction/core@2.85.0
+- @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

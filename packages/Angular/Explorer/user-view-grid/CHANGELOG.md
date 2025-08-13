@@ -1,5 +1,62 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/actions-base@2.87.0
+  - @memberjunction/ng-compare-records@2.87.0
+  - @memberjunction/ng-entity-form-dialog@2.87.0
+  - @memberjunction/ng-shared@2.87.0
+  - @memberjunction/ng-base-types@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-entity-communications@2.87.0
+  - @memberjunction/communication-types@2.87.0
+  - @memberjunction/entity-communications-client@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/templates-base-types@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/actions-base@2.86.0
+  - @memberjunction/ng-compare-records@2.86.0
+  - @memberjunction/ng-entity-form-dialog@2.86.0
+  - @memberjunction/ng-shared@2.86.0
+  - @memberjunction/ng-base-types@2.86.0
+  - @memberjunction/ng-entity-communications@2.86.0
+  - @memberjunction/communication-types@2.86.0
+  - @memberjunction/entity-communications-client@2.86.0
+  - @memberjunction/templates-base-types@2.86.0
+  - @memberjunction/ng-container-directives@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/actions-base@2.85.0
+  - @memberjunction/ng-compare-records@2.85.0
+  - @memberjunction/ng-entity-form-dialog@2.85.0
+  - @memberjunction/ng-shared@2.85.0
+  - @memberjunction/ng-base-types@2.85.0
+  - @memberjunction/ng-entity-communications@2.85.0
+  - @memberjunction/communication-types@2.85.0
+  - @memberjunction/entity-communications-client@2.85.0
+  - @memberjunction/templates-base-types@2.85.0
+  - @memberjunction/ng-container-directives@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

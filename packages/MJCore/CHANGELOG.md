@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/core
 
+## 2.87.0
+
+### Minor Changes
+
+- 58a00df: Removed broken migration
+
+### Patch Changes
+
+- @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Minor Changes

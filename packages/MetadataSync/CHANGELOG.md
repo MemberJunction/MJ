@@ -1,5 +1,86 @@
 # @memberjunction/metadata-sync
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/graphql-dataprovider@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/core-entities-server@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- 7675555: Fix critical MetadataSync issues with parent-child dependencies and record processing
+
+  **Fixed Issues:**
+
+  1. **One Record Per Run Bug**: Fixed issue where only one new related entity was processed per sync run when multiple records were added
+  2. **Parent-Child Dependencies**: Resolved "@parent:ID reference not found" errors by ensuring parents are saved before children
+  3. **Complex Lookup Resolution**: Enhanced dependency analyzer to handle compound lookups with @parent references (e.g., `Name=X&AgentID=@parent:AgentID`)
+  4. **Sync Metadata Regression**: Restored proper behavior where lastModified timestamps only update for actually changed records
+
+  **Technical Changes:**
+
+  - Use unique record IDs for batch context tracking instead of complex key building
+  - Parents are now saved and added to batch context before processing children
+  - Enhanced RecordDependencyAnalyzer to resolve @parent references within lookup criteria
+  - Restored dirty checking and file content checksum comparison before updating sync metadata
+  - Preserve original field values with @ references when writing back to files
+
+  This ensures MetadataSync correctly handles complex entity hierarchies with proper dependency ordering.
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/core-entities-server@2.86.0
+  - @memberjunction/graphql-dataprovider@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- 9b74582: Improved metadata sync push functionality with better dependency ordering and cleaner logging
+
+  ## Changes
+
+  ### Dependency Ordering
+
+  - Added RecordDependencyAnalyzer to handle complex nested entity relationships
+  - Records are now processed in correct dependency order using topological sorting
+  - Supports @lookup, @parent, @root references and direct foreign keys
+  - Handles circular dependencies gracefully with warnings
+
+  ### Logging Improvements
+
+  - Fixed confusing "Error in BaseEntity.Load" messages for missing records
+  - Now shows clear messages like "Creating missing [Entity] record with primaryKey {...}"
+  - Provides better visibility into what records are being created vs updated
+
+  ### Code Cleanup
+
+  - Removed 700+ lines of unused legacy code from PushService
+  - Removed unused template processing methods from SyncEngine
+  - Fixed parameter ordering in processFileContentWithIncludes method
+  - Simplified initialize method in SyncEngine
+
+  These improvements make the metadata sync tool more reliable when dealing with complex entity relationships and provide clearer feedback during push operations.
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/graphql-dataprovider@2.85.0
+  - @memberjunction/core-entities-server@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

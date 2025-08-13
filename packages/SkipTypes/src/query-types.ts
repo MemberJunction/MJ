@@ -91,6 +91,33 @@ export class SkipQueryParamInfo {
 }
 
 /**
+ * Metadata about entities referenced by a query, including how the reference was detected
+ * and the confidence level. This helps Skip understand which entities are involved in
+ * each query and how they are being used.
+ */
+export class SkipQueryEntityInfo {
+    id: string;
+    queryID: string;
+    entityID: string;
+    entityName: string;
+    /**
+     * Indicates how this entity-query relationship was identified. 
+     * "AI" means LLM analysis was used to parse the SQL/template and identify which MemberJunction entities are referenced.
+     * "Manual" means a user explicitly marked this entity as being used by the query.
+     */
+    detectionMethod: 'AI' | 'Manual';
+    /**
+     * Confidence score (0.00-1.00) indicating how certain the AI was that this entity is actually used in the query.
+     * Only populated when detectionMethod="AI". 
+     * Considers factors like: direct table references vs indirect joins, clear entity names vs ambiguous aliases, 
+     * and context from the query purpose.
+     */
+    autoDetectConfidenceScore?: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+/**
  * Complete metadata about a stored query, including its SQL, approval status, quality ranking,
  * and field definitions. This information allows Skip to understand and utilize pre-built
  * queries for analysis and reporting.
@@ -111,6 +138,23 @@ export class SkipQueryInfo {
     categoryPath: string;
     fields: SkipQueryFieldInfo[];
     params: SkipQueryParamInfo[];
+    /**
+     * Entities referenced by this query, including metadata about how the reference was detected
+     */
+    entities?: SkipQueryEntityInfo[];
+
+    /**
+     * Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis
+     */
+    embeddingVector?: string;
+    /**
+     * The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.
+     */
+    embeddingModelID?: string;
+    /**
+     * The name of the AI Model used to generate the embedding vector for this query.
+     */
+    embeddingModelName?: string; 
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   SkipAPIClarifyingQuestionResponse,
   SkipEntityInfo,
   SkipQueryInfo,
+  SkipQueryEntityInfo,
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
@@ -1470,6 +1471,18 @@ cycle.`);
             defaultValue: p.DefaultValue,
             createdAt: p.__mj_CreatedAt,
             updatedAt: p.__mj_UpdatedAt,
+          };
+        }),
+        entities: q.Entities.map((e) => {
+          return {
+            id: `${e.QueryID}_${e.EntityID}`, // Composite key since QueryEntityInfo doesn't have a single ID field
+            queryID: e.QueryID,
+            entityID: e.EntityID,
+            entityName: e.Entity,
+            detectionMethod: e.DetectionMethod,
+            autoDetectConfidenceScore: e.AutoDetectConfidenceScore,
+            createdAt: e.__mj_CreatedAt,
+            updatedAt: e.__mj_UpdatedAt,
           };
         })
       }

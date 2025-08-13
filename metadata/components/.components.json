@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Entity Browser",
+      "Description": "A comprehensive multi-panel dashboard component for browsing and exploring entities in a data system. Features a three-panel layout with collapsible filters, main entity list (grid/card view), and sliding details panel.",
+      "Title": "Entity Browser",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/entity-browser.spec.json",
+      "FunctionalRequirements": "@file:files/entity-browser.functional.md",
+      "TechnicalDesign": "@file:files/entity-browser.technical.md"
+    },
+    "primaryKey": {
+      "ID": "57066C89-06EF-4AB9-927E-4DFC59139F05"
+    },
+    "sync": {
+      "lastModified": "2025-08-13T20:26:05.789Z",
+      "checksum": "1c85fed463055814db8403c4c895c0d303b2198c2a3ffea8d4bbe843902180ee"
+    }
+  }
+]

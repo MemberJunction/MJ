@@ -1,5 +1,26 @@
 # @memberjunction/react-test-harness
 
+## 2.87.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.87.0
+- @memberjunction/react-runtime@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.86.0
+- @memberjunction/react-runtime@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.85.0
+- @memberjunction/react-runtime@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/actions
 
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ai-core-plus@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/ai-prompts@2.87.0
+  - @memberjunction/actions-base@2.87.0
+  - @memberjunction/doc-utils@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/ai@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/ai-core-plus@2.86.0
+  - @memberjunction/aiengine@2.86.0
+  - @memberjunction/ai-prompts@2.86.0
+  - @memberjunction/actions-base@2.86.0
+  - @memberjunction/doc-utils@2.86.0
+  - @memberjunction/ai@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/ai-core-plus@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-prompts@2.85.0
+  - @memberjunction/actions-base@2.85.0
+  - @memberjunction/doc-utils@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
 ## 2.84.0
 
 ### Patch Changes

@@ -11,7 +11,9 @@
     "agent-types",
     "agents",
     "query-categories",
-    "queries"
+    "queries",
+    "component-libraries",
+    "components"
   ],
   "sqlLogging": {
     "enabled": true,

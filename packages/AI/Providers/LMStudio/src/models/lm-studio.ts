@@ -76,30 +76,30 @@ export class LMStudioLLM extends BaseLLM {
                     m.content
             }));
 
-            // Create completion parameters
-            const completionParams: any = {
-                messages: messages,
-                temperature: params.temperature
-            };
+            // Create options for respond() method
+            const respondOptions: any = {};
 
-            // Add optional parameters
+            // Add optional parameters with LM Studio naming conventions
+            if (params.temperature != null) {
+                respondOptions.temperature = params.temperature;
+            }
             if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
-                completionParams.maxTokens = params.maxOutputTokens;
+                respondOptions.maxPredictedTokens = params.maxOutputTokens;
             }
             if (params.topP != null) {
-                completionParams.topP = params.topP;
+                respondOptions.topP = params.topP;
             }
             if (params.seed != null) {
-                completionParams.seed = params.seed;
+                respondOptions.seed = params.seed;
             }
             if (params.stopSequences != null && params.stopSequences.length > 0) {
-                completionParams.stop = params.stopSequences;
+                respondOptions.stopStrings = params.stopSequences;
             }
             if (params.frequencyPenalty != null) {
-                completionParams.frequencyPenalty = params.frequencyPenalty;
+                respondOptions.frequencyPenalty = params.frequencyPenalty;
             }
             if (params.presencePenalty != null) {
-                completionParams.presencePenalty = params.presencePenalty;
+                respondOptions.presencePenalty = params.presencePenalty;
             }
 
             // LM Studio doesn't support topK in the same way - warn if provided
@@ -111,22 +111,22 @@ export class LMStudioLLM extends BaseLLM {
             switch (params.responseFormat) {
                 case 'JSON':
                     // LM Studio may support JSON mode depending on the model
-                    completionParams.responseFormat = { type: "json_object" };
+                    respondOptions.responseFormat = { type: "json_object" };
                     break;
                 case 'ModelSpecific':
-                    completionParams.responseFormat = params.modelSpecificResponseFormat;
+                    respondOptions.responseFormat = params.modelSpecificResponseFormat;
                     break;
             }
 
-            // Make the completion request
-            const response = await model.complete(completionParams);
+            // Make the chat completion request using respond()
+            const response = await model.respond(messages, respondOptions);
             const endTime = new Date();
 
             const choices: ChatResultChoice[] = [{
                 message: {
                     role: ChatMessageRole.assistant,
                     content: response.nonReasoningContent,
-                    thinking: response.reasoningContent
+                    thinking: response.reasoningContent  
                 },
                 finish_reason: 'stop', // LM Studio doesn't provide detailed finish reasons
                 index: 0
@@ -208,44 +208,45 @@ export class LMStudioLLM extends BaseLLM {
                 m.content
         }));
 
-        // Create streaming completion parameters
-        const completionParams: any = {
-            messages: messages,
-            temperature: params.temperature,
+        // Create options for respond() method with streaming
+        const respondOptions: any = {
             stream: true
         };
 
-        // Add optional parameters
+        // Add optional parameters with LM Studio naming conventions
+        if (params.temperature != null) {
+            respondOptions.temperature = params.temperature;
+        }
         if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
-            completionParams.maxTokens = params.maxOutputTokens;
+            respondOptions.maxPredictedTokens = params.maxOutputTokens;
         }
         if (params.topP != null) {
-            completionParams.topP = params.topP;
+            respondOptions.topP = params.topP;
         }
         if (params.seed != null) {
-            completionParams.seed = params.seed;
+            respondOptions.seed = params.seed;
         }
         if (params.stopSequences != null && params.stopSequences.length > 0) {
-            completionParams.stop = params.stopSequences;
+            respondOptions.stopStrings = params.stopSequences;
         }
         if (params.frequencyPenalty != null) {
-            completionParams.frequencyPenalty = params.frequencyPenalty;
+            respondOptions.frequencyPenalty = params.frequencyPenalty;
         }
         if (params.presencePenalty != null) {
-            completionParams.presencePenalty = params.presencePenalty;
+            respondOptions.presencePenalty = params.presencePenalty;
         }
 
         // Handle response format
         switch (params.responseFormat) {
             case 'JSON':
-                completionParams.responseFormat = { type: "json_object" };
+                respondOptions.responseFormat = { type: "json_object" };
                 break;
             case 'ModelSpecific':
-                completionParams.responseFormat = params.modelSpecificResponseFormat;
+                respondOptions.responseFormat = params.modelSpecificResponseFormat;
                 break;
         }
         
-        return model.complete(completionParams);
+        return model.respond(messages, respondOptions);
     }
     
     /**

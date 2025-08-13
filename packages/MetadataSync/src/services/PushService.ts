@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { BaseEntity, LogStatus, Metadata, UserInfo, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -9,6 +9,7 @@ import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
+import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
@@ -47,7 +48,6 @@ export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
-  private processedRecords: Map<string, { filePath: string; arrayIndex?: number; lineNumber?: number }> = new Map();
   private syncConfig: any;
   
   constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
@@ -57,7 +57,6 @@ export class PushService {
   
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
-    this.processedRecords.clear();
     
     const fileBackupManager = new FileBackupManager();
     
@@ -191,8 +190,7 @@ export class PushService {
             entityConfig,
             options,
             fileBackupManager,
-            callbacks,
-            sqlLogger
+            callbacks
           );
           
           // Stop the spinner if we were using onProgress
@@ -292,8 +290,7 @@ export class PushService {
     entityConfig: any,
     options: PushOptions,
     fileBackupManager: FileBackupManager,
-    callbacks?: PushCallbacks,
-    sqlLogger?: SQLLogger
+    callbacks?: PushCallbacks
   ): Promise<EntityPushResult> {
     let created = 0;
     let updated = 0;
@@ -326,69 +323,56 @@ export class PushService {
         const records = Array.isArray(fileData) ? fileData : [fileData];
         const isArray = Array.isArray(fileData);
         
-        for (let i = 0; i < records.length; i++) {
-          const recordData = records[i];
-          
-          if (!this.isValidRecordData(recordData)) {
-            callbacks?.onWarn?.(`Invalid record format in ${filePath}${isArray ? ` at index ${i}` : ''}`);
-            errors++;
-            continue;
+        // Analyze dependencies and get sorted records
+        const analyzer = new RecordDependencyAnalyzer();
+        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        
+        if (analysisResult.circularDependencies.length > 0) {
+          callbacks?.onWarn?.(`⚠️  Circular dependencies detected in ${filePath}`);
+          for (const cycle of analysisResult.circularDependencies) {
+            callbacks?.onWarn?.(`   Cycle: ${cycle.join(' → ')}`);
           }
-          
+        }
+        
+        if (options.verbose) {
+          callbacks?.onLog?.(`   Analyzed ${analysisResult.sortedRecords.length} records (including nested)`);
+        }
+        
+        // Create batch context for in-memory entity resolution
+        const batchContext = new Map<string, BaseEntity>();
+        
+        // Process all flattened records in dependency order
+        for (const flattenedRecord of analysisResult.sortedRecords) {
           try {
-            // For arrays, work with a deep copy to avoid modifying the original
-            const recordToProcess = isArray ? JSON.parse(JSON.stringify(recordData)) : recordData;
-            
-            const result = await this.processRecord(
-              recordToProcess,
-              entityConfig,
+            const result = await this.processFlattenedRecord(
+              flattenedRecord,
               entityDir,
               options,
-              callbacks,
-              filePath,
-              isArray ? i : undefined
+              batchContext,
+              callbacks
             );
             
-            // Don't count duplicates in stats
+            // Update stats
             if (!result.isDuplicate) {
               if (result.status === 'created') created++;
               else if (result.status === 'updated') updated++;
               else if (result.status === 'unchanged') unchanged++;
             }
-            
-            // Add related entity stats
-            created += result.relatedStats.created;
-            updated += result.relatedStats.updated;
-            unchanged += result.relatedStats.unchanged;
-            
-            // For arrays, update the original record's primaryKey, sync, and relatedEntities
-            if (isArray) {
-              // Update primaryKey if it exists (for new records)
-              if (recordToProcess.primaryKey) {
-                records[i].primaryKey = recordToProcess.primaryKey;
-              }
-              // Update sync metadata only if it was updated (dirty records only)
-              if (recordToProcess.sync) {
-                records[i].sync = recordToProcess.sync;
-              }
-              // Update relatedEntities to capture primaryKey/sync changes in nested entities
-              if (recordToProcess.relatedEntities) {
-                records[i].relatedEntities = recordToProcess.relatedEntities;
-              }
-            }
-            
-            // Record tracking is now handled inside processRecord
-            
           } catch (recordError) {
-            const errorMsg = `Error processing record in ${filePath}${isArray ? ` at index ${i}` : ''}: ${recordError}`;
+            const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
             callbacks?.onError?.(errorMsg);
             errors++;
           }
         }
         
-        // Write back the entire file if it's an array (after processing all records)
-        if (isArray && !options.dryRun) {
-          await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+        // Write back to file (handles both single records and arrays)
+        if (!options.dryRun) {
+          if (isArray) {
+            await JsonWriteHelper.writeOrderedRecordData(filePath, records);
+          } else {
+            // For single record files, write back the single record
+            await JsonWriteHelper.writeOrderedRecordData(filePath, records[0]);
+          }
         }
       } catch (fileError) {
         const errorMsg = `Error reading file ${filePath}: ${fileError}`;
@@ -400,91 +384,73 @@ export class PushService {
     return { created, updated, unchanged, errors };
   }
   
-  private async processRecord(
-    recordData: RecordData,
-    entityConfig: any,
+  private async processFlattenedRecord(
+    flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
-    callbacks?: PushCallbacks,
-    filePath?: string,
-    arrayIndex?: number
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; relatedStats: { created: number; updated: number; unchanged: number }; isDuplicate?: boolean }> {
+    batchContext: Map<string, BaseEntity>,
+    callbacks?: PushCallbacks
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
+    const { record, entityName, parentContext, id: recordId } = flattenedRecord;
     
-    // Get or create entity instance
-    let entity = await metadata.GetEntityObject(entityConfig.entity, this.contextUser);
-    if (!entity) {
-      throw new Error(`Failed to create entity object for ${entityConfig.entity}`);
+    // Use the unique record ID from the flattened record for batch context
+    // This ensures we can properly find parent entities even when they're new
+    const lookupKey = recordId;
+    
+    // Check if already in batch context
+    let entity = batchContext.get(lookupKey);
+    if (entity) {
+      // Already processed
+      return { status: 'unchanged', isDuplicate: true };
     }
     
-    // Apply defaults from configuration
-    const defaults = { ...entityConfig.defaults };
-    
-    // Build full record data - keep original values for file writing
-    const originalFields = { ...recordData.fields };
-    const fullData = {
-      ...defaults,
-      ...recordData.fields
-    };
-    
-    // Process field values for database operations
-    const processedData: Record<string, any> = {};
-    for (const [fieldName, fieldValue] of Object.entries(fullData)) {
-      const processedValue = await this.syncEngine.processFieldValue(
-        fieldValue,
-        entityDir,
-        null, // parentRecord
-        null  // rootRecord
-      );
-      processedData[fieldName] = processedValue;
+    // Get or create entity instance
+    entity = await metadata.GetEntityObject(entityName, this.contextUser);
+    if (!entity) {
+      throw new Error(`Failed to create entity object for ${entityName}`);
     }
     
     // Check if record exists
-    const primaryKey = recordData.primaryKey;
+    const primaryKey = record.primaryKey;
     let exists = false;
     let isNew = false;
     
     if (primaryKey && Object.keys(primaryKey).length > 0) {
-      // Try to load existing record
-      const compositeKey = new CompositeKey();
-      compositeKey.LoadFromSimpleObject(primaryKey);
-      exists = await entity.InnerLoad(compositeKey);
+      // First check if the record exists using the sync engine's loadEntity method
+      // This avoids the "Error in BaseEntity.Load" message for missing records
+      const existingEntity = await this.syncEngine.loadEntity(entityName, primaryKey);
       
-      // Check autoCreateMissingRecords flag if record not found
-      if (!exists) {
+      if (existingEntity) {
+        // Record exists, use the loaded entity
+        entity = existingEntity;
+        exists = true;
+      } else {
+        // Record doesn't exist in database
         const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
         const pkDisplay = Object.entries(primaryKey)
           .map(([key, value]) => `${key}=${value}`)
           .join(', ');
         
         if (!autoCreate) {
-          const warning = `Record not found: ${entityConfig.entity} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
+          const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           this.warnings.push(warning);
           callbacks?.onWarn?.(warning);
-          return { status: 'error', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
-        } else if (options.verbose) {
-          callbacks?.onLog?.(`Auto-creating missing ${entityConfig.entity} record with primaryKey {${pkDisplay}}`);
+          return { status: 'error' };
+        } else {
+          // Log that we're creating the missing record
+          if (options.verbose) {
+            callbacks?.onLog?.(`📝 Creating missing ${entityName} record with primaryKey {${pkDisplay}}`);
+          }
         }
       }
     }
     
-    if (options.dryRun) {
-      if (exists) {
-        callbacks?.onLog?.(`[DRY RUN] Would update ${entityConfig.entity} record`);
-        return { status: 'updated', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
-      } else {
-        callbacks?.onLog?.(`[DRY RUN] Would create ${entityConfig.entity} record`);
-        return { status: 'created', relatedStats: { created: 0, updated: 0, unchanged: 0 } };
-      }
-    }
-    
     if (!exists) {
-      entity.NewRecord(); // make sure our record starts out fresh
+      entity.NewRecord();
       isNew = true;
       
-      // UUID generation now happens automatically in BaseEntity.NewRecord()
-      
-      // Set primary key values for new records if provided, this is important for the auto-create logic
+      // Set primary key values for new records if provided
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {
           entity.Set(pkField, pkValue);
@@ -492,28 +458,59 @@ export class PushService {
       }
     }
     
-    // Set field values
-    for (const [fieldName, fieldValue] of Object.entries(processedData)) {
-      entity.Set(fieldName, fieldValue);
+    // Store original field values to preserve @ references
+    const originalFields = { ...record.fields };
+    
+    // Get parent entity from context if available
+    let parentEntity: BaseEntity | null = null;
+    if (parentContext) {
+      // Find the parent's flattened record ID
+      // The parent record was flattened before this child, so it should have a lower ID number
+      const parentRecordId = flattenedRecord.dependencies.values().next().value;
+      if (parentRecordId) {
+        parentEntity = batchContext.get(parentRecordId) || null;
+      }
+      
+      if (!parentEntity) {
+        // Parent should have been processed before child due to dependency ordering
+        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
+      }
     }
-
-    // Handle related entities
-    if (recordData.relatedEntities) {
-      // Store related entities to process after parent save
-      (entity as any).__pendingRelatedEntities = recordData.relatedEntities;
+    
+    // Process field values with parent context and batch context
+    for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
+      const processedValue = await this.syncEngine.processFieldValue(
+        fieldValue,
+        entityDir,
+        parentEntity,
+        null, // rootRecord
+        0,
+        batchContext // Pass batch context for lookups
+      );
+      entity.Set(fieldName, processedValue);
     }
     
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
     
     // Also check if file content has changed (for @file references)
-    if (!isDirty && !isNew && recordData.sync) {
+    if (!isDirty && !isNew && record.sync) {
       const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
-      if (currentChecksum !== recordData.sync.checksum) {
+      if (currentChecksum !== record.sync.checksum) {
         isDirty = true;
         if (options.verbose) {
-          callbacks?.onLog?.(`📄 File content changed for ${entityConfig.entity} record (checksum mismatch)`);
+          callbacks?.onLog?.(`📄 File content changed for ${entityName} record (checksum mismatch)`);
         }
+      }
+    }
+    
+    if (options.dryRun) {
+      if (exists) {
+        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
+        return { status: 'updated' };
+      } else {
+        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        return { status: 'created' };
       }
     }
     
@@ -523,7 +520,7 @@ export class PushService {
       const changeKeys = Object.keys(changes);
       if (changeKeys.length > 0) {
         // Get primary key info for display
-        const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+        const entityInfo = this.syncEngine.getEntityInfo(entityName);
         const primaryKeyDisplay: string[] = [];
         if (entityInfo) {
           for (const pk of entityInfo.PrimaryKeys) {
@@ -531,7 +528,7 @@ export class PushService {
           }
         }
         
-        callbacks?.onLog?.(`📝 Updating ${entityConfig.entity} record:`);
+        callbacks?.onLog?.(`📝 Updating ${entityName} record:`);
         if (primaryKeyDisplay.length > 0) {
           callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
         }
@@ -545,37 +542,31 @@ export class PushService {
       }
     }
     
-    // Check for duplicate processing (but only for existing records that were loaded)
-    let isDuplicate = false;
-    if (!isNew && entity) {
-      isDuplicate = this.checkAndTrackRecord(entityConfig.entity, entity, filePath, arrayIndex);
-    }
-    
-    // Save the record (always call Save, but track if it was actually dirty)
+    // Save the record
     const saveResult = await entity.Save();
-    
     if (!saveResult) {
-      throw new Error(`Failed to save ${entityConfig.entity} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
+      throw new Error(`Failed to save ${entityName} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
     }
+    
+    // Add to batch context AFTER save so it has an ID for child @parent:ID references
+    // Use the recordId (lookupKey) as the key so child records can find this parent
+    batchContext.set(lookupKey, entity);
     
     // Update primaryKey for new records
     if (isNew) {
-      const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (entityInfo) {
         const newPrimaryKey: Record<string, any> = {};
         for (const pk of entityInfo.PrimaryKeys) {
           newPrimaryKey[pk.Name] = entity.Get(pk.Name);
         }
-        recordData.primaryKey = newPrimaryKey;
+        record.primaryKey = newPrimaryKey;
       }
-      
-      // Track the new record now that we have its primary key
-      this.checkAndTrackRecord(entityConfig.entity, entity, filePath, arrayIndex);
     }
     
     // Only update sync metadata if the record was actually dirty (changed)
     if (isNew || isDirty) {
-      recordData.sync = {
+      record.sync = {
         lastModified: new Date().toISOString(),
         checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
       };
@@ -587,391 +578,49 @@ export class PushService {
     }
     
     // Restore original field values to preserve @ references
-    recordData.fields = originalFields;
+    record.fields = originalFields;
     
-    // Write back to file only if it's a single record (not part of an array)
-    if (filePath && arrayIndex === undefined && !options.dryRun) {
-      await JsonWriteHelper.writeOrderedRecordData(filePath, recordData);
-    }
-    
-    // Process related entities after parent save
-    let relatedStats = { created: 0, updated: 0, unchanged: 0 };
-    if (recordData.relatedEntities && !options.dryRun) {
-      relatedStats = await this.processRelatedEntities(
-        recordData.relatedEntities,
-        entity,
-        entity, // root is same as parent for top level
-        entityDir,
-        options,
-        callbacks,
-        undefined, // fileBackupManager
-        1, // indentLevel
-        filePath,
-        arrayIndex
-      );
-    }
-    
-    // Store related stats on the result for propagation
-    // Don't count duplicates in stats
-    const status: 'created' | 'updated' | 'unchanged' = isDuplicate ? 'unchanged' : (isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'));
-    const result = {
-      status,
-      relatedStats,
-      isDuplicate
+    return { 
+      status: isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'),
+      isDuplicate: false
     };
-    
-    // Return enhanced result with related stats
-    return result;
   }
   
-  private async processRelatedEntities(
-    relatedEntities: Record<string, RecordData[]>,
-    parentEntity: BaseEntity,
-    rootEntity: BaseEntity,
-    baseDir: string,
-    options: PushOptions,
-    callbacks?: PushCallbacks,
-    fileBackupManager?: FileBackupManager,
-    indentLevel: number = 1,
-    parentFilePath?: string,
-    parentArrayIndex?: number
-  ): Promise<{ created: number; updated: number; unchanged: number }> {
-    const indent = '  '.repeat(indentLevel);
-    const stats = { created: 0, updated: 0, unchanged: 0 };
-    
-    for (const [entityName, records] of Object.entries(relatedEntities)) {
-      if (options.verbose) {
-        callbacks?.onLog?.(`${indent}↳ Processing ${records.length} related ${entityName} records`);
+  private formatFieldValue(value: any): string {
+    if (value === null || value === undefined) return 'null';
+    if (typeof value === 'string') {
+      // Truncate long strings and show quotes
+      if (value.length > 50) {
+        return `"${value.substring(0, 47)}..."`;
       }
-      
-      for (const relatedRecord of records) {
-        try {
-          // Load or create entity
-          let entity = null;
-          let isNew = false;
-          
-          if (relatedRecord.primaryKey) {
-            entity = await this.syncEngine.loadEntity(entityName, relatedRecord.primaryKey);
-            
-            // Warn if record has primaryKey but wasn't found
-            if (!entity) {
-              const pkDisplay = Object.entries(relatedRecord.primaryKey)
-                .map(([key, value]) => `${key}=${value}`)
-                .join(', ');
-              
-              // Load sync config to check autoCreateMissingRecords setting
-              const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
-              
-              if (!autoCreate) {
-                const fileRef = parentFilePath ? path.relative(configManager.getOriginalCwd(), parentFilePath) : 'unknown';
-                const warning = `${indent}⚠️  Related record not found: ${entityName} with primaryKey {${pkDisplay}} at ${fileRef}`;
-                this.warnings.push(warning);
-                callbacks?.onWarn?.(warning);
-                const warning2 = `${indent}   To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
-                this.warnings.push(warning2);
-                callbacks?.onWarn?.(warning2);
-                
-                // Skip this record
-                continue;
-              } else {
-                if (options.verbose) {
-                  callbacks?.onLog?.(`${indent}   Auto-creating missing related ${entityName} record with primaryKey {${pkDisplay}}`);
-                }
-              }
-            }
-          }
-          
-          if (!entity) {
-            entity = await this.syncEngine.createEntityObject(entityName);
-            entity.NewRecord();
-            isNew = true;
-            
-            // Handle primary keys for new related entity records
-            const entityInfo = this.syncEngine.getEntityInfo(entityName);
-            if (entityInfo) {
-              for (const pk of entityInfo.PrimaryKeys) {
-                if (!pk.AutoIncrement) {
-                  // Check if we have a value in primaryKey object
-                  if (relatedRecord.primaryKey?.[pk.Name]) {
-                    // User specified a primary key for new record, set it on entity directly
-                    // Don't add to fields as it will be in primaryKey section
-                    (entity as any)[pk.Name] = relatedRecord.primaryKey[pk.Name];
-                    if (options.verbose) {
-                      callbacks?.onLog?.(`${indent}  Using specified primary key ${pk.Name}: ${relatedRecord.primaryKey[pk.Name]}`);
-                    }
-                  }
-                  // Note: BaseEntity.NewRecord() automatically generates UUIDs for uniqueidentifier primary keys
-                }
-              }
-            }
-          }
-          
-          // Apply fields with parent/root context
-          for (const [field, value] of Object.entries(relatedRecord.fields)) {
-            if (field in entity) {
-              try {
-                const processedValue = await this.syncEngine.processFieldValue(
-                  value, 
-                  baseDir, 
-                  parentEntity, 
-                  rootEntity
-                );
-                if (options.verbose) {
-                  callbacks?.onLog?.(`${indent}  Setting ${field}: ${this.formatFieldValue(value)} -> ${this.formatFieldValue(processedValue)}`);
-                }
-                (entity as any)[field] = processedValue;
-              } catch (error) {
-                throw new Error(`Failed to process field '${field}' in ${entityName}: ${error}`);
-              }
-            } else {
-              const warning = `${indent}  Field '${field}' does not exist on entity '${entityName}'`;
-              this.warnings.push(warning);
-              callbacks?.onWarn?.(warning);
-            }
-          }
-          
-          // Check for duplicate processing (but only for existing records that were loaded)
-          let isDuplicate = false;
-          if (!isNew && entity) {
-            // Use parent file path for related entities since they're defined in the parent's file
-            const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
-            isDuplicate = this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
-          }
-          
-          // Check if the record is dirty before saving
-          let wasActuallyUpdated = false;
-          
-          // Check for file content changes for related entities
-          if (!isNew && relatedRecord.sync) {
-            const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir);
-            if (currentChecksum !== relatedRecord.sync.checksum) {
-              wasActuallyUpdated = true;
-              if (options.verbose) {
-                callbacks?.onLog?.(`${indent}📄 File content changed for related ${entityName} record (checksum mismatch)`);
-              }
-            }
-          }
-          
-          if (!isNew && entity.Dirty) {
-            // Record is dirty, get the changes
-            const changes = entity.GetChangesSinceLastSave();
-            const changeKeys = Object.keys(changes);
-            if (changeKeys.length > 0) {
-              wasActuallyUpdated = true;
-              
-              // Get primary key info for display
-              const entityInfo = this.syncEngine.getEntityInfo(entityName);
-              const primaryKeyDisplay: string[] = [];
-              if (entityInfo) {
-                for (const pk of entityInfo.PrimaryKeys) {
-                  primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
-                }
-              }
-              
-              callbacks?.onLog?.(''); // Add newline before update output
-              callbacks?.onLog?.(`${indent}📝 Updating related ${entityName} record:`);
-              if (primaryKeyDisplay.length > 0) {
-                callbacks?.onLog?.(`${indent}   Primary Key: ${primaryKeyDisplay.join(', ')}`);
-              }
-              callbacks?.onLog?.(`${indent}   Changes:`);
-              for (const fieldName of changeKeys) {
-                const field = entity.GetFieldByName(fieldName);
-                const oldValue = field ? field.OldValue : undefined;
-                const newValue = (changes as any)[fieldName];
-                callbacks?.onLog?.(`${indent}     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
-              }
-            }
-          } else if (isNew) {
-            wasActuallyUpdated = true;
-          }
-          
-          // Save the related entity
-          const saved = await entity.Save();
-          if (!saved) {
-            const message = entity.LatestResult?.Message;
-            if (message) {
-              throw new Error(`Failed to save related ${entityName}: ${message}`);
-            }
-            
-            const errors = entity.LatestResult?.Errors?.map(err => 
-              typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-            )?.join(', ') || 'Unknown error';
-            throw new Error(`Failed to save related ${entityName}: ${errors}`);
-          }
-          
-          // Update stats - don't count duplicates
-          if (!isDuplicate) {
-            if (isNew) {
-              stats.created++;
-            } else if (wasActuallyUpdated) {
-              stats.updated++;
-            } else {
-              stats.unchanged++;
-            }
-          }
-          
-          if (options.verbose && wasActuallyUpdated) {
-            callbacks?.onLog?.(`${indent}  ✓ ${isNew ? 'Created' : 'Updated'} ${entityName} record`);
-          } else if (options.verbose && !wasActuallyUpdated) {
-            callbacks?.onLog?.(`${indent}  - No changes to ${entityName} record`);
-          }
-          
-          // Update the related record with primary key and sync metadata
-          const entityInfo = this.syncEngine.getEntityInfo(entityName);
-          if (entityInfo) {
-            // Update primary key if new
-            if (isNew) {
-              relatedRecord.primaryKey = {};
-              for (const pk of entityInfo.PrimaryKeys) {
-                relatedRecord.primaryKey[pk.Name] = entity.Get(pk.Name);
-              }
-              
-              // Track the new related entity now that we have its primary key
-              const relatedFilePath = parentFilePath || path.join(baseDir, 'unknown');
-              this.checkAndTrackRecord(entityName, entity, relatedFilePath, parentArrayIndex);
-            }
-            
-            // Only update sync metadata if the record was actually changed
-            if (isNew || wasActuallyUpdated) {
-              relatedRecord.sync = {
-                lastModified: new Date().toISOString(),
-                checksum: await this.syncEngine.calculateChecksumWithFileContent(relatedRecord.fields, baseDir)
-              };
-              if (options.verbose) {
-                callbacks?.onLog?.(`${indent}  ✓ Updated sync metadata for related ${entityName} (record was ${isNew ? 'new' : 'changed'})`);
-              }
-            } else if (options.verbose) {
-              callbacks?.onLog?.(`${indent}  - Skipped sync metadata update for related ${entityName} (no changes detected)`);
-            }
-          }
-          
-          // Process nested related entities if any
-          if (relatedRecord.relatedEntities) {
-            const nestedStats = await this.processRelatedEntities(
-              relatedRecord.relatedEntities,
-              entity,
-              rootEntity,
-              baseDir,
-              options,
-              callbacks,
-              fileBackupManager,
-              indentLevel + 1,
-              parentFilePath,
-              parentArrayIndex
-            );
-            
-            // Accumulate nested stats
-            stats.created += nestedStats.created;
-            stats.updated += nestedStats.updated;
-            stats.unchanged += nestedStats.unchanged;
-          }
-        } catch (error) {
-          throw new Error(`Failed to process related ${entityName}: ${error}`);
+      return `"${value}"`;
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+  
+  private buildBatchContextKey(entityName: string, record: RecordData): string {
+    // Build a unique key for the batch context based on entity name and identifying fields
+    const keyParts = [entityName];
+    
+    // Use primary key if available
+    if (record.primaryKey) {
+      for (const [field, value] of Object.entries(record.primaryKey)) {
+        keyParts.push(`${field}=${value}`);
+      }
+    } else {
+      // Use a combination of important fields as fallback
+      const identifyingFields = ['Name', 'ID', 'Code', 'Email'];
+      for (const field of identifyingFields) {
+        if (record.fields[field]) {
+          keyParts.push(`${field}=${record.fields[field]}`);
         }
       }
     }
     
-    return stats;
-  }
-  
-  private isValidRecordData(data: any): data is RecordData {
-    return data && 
-           typeof data === 'object' && 
-           'fields' in data &&
-           typeof data.fields === 'object';
-  }
-  
-  
-  private formatFieldValue(value: any, maxLength: number = 50): string {
-    let strValue = JSON.stringify(value);
-    strValue = strValue.trim();
-
-    if (strValue.length > maxLength) {
-      return strValue.substring(0, maxLength) + '...';
-    }
-
-    return strValue;
-  }
-  
-  /**
-   * Generate a unique tracking key for a record based on entity name and primary key values
-   */
-  private generateRecordKey(entityName: string, entity: BaseEntity): string {
-    // Use the built-in CompositeKey ToURLSegment method
-    const keySegment = entity.PrimaryKey.ToURLSegment();
-    return `${entityName}|${keySegment}`;
-  }
-  
-  /**
-   * Check if a record has already been processed and warn if duplicate
-   */
-  private checkAndTrackRecord(
-    entityName: string, 
-    entity: BaseEntity, 
-    filePath?: string,
-    arrayIndex?: number,
-    lineNumber?: number
-  ): boolean {
-    const recordKey = this.generateRecordKey(entityName, entity);
-    
-    const existing = this.processedRecords.get(recordKey);
-    if (existing) {
-      const primaryKeyDisplay = entity.EntityInfo?.PrimaryKeys
-        .map(pk => `${pk.Name}: ${entity.Get(pk.Name)}`)
-        .join(', ') || 'unknown';
-      
-      // Format file location with clickable link for VSCode
-      // Create maps with just the line numbers we have
-      const currentLineMap = lineNumber ? new Map([[arrayIndex || 0, lineNumber]]) : undefined;
-      const originalLineMap = existing.lineNumber ? new Map([[existing.arrayIndex || 0, existing.lineNumber]]) : undefined;
-      
-      const currentLocation = this.formatFileLocation(filePath, arrayIndex, currentLineMap);
-      const originalLocation = this.formatFileLocation(existing.filePath, existing.arrayIndex, originalLineMap);
-      
-      const warning = `⚠️  Duplicate record detected for ${entityName} (${primaryKeyDisplay})`;
-      this.warnings.push(warning);
-      const warning2 = `   Current location:  ${currentLocation}`;
-      this.warnings.push(warning2);
-      const warning3 = `   Original location: ${originalLocation}`;
-      this.warnings.push(warning3);
-      const warning4 = `   The duplicate update will proceed, but you should review your data for unintended duplicates.`;
-      this.warnings.push(warning4);
-      
-      return true; // is duplicate
-    }
-    
-    // Track the record with its source location
-    this.processedRecords.set(recordKey, {
-      filePath: filePath || 'unknown',
-      arrayIndex,
-      lineNumber
-    });
-    return false; // not duplicate
-  }
-  
-  /**
-   * Format file location with clickable link for VSCode
-   */
-  private formatFileLocation(filePath?: string, arrayIndex?: number, lineNumbers?: Map<number, number>): string {
-    if (!filePath || filePath === 'unknown') {
-      return 'unknown';
-    }
-    
-    // Get absolute path for better VSCode integration
-    const absolutePath = path.resolve(filePath);
-    
-    // Try to get actual line number from our tracking
-    let lineNumber = 1;
-    if (arrayIndex !== undefined && lineNumbers && lineNumbers.has(arrayIndex)) {
-      lineNumber = lineNumbers.get(arrayIndex)!;
-    } else if (arrayIndex !== undefined) {
-      // Fallback estimation if we don't have actual line numbers
-      lineNumber = 2 + (arrayIndex * 15);
-    }
-    
-    // Create clickable file path for VSCode - format: file:line
-    // VSCode will make this clickable in the terminal
-    return `${absolutePath}:${lineNumber}`;
+    return keyParts.join('|');
   }
   
   private findEntityDirectories(baseDir: string, specificDir?: string, directoryOrder?: string[]): string[] {
