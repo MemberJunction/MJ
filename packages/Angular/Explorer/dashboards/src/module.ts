@@ -49,11 +49,9 @@ import { PerformanceHeatmapComponent } from './AI/components/charts/performance-
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 // Component Studio Components
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
-import { ComponentPreviewComponent } from './ComponentStudio/components/component-preview.component';
-import { ComponentDependenciesComponent } from './ComponentStudio/components/component-dependencies.component';
-import { ComponentStudioSettingsComponent } from './ComponentStudio/components/component-studio-settings.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { MJReactModule } from '@memberjunction/ng-react';
+import { SplitterModule } from '@progress/kendo-angular-layout';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -89,10 +87,7 @@ import { MJReactModule } from '@memberjunction/ng-react';
     TimeSeriesChartComponent,
     PerformanceHeatmapComponent,
     // Component Studio Components
-    ComponentStudioDashboardComponent,
-    ComponentPreviewComponent,
-    ComponentDependenciesComponent,
-    ComponentStudioSettingsComponent
+    ComponentStudioDashboardComponent
   ],
   imports: [
     CommonModule,
@@ -112,7 +107,8 @@ import { MJReactModule } from '@memberjunction/ng-react';
     AITestHarnessModule,
     MemberJunctionCoreEntityFormsModule,
     GridModule,
-    MJReactModule
+    MJReactModule,
+    SplitterModule
   ],
   providers: [
     AIInstrumentationService

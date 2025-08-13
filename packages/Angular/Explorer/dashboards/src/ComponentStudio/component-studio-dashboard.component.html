@@ -1,281 +1,169 @@
-<div class="component-studio-dashboard">
-  <!-- Dialog container for Kendo dialogs -->
-  <div kendoDialogContainer></div>
-  
-  @if (isLoading) {
-    <div class="loading-container">
-      <div class="loading-content">
-        <div class="loading-spinner">
-          <i class="fa-solid fa-spinner fa-spin fa-3x"></i>
-        </div>
-        <div class="loading-text">Loading Component Studio...</div>
-      </div>
+<div class="component-studio-simple">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
+      <button kendoButton [icon]="'fa-solid fa-sync'" (click)="refreshData()" [disabled]="isLoading">
+        Refresh
+      </button>
     </div>
-  }
-  
-  @if (!isLoading) {
-    <div class="dashboard-wrapper">
-      <!-- Header -->
-      <div class="dashboard-header">
-        <div class="header-left">
-          <h1 class="dashboard-title">
-            <i class="fa-solid fa-puzzle-piece"></i>
-            Component Studio
-          </h1>
-          <div class="dashboard-subtitle">
-            Discover, preview, and test reusable components
+  </div>
+
+  <!-- Main Content with Splitter -->
+  <kendo-splitter orientation="horizontal" style="flex: 1; height: auto;">
+    <!-- Left Panel - Component List -->
+    <kendo-splitter-pane [min]="'300px'" [max]="'600px'">
+      <div class="components-panel">
+        <div class="panel-header">
+          <h3>Components</h3>
+          <div class="search-box">
+            <kendo-textbox 
+              [value]="searchQuery"
+              (valueChange)="onSearchChange($event)"
+              placeholder="Search components..."
+              [clearButton]="true">
+              <ng-template kendoTextBoxPrefixTemplate>
+                <i class="fa-solid fa-search"></i>
+              </ng-template>
+            </kendo-textbox>
           </div>
         </div>
-        <div class="header-right">
-          <div class="header-actions">
-            <button kendoButton 
-              [icon]="viewMode === 'grid' ? 'fa-solid fa-list' : 'fa-solid fa-th'"
-              [fillMode]="'flat'"
-              (click)="toggleViewMode()"
-              title="Toggle view mode">
-            </button>
-            <button kendoButton 
-              [icon]="showFilterPanel ? 'fa-solid fa-filter-circle-xmark' : 'fa-solid fa-filter'"
-              [fillMode]="'flat'"
-              (click)="toggleFilterPanel()"
-              title="Toggle filters">
-            </button>
-            <button kendoButton 
-              [icon]="'fa-solid fa-sync'"
-              [fillMode]="'flat'"
-              (click)="refreshData()"
-              title="Refresh">
-            </button>
-          </div>
+        
+        <div class="components-list">
+          @if (isLoading) {
+            <div class="loading-message">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading components...
+            </div>
+          } @else if (filteredComponents.length === 0) {
+            <div class="empty-message">
+              No components found
+            </div>
+          } @else {
+            @for (component of filteredComponents; track component.ID) {
+              <div class="component-item" 
+                [class.selected]="selectedComponent?.ID === component.ID"
+                (click)="selectComponent(component)">
+                <div class="component-icon" [style.color]="getComponentTypeColor(component.Type)">
+                  <i class="fa-solid" [ngClass]="getComponentTypeIcon(component.Type)"></i>
+                </div>
+                <div class="component-info">
+                  <div class="component-name">{{ component.Name }}</div>
+                  <div class="component-type">{{ component.Type || 'Unknown' }} • v{{ component.Version || '1.0.0' }}</div>
+                </div>
+              </div>
+            }
+          }
         </div>
       </div>
+    </kendo-splitter-pane>
 
-      <!-- Main Content Area -->
-      <div class="dashboard-content">
-        <!-- Left Filter Panel -->
-        @if (showFilterPanel && activeTab === 'browse') {
-          <div class="filter-panel">
-            <div class="filter-header">
-              <h3>Filters</h3>
+    <!-- Right Panel - Component Preview -->
+    <kendo-splitter-pane [min]="'400px'">
+      <div class="preview-panel">
+        @if (selectedComponent) {
+          <div class="preview-header">
+            <h3>{{ selectedComponent.Name }}</h3>
+            <div class="preview-actions">
               <button kendoButton 
-                [fillMode]="'flat'"
-                [size]="'small'"
-                (click)="clearFilters()">
-                Clear All
+                [icon]="'fa-solid fa-play'" 
+                [themeColor]="'primary'"
+                (click)="runComponent()">
+                Run Component
               </button>
             </div>
-            
-            <!-- Search -->
-            <div class="filter-section">
-              <label class="filter-label">Search</label>
-              <kendo-textbox 
-                [value]="searchQuery$.value"
-                (valueChange)="onSearchChange($event)"
-                placeholder="Search components..."
-                [clearButton]="true">
-                <ng-template kendoTextBoxPrefixTemplate>
-                  <i class="fa-solid fa-search"></i>
-                </ng-template>
-              </kendo-textbox>
-            </div>
-
-            <!-- Type Filter -->
-            <div class="filter-section">
-              <label class="filter-label">Component Type</label>
-              <div class="filter-options">
-                @for (type of componentTypes; track type) {
-                  <label class="checkbox-label">
-                    <input type="checkbox" 
-                      [checked]="selectedTypes$.value.has(type)"
-                      (change)="onTypeFilterChange(type, $any($event.target).checked)">
-                    <span class="type-indicator" [style.background-color]="getComponentTypeColor(type)"></span>
-                    {{ type }}
-                  </label>
-                }
-              </div>
-            </div>
-
-            <!-- Status Filter -->
-            <div class="filter-section">
-              <label class="filter-label">Status</label>
-              <div class="filter-options">
-                @for (status of componentStatuses; track status) {
-                  <label class="checkbox-label">
-                    <input type="checkbox" 
-                      [checked]="selectedStatuses$.value.has(status)"
-                      (change)="onStatusFilterChange(status, $any($event.target).checked)">
-                    <span class="status-badge" [ngClass]="getStatusBadgeClass(status)">{{ status }}</span>
-                  </label>
-                }
-              </div>
-            </div>
-
-            <!-- Source Filter -->
-            <div class="filter-section">
-              <label class="filter-label">Source</label>
-              <div class="filter-options">
-                <label class="checkbox-label">
-                  <input type="checkbox" 
-                    [checked]="selectedSources$.value.has('Local')"
-                    (change)="onSourceFilterChange('Local', $any($event.target).checked)">
-                  <i class="fa-solid fa-house"></i> Local
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" 
-                    [checked]="selectedSources$.value.has('Registry')"
-                    (change)="onSourceFilterChange('Registry', $any($event.target).checked)">
-                  <i class="fa-solid fa-cloud"></i> Registry
-                </label>
-              </div>
-            </div>
           </div>
-        }
-
-        <!-- Center Content Area -->
-        <div class="content-area">
-          <!-- Tab Content -->
-          @if (activeTab === 'browse') {
-            <div class="browse-content">
-              <!-- Results Summary -->
-              <div class="results-summary">
-                <span class="result-count">
-                  {{ filteredComponents$.value.length }} components found
+          
+          <div class="preview-content">
+            <div class="component-details">
+              <div class="detail-row">
+                <label>Type:</label>
+                <span>{{ selectedComponent.Type || 'Unknown' }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Version:</label>
+                <span>{{ selectedComponent.Version || '1.0.0' }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Status:</label>
+                <span class="status-badge" [class.published]="selectedComponent.Status === 'Published'">
+                  {{ selectedComponent.Status || 'Draft' }}
                 </span>
               </div>
-
-              <!-- Component Grid/List -->
-              @if (viewMode === 'grid') {
-                <div class="component-grid">
-                  @for (component of filteredComponents$.value; track component.ID) {
-                    <div class="component-card" 
-                      [class.selected]="selectedComponentId === component.ID"
-                      (click)="selectComponent(component)">
-                      <div class="card-header">
-                        <div class="card-type" [style.background-color]="getComponentTypeColor(component.Type || 'Other')">
-                          {{ component.Type || 'Other' }}
+              @if (selectedComponent.Description) {
+                <div class="detail-row full-width">
+                  <label>Description:</label>
+                  <p>{{ selectedComponent.Description }}</p>
+                </div>
+              }
+            </div>
+            
+            @if (showPreview && componentSpec) {
+              <div class="component-runtime">
+                <div class="runtime-header">
+                  <h4>Component Preview</h4>
+                </div>
+                <div class="runtime-container">
+                  @if (currentError) {
+                    <!-- Error display -->
+                    <div class="error-display">
+                      <div class="error-container">
+                        <div class="error-header">
+                          <i class="fa-solid fa-exclamation-triangle"></i>
+                          <h3>Component Error</h3>
+                          <button class="copy-button" (click)="copyErrorToClipboard()" title="Copy error details">
+                            <i class="fa-solid fa-copy"></i>
+                          </button>
                         </div>
-                        <div class="card-status" [ngClass]="getStatusBadgeClass(component.Status || 'Draft')">
-                          {{ component.Status }}
-                        </div>
-                      </div>
-                      <div class="card-body">
-                        <h4 class="card-title">{{ component.Name }}</h4>
-                        <div class="card-version">v{{ component.Version }}</div>
-                        <p class="card-description">{{ component.Description || 'No description available' }}</p>
-                        <div class="card-namespace">
-                          <i class="fa-solid fa-folder-tree"></i>
-                          {{ component.Namespace || 'root' }}
-                        </div>
-                      </div>
-                      <div class="card-footer">
-                        <div class="card-developer">
-                          <i class="fa-solid fa-user"></i>
-                          {{ component.DeveloperOrganization || component.DeveloperName || 'Unknown' }}
-                        </div>
-                        <div class="card-source">
-                          @if (!component.SourceRegistryID) {
-                            <i class="fa-solid fa-house" title="Local"></i>
-                          } @else {
-                            <i class="fa-solid fa-cloud" title="Registry"></i>
+                        
+                        <p class="error-intro">
+                          The component could not be rendered due to the following error:
+                        </p>
+                        
+                        <div class="error-details">
+                          <strong>Error Type:</strong> {{ currentError.type }}<br>
+                          <strong>Message:</strong> {{ currentError.message }}
+                          @if (currentError.technicalDetails) {
+                            <details class="technical-details">
+                              <summary>Technical Details (click to expand)</summary>
+                              <pre>{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
+                            </details>
                           }
+                        </div>
+                        
+                        <div class="error-help">
+                          <strong>What to do:</strong>
+                          <ol>
+                            <li>Check that the component code is valid JavaScript/React</li>
+                            <li>Ensure all required dependencies are available</li>
+                            <li>Review the technical details for specific error information</li>
+                            <li>Contact your system administrator if the issue persists</li>
+                          </ol>
+                        </div>
+                        
+                        <div class="error-actions">
+                          <button kendoButton (click)="retryComponent()" [icon]="'fa-solid fa-rotate'">
+                            Retry
+                          </button>
                         </div>
                       </div>
                     </div>
+                  } @else {
+                    <mj-react-component 
+                      [component]="componentSpec"
+                      (componentEvent)="onComponentEvent($event)">
+                    </mj-react-component>
                   }
                 </div>
-              } @else {
-                <!-- List View -->
-                <kendo-grid 
-                  [data]="filteredComponents$.value"
-                  [pageSize]="20"
-                  [pageable]="true"
-                  [sortable]="true"
-                  [filterable]="false"
-                  [resizable]="true"
-                  [selectable]="true"
-                  (selectionChange)="selectComponent($event.selectedRows && $event.selectedRows[0] ? $event.selectedRows[0].dataItem : null)">
-                  <kendo-grid-column field="Name" title="Component" [width]="250">
-                    <ng-template kendoGridCellTemplate let-dataItem>
-                      <div class="component-name">
-                        <span class="type-dot" [style.background-color]="getComponentTypeColor(dataItem.Type || 'Other')"></span>
-                        {{ dataItem.Name }}
-                      </div>
-                    </ng-template>
-                  </kendo-grid-column>
-                  <kendo-grid-column field="Version" title="Version" [width]="80"></kendo-grid-column>
-                  <kendo-grid-column field="Type" title="Type" [width]="100"></kendo-grid-column>
-                  <kendo-grid-column field="Status" title="Status" [width]="100">
-                    <ng-template kendoGridCellTemplate let-dataItem>
-                      <span class="status-badge" [ngClass]="getStatusBadgeClass(dataItem.Status || 'Draft')">
-                        {{ dataItem.Status }}
-                      </span>
-                    </ng-template>
-                  </kendo-grid-column>
-                  <kendo-grid-column field="Namespace" title="Namespace" [width]="200"></kendo-grid-column>
-                  <kendo-grid-column field="DeveloperOrganization" title="Developer" [width]="150"></kendo-grid-column>
-                  <kendo-grid-column field="Description" title="Description"></kendo-grid-column>
-                </kendo-grid>
-              }
-            </div>
-          }
-
-          @if (activeTab === 'preview') {
-            <div class="preview-content">
-              @if (selectedComponent) {
-                <mj-component-preview 
-                  [component]="selectedComponent"
-                  [componentSpec]="componentSpec"
-                  (openEntityRecord)="onOpenEntityRecord($event)">
-                </mj-component-preview>
-              } @else {
-                <div class="empty-state">
-                  <i class="fa-solid fa-eye fa-4x"></i>
-                  <h3>No Component Selected</h3>
-                  <p>Select a component from the Browse tab to preview it</p>
-                </div>
-              }
-            </div>
-          }
-
-          @if (activeTab === 'dependencies') {
-            <div class="dependencies-content">
-              @if (selectedComponent) {
-                <mj-component-dependencies
-                  [component]="selectedComponent"
-                  (openEntityRecord)="onOpenEntityRecord($event)">
-                </mj-component-dependencies>
-              } @else {
-                <div class="empty-state">
-                  <i class="fa-solid fa-sitemap fa-4x"></i>
-                  <h3>No Component Selected</h3>
-                  <p>Select a component to view its dependencies</p>
-                </div>
-              }
-            </div>
-          }
-
-          @if (activeTab === 'settings') {
-            <div class="settings-content">
-              <mj-component-studio-settings
-                (openEntityRecord)="onOpenEntityRecord($event)">
-              </mj-component-studio-settings>
-            </div>
-          }
-        </div>
-      </div>
-
-      <!-- Bottom Navigation -->
-      <div class="dashboard-navigation">
-        @for (navItem of navigationConfig; track $index) {
-          <div 
-            class="nav-item"
-            [class.active]="navItem.selected"
-            (click)="onTabChange(navigationItems[$index])">
-            <i [class]="navItem.icon"></i>
-            <span>{{ navItem.text }}</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="no-selection">
+            <i class="fa-solid fa-hand-pointer fa-3x"></i>
+            <p>Select a component from the list to preview</p>
           </div>
         }
       </div>
-    </div>
-  }
+    </kendo-splitter-pane>
+  </kendo-splitter>
 </div>

@@ -1,3 +1,7 @@
+/* SQL text to update existing entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+
+
 -- Add missing fields to Component table for component specifications and vectors
 
 -- Add all fields in a single ALTER TABLE statement for efficiency
