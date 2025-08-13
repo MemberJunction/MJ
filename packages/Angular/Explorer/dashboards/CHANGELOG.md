@@ -1,5 +1,24 @@
 # @memberjunction/ng-dashboards
 
+## 2.87.0
+
+### Minor Changes
+
+- fa4132a: 2.87 bump
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ng-core-entity-forms@2.87.0
+  - @memberjunction/ng-shared@2.87.0
+  - @memberjunction/ng-action-gallery@2.87.0
+  - @memberjunction/ng-ai-test-harness@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-notifications@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/templates-base-types@2.87.0
+
 ## 2.86.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @memberjunction/ai-elevenlabs
 
+## 2.87.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.87.0
+- @memberjunction/global@2.87.0
+
 ## 2.86.0
 
 ### Patch Changes
