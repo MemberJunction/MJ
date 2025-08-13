@@ -25,7 +25,7 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedStepId: number | null = null;
   executingStepId: number | null = null;
   showExecutionPanel = false;
-  legendCollapsed = false;
+  legendCollapsed = true;
   
   // Fixed dimensions for all steps
   private readonly STEP_WIDTH = 320;
@@ -80,14 +80,18 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     
     // Log the loaded data
     if (this.steps.length > 0 || this.connections.length > 0) {
+      // Auto-arrange steps with proper spacing
+      this.autoArrangeSteps();
+      
       // The template will automatically render the steps and connections
       // through Angular's change detection
       this.changeDetector.detectChanges();
       
-      // Auto-center on the first step or starting step
+      // Fit entire flow in view after DOM is ready
+      // Need longer delay to ensure canvas element has dimensions
       setTimeout(() => {
-        this.centerOnStartingStep();
-      }, 100);
+        this.fitToView();
+      }, 500);
     }
   }
   
@@ -586,9 +590,8 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   onResetView() {
-    this.currentScale = 1;
-    this.canvasOffset = { x: 0, y: 0 };
-    this.updateCanvasTransform();
+    // Fit entire flow in view
+    this.fitToView();
   }
   
   onAutoArrange() {
@@ -602,9 +605,10 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private autoArrangeSteps() {
     if (this.steps.length === 0) return;
     
-    // Spacing adjusted for larger step dimensions
-    const horizontalSpacing = 420;
-    const verticalSpacing = 200;
+    // Spacing adjusted for larger step dimensions and condition text
+    // Step width is 320px, so we need spacing > 320px to avoid overlap
+    const horizontalSpacing = 500; // Balanced spacing - enough room for connections without being too spread out
+    const verticalSpacing = 200; // Good vertical separation
     
     // Build adjacency map for BFS traversal
     const adjacencyMap = new Map<number, number[]>();
@@ -675,7 +679,23 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   
   private fitToView() {
-    if (this.steps.length === 0) return;
+    if (this.steps.length === 0) {
+      // If no steps, just reset to default view
+      this.currentScale = 1;
+      this.canvasOffset = { x: 0, y: 0 };
+      this.updateCanvasTransform();
+      return;
+    }
+    
+    // Get viewport dimensions
+    const viewportWidth = this.reteEditor.nativeElement.clientWidth;
+    const viewportHeight = this.reteEditor.nativeElement.clientHeight;
+    
+    // Check if DOM is ready - if not, retry
+    if (viewportWidth === 0 || viewportHeight === 0) {
+      setTimeout(() => this.fitToView(), 200);
+      return;
+    }
     
     // Find bounds of all steps
     let minX = Infinity, minY = Infinity;
@@ -684,26 +704,35 @@ export class FlowEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.steps.forEach(step => {
       minX = Math.min(minX, step.position[0]);
       minY = Math.min(minY, step.position[1]);
-      maxX = Math.max(maxX, step.position[0] + 300); // Approximate step width
-      maxY = Math.max(maxY, step.position[1] + 120); // Approximate step height
+      maxX = Math.max(maxX, step.position[0] + this.STEP_WIDTH);
+      maxY = Math.max(maxY, step.position[1] + this.STEP_HEIGHT);
     });
     
-    // Calculate required scale and offset to fit all steps
-    const padding = 50;
-    const viewportWidth = this.reteEditor.nativeElement.clientWidth - padding * 2;
-    const viewportHeight = this.reteEditor.nativeElement.clientHeight - padding * 2;
-    
+    // Calculate content dimensions
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
     
-    // Calculate scale to fit content
-    const scaleX = viewportWidth / contentWidth;
-    const scaleY = viewportHeight / contentHeight;
-    this.currentScale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 100%
+    // Calculate scale to fit content with padding
+    const padding = 100;
+    const scaleX = (viewportWidth - padding * 2) / contentWidth;
+    const scaleY = (viewportHeight - padding * 2) / contentHeight;
     
-    // Center the content
-    this.canvasOffset.x = padding - minX * this.currentScale;
-    this.canvasOffset.y = padding - minY * this.currentScale;
+    // Use the smaller scale to ensure everything fits
+    // But don't zoom out too much or zoom in too much
+    const idealScale = Math.min(scaleX, scaleY);
+    this.currentScale = Math.max(0.3, Math.min(idealScale, 1.0));
+    
+    // Calculate the center point of the content
+    const contentCenterX = minX + contentWidth / 2;
+    const contentCenterY = minY + contentHeight / 2;
+    
+    // Calculate the center point of the viewport
+    const viewportCenterX = viewportWidth / 2;
+    const viewportCenterY = viewportHeight / 2;
+    
+    // Calculate offset to center the content
+    this.canvasOffset.x = viewportCenterX - (contentCenterX * this.currentScale);
+    this.canvasOffset.y = viewportCenterY - (contentCenterY * this.currentScale);
     
     this.updateCanvasTransform();
   }
