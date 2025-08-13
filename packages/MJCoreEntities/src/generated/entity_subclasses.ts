@@ -7558,6 +7558,60 @@ export const AIAgentPromptSchema = z.object({
 export type AIAgentPromptEntityType = z.infer<typeof AIAgentPromptSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Relationships
+ */
+export const AIAgentRelationshipSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for AI agent relationships`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign key to parent AIAgent that can invoke the sub-agent`),
+    SubAgentID: z.string().describe(`
+        * * Field Name: SubAgentID
+        * * Display Name: Sub Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign key to sub-agent AIAgent that can be invoked`),
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Revoked
+        * * Description: Status of the relationship: Pending (awaiting approval), Active (can invoke), or Revoked (no longer allowed)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    SubAgent: z.string().nullable().describe(`
+        * * Field Name: SubAgent
+        * * Display Name: Sub Agent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentRelationshipEntityType = z.infer<typeof AIAgentRelationshipSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Run Steps
  */
 export const AIAgentRunStepSchema = z.object({
@@ -9408,6 +9462,377 @@ export const ArtifactTypeSchema = z.object({
 });
 
 export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Component Dependencies
+ */
+export const ComponentDependencySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for component dependency`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: Foreign key to parent Component that has the dependency`),
+    DependencyComponentID: z.string().describe(`
+        * * Field Name: DependencyComponentID
+        * * Display Name: Dependency Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: Foreign key to the Component that is depended upon`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component
+        * * SQL Data Type: nvarchar(500)`),
+    DependencyComponent: z.string().describe(`
+        * * Field Name: DependencyComponent
+        * * Display Name: Dependency Component
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type ComponentDependencyEntityType = z.infer<typeof ComponentDependencySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Component Libraries
+ */
+export const ComponentLibrarySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for the component library`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: NPM-style package name (e.g., recharts, lodash, @memberjunction/lib-name)`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: User-friendly display name for the library`),
+    Version: z.string().nullable().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Library version number`),
+    GlobalVariable: z.string().nullable().describe(`
+        * * Field Name: GlobalVariable
+        * * Display Name: Global Variable
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Global variable name when loaded (e.g., _ for lodash, React for react)`),
+    Category: z.union([z.literal('Core'), z.literal('Runtime'), z.literal('UI'), z.literal('Charting'), z.literal('Utility'), z.literal('Other')]).nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Runtime
+    *   * UI
+    *   * Charting
+    *   * Utility
+    *   * Other
+        * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other`),
+    CDNUrl: z.string().nullable().describe(`
+        * * Field Name: CDNUrl
+        * * Display Name: CDN Url
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: CDN URL for loading the library JavaScript`),
+    CDNCssUrl: z.string().nullable().describe(`
+        * * Field Name: CDNCssUrl
+        * * Display Name: CDN Css Url
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional CDN URL for loading library CSS`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the library and its capabilities`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Component Library Links
+ */
+export const ComponentLibraryLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for component-library relationship`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: Foreign key to Component that depends on the library`),
+    LibraryID: z.string().describe(`
+        * * Field Name: LibraryID
+        * * Display Name: Library ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Component Libraries (vwComponentLibraries.ID)
+        * * Description: Foreign key to ComponentLibrary that the component depends on`),
+    MinVersion: z.string().nullable().describe(`
+        * * Field Name: MinVersion
+        * * Display Name: Min Version
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Minimum version requirement using semantic versioning (e.g., ^1.0.0, ~2.5.0)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component
+        * * SQL Data Type: nvarchar(500)`),
+    Library: z.string().describe(`
+        * * Field Name: Library
+        * * Display Name: Library
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type ComponentLibraryLinkEntityType = z.infer<typeof ComponentLibraryLinkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Component Registries
+ */
+export const ComponentRegistrySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for the component registry`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the registry (e.g., MemberJunction Registry, NPM, Internal Registry)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the registry and its purpose`),
+    URI: z.string().nullable().describe(`
+        * * Field Name: URI
+        * * Display Name: URI
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Registry endpoint URI (e.g., https://registry.memberjunction.org)`),
+    Type: z.union([z.literal('Public'), z.literal('Private'), z.literal('Internal')]).nullable().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Public
+    *   * Private
+    *   * Internal
+        * * Description: Type of registry: public, private, or internal`),
+    APIVersion: z.string().nullable().describe(`
+        * * Field Name: APIVersion
+        * * Display Name: API Version
+        * * SQL Data Type: nvarchar(50)
+        * * Description: API version supported by the registry for compatibility`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Offline')]).nullable().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Offline
+        * * Description: Current status of the registry: active, deprecated, or offline`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ComponentRegistryEntityType = z.infer<typeof ComponentRegistrySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Components
+ */
+export const ComponentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Immutable UUID that remains the same across all systems`),
+    Namespace: z.string().nullable().describe(`
+        * * Field Name: Namespace
+        * * Display Name: Namespace
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Hierarchical namespace path (e.g., dashboards/sales for local, @memberjunction/dashboards/financial for external)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Component name within the namespace (e.g., revenue-tracker)`),
+    Version: z.string().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Semantic version number (e.g., 1.0.0, 1.2.3-beta)`),
+    VersionSequence: z.number().describe(`
+        * * Field Name: VersionSequence
+        * * Display Name: Version Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Numeric sequence for sorting versions`),
+    Title: z.string().nullable().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: User-friendly display title for the component`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the component functionality`),
+    Type: z.union([z.literal('Report'), z.literal('Dashboard'), z.literal('Form'), z.literal('Table'), z.literal('Chart'), z.literal('Navigation'), z.literal('Search'), z.literal('Widget'), z.literal('Utility'), z.literal('Other')]).nullable().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(255)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Report
+    *   * Dashboard
+    *   * Form
+    *   * Table
+    *   * Chart
+    *   * Navigation
+    *   * Search
+    *   * Widget
+    *   * Utility
+    *   * Other
+        * * Description: Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other`),
+    Status: z.union([z.literal('Draft'), z.literal('Published'), z.literal('Deprecated')]).nullable().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+    *   * Deprecated
+        * * Description: Publication status: draft, published, or deprecated`),
+    DeveloperName: z.string().nullable().describe(`
+        * * Field Name: DeveloperName
+        * * Display Name: Developer Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the component developer or author`),
+    DeveloperEmail: z.string().nullable().describe(`
+        * * Field Name: DeveloperEmail
+        * * Display Name: Developer Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Contact email for the component developer`),
+    DeveloperOrganization: z.string().nullable().describe(`
+        * * Field Name: DeveloperOrganization
+        * * Display Name: Developer Organization
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Organization name of the component developer`),
+    SourceRegistryID: z.string().nullable().describe(`
+        * * Field Name: SourceRegistryID
+        * * Display Name: Source Registry ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Component Registries (vwComponentRegistries.ID)
+        * * Description: Foreign key to ComponentRegistry - NULL for local components, populated for replicated ones`),
+    ReplicatedAt: z.date().nullable().describe(`
+        * * Field Name: ReplicatedAt
+        * * Display Name: Replicated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the component was replicated from external registry (NULL for local components)`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last synchronization timestamp with the source registry`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Specification: z.string().describe(`
+        * * Field Name: Specification
+        * * Display Name: Specification
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Complete JSON specification object for the component`),
+    FunctionalRequirements: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirements
+        * * Display Name: Functional Requirements
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Functional requirements describing what the component should accomplish`),
+    TechnicalDesign: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesign
+        * * Display Name: Technical Design
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Technical design describing how the component is implemented`),
+    FunctionalRequirementsVector: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirementsVector
+        * * Display Name: Functional Requirements Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Vector embedding of the functional requirements for similarity search`),
+    TechnicalDesignVector: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesignVector
+        * * Display Name: Technical Design Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Vector embedding of the technical design for similarity search`),
+    SourceRegistry: z.string().nullable().describe(`
+        * * Field Name: SourceRegistry
+        * * Display Name: Source Registry
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ComponentEntityType = z.infer<typeof ComponentSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Artifact Permissions
@@ -33165,6 +33590,136 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
 
 
 /**
+ * MJ: AI Agent Relationships - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRelationship
+ * * Base View: vwAIAgentRelationships
+ * * @description Tracks relationships between AI agents for sub-agent orchestration
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Relationships')
+export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEntityType> {
+    /**
+    * Loads the MJ: AI Agent Relationships record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Relationships record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRelationshipEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for AI agent relationships
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign key to parent AIAgent that can invoke the sub-agent
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: SubAgentID
+    * * Display Name: Sub Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign key to sub-agent AIAgent that can be invoked
+    */
+    get SubAgentID(): string {
+        return this.Get('SubAgentID');
+    }
+    set SubAgentID(value: string) {
+        this.Set('SubAgentID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Revoked
+    * * Description: Status of the relationship: Pending (awaiting approval), Active (can invoke), or Revoked (no longer allowed)
+    */
+    get Status(): 'Pending' | 'Active' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Active' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: SubAgent
+    * * Display Name: Sub Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SubAgent(): string | null {
+        return this.Get('SubAgent');
+    }
+}
+
+
+/**
  * MJ: AI Agent Run Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
@@ -38219,6 +38774,916 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Component Dependencies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ComponentDependency
+ * * Base View: vwComponentDependencies
+ * * @description Tracks component-to-component dependencies for composition
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Component Dependencies')
+export class ComponentDependencyEntity extends BaseEntity<ComponentDependencyEntityType> {
+    /**
+    * Loads the MJ: Component Dependencies record from the database
+    * @param ID: string - primary key value to load the MJ: Component Dependencies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ComponentDependencyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for component dependency
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Foreign key to parent Component that has the dependency
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: DependencyComponentID
+    * * Display Name: Dependency Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Foreign key to the Component that is depended upon
+    */
+    get DependencyComponentID(): string {
+        return this.Get('DependencyComponentID');
+    }
+    set DependencyComponentID(value: string) {
+        this.Set('DependencyComponentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: DependencyComponent
+    * * Display Name: Dependency Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get DependencyComponent(): string {
+        return this.Get('DependencyComponent');
+    }
+}
+
+
+/**
+ * MJ: Component Libraries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ComponentLibrary
+ * * Base View: vwComponentLibraries
+ * * @description Catalog of third-party JavaScript libraries that components can depend on
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Component Libraries')
+export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityType> {
+    /**
+    * Loads the MJ: Component Libraries record from the database
+    * @param ID: string - primary key value to load the MJ: Component Libraries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ComponentLibraryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for the component library
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: NPM-style package name (e.g., recharts, lodash, @memberjunction/lib-name)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: User-friendly display name for the library
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Library version number
+    */
+    get Version(): string | null {
+        return this.Get('Version');
+    }
+    set Version(value: string | null) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: GlobalVariable
+    * * Display Name: Global Variable
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Global variable name when loaded (e.g., _ for lodash, React for react)
+    */
+    get GlobalVariable(): string | null {
+        return this.Get('GlobalVariable');
+    }
+    set GlobalVariable(value: string | null) {
+        this.Set('GlobalVariable', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Core
+    *   * Runtime
+    *   * UI
+    *   * Charting
+    *   * Utility
+    *   * Other
+    * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other
+    */
+    get Category(): 'Core' | 'Runtime' | 'UI' | 'Charting' | 'Utility' | 'Other' | null {
+        return this.Get('Category');
+    }
+    set Category(value: 'Core' | 'Runtime' | 'UI' | 'Charting' | 'Utility' | 'Other' | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: CDNUrl
+    * * Display Name: CDN Url
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: CDN URL for loading the library JavaScript
+    */
+    get CDNUrl(): string | null {
+        return this.Get('CDNUrl');
+    }
+    set CDNUrl(value: string | null) {
+        this.Set('CDNUrl', value);
+    }
+
+    /**
+    * * Field Name: CDNCssUrl
+    * * Display Name: CDN Css Url
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional CDN URL for loading library CSS
+    */
+    get CDNCssUrl(): string | null {
+        return this.Get('CDNCssUrl');
+    }
+    set CDNCssUrl(value: string | null) {
+        this.Set('CDNCssUrl', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the library and its capabilities
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Component Library Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ComponentLibraryLink
+ * * Base View: vwComponentLibraryLinks
+ * * @description Links components to their third-party library dependencies
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Component Library Links')
+export class ComponentLibraryLinkEntity extends BaseEntity<ComponentLibraryLinkEntityType> {
+    /**
+    * Loads the MJ: Component Library Links record from the database
+    * @param ID: string - primary key value to load the MJ: Component Library Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ComponentLibraryLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for component-library relationship
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Foreign key to Component that depends on the library
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: LibraryID
+    * * Display Name: Library ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Component Libraries (vwComponentLibraries.ID)
+    * * Description: Foreign key to ComponentLibrary that the component depends on
+    */
+    get LibraryID(): string {
+        return this.Get('LibraryID');
+    }
+    set LibraryID(value: string) {
+        this.Set('LibraryID', value);
+    }
+
+    /**
+    * * Field Name: MinVersion
+    * * Display Name: Min Version
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Minimum version requirement using semantic versioning (e.g., ^1.0.0, ~2.5.0)
+    */
+    get MinVersion(): string | null {
+        return this.Get('MinVersion');
+    }
+    set MinVersion(value: string | null) {
+        this.Set('MinVersion', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: Library
+    * * Display Name: Library
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Library(): string {
+        return this.Get('Library');
+    }
+}
+
+
+/**
+ * MJ: Component Registries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ComponentRegistry
+ * * Base View: vwComponentRegistries
+ * * @description Registry catalog for component sources, similar to NPM registry but supporting multiple sources
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Component Registries')
+export class ComponentRegistryEntity extends BaseEntity<ComponentRegistryEntityType> {
+    /**
+    * Loads the MJ: Component Registries record from the database
+    * @param ID: string - primary key value to load the MJ: Component Registries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ComponentRegistryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for the component registry
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the registry (e.g., MemberJunction Registry, NPM, Internal Registry)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of the registry and its purpose
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: URI
+    * * Display Name: URI
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Registry endpoint URI (e.g., https://registry.memberjunction.org)
+    */
+    get URI(): string | null {
+        return this.Get('URI');
+    }
+    set URI(value: string | null) {
+        this.Set('URI', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Public
+    *   * Private
+    *   * Internal
+    * * Description: Type of registry: public, private, or internal
+    */
+    get Type(): 'Public' | 'Private' | 'Internal' | null {
+        return this.Get('Type');
+    }
+    set Type(value: 'Public' | 'Private' | 'Internal' | null) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: APIVersion
+    * * Display Name: API Version
+    * * SQL Data Type: nvarchar(50)
+    * * Description: API version supported by the registry for compatibility
+    */
+    get APIVersion(): string | null {
+        return this.Get('APIVersion');
+    }
+    set APIVersion(value: string | null) {
+        this.Set('APIVersion', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Offline
+    * * Description: Current status of the registry: active, deprecated, or offline
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Offline' | null {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Offline' | null) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Components - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Component
+ * * Base View: vwComponents
+ * * @description Main catalog of reusable components with versioning and registry support
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Components')
+export class ComponentEntity extends BaseEntity<ComponentEntityType> {
+    /**
+    * Loads the MJ: Components record from the database
+    * @param ID: string - primary key value to load the MJ: Components record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ComponentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Immutable UUID that remains the same across all systems
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Namespace
+    * * Display Name: Namespace
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Hierarchical namespace path (e.g., dashboards/sales for local, @memberjunction/dashboards/financial for external)
+    */
+    get Namespace(): string | null {
+        return this.Get('Namespace');
+    }
+    set Namespace(value: string | null) {
+        this.Set('Namespace', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Component name within the namespace (e.g., revenue-tracker)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Semantic version number (e.g., 1.0.0, 1.2.3-beta)
+    */
+    get Version(): string {
+        return this.Get('Version');
+    }
+    set Version(value: string) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: VersionSequence
+    * * Display Name: Version Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Numeric sequence for sorting versions
+    */
+    get VersionSequence(): number {
+        return this.Get('VersionSequence');
+    }
+    set VersionSequence(value: number) {
+        this.Set('VersionSequence', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: User-friendly display title for the component
+    */
+    get Title(): string | null {
+        return this.Get('Title');
+    }
+    set Title(value: string | null) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the component functionality
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(255)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Report
+    *   * Dashboard
+    *   * Form
+    *   * Table
+    *   * Chart
+    *   * Navigation
+    *   * Search
+    *   * Widget
+    *   * Utility
+    *   * Other
+    * * Description: Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other
+    */
+    get Type(): 'Report' | 'Dashboard' | 'Form' | 'Table' | 'Chart' | 'Navigation' | 'Search' | 'Widget' | 'Utility' | 'Other' | null {
+        return this.Get('Type');
+    }
+    set Type(value: 'Report' | 'Dashboard' | 'Form' | 'Table' | 'Chart' | 'Navigation' | 'Search' | 'Widget' | 'Utility' | 'Other' | null) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+    *   * Deprecated
+    * * Description: Publication status: draft, published, or deprecated
+    */
+    get Status(): 'Draft' | 'Published' | 'Deprecated' | null {
+        return this.Get('Status');
+    }
+    set Status(value: 'Draft' | 'Published' | 'Deprecated' | null) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DeveloperName
+    * * Display Name: Developer Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the component developer or author
+    */
+    get DeveloperName(): string | null {
+        return this.Get('DeveloperName');
+    }
+    set DeveloperName(value: string | null) {
+        this.Set('DeveloperName', value);
+    }
+
+    /**
+    * * Field Name: DeveloperEmail
+    * * Display Name: Developer Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Contact email for the component developer
+    */
+    get DeveloperEmail(): string | null {
+        return this.Get('DeveloperEmail');
+    }
+    set DeveloperEmail(value: string | null) {
+        this.Set('DeveloperEmail', value);
+    }
+
+    /**
+    * * Field Name: DeveloperOrganization
+    * * Display Name: Developer Organization
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Organization name of the component developer
+    */
+    get DeveloperOrganization(): string | null {
+        return this.Get('DeveloperOrganization');
+    }
+    set DeveloperOrganization(value: string | null) {
+        this.Set('DeveloperOrganization', value);
+    }
+
+    /**
+    * * Field Name: SourceRegistryID
+    * * Display Name: Source Registry ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Component Registries (vwComponentRegistries.ID)
+    * * Description: Foreign key to ComponentRegistry - NULL for local components, populated for replicated ones
+    */
+    get SourceRegistryID(): string | null {
+        return this.Get('SourceRegistryID');
+    }
+    set SourceRegistryID(value: string | null) {
+        this.Set('SourceRegistryID', value);
+    }
+
+    /**
+    * * Field Name: ReplicatedAt
+    * * Display Name: Replicated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the component was replicated from external registry (NULL for local components)
+    */
+    get ReplicatedAt(): Date | null {
+        return this.Get('ReplicatedAt');
+    }
+    set ReplicatedAt(value: Date | null) {
+        this.Set('ReplicatedAt', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last synchronization timestamp with the source registry
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Specification
+    * * Display Name: Specification
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Complete JSON specification object for the component
+    */
+    get Specification(): string {
+        return this.Get('Specification');
+    }
+    set Specification(value: string) {
+        this.Set('Specification', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirements
+    * * Display Name: Functional Requirements
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Functional requirements describing what the component should accomplish
+    */
+    get FunctionalRequirements(): string | null {
+        return this.Get('FunctionalRequirements');
+    }
+    set FunctionalRequirements(value: string | null) {
+        this.Set('FunctionalRequirements', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesign
+    * * Display Name: Technical Design
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Technical design describing how the component is implemented
+    */
+    get TechnicalDesign(): string | null {
+        return this.Get('TechnicalDesign');
+    }
+    set TechnicalDesign(value: string | null) {
+        this.Set('TechnicalDesign', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirementsVector
+    * * Display Name: Functional Requirements Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Vector embedding of the functional requirements for similarity search
+    */
+    get FunctionalRequirementsVector(): string | null {
+        return this.Get('FunctionalRequirementsVector');
+    }
+    set FunctionalRequirementsVector(value: string | null) {
+        this.Set('FunctionalRequirementsVector', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesignVector
+    * * Display Name: Technical Design Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Vector embedding of the technical design for similarity search
+    */
+    get TechnicalDesignVector(): string | null {
+        return this.Get('TechnicalDesignVector');
+    }
+    set TechnicalDesignVector(value: string | null) {
+        this.Set('TechnicalDesignVector', value);
+    }
+
+    /**
+    * * Field Name: SourceRegistry
+    * * Display Name: Source Registry
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceRegistry(): string | null {
+        return this.Get('SourceRegistry');
     }
 }
 

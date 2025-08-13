@@ -47,6 +47,13 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { TimeSeriesChartComponent } from './AI/components/charts/time-series-chart.component';
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
+// Component Studio Components
+import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
+import { ComponentPreviewComponent } from './ComponentStudio/components/component-preview.component';
+import { ComponentDependenciesComponent } from './ComponentStudio/components/component-dependencies.component';
+import { ComponentStudioSettingsComponent } from './ComponentStudio/components/component-studio-settings.component';
+import { GridModule } from '@progress/kendo-angular-grid';
+import { MJReactModule } from '@memberjunction/ng-react';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -80,7 +87,12 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     KPICardComponent,
     LiveExecutionWidgetComponent,
     TimeSeriesChartComponent,
-    PerformanceHeatmapComponent
+    PerformanceHeatmapComponent,
+    // Component Studio Components
+    ComponentStudioDashboardComponent,
+    ComponentPreviewComponent,
+    ComponentDependenciesComponent,
+    ComponentStudioSettingsComponent
   ],
   imports: [
     CommonModule,
@@ -98,7 +110,9 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     ButtonsModule,
     ActionGalleryModule,
     AITestHarnessModule,
-    MemberJunctionCoreEntityFormsModule
+    MemberJunctionCoreEntityFormsModule,
+    GridModule,
+    MJReactModule
   ],
   providers: [
     AIInstrumentationService
@@ -106,7 +120,8 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
   exports: [
     EntityAdminDashboardComponent,
     AIDashboardComponent,
-    ActionsManagementDashboardComponent
+    ActionsManagementDashboardComponent,
+    ComponentStudioDashboardComponent
   ]
 })
 export class DashboardsModule { }

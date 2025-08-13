@@ -1657,21 +1657,21 @@ export class ManageMetadataBase {
       }
    }
 
-   protected createNewEntityDisplayName(newEntity: any): string | null {
+   protected createNewEntityDisplayName(newEntity: any, newName: string): string | null {
       const rule = this.getNewEntityNameRule(newEntity.SchemaName);
       if (rule) {
          // we have a rule, so let's extract the DisplayName from the rule which is done
          // by removing the rule.EntityNamePrefix and rule.EntityNameSuffix from the newEntity.Name
          const prefix = rule.EntityNamePrefix.trim();
          const suffix = rule.EntityNameSuffix.trim();
-         const newEntityName = newEntity.Name.trim();
+         const newEntityName = newName.trim();
          let newEntityDisplayName = newEntityName; // start with the original name
 
-         if (newEntityDisplayName.startsWith(prefix)) {
-            newEntityDisplayName = newEntityDisplayName.substring(prefix.length); // remove the prefix
+         if (prefix?.length > 0 && newEntityDisplayName.startsWith(prefix)) {
+            newEntityDisplayName = newEntityDisplayName.substring(prefix.length).trim(); // remove the prefix
          }
-         if (newEntityDisplayName.endsWith(suffix)) {
-            newEntityDisplayName = newEntityDisplayName.substring(0, newEntityDisplayName.length - suffix.length); // remove the suffix
+         if (suffix?.length > 0 && newEntityDisplayName.endsWith(suffix)) {
+            newEntityDisplayName = newEntityDisplayName.substring(0, newEntityDisplayName.length - suffix.length).trim(); // remove the suffix
          }
          if (newEntityDisplayName.length > 0 && newEntityDisplayName !== newEntity.Name) {
             return newEntityDisplayName.trim();
@@ -1767,7 +1767,7 @@ export class ManageMetadataBase {
          if (shouldCreate) {
             // process a single new entity
             let newEntityName: string = await this.createNewEntityName(newEntity);
-            const newEntityDisplayName = this.createNewEntityDisplayName(newEntity);
+            const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
             let suffix = '';
             const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
