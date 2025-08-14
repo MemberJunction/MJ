@@ -35,6 +35,13 @@
           color: #6366f1;
         }
       }
+      
+      .header-subtitle {
+        margin: 4px 0 0 0;
+        font-size: 13px;
+        color: #6c757d;
+        font-weight: normal;
+      }
     }
   }
 
@@ -107,6 +114,19 @@
         &.running {
           border-color: #10b981;
           box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+          background: linear-gradient(to right, rgba(16, 185, 129, 0.03) 0%, white 100%);
+          
+          .card-header {
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 4px;
+              background: #10b981;
+            }
+          }
         }
         
         .card-header {
@@ -115,6 +135,7 @@
           padding: 16px;
           cursor: pointer;
           user-select: none;
+          position: relative;
           
           &:hover {
             background: #f8f9fa;

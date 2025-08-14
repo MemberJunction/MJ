@@ -2,9 +2,12 @@
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-content">
-      <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
-      <button kendoButton [icon]="'fa-solid fa-sync'" (click)="refreshData()" [disabled]="isLoading">
-        Refresh
+      <div>
+        <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
+        <p class="header-subtitle">Testing components without custom properties</p>
+      </div>
+      <button kendoButton (click)="refreshData()" [disabled]="isLoading">
+        <span class="fa-solid fa-sync"></span> Refresh
       </button>
     </div>
   </div>
@@ -36,7 +39,9 @@
             </div>
           } @else if (filteredComponents.length === 0) {
             <div class="empty-message">
-              No components found
+              <i class="fa-solid fa-info-circle"></i> No components found without custom properties.
+              <br>
+              <small>Only components that don't require custom props can be tested here.</small>
             </div>
           } @else {
             @for (component of filteredComponents; track component.ID) {
@@ -107,17 +112,22 @@
                     <div class="card-actions">
                       @if (selectedComponent?.ID === component.ID && isRunning) {
                         <button kendoButton 
-                          [icon]="'fa-solid fa-stop'" 
                           [themeColor]="'error'"
                           (click)="stopComponent(); $event.stopPropagation()">
-                          Stop Component
+                          <span class="fa-solid fa-stop"></span> Stop Component
+                        </button>
+                      } @else if (isRunning && selectedComponent?.ID !== component.ID) {
+                        <button kendoButton 
+                          [themeColor]="'base'"
+                          title="Stop current component and run this one"
+                          (click)="runComponent(component); $event.stopPropagation()">
+                          <span class="fa-solid fa-play"></span> Switch to This Component
                         </button>
                       } @else {
                         <button kendoButton 
-                          [icon]="'fa-solid fa-play'" 
                           [themeColor]="'primary'"
                           (click)="runComponent(component); $event.stopPropagation()">
-                          Run Component
+                          <span class="fa-solid fa-play"></span> Run Component
                         </button>
                       }
                     </div>
@@ -172,11 +182,11 @@
                 </div>
                 
                 <div class="error-actions">
-                  <button kendoButton (click)="retryComponent()" [icon]="'fa-solid fa-rotate'">
-                    Retry
+                  <button kendoButton (click)="retryComponent()">
+                    <span class="fa-solid fa-rotate"></span> Retry
                   </button>
-                  <button kendoButton (click)="stopComponent()" [icon]="'fa-solid fa-stop'" [themeColor]="'error'">
-                    Stop
+                  <button kendoButton (click)="stopComponent()" [themeColor]="'error'">
+                    <span class="fa-solid fa-stop"></span> Stop
                   </button>
                 </div>
               </div>
