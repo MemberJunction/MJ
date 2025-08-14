@@ -5,6 +5,7 @@ import { AIAgentEntity, AIAgentStepEntity, AIAgentStepPathEntity } from '@member
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { SharedService } from '@memberjunction/ng-shared';
+import { MJIntegratedFlowEditorComponent } from './mj-integrated-flow-editor.component';
 
 @Component({
     selector: 'mj-flow-agent-form-section',

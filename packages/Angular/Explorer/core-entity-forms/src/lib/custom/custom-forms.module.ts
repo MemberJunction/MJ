@@ -59,6 +59,7 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
 import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
+import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
 
 @NgModule({
     declarations: [
@@ -137,7 +138,8 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         TreeViewModule,
         CheckBoxModule,
         AITestHarnessModule,
-        ActionGalleryModule
+        ActionGalleryModule,
+        MJIntegratedFlowEditorComponent
     ],
     exports: [
         EntityFormExtendedComponent,
@@ -161,6 +163,7 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
+        MJIntegratedFlowEditorComponent
     ],
     providers: [
         NewAgentDialogService,
