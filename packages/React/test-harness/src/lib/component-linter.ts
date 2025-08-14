@@ -1147,13 +1147,14 @@ export class ComponentLinter {
         
         // Valid properties for RunView/RunViews
         const validRunViewProps = new Set([
-          'EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 
-          'MaxRows', 'StartRow', 'ResultType'
+          'ViewID','ViewName', 'EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 
+          'MaxRows', 'StartRow', 'ResultType', 'UserSearchString', 'ForceAuditLog','AuditLogDescription',
+          'ResultType'
         ]);
         
         // Valid properties for RunQuery
         const validRunQueryProps = new Set([
-          'QueryName', 'CategoryName', 'CategoryID', 'Parameters'
+          'QueryID', 'QueryName', 'CategoryID', 'CategoryPath', 'Parameters', 'MaxRows', 'StartRow', 'ForceAuditLog','AuditLogDescription'
         ]);
         
         traverse(ast, {
