@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/graphql-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ng-shared@2.88.0
+  - @memberjunction/ng-skip-chat@2.88.0
+  - @memberjunction/ng-user-view-grid@2.88.0
+  - @memberjunction/ng-data-context@2.88.0
+  - @memberjunction/skip-types@2.88.0
+  - @memberjunction/ng-chat@2.88.0
+  - @memberjunction/ng-container-directives@2.88.0
+  - @memberjunction/ng-tabstrip@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes

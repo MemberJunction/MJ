@@ -1,5 +1,60 @@
 # Change Log - @memberjunction/server
 
+## 2.88.0
+
+### Patch Changes
+
+- 56257ed: Fix RunView pagination implementation
+
+  - Added StartRow parameter support for server-side pagination
+  - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
+  - Improved total row count calculation for paginated queries
+  - Ensures proper parameter passing through GraphQL to SQL layer
+
+  Fixes issue where pagination parameters were lost in the RunView processing chain, preventing proper
+  server-side pagination from working.
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/graphql-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/external-change-detection@2.88.0
+  - @memberjunction/core-entities-server@2.88.0
+  - @memberjunction/ai-agent-manager-actions@2.88.0
+  - @memberjunction/ai-agents@2.88.0
+  - @memberjunction/ai-core-plus@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/ai-prompts@2.88.0
+  - @memberjunction/actions-apollo@2.88.0
+  - @memberjunction/actions-bizapps-accounting@2.88.0
+  - @memberjunction/actions-bizapps-lms@2.88.0
+  - @memberjunction/actions-bizapps-social@2.88.0
+  - @memberjunction/core-actions@2.88.0
+  - @memberjunction/actions@2.88.0
+  - @memberjunction/entity-communications-server@2.88.0
+  - @memberjunction/doc-utils@2.88.0
+  - @memberjunction/data-context@2.88.0
+  - @memberjunction/queue@2.88.0
+  - @memberjunction/storage@2.88.0
+  - @memberjunction/templates@2.88.0
+  - @memberjunction/ai-vectors-pinecone@2.88.0
+  - @memberjunction/actions-bizapps-crm@2.88.0
+  - @memberjunction/data-context-server@2.88.0
+  - @memberjunction/skip-types@2.88.0
+  - @memberjunction/ai@2.88.0
+  - @memberjunction/ai-anthropic@2.88.0
+  - @memberjunction/ai-cerebras@2.88.0
+  - @memberjunction/ai-groq@2.88.0
+  - @memberjunction/ai-lmstudio@2.88.0
+  - @memberjunction/ai-local-embeddings@2.88.0
+  - @memberjunction/ai-mistral@2.88.0
+  - @memberjunction/ai-ollama@2.88.0
+  - @memberjunction/ai-openai@2.88.0
+  - @memberjunction/ai-openrouter@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes

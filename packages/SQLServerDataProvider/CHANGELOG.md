@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.88.0
+
+### Patch Changes
+
+- 56257ed: Fix RunView pagination implementation
+
+  - Added StartRow parameter support for server-side pagination
+  - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
+  - Improved total row count calculation for paginated queries
+  - Ensures proper parameter passing through GraphQL to SQL layer
+
+  Fixes issue where pagination parameters were lost in the RunView processing chain, preventing proper
+  server-side pagination from working.
+
+- Updated dependencies [df4031f]
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/ai-vector-dupe@2.88.0
+  - @memberjunction/actions@2.88.0
+  - @memberjunction/queue@2.88.0
+  - @memberjunction/ai@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes

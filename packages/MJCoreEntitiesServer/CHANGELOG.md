@@ -1,5 +1,22 @@
 # @memberjunction/core-entities-server
 
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ai-core-plus@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/ai-prompts@2.88.0
+  - @memberjunction/ai-vector-dupe@2.88.0
+  - @memberjunction/skip-types@2.88.0
+  - @memberjunction/ai-local-embeddings@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes
