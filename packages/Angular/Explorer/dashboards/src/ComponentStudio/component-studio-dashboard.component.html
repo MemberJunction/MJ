@@ -7,6 +7,15 @@
         <p class="header-subtitle">Testing components without custom properties</p>
       </div>
       <div class="header-buttons">
+        @if (selectedComponent && isRunning) {
+          <button kendoButton (click)="toggleDetailsPane()" [themeColor]="'base'">
+            @if (isDetailsPaneCollapsed) {
+              <span class="fa-solid fa-eye"></span> Show Details
+            } @else {
+              <span class="fa-solid fa-eye-slash"></span> Hide Details
+            }
+          </button>
+        }
         <button kendoButton (click)="triggerFileInput()" [themeColor]="'info'">
           <span class="fa-solid fa-file-import"></span> Import from File
         </button>
@@ -162,17 +171,16 @@
       </div>
     </kendo-splitter-pane>
 
-    <!-- Right Panel - Tabbed Component Display -->
+    <!-- Right Panel - Component Display with Editor Splitter -->
     <kendo-splitter-pane [min]="'400px'">
       <div class="component-display">
         @if (selectedComponent) {
-          <!-- Tabbed Interface -->
-          <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="component-tabs">
-            <!-- Run Tab -->
-            <kendo-tabstrip-tab [title]="'Run'" [selected]="activeTab === 0">
-              <ng-template kendoTabContent>
-                <div class="tab-content run-tab">
-                  @if (isRunning && componentSpec) {
+          <!-- Splitter for component and editors -->
+          <kendo-splitter orientation="horizontal" class="component-editor-splitter">
+            <!-- Left side - Running Component -->
+            <kendo-splitter-pane [min]="'300px'" [collapsible]="false">
+              <div class="component-runtime">
+                @if (isRunning && componentSpec) {
                     @if (currentError) {
                       <!-- Error Display -->
                       <div class="error-display">
@@ -228,24 +236,26 @@
                         (openEntityRecord)="onOpenEntityRecord($event)">
                       </mj-react-component>
                     }
-                  } @else {
-                    <!-- Run Tab Empty State -->
-                    <div class="run-empty-state">
-                      <i class="fa-solid fa-play-circle fa-3x"></i>
-                      <h3>Component: {{ getComponentName(selectedComponent) }}</h3>
-                      <p>{{ getComponentDescription(selectedComponent) || 'No description available' }}</p>
-                      <button kendoButton [themeColor]="'primary'" [size]="'large'" (click)="runComponent(selectedComponent)">
-                        <span class="fa-solid fa-play"></span> Run Component
-                      </button>
-                    </div>
-                  }
-                </div>
-              </ng-template>
-            </kendo-tabstrip-tab>
+                } @else {
+                  <!-- Component Not Running State -->
+                  <div class="run-empty-state">
+                    <i class="fa-solid fa-play-circle fa-3x"></i>
+                    <h3>Component: {{ getComponentName(selectedComponent) }}</h3>
+                    <p>{{ getComponentDescription(selectedComponent) || 'No description available' }}</p>
+                    <button kendoButton [themeColor]="'primary'" [size]="'large'" (click)="runComponent(selectedComponent)">
+                      <span class="fa-solid fa-play"></span> Run Component
+                    </button>
+                  </div>
+                }
+              </div>
+            </kendo-splitter-pane>
             
-            <!-- Spec Tab -->
-            <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 1">
-              <ng-template kendoTabContent>
+            <!-- Right side - Spec and Code Editors -->
+            <kendo-splitter-pane [min]="'400px'" [collapsible]="true" [collapsed]="isDetailsPaneCollapsed">
+              <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
+                <!-- Spec Tab -->
+                <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
+                  <ng-template kendoTabContent>
                 <div class="tab-content spec-tab">
                   <div class="editor-header">
                     <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
@@ -272,13 +282,13 @@
                     [readonly]="false"
                     style="height: calc(100% - 60px); width: 100%;">
                   </mj-code-editor>
-                </div>
-              </ng-template>
-            </kendo-tabstrip-tab>
-            
-            <!-- Code Tab -->
-            <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 2">
-              <ng-template kendoTabContent>
+                  </div>
+                </ng-template>
+              </kendo-tabstrip-tab>
+              
+              <!-- Code Tab -->
+              <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 1">
+                <ng-template kendoTabContent>
                 <div class="tab-content code-tab">
                   <div class="editor-header">
                     <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
@@ -319,6 +329,8 @@
               </ng-template>
             </kendo-tabstrip-tab>
           </kendo-tabstrip>
+        </kendo-splitter-pane>
+      </kendo-splitter>
         } @else {
           <!-- Empty State when no component selected -->
           <div class="empty-state">

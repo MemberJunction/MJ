@@ -50,7 +50,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
   
   // Tab management
-  public activeTab = 0; // 0 = Run, 1 = Spec, 2 = Code
+  public activeTab = 0; // 0 = Spec, 1 = Code
+  
+  // Splitter state
+  public isDetailsPaneCollapsed = true; // Start with details collapsed
   
   // Editor content
   public editableSpec = ''; // JSON string for spec editor
@@ -212,6 +215,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.componentSpec = this.getComponentSpec(component);
     this.isRunning = true;
     this.currentError = null; // Clear any previous errors
+    this.isDetailsPaneCollapsed = true; // Start with details collapsed
     this.initializeEditors(); // Initialize spec and code editors
     console.log('Running component:', this.getComponentName(component));
     try {
@@ -489,10 +493,12 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           // Update file-loaded component
           (this.selectedComponent as FileLoadedComponent).specification = parsed;
         } else {
-          // Update database component (would need to save to DB)
-          // For now, just update the runtime spec
-          this.componentSpec = parsed;
+          // Update database component's Specification field in memory only
+          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(parsed);
         }
+        
+        // Update the runtime spec
+        this.componentSpec = parsed;
         
         // Update the code editor with new code from spec
         this.editableCode = parsed.code || '// No code available';
@@ -500,9 +506,9 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         // Rebuild code sections from updated spec
         this.buildCodeSections();
         
-        // If component is running, refresh it
+        // If component is running, update it without full refresh
         if (this.isRunning) {
-          this.refreshComponent();
+          this.updateRunningComponent();
         }
         
         this.isEditingSpec = false;
@@ -547,16 +553,20 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         const parsed = ParseJSONRecursive(spec, parseOptions);
         this.editableSpec = JSON.stringify(parsed, null, 2);
         
-        // Update the component
+        // Update the component entity in memory
         if (this.isFileLoadedComponent(this.selectedComponent)) {
           (this.selectedComponent as FileLoadedComponent).specification = spec;
         } else {
-          this.componentSpec = spec;
+          // Update database component's Specification field in memory only
+          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(spec);
         }
         
-        // If component is running, refresh it
+        // Update the runtime spec
+        this.componentSpec = spec;
+        
+        // If component is running, update it without full refresh
         if (this.isRunning) {
-          this.refreshComponent();
+          this.updateRunningComponent();
         }
         
         this.isEditingCode = false;
@@ -567,7 +577,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   }
 
   /**
-   * Refresh the running component with new spec/code
+   * Refresh the running component with new spec/code (full restart)
    */
   public refreshComponent(): void {
     if (this.selectedComponent && this.isRunning) {
@@ -576,6 +586,30 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       setTimeout(() => {
         this.startComponent(this.selectedComponent!);
       }, 100);
+    }
+  }
+
+  /**
+   * Update the running component without full refresh
+   */
+  private updateRunningComponent(): void {
+    if (this.selectedComponent && this.isRunning) {
+      // Get the updated spec
+      const spec = this.getComponentSpec(this.selectedComponent);
+      
+      // Temporarily set to null to force React to re-render
+      this.componentSpec = null;
+      this.cdr.detectChanges();
+      
+      // Then set the new spec
+      setTimeout(() => {
+        this.componentSpec = spec;
+        try {
+          this.cdr.detectChanges();
+        } catch (error) {
+          console.error('Error with cdr.detectChanges():', error);
+        }
+      }, 10);
     }
   }
 
@@ -634,15 +668,22 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   }
 
   /**
+   * Toggle the details pane (spec/code editors)
+   */
+  public toggleDetailsPane(): void {
+    this.isDetailsPaneCollapsed = !this.isDetailsPaneCollapsed;
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Handle tab selection
    */
   public onTabSelect(event: any): void {
     this.activeTab = event.index;
     
     // Initialize editors when switching to spec or code tabs
-    if (event.index === 1 || event.index === 2) {
-      this.initializeEditors();
-    }
+    // Both tabs now need initialization since there's no separate Run tab
+    this.initializeEditors();
   }
 }
 

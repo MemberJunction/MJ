@@ -196,5 +196,115 @@
       "lastModified": "2025-08-14T15:50:24.149Z",
       "checksum": "5ca740463986285889e8bf4bf3af31f6f068eec74342b08b504b5f8c97a5c2c5"
     }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentAnalyticsDashboard",
+      "Namespace": "AI/Agents",
+      "Description": "A comprehensive analytics dashboard for monitoring AI agent executions, performance metrics, hierarchical relationships, and step-by-step analysis with real-time updates and interactive visualizations",
+      "Title": "AI Agent Analytics Dashboard",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-analytics-dashboard.spec.json",
+      "FunctionalRequirements": "Display real-time agent execution status with live updates, show hierarchical agent relationships and sub-agent orchestration, provide step-by-step execution analysis with timing and success metrics, visualize performance metrics including execution time, token usage, and costs",
+      "TechnicalDesign": "Multi-panel dashboard with WebSocket real-time updates, coordinated views across child components, time range filtering, and interactive agent selection"
+    },
+    "primaryKey": {
+      "ID": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T16:00:00.000Z",
+      "checksum": "pending"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentExecutionOverview",
+      "Namespace": "AI/Agents",
+      "Description": "Real-time execution monitor with live status indicators, success rate gauges, and execution velocity metrics",
+      "Title": "AI Agent Execution Overview",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-execution-overview.spec.json",
+      "FunctionalRequirements": "Display real-time agent execution status with animated indicators, success rate circular gauges, execution velocity sparklines, and throughput metrics",
+      "TechnicalDesign": "Live monitoring panel with WebSocket updates, circular progress indicators, sparkline charts, and animated status badges"
+    },
+    "primaryKey": {
+      "ID": "B2C3D4E5-F6A7-8901-BCDE-F23456789012"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T16:00:00.000Z",
+      "checksum": "pending"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentHierarchyTree",
+      "Namespace": "AI/Agents",
+      "Description": "Interactive tree visualization showing agent parent-child relationships, sub-agent orchestration patterns, and execution flow with real-time status indicators",
+      "Title": "AI Agent Hierarchy Tree",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-hierarchy-tree.spec.json",
+      "FunctionalRequirements": "Display hierarchical agent relationships as an interactive tree with expandable nodes, execution counts, success rates per node, and real-time status indicators for active runs",
+      "TechnicalDesign": "SVG-based tree visualization with D3-style layouts, interactive node expansion, color-coded status indicators, and drill-down navigation to agent details"
+    },
+    "primaryKey": {
+      "ID": "C3D4E5F6-A7B8-9012-CDEF-345678901234"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T16:00:00.000Z",
+      "checksum": "pending"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentStepAnalysis",
+      "Namespace": "AI/Agents",
+      "Description": "Detailed step-by-step execution analysis with waterfall charts, step type distribution, execution timelines, and error pattern detection",
+      "Title": "AI Agent Step Analysis",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-step-analysis.spec.json",
+      "FunctionalRequirements": "Display execution waterfall showing step sequence and timing, visualize step type distribution with donut chart, show execution timeline with concurrent steps, identify error patterns and bottlenecks",
+      "TechnicalDesign": "Multi-panel visualization with waterfall chart for execution flow, donut chart for step type distribution, timeline view for concurrent execution patterns, and error analysis section"
+    },
+    "primaryKey": {
+      "ID": "D4E5F6A7-B8C9-0123-DEF0-456789012345"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T16:00:00.000Z",
+      "checksum": "pending"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentPerformanceMetrics",
+      "Namespace": "AI/Agents",
+      "Description": "Comprehensive performance analytics panel showing execution time distributions, token usage analytics, cost breakdown by agent, error analysis, and trend charts",
+      "Title": "AI Agent Performance Metrics",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-performance-metrics.spec.json",
+      "FunctionalRequirements": "Display execution time histograms, token usage over time, cost breakdown pie chart, error pattern analysis, performance trend lines, and SLA compliance metrics",
+      "TechnicalDesign": "Multi-section panel with histogram for execution times, line chart for token trends, pie chart for cost distribution, error heatmap, and metric cards for key performance indicators"
+    },
+    "primaryKey": {
+      "ID": "E5F6A7B8-C9D0-1234-EF01-567890123456"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T16:00:00.000Z",
+      "checksum": "pending"
+    }
   }
 ]

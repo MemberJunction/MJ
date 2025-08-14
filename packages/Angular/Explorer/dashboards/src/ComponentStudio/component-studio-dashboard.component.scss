@@ -54,8 +54,13 @@
     flex: 1;
     background: white;
     display: flex;
-    height: 100%;
+    height: calc(100vh - 100px); // Account for header
     min-height: 0;
+    overflow: hidden;
+    
+    ::ng-deep .k-pane {
+      overflow: auto;
+    }
   }
 
   .components-panel {
@@ -86,6 +91,7 @@
     .components-list {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 16px;
       
       .loading-message,
@@ -321,6 +327,7 @@
     flex-direction: column;
     background: white;
     position: relative;
+    overflow: hidden;
     
     .empty-state {
       flex: 1;
@@ -489,21 +496,83 @@
       height: 100%;
     }
     
-    // Tabbed interface styles
-    .component-tabs {
+    // Component and editor splitter
+    .component-editor-splitter {
+      height: 100%;
+      overflow: hidden;
+      
+      ::ng-deep .k-splitter-bar {
+        background: #dee2e6;
+        
+        &:hover {
+          background: #c8cdd2;
+        }
+      }
+      
+      ::ng-deep .k-pane {
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+    }
+    
+    // Component runtime area
+    .component-runtime {
       height: 100%;
       display: flex;
       flex-direction: column;
+      background: white;
+      position: relative;
+      overflow: auto;
+      
+      .run-empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px;
+        text-align: center;
+        
+        i {
+          color: #10b981;
+          margin-bottom: 24px;
+        }
+        
+        h3 {
+          margin: 0 0 12px 0;
+          font-size: 20px;
+          font-weight: 600;
+          color: #212529;
+        }
+        
+        p {
+          margin: 0 0 24px 0;
+          font-size: 14px;
+          color: #6c757d;
+          max-width: 400px;
+        }
+      }
+    }
+    
+    // Editor tabs on the right
+    .editor-tabs {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       
       ::ng-deep .k-tabstrip-items-wrapper {
         background: #f8f9fa;
         border-bottom: 2px solid #dee2e6;
+        flex-shrink: 0;
       }
       
       ::ng-deep .k-tabstrip-content {
         flex: 1;
         padding: 0;
-        overflow: hidden;
+        overflow: auto;
+        min-height: 0;
       }
       
       ::ng-deep .k-item.k-tabstrip-item {
@@ -520,37 +589,7 @@
       height: 100%;
       display: flex;
       flex-direction: column;
-      
-      &.run-tab {
-        .run-empty-state {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 48px;
-          text-align: center;
-          
-          i {
-            color: #10b981;
-            margin-bottom: 24px;
-          }
-          
-          h3 {
-            margin: 0 0 12px 0;
-            font-size: 20px;
-            font-weight: 600;
-            color: #212529;
-          }
-          
-          p {
-            margin: 0 0 24px 0;
-            font-size: 14px;
-            color: #6c757d;
-            max-width: 400px;
-          }
-        }
-      }
+      overflow: auto;
       
       &.spec-tab, &.code-tab {
         .editor-header {
@@ -595,6 +634,7 @@
       .code-sections {
         flex: 1;
         overflow-y: auto;
+        overflow-x: hidden;
         
         ::ng-deep .k-panelbar-item-header {
           background: #f8f9fa;
