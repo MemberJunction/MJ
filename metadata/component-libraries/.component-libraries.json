@@ -11,10 +11,10 @@
       "Description": "Fast 2KB alternative to Moment.js with the same modern API"
     },
     "primaryKey": {
-      "ID": "4436EE9F-D09E-4ED7-A3FB-76E021166D04"
+      "ID": "C8659859-FEA7-4CBA-B670-85729102213F"
     },
     "sync": {
-      "lastModified": "2025-08-14T14:41:31.881Z",
+      "lastModified": "2025-08-14T15:50:23.869Z",
       "checksum": "e27043fe769305817a3166184f755ca1e4f347233dcce6ad5d34291c4fd1cc7e"
     }
   },
@@ -30,10 +30,10 @@
       "Description": "Enterprise-class UI design language and React components"
     },
     "primaryKey": {
-      "ID": "3BA7719E-7DC1-42DC-8F42-570DC7E8FFE6"
+      "ID": "91591953-DB49-4E61-A81D-4F7755E2FF73"
     },
     "sync": {
-      "lastModified": "2025-08-14T14:41:31.900Z",
+      "lastModified": "2025-08-14T15:50:23.887Z",
       "checksum": "fbe6f965f79fc81eccb19514e02075bc54c136bacc2d443057e25e3ef5e9c0a2"
     }
   },
@@ -49,10 +49,10 @@
       "Description": "Data visualization library for creating custom charts"
     },
     "primaryKey": {
-      "ID": "1FC5E615-5BC3-46B1-B964-0545F9B9F868"
+      "ID": "12416186-FBBD-4973-A7F4-D030FD84994B"
     },
     "sync": {
-      "lastModified": "2025-08-14T14:41:31.918Z",
+      "lastModified": "2025-08-14T15:50:23.905Z",
       "checksum": "a79e3843652ae72576588bb97d799105098b3cc01cbb8b5c93010ee288d13494"
     }
   },
@@ -68,10 +68,10 @@
       "Description": "Simple yet flexible JavaScript charting library"
     },
     "primaryKey": {
-      "ID": "4A6A90DE-91E8-41BA-AD9E-A1DB39368420"
+      "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
     },
     "sync": {
-      "lastModified": "2025-08-14T14:41:31.935Z",
+      "lastModified": "2025-08-14T15:50:23.921Z",
       "checksum": "32b9d07f2dfb5adb9fb88c8b4cae3c6ae31828093060dfed4493c6ca1a41fe27"
     }
   }
