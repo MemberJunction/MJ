@@ -57,7 +57,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
-        ExtraFilter: '',
+        ExtraFilter: 'HasCustomProps = 0', // Only load components without custom props
         OrderBy: 'Name',
         MaxRows: 1000,
         ResultType: 'entity_object'
@@ -82,6 +82,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   private filterComponents(): void {
+    // Note: this.components already filtered to HasCustomProps = 0 in loadData
     if (!this.searchQuery) {
       this.filteredComponents = [...this.components];
     } else {
@@ -105,6 +106,26 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   public runComponent(component: ComponentEntity): void {
+    // If another component is running, stop it first then start the new one
+    if (this.isRunning && this.selectedComponent?.ID !== component.ID) {
+      console.log('Switching from', this.selectedComponent?.Name, 'to', component.Name);
+      // Clear the current component state
+      this.isRunning = false;
+      this.selectedComponent = null;
+      this.componentSpec = null;
+      this.currentError = null;
+      this.cdr.detectChanges();
+      
+      // Small delay to ensure React component cleanup, then start new component
+      setTimeout(() => {
+        this.startComponent(component);
+      }, 100);
+    } else {
+      this.startComponent(component);
+    }
+  }
+
+  private startComponent(component: ComponentEntity): void {
     this.selectedComponent = component;
     this.componentSpec = JSON.parse(component.Specification);
     this.isRunning = true;

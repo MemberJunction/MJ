@@ -2,7 +2,10 @@
   <!-- Header -->
   <div class="dashboard-header">
     <div class="header-content">
-      <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
+      <div>
+        <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
+        <p class="header-subtitle">Testing components without custom properties</p>
+      </div>
       <button kendoButton [icon]="'fa-solid fa-sync'" (click)="refreshData()" [disabled]="isLoading">
         Refresh
       </button>
@@ -36,7 +39,9 @@
             </div>
           } @else if (filteredComponents.length === 0) {
             <div class="empty-message">
-              No components found
+              <i class="fa-solid fa-info-circle"></i> No components found without custom properties.
+              <br>
+              <small>Only components that don't require custom props can be tested here.</small>
             </div>
           } @else {
             @for (component of filteredComponents; track component.ID) {
@@ -111,6 +116,14 @@
                           [themeColor]="'error'"
                           (click)="stopComponent(); $event.stopPropagation()">
                           Stop Component
+                        </button>
+                      } @else if (isRunning && selectedComponent?.ID !== component.ID) {
+                        <button kendoButton 
+                          [icon]="'fa-solid fa-play'" 
+                          [themeColor]="'base'"
+                          title="Stop current component and run this one"
+                          (click)="runComponent(component); $event.stopPropagation()">
+                          Switch to This Component
                         </button>
                       } @else {
                         <button kendoButton 
