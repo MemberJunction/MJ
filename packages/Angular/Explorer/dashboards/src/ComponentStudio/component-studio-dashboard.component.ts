@@ -577,15 +577,12 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   }
 
   /**
-   * Refresh the running component with new spec/code (full restart)
+   * Refresh the running component with new spec/code (in-place update)
    */
   public refreshComponent(): void {
     if (this.selectedComponent && this.isRunning) {
-      // Stop and restart to clear registrations
-      this.stopComponent();
-      setTimeout(() => {
-        this.startComponent(this.selectedComponent!);
-      }, 100);
+      // Use the same in-place update logic as Apply Changes
+      this.updateRunningComponent();
     }
   }
 

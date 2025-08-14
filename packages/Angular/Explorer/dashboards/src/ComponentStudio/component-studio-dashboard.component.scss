@@ -507,10 +507,15 @@
       overflow: hidden;
       
       ::ng-deep .k-splitter-bar {
-        background: #dee2e6;
+        background: #6366f1;  // Same blue as Import button
+        width: 6px;  // Make it slightly wider for visibility
         
         &:hover {
-          background: #c8cdd2;
+          background: #4f52d9;  // Darker blue on hover
+        }
+        
+        .k-resize-handle {
+          background-color: rgba(255, 255, 255, 0.3);
         }
       }
       
@@ -577,8 +582,10 @@
       ::ng-deep .k-tabstrip-content {
         flex: 1;
         padding: 0;
-        overflow: auto;
+        overflow: hidden;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
       }
       
       ::ng-deep .k-item.k-tabstrip-item {
@@ -611,6 +618,7 @@
           background: #f8f9fa;
           border-bottom: 1px solid #dee2e6;
           flex-shrink: 0;
+          min-width: 0;  // Fix width issue
           
           h4 {
             margin: 0;
@@ -620,20 +628,25 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-shrink: 1;  // Allow title to shrink
+            min-width: 0;  // Prevent overflow
             
             i {
               color: #6366f1;
+              flex-shrink: 0;  // Keep icon from shrinking
             }
           }
           
           .editor-actions {
             display: flex;
             gap: 8px;
+            flex-shrink: 0;  // Prevent buttons from shrinking
             
             button {
               min-width: auto;
               padding: 4px 12px;
               font-size: 13px;
+              white-space: nowrap;  // Prevent button text wrapping
             }
           }
         }
@@ -652,9 +665,7 @@
       }
       
       .code-sections {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
+        height: 100%;
         
         ::ng-deep .k-panelbar-item-header {
           background: #f8f9fa;
