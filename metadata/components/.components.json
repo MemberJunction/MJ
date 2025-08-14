@@ -1,7 +1,8 @@
 [
   {
     "fields": {
-      "Name": "Entity Browser",
+      "Name": "EntityBrowser",
+      "Namespace": "Admin/Entities",
       "Description": "A comprehensive multi-panel dashboard component for browsing and exploring entities in a data system. Features a three-panel layout with collapsible filters, main entity list (grid/card view), and sliding details panel.",
       "Title": "Entity Browser",
       "Type": "Dashboard",
@@ -16,8 +17,96 @@
       "ID": "57066C89-06EF-4AB9-927E-4DFC59139F05"
     },
     "sync": {
-      "lastModified": "2025-08-13T20:26:05.789Z",
-      "checksum": "1c85fed463055814db8403c4c895c0d303b2198c2a3ffea8d4bbe843902180ee"
+      "lastModified": "2025-08-13T21:04:33.033Z",
+      "checksum": "a6133b5e7ee01945462adec25736e9fd6a6feb428cb817d80e9eba77c7520517"
+    }
+  },
+  {
+    "fields": {
+      "Name": "EntityDetails",
+      "Namespace": "Admin/Entities",
+      "Description": "Sliding panel that displays detailed information about a selected entity including fields and relationships",
+      "Title": "Entity Details Panel",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/entity-details.spec.json",
+      "FunctionalRequirements": "## Entity Details Requirements\n\n- Slide in from the right when an entity is selected\n- Display entity metadata at the top\n- Show fields in a formatted table\n- Display relationships with icons\n- Include 'Open Record' button\n- Support closing via X button or Escape key\n- Smooth slide animation\n- Scrollable content area",
+      "TechnicalDesign": "## Technical Design\n\n### Props\n- entity: Selected entity object\n- fields: Array of entity fields\n- relationships: Array of entity relationships\n- isOpen: Whether panel is visible\n- onClose: Callback to close panel\n- onOpenRecord: Callback to open entity record\n\n### Layout\n- Fixed position overlay\n- Slide animation using transform\n- Header with entity name and close button\n- Sections for metadata, fields, relationships\n- Sticky 'Open Record' button at bottom"
+    },
+    "primaryKey": {
+      "ID": "60F15B0E-B27E-4384-B26D-0819D54BD60C"
+    },
+    "sync": {
+      "lastModified": "2025-08-13T21:04:33.062Z",
+      "checksum": "2b7fa4f8bc43cfca0fe29f2ea24516df1863e3c559ab8f042e6c503d349efaa0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "EntityList",
+      "Namespace": "Admin/Entities",
+      "Description": "Displays entities in a grid or card layout with sorting capabilities",
+      "Title": "Entity List",
+      "Type": "Table",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/entity-list.spec.json",
+      "FunctionalRequirements": "## Entity List Requirements\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
+      "TechnicalDesign": "## Technical Design\n\n### Props\n- entities: Array of entity objects\n- viewMode: 'grid' | 'card'\n- selectedEntityId: Currently selected entity\n- onSelectEntity: Callback when entity selected\n- sortBy: Current sort field\n- sortDirection: 'asc' | 'desc'\n- onSortChange: Callback for sort changes\n\n### Rendering\n- Grid mode: Compact table with columns\n- Card mode: Cards with entity info\n- Sort indicators in headers\n- Selection highlighting"
+    },
+    "primaryKey": {
+      "ID": "418352BE-2890-4FB6-9BF8-342DE5C20711"
+    },
+    "sync": {
+      "lastModified": "2025-08-13T21:04:33.083Z",
+      "checksum": "d757bb42cfedbb05a72c7bd19898960bb34eae397409f4505c7a5e6174029300"
+    }
+  },
+  {
+    "fields": {
+      "Name": "EntityFilter",
+      "Namespace": "Admin/Entities",
+      "Description": "Collapsible filter panel for filtering entities by various criteria",
+      "Title": "Entity Filter",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/entity-filter.spec.json",
+      "FunctionalRequirements": "## Entity Filter Requirements\n\n- Collapsible panel on the left side\n- Filter by schema name (dropdown)\n- Filter by base table (dropdown)\n- Search box for text search\n- Clear all filters button\n- Show active filter count\n- Smooth collapse/expand animation\n- Remember collapsed state",
+      "TechnicalDesign": "## Technical Design\n\n### Props\n- filters: Current filter values\n- onFilterChange: Callback when filters change\n- schemas: Available schema options\n- tables: Available table options\n- isCollapsed: Whether panel is collapsed\n- onToggleCollapse: Callback to toggle collapse\n\n### Components\n- Collapse toggle button\n- Schema dropdown\n- Table dropdown\n- Search input\n- Clear filters button\n- Active filter badges"
+    },
+    "primaryKey": {
+      "ID": "B91F7B09-15DC-4A30-BDDB-B349E47BBAFC"
+    },
+    "sync": {
+      "lastModified": "2025-08-13T21:04:33.102Z",
+      "checksum": "4a1040be14baa79637c3e001aef65d5533d011513f3d01a26413c5c00cd87341"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIModelBrowser",
+      "Namespace": "AI",
+      "Description": "A comprehensive AI model browser with filtering by developers and inference providers, prompt usage analytics with pie charts, and detailed model specifications",
+      "Title": "AI Model Browser",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-model-browser.spec.json",
+      "FunctionalRequirements": "## AI Model Browser Requirements\n\n### Core Functionality\n- Display AI models in grid or list view with comprehensive information\n- Filter models by Model Type, Status, Model Developer, and Inference Provider\n- View detailed model specifications including context window, token limits, and cost ranking\n- Display all vendors associated with a model (model developers and inference providers)\n- Show prompt run history and usage statistics for selected models\n- Visualize prompt usage with pie charts showing distribution across different prompts\n- Display performance metrics with bar charts showing average execution times\n- Show time series data for model usage over time\n- Support sorting by multiple fields with visual indicators\n- Include search functionality for quick model filtering\n- Provide 'Open' button to trigger OpenEntityRecord callback for detailed editing\n\n### Analytics Features\n- Pie chart visualization of prompt usage distribution\n- Performance bar charts showing average execution times per prompt\n- Time series chart showing model usage trends over last 7 days\n- Summary statistics including total runs, success rates, and token usage\n- Grouped vendor display by type (Model Developer vs Inference Provider)\n\n### UX Considerations\n- Collapsible filter panel with active filter count indicator\n- Sliding details panel for comprehensive model information\n- Inline analytics panel with tabbed views for different visualizations\n- Smooth animations for panel transitions and chart rendering\n- Responsive design adapting to different screen sizes\n- Loading states while fetching data\n- Empty states with helpful messages\n- Visual feedback for hover and selection states\n- Maintain user preferences for view mode and filter state",
+      "TechnicalDesign": "## Component Architecture\n\n### Root Component (AIModelBrowser)\n- Manages overall state and data loading\n- Coordinates between filter, list, details, and analytics components\n- Handles user preferences and saved settings\n- Manages search and sort state\n\n### Child Components\n1. **AIModelList**: Displays models in grid or list view with vendor information\n2. **AIModelDetails**: Sliding panel showing comprehensive model information and vendors\n3. **AIModelFilter**: Collapsible filter panel for model type, status, and vendor filtering\n4. **AIModelAnalytics**: Inline analytics panel with charts and statistics\n\n### Data Flow\n- Root component loads all models and vendor associations\n- Filters are applied at the root level and filtered data passed to list\n- Selection in list triggers detail loading and analytics calculation\n- Analytics component processes prompt runs to generate visualizations\n\n### Chart Implementation\n- Pie charts using SVG for prompt usage distribution\n- Bar charts for performance metrics\n- Time series charts for usage trends\n- All charts are responsive and interactive"
+    },
+    "primaryKey": {
+      "ID": "6FE5B0A0-3C9E-4C00-AF0B-02F8286376C4"
+    },
+    "sync": {
+      "lastModified": "2025-08-13T22:04:23.273Z",
+      "checksum": "28cfb803d234626a3ee3113ed2deaf81c286aae67e6d888f1d58a9888672c624"
     }
   }
 ]
