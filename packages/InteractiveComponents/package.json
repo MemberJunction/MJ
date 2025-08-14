@@ -19,7 +19,6 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.87.0",
-    "@memberjunction/data-context": "2.87.0"
+    "@memberjunction/core": "2.87.0"
   }
 }

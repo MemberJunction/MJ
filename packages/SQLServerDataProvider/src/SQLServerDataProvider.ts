@@ -1108,12 +1108,16 @@ export class SQLServerDataProvider
         const saveViewResults: boolean = params.SaveViewResults;
 
         let topSQL: string = '';
+        // Only use TOP if we're NOT using OFFSET/FETCH pagination
+        const usingPagination = params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0);
+        
         if (params.IgnoreMaxRows === true) {
           // do nothing, leave it blank, this structure is here to make the code easier to read
-        } else if (params.StartRow && params.StartRow > 0) {
-          // do nothing, leave it blank, this structure is here to make the code easier to read
+        } else if (usingPagination) {
+          // When using OFFSET/FETCH, don't add TOP clause
+          // do nothing, leave it blank
         } else if (params.MaxRows && params.MaxRows > 0) {
-          // user provided a max rows, so we use that
+          // user provided a max rows, so we use that (but not using pagination)
           topSQL = 'TOP ' + params.MaxRows;
         } else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
           topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
@@ -1122,7 +1126,8 @@ export class SQLServerDataProvider
         const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
         let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
-        let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
+        // We need countSQL for pagination (to get total count) or when using TOP (to show limited vs total)
+        let countSQL = (usingPagination || (topSQL && topSQL.length > 0)) ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
         let whereSQL: string = '';
         let bHasWhere: boolean = false;
         let userViewRunID: string = '';
@@ -1229,8 +1234,12 @@ export class SQLServerDataProvider
           viewSQL += ` ORDER BY ${orderBy}`;
         }
 
-        if (params.StartRow && params.StartRow > 0 && params.MaxRows && params.MaxRows > 0 && entityInfo.FirstPrimaryKey) {
-          viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+        // Apply pagination using OFFSET/FETCH if both MaxRows and StartRow are specified
+        if (params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0) && entityInfo.FirstPrimaryKey) {
+          // If no ORDER BY was already added, add one based on primary key (required for OFFSET/FETCH)
+          if (!orderBy) {
+            viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+          }
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
@@ -1238,10 +1247,13 @@ export class SQLServerDataProvider
         const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
 
         // finally, if we have a countSQL, we need to run that to get the row count
-        // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
-        // OR do that if we are doing a count_only
+        // Run the count query if:
+        // 1. We're using pagination (always need total count for pagination)
+        // 2. ResultType is 'count_only'
+        // 3. The number of returned rows equals the max limit (might be more rows available)
         let rowCount = null;
-        if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
+        const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
+        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
@@ -1993,7 +2005,18 @@ export class SQLServerDataProvider
    * @returns Object with fullSQL and simpleSQL properties
    */
   private GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): { fullSQL: string; simpleSQL: string } {
-    const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
+    // Generate the stored procedure parameters - now returns an object with structured SQL
+    const spParams = this.generateSPParams(entity, !bNewRecord);
+    
+    // Build the simple SQL - use the new DECLARE/SET/EXEC pattern
+    let sSimpleSQL: string;
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
+    if (spParams.variablesSQL) {
+      sSimpleSQL = `${spParams.variablesSQL}\n\n${spParams.setSQL}\n\n${execSQL}`;
+    } else {
+      sSimpleSQL = execSQL;
+    }
+    
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
     let sSQL: string = '';
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
@@ -2014,29 +2037,35 @@ export class SQLServerDataProvider
         sSQL = sSimpleSQL; 
       }
       else {
+        // For complex case with record change tracking, we need to insert DECLARE statements at the top
+        const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
         sSQL = `
-                      DECLARE @ResultTable TABLE (
-                          ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                      );
+                    ${spParams.variablesSQL}
+                    
+                    DECLARE @ResultTable TABLE (
+                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                    );
 
-                      INSERT INTO @ResultTable
-                      ${sSimpleSQL};
+                    ${spParams.setSQL}
 
-                      DECLARE @ID NVARCHAR(MAX);
-                      
-                      SELECT @ID = ${concatPKIDString} FROM @ResultTable;
-                      
-                      IF @ID IS NOT NULL
-                      BEGIN
-                          DECLARE @ResultChangesTable TABLE (
-                              ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                          );
+                    INSERT INTO @ResultTable
+                    ${execSQL};
 
-                          INSERT INTO @ResultChangesTable
-                          ${logRecordChangeSQL};
-                      END;
+                    DECLARE @ID NVARCHAR(MAX);
+                    
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                    
+                    IF @ID IS NOT NULL
+                    BEGIN
+                        DECLARE @ResultChangesTable TABLE (
+                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                        );
 
-                      SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                        INSERT INTO @ResultChangesTable
+                        ${logRecordChangeSQL};
+                    END;
+
+                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
       }
     } else {
       // not doing track changes for this entity, keep it simple
@@ -2369,9 +2398,16 @@ export class SQLServerDataProvider
     return sRet;
   }
 
-  private generateSPParams(entity: BaseEntity, isUpdate: boolean): string {
-    let sRet: string = '',
-      bFirst: boolean = true;
+  private generateSPParams(entity: BaseEntity, isUpdate: boolean): { variablesSQL: string; setSQL: string; execParams: string; simpleParams: string } {
+    // Generate a unique suffix for variable names to avoid collisions in batch scripts
+    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    
+    const declarations: string[] = [];
+    const setStatements: string[] = [];
+    const execParams: string[] = [];
+    let simpleParams: string = '';
+    let bFirst: boolean = true;
+    
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
       // For CREATE operations, include primary keys that are not auto-increment and have actual values
@@ -2405,23 +2441,109 @@ export class SQLServerDataProvider
             }
           }
 
-          // if we get here, we have a value that we need to include in the SP call
-          sRet += this.generateSingleSPParam(f, value, bFirst);
+          // Generate variable name with unique suffix
+          const varName = `@${f.CodeName}${uniqueSuffix}`;
+          
+          // Add declaration with proper SQL type using existing SQLFullType property
+          declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+          
+          // Add SET statement if value is not null (SQL variables default to NULL)
+          if (value !== null && value !== undefined) {
+            const setValueSQL = this.generateSetStatementValue(f, value);
+            setStatements.push(`SET ${varName} = ${setValueSQL}`);
+          }
+          
+          // Add to EXEC parameters
+          execParams.push(`@${f.CodeName}=${varName}`);
+          
+          // Also build the old-style simple params for backward compatibility
+          simpleParams += this.generateSingleSPParam(f, value, bFirst);
           bFirst = false;
         }
       }
     }
-    if (isUpdate && bFirst === false) {
+    if (isUpdate && execParams.length > 0) {
       // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call
       for (const pkey of entity.PrimaryKey.KeyValuePairs) {
         const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === pkey.FieldName.trim().toLowerCase());
+        const varName = `@${f.CodeName}${uniqueSuffix}`;
+        
+        // Add declaration using existing SQLFullType property
+        declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+        
+        // Add SET statement
+        const setValueSQL = this.generateSetStatementValue(f, pkey.Value);
+        setStatements.push(`SET ${varName} = ${setValueSQL}`);
+        
+        // Add to EXEC parameters
+        execParams.push(`@${f.CodeName}=${varName}`);
+        
+        // Also add to simple params
         const pkeyQuotes = f.NeedsQuotes ? "'" : '';
-        sRet += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
+        simpleParams += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
       }
       bFirst = false;
     }
 
-    return sRet;
+    // Return the structured result with all components
+    return {
+      variablesSQL: declarations.length > 0 ? `DECLARE ${declarations.join(',\n        ')}` : '',
+      setSQL: setStatements.join('\n'),
+      execParams: execParams.join(',\n                '),
+      simpleParams: simpleParams
+    };
+  }
+
+  /**
+   * Generates the value portion of a SET statement for a field
+   * @param f The field info
+   * @param value The value to set
+   * @returns SQL value string
+   */
+  private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
+    let val: any = value;
+    
+    switch (f.TSType) {
+      case EntityFieldTSType.Boolean:
+        // check to see if the value is a string and if it is equal to true, if so, set the value to 1
+        if (typeof value === 'string' && value.trim().toLowerCase() === 'true') val = 1;
+        else if (typeof value === 'string' && value.trim().toLowerCase() === 'false') val = 0;
+        else val = value ? 1 : 0;
+        return val.toString();
+        
+      case EntityFieldTSType.String:
+        // Handle string escaping for SET statements
+        if (typeof val === 'string') {
+          val = val.replace(/'/g, "''");
+        }
+        return `${f.UnicodePrefix}'${val}'`;
+        
+      case EntityFieldTSType.Date:
+        if (val !== null && val !== undefined) {
+          if (typeof val === 'number') {
+            // we have a timestamp - milliseconds since Unix Epoch
+            val = new Date(val);
+          } else if (typeof val === 'string') {
+            // we have a string, attempt to convert it to a date object
+            val = new Date(val);
+          }
+          val = val.toISOString(); // convert the date to ISO format for storage in the DB
+        }
+        return `'${val}'`;
+        
+      case EntityFieldTSType.Number:
+        return val.toString();
+        
+      default:
+        // For other types, convert to string and quote if needed
+        if (f.NeedsQuotes) {
+          if (typeof val === 'string') {
+            val = val.replace(/'/g, "''");
+          }
+          return `${f.UnicodePrefix}'${val}'`;
+        }
+        return val.toString();
+    }
   }
 
   private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean): string {
