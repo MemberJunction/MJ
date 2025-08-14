@@ -1,6 +1,7 @@
 import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 export interface LintResult {
   success: boolean;
@@ -30,7 +31,7 @@ export interface FixSuggestion {
 interface Rule {
   name: string;
   appliesTo: 'all' | 'child' | 'root';
-  test: (ast: t.File, componentName: string) => Violation[];
+  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => Violation[];
 }
 
 // Helper function
@@ -45,7 +46,7 @@ export class ComponentLinter {
     {
       name: 'full-state-ownership',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const controlledStateProps: string[] = [];
         const initializationProps: string[] = [];
@@ -218,7 +219,7 @@ export class ComponentLinter {
     {
       name: 'no-use-reducer',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -252,7 +253,7 @@ export class ComponentLinter {
     {
       name: 'no-data-prop',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -309,7 +310,7 @@ export class ComponentLinter {
     {
       name: 'saved-user-settings-pattern',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         // Check for improper onSaveUserSettings usage
@@ -354,16 +355,50 @@ export class ComponentLinter {
     {
       name: 'pass-standard-props',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const requiredProps = ['styles', 'utilities', 'components'];
         
+        // Build a set of our component names from componentSpec dependencies
+        const ourComponentNames = new Set<string>();
+        
+        // Add components from dependencies array
+        if (componentSpec?.dependencies) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep.name) {
+              ourComponentNames.add(dep.name);
+            }
+          }
+        }
+        
+        // Also find components destructured from the components prop in the code
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Look for: const { ComponentA, ComponentB } = components;
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) && 
+                path.node.init.name === 'components') {
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  ourComponentNames.add(prop.key.name);
+                }
+                // Also handle renaming: { ComponentA: RenamedComponent }
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.value)) {
+                  ourComponentNames.add(prop.value.name);
+                }
+              }
+            }
+          }
+        });
+        
+        // Now check only our components for standard props
         traverse(ast, {
           JSXElement(path: NodePath<t.JSXElement>) {
             const openingElement = path.node.openingElement;
             
-            // Check if this looks like a component (capitalized name)
-            if (t.isJSXIdentifier(openingElement.name) && /^[A-Z]/.test(openingElement.name.name)) {
+            // Only check if it's one of our components
+            if (t.isJSXIdentifier(openingElement.name) && 
+                ourComponentNames.has(openingElement.name.name)) {
               const componentBeingCalled = openingElement.name.name;
               const passedProps = new Set<string>();
               
@@ -377,14 +412,13 @@ export class ComponentLinter {
               // Check if required props are missing
               const missingProps = requiredProps.filter(prop => !passedProps.has(prop));
               
-              if (missingProps.length > 0 && passedProps.size > 0) {
-                // Only report if some props are passed (to avoid false positives on non-component JSX)
+              if (missingProps.length > 0) {
                 violations.push({
                   rule: 'pass-standard-props',
                   severity: 'critical',
                   line: openingElement.loc?.start.line || 0,
                   column: openingElement.loc?.start.column || 0,
-                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All components must receive styles, utilities, and components props.`,
+                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All child components must receive styles, utilities, and components props.`,
                   code: `<${componentBeingCalled} ... />`
                 });
               }
@@ -399,7 +433,7 @@ export class ComponentLinter {
     {
       name: 'no-child-implementation',
       appliesTo: 'root',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const rootFunctionName = componentName;
         const declaredFunctions: string[] = [];
@@ -436,7 +470,7 @@ export class ComponentLinter {
     {
       name: 'undefined-component-usage',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const componentsFromProps = new Set<string>();
         const componentsUsedInJSX = new Set<string>();
@@ -518,7 +552,7 @@ export class ComponentLinter {
     {
       name: 'unsafe-array-access',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -555,7 +589,7 @@ export class ComponentLinter {
     {
       name: 'array-reduce-safety',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -751,7 +785,7 @@ export class ComponentLinter {
     {
       name: 'property-name-consistency',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const dataTransformations = new Map<string, { originalProps: Set<string>, transformedProps: Set<string>, location: { line: number, column: number } }>();
         const propertyAccesses = new Map<string, Set<string>>(); // variable -> accessed properties
@@ -888,7 +922,7 @@ export class ComponentLinter {
     {
       name: 'noisy-settings-updates',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -930,7 +964,7 @@ export class ComponentLinter {
     {
       name: 'prop-state-sync',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -972,7 +1006,7 @@ export class ComponentLinter {
     {
       name: 'performance-memoization',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const memoizedValues = new Set<string>();
         
@@ -1059,7 +1093,7 @@ export class ComponentLinter {
     {
       name: 'child-state-management',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -1103,7 +1137,7 @@ export class ComponentLinter {
     {
       name: 'server-reload-on-client-operation',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         traverse(ast, {
@@ -1142,7 +1176,7 @@ export class ComponentLinter {
     {
       name: 'runview-runquery-valid-properties',
       appliesTo: 'all',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
         // Valid properties for RunView/RunViews
@@ -1281,7 +1315,7 @@ export class ComponentLinter {
     {
       name: 'root-component-props-restriction',
       appliesTo: 'root',
-      test: (ast: t.File, componentName: string) => {
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
         
@@ -1365,7 +1399,7 @@ export class ComponentLinter {
   public static async lintComponent(
     code: string,
     componentName: string,
-    componentSpec?: any,
+    componentSpec?: ComponentSpec,
     isRootComponent?: boolean
   ): Promise<LintResult> {
     try {
@@ -1391,7 +1425,7 @@ export class ComponentLinter {
       
       // Run each rule
       for (const rule of rules) {
-        const ruleViolations = rule.test(ast, componentName);
+        const ruleViolations = rule.test(ast, componentName, componentSpec);
         violations.push(...ruleViolations);
       }
       
@@ -1438,7 +1472,7 @@ export class ComponentLinter {
     }
   }
   
-  private static validateDataRequirements(ast: t.File, componentSpec: any): Violation[] {
+  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
     
     // Extract entity names from dataRequirements
