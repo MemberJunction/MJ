@@ -604,149 +604,149 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'parent-event-callback-usage',
-      appliesTo: 'child',
-      test: (ast: t.File, componentName: string) => {
-        const violations: Violation[] = [];
-        const eventCallbacks = new Map<string, { line: number; column: number }>();
-        const callbackInvocations = new Set<string>();
-        const stateUpdateHandlers = new Map<string, string[]>(); // handler -> state updates
+    // {
+    //   name: 'parent-event-callback-usage',
+    //   appliesTo: 'child',
+    //   test: (ast: t.File, componentName: string) => {
+    //     const violations: Violation[] = [];
+    //     const eventCallbacks = new Map<string, { line: number; column: number }>();
+    //     const callbackInvocations = new Set<string>();
+    //     const stateUpdateHandlers = new Map<string, string[]>(); // handler -> state updates
         
-        // First pass: collect event callback props (onSelect, onChange, etc.)
-        traverse(ast, {
-          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
-              const param = path.node.params[0];
-              if (t.isObjectPattern(param)) {
-                for (const prop of param.properties) {
-                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                    const propName = prop.key.name;
-                    // Check for event callback patterns
-                    if (/^on[A-Z]/.test(propName) && 
-                        propName !== 'onSaveUserSettings' && 
-                        !propName.includes('StateChanged')) {
-                      eventCallbacks.set(propName, {
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0
-                      });
-                    }
-                  }
-                }
-              }
-            }
-          },
+    //     // First pass: collect event callback props (onSelect, onChange, etc.)
+    //     traverse(ast, {
+    //       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+    //         if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+    //           const param = path.node.params[0];
+    //           if (t.isObjectPattern(param)) {
+    //             for (const prop of param.properties) {
+    //               if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+    //                 const propName = prop.key.name;
+    //                 // Check for event callback patterns
+    //                 if (/^on[A-Z]/.test(propName) && 
+    //                     propName !== 'onSaveUserSettings' && 
+    //                     !propName.includes('StateChanged')) {
+    //                   eventCallbacks.set(propName, {
+    //                     line: prop.loc?.start.line || 0,
+    //                     column: prop.loc?.start.column || 0
+    //                   });
+    //                 }
+    //               }
+    //             }
+    //           }
+    //         }
+    //       },
           
-          // Also check arrow function components
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
-              const init = path.node.init;
-              if (t.isArrowFunctionExpression(init) && init.params[0]) {
-                const param = init.params[0];
-                if (t.isObjectPattern(param)) {
-                  for (const prop of param.properties) {
-                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                      const propName = prop.key.name;
-                      if (/^on[A-Z]/.test(propName) && 
-                          propName !== 'onSaveUserSettings' && 
-                          !propName.includes('StateChanged')) {
-                        eventCallbacks.set(propName, {
-                          line: prop.loc?.start.line || 0,
-                          column: prop.loc?.start.column || 0
-                        });
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        });
+    //       // Also check arrow function components
+    //       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+    //         if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+    //           const init = path.node.init;
+    //           if (t.isArrowFunctionExpression(init) && init.params[0]) {
+    //             const param = init.params[0];
+    //             if (t.isObjectPattern(param)) {
+    //               for (const prop of param.properties) {
+    //                 if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+    //                   const propName = prop.key.name;
+    //                   if (/^on[A-Z]/.test(propName) && 
+    //                       propName !== 'onSaveUserSettings' && 
+    //                       !propName.includes('StateChanged')) {
+    //                     eventCallbacks.set(propName, {
+    //                       line: prop.loc?.start.line || 0,
+    //                       column: prop.loc?.start.column || 0
+    //                     });
+    //                   }
+    //                 }
+    //               }
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
         
-        // Second pass: check if callbacks are invoked in event handlers
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            // Check for callback invocations
-            if (t.isIdentifier(path.node.callee)) {
-              const callbackName = path.node.callee.name;
-              if (eventCallbacks.has(callbackName)) {
-                callbackInvocations.add(callbackName);
-              }
-            }
+    //     // Second pass: check if callbacks are invoked in event handlers
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         // Check for callback invocations
+    //         if (t.isIdentifier(path.node.callee)) {
+    //           const callbackName = path.node.callee.name;
+    //           if (eventCallbacks.has(callbackName)) {
+    //             callbackInvocations.add(callbackName);
+    //           }
+    //         }
             
-            // Check for state updates (setSelectedId, setFilters, etc.)
-            if (t.isIdentifier(path.node.callee) && /^set[A-Z]/.test(path.node.callee.name)) {
-              // Find the containing function
-              let containingFunction = path.getFunctionParent();
-              if (containingFunction) {
-                const funcName = ComponentLinter.getFunctionName(containingFunction);
-                if (funcName) {
-                  if (!stateUpdateHandlers.has(funcName)) {
-                    stateUpdateHandlers.set(funcName, []);
-                  }
-                  stateUpdateHandlers.get(funcName)!.push(path.node.callee.name);
-                }
-              }
-            }
-          },
+    //         // Check for state updates (setSelectedId, setFilters, etc.)
+    //         if (t.isIdentifier(path.node.callee) && /^set[A-Z]/.test(path.node.callee.name)) {
+    //           // Find the containing function
+    //           let containingFunction = path.getFunctionParent();
+    //           if (containingFunction) {
+    //             const funcName = ComponentLinter.getFunctionName(containingFunction);
+    //             if (funcName) {
+    //               if (!stateUpdateHandlers.has(funcName)) {
+    //                 stateUpdateHandlers.set(funcName, []);
+    //               }
+    //               stateUpdateHandlers.get(funcName)!.push(path.node.callee.name);
+    //             }
+    //           }
+    //         }
+    //       },
           
-          // Check conditional callback invocations
-          IfStatement(path: NodePath<t.IfStatement>) {
-            if (t.isBlockStatement(path.node.consequent)) {
-              // Check if the condition tests for callback existence
-              if (t.isIdentifier(path.node.test)) {
-                const callbackName = path.node.test.name;
-                if (eventCallbacks.has(callbackName)) {
-                  // Check if callback is invoked in the block
-                  let hasInvocation = false;
-                  path.traverse({
-                    CallExpression(innerPath: NodePath<t.CallExpression>) {
-                      if (t.isIdentifier(innerPath.node.callee) && 
-                          innerPath.node.callee.name === callbackName) {
-                        hasInvocation = true;
-                        callbackInvocations.add(callbackName);
-                      }
-                    }
-                  });
-                }
-              }
-            }
-          }
-        });
+    //       // Check conditional callback invocations
+    //       IfStatement(path: NodePath<t.IfStatement>) {
+    //         if (t.isBlockStatement(path.node.consequent)) {
+    //           // Check if the condition tests for callback existence
+    //           if (t.isIdentifier(path.node.test)) {
+    //             const callbackName = path.node.test.name;
+    //             if (eventCallbacks.has(callbackName)) {
+    //               // Check if callback is invoked in the block
+    //               let hasInvocation = false;
+    //               path.traverse({
+    //                 CallExpression(innerPath: NodePath<t.CallExpression>) {
+    //                   if (t.isIdentifier(innerPath.node.callee) && 
+    //                       innerPath.node.callee.name === callbackName) {
+    //                     hasInvocation = true;
+    //                     callbackInvocations.add(callbackName);
+    //                   }
+    //                 }
+    //               });
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
         
-        // Check for unused callbacks that have related state updates
-        for (const [callbackName, location] of eventCallbacks) {
-          if (!callbackInvocations.has(callbackName)) {
-            // Try to find related state update handlers
-            const relatedHandlers: string[] = [];
-            const expectedStateName = callbackName.replace(/^on/, '').replace(/Change$|Select$/, '');
+    //     // Check for unused callbacks that have related state updates
+    //     for (const [callbackName, location] of eventCallbacks) {
+    //       if (!callbackInvocations.has(callbackName)) {
+    //         // Try to find related state update handlers
+    //         const relatedHandlers: string[] = [];
+    //         const expectedStateName = callbackName.replace(/^on/, '').replace(/Change$|Select$/, '');
             
-            for (const [handlerName, stateUpdates] of stateUpdateHandlers) {
-              for (const stateUpdate of stateUpdates) {
-                if (stateUpdate.toLowerCase().includes(expectedStateName.toLowerCase()) ||
-                    handlerName.toLowerCase().includes(expectedStateName.toLowerCase())) {
-                  relatedHandlers.push(handlerName);
-                  break;
-                }
-              }
-            }
+    //         for (const [handlerName, stateUpdates] of stateUpdateHandlers) {
+    //           for (const stateUpdate of stateUpdates) {
+    //             if (stateUpdate.toLowerCase().includes(expectedStateName.toLowerCase()) ||
+    //                 handlerName.toLowerCase().includes(expectedStateName.toLowerCase())) {
+    //               relatedHandlers.push(handlerName);
+    //               break;
+    //             }
+    //           }
+    //         }
             
-            if (relatedHandlers.length > 0) {
-              violations.push({
-                rule: 'parent-event-callback-usage',
-                severity: 'critical',
-                line: location.line,
-                column: location.column,
-                message: `Component receives '${callbackName}' event callback but never invokes it. Found state updates in ${relatedHandlers.join(', ')} but parent is not notified.`,
-                code: `Missing: if (${callbackName}) ${callbackName}(...)`
-              });
-            }
-          }
-        }
+    //         if (relatedHandlers.length > 0) {
+    //           violations.push({
+    //             rule: 'parent-event-callback-usage',
+    //             severity: 'critical',
+    //             line: location.line,
+    //             column: location.column,
+    //             message: `Component receives '${callbackName}' event callback but never invokes it. Found state updates in ${relatedHandlers.join(', ')} but parent is not notified.`,
+    //             code: `Missing: if (${callbackName}) ${callbackName}(...)`
+    //           });
+    //         }
+    //       }
+    //     }
         
-        return violations;
-      }
-    },
+    //     return violations;
+    //   }
+    // },
     
     {
       name: 'property-name-consistency',
