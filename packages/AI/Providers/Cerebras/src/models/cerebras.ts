@@ -55,27 +55,23 @@ export class CerebrasLLM extends BaseLLM {
     protected setCerebrasParamsEffortLevel(cerebrasParams: Chat.ChatCompletionCreateParams, params: ChatParams): void {
         let convertedEffortLevel = params.effortLevel;
         if (convertedEffortLevel) {
-            const isGptOSSModel = params.model.toLowerCase().includes("gpt-oss");
             const numericEffortLevel = Number.isNaN(params.effortLevel) ? null : Number.parseInt(params.effortLevel);
-            
-            if (isGptOSSModel) {
-                // Map our effort levels as follows:
-                // 0-33 = "low"
-                // 34-66 = "medium"
-                // 67-100 = "high"
-                if (numericEffortLevel !== null) {
-                    if (numericEffortLevel >= 0 && numericEffortLevel <= 33) {
-                        convertedEffortLevel = "low";
-                    } else if (numericEffortLevel > 33 && numericEffortLevel <= 66) {
-                        convertedEffortLevel = "medium";
-                    } else if (numericEffortLevel > 66 && numericEffortLevel <= 100) {
-                        convertedEffortLevel = "high";
-                    }
+            // Map our effort levels as follows:
+            // 0-33 = "low"
+            // 34-66 = "medium"
+            // 67-100 = "high"
+            if (numericEffortLevel !== null) {
+                if (numericEffortLevel >= 0 && numericEffortLevel <= 33) {
+                    convertedEffortLevel = "low";
+                } else if (numericEffortLevel > 33 && numericEffortLevel <= 66) {
+                    convertedEffortLevel = "medium";
+                } else if (numericEffortLevel > 66 && numericEffortLevel <= 100) {
+                    convertedEffortLevel = "high";
                 }
-                
-                // Only set reasoning_effort for GPT OSS models
-                cerebrasParams.reasoning_effort = convertedEffortLevel as "low" | "medium" | "high";
             }
+            
+            // Only set reasoning_effort for GPT OSS models
+            cerebrasParams.reasoning_effort = convertedEffortLevel as "low" | "medium" | "high";
         }
     }
 
