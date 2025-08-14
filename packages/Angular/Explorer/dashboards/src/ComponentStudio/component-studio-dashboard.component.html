@@ -6,9 +6,16 @@
         <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
         <p class="header-subtitle">Testing components without custom properties</p>
       </div>
-      <button kendoButton (click)="refreshData()" [disabled]="isLoading">
-        <span class="fa-solid fa-sync"></span> Refresh
-      </button>
+      <div class="header-buttons">
+        <button kendoButton (click)="triggerFileInput()" [themeColor]="'info'">
+          <span class="fa-solid fa-file-import"></span> Import from File
+        </button>
+        <button kendoButton (click)="refreshData()" [disabled]="isLoading">
+          <span class="fa-solid fa-sync"></span> Refresh
+        </button>
+      </div>
+      <!-- Hidden file input -->
+      <input #fileInput type="file" accept=".json" (change)="handleFileSelect($event)" style="display: none;" />
     </div>
   </div>
 
@@ -44,22 +51,32 @@
               <small>Only components that don't require custom props can be tested here.</small>
             </div>
           } @else {
-            @for (component of filteredComponents; track component.ID) {
+            @for (component of filteredComponents; track getComponentId(component)) {
               <div class="component-card" 
-                [class.expanded]="expandedComponent?.ID === component.ID"
-                [class.running]="selectedComponent?.ID === component.ID && isRunning">
+                [class.expanded]="expandedComponent && getComponentId(expandedComponent) === getComponentId(component)"
+                [class.running]="selectedComponent && getComponentId(selectedComponent) === getComponentId(component) && isRunning"
+                [class.file-loaded]="isFileLoadedComponent(component)">
                 
                 <!-- Card Header - Always visible -->
                 <div class="card-header" (click)="toggleComponentExpansion(component)">
-                  <div class="card-icon" [style.color]="getComponentTypeColor(component.Type)">
-                    <i class="fa-solid" [ngClass]="getComponentTypeIcon(component.Type)"></i>
+                  <div class="card-icon" [style.color]="getComponentTypeColor(getComponentType(component))">
+                    <i class="fa-solid" [ngClass]="getComponentTypeIcon(getComponentType(component))"></i>
                   </div>
                   <div class="card-info">
-                    <div class="card-name">{{ component.Name }}</div>
+                    <div class="card-name">
+                      {{ getComponentName(component) }}
+                      @if (isFileLoadedComponent(component)) {
+                        <span class="file-badge" title="Loaded from {{ getComponentFilename(component) }}">
+                          <i class="fa-solid fa-file"></i> {{ getComponentFilename(component) }}
+                        </span>
+                      }
+                    </div>
                     <div class="card-meta">
-                      <span class="card-type">{{ component.Type || 'Component' }}</span>
-                      <span class="card-version">v{{ component.Version || '1.0.0' }}</span>
-                      @if (component.Status === 'Published') {
+                      <span class="card-type">{{ getComponentType(component) || 'Component' }}</span>
+                      <span class="card-version">v{{ getComponentVersion(component) }}</span>
+                      @if (isFileLoadedComponent(component)) {
+                        <span class="status-badge file">File</span>
+                      } @else if (getComponentStatus(component) === 'Published') {
                         <span class="status-badge published">Published</span>
                       } @else {
                         <span class="status-badge draft">Draft</span>
@@ -67,7 +84,7 @@
                     </div>
                   </div>
                   <div class="card-chevron">
-                    @if (expandedComponent?.ID === component.ID) {
+                    @if (expandedComponent && getComponentId(expandedComponent) === getComponentId(component)) {
                       <i class="fa-solid fa-chevron-up"></i>
                     } @else {
                       <i class="fa-solid fa-chevron-down"></i>
@@ -76,12 +93,12 @@
                 </div>
                 
                 <!-- Card Details - Only visible when expanded -->
-                @if (expandedComponent?.ID === component.ID) {
+                @if (expandedComponent && getComponentId(expandedComponent) === getComponentId(component)) {
                   <div class="card-details">
-                    @if (component.Description) {
+                    @if (getComponentDescription(component)) {
                       <div class="detail-section">
                         <label>Description</label>
-                        <p>{{ component.Description }}</p>
+                        <p>{{ getComponentDescription(component) }}</p>
                       </div>
                     }
                     
@@ -90,33 +107,38 @@
                       <div class="info-grid">
                         <div class="info-item">
                           <span class="info-label">Type:</span>
-                          <span class="info-value">{{ component.Type || 'Unknown' }}</span>
+                          <span class="info-value">{{ getComponentType(component) || 'Unknown' }}</span>
                         </div>
                         <div class="info-item">
                           <span class="info-label">Version:</span>
-                          <span class="info-value">{{ component.Version || '1.0.0' }}</span>
+                          <span class="info-value">{{ getComponentVersion(component) }}</span>
                         </div>
                         <div class="info-item">
                           <span class="info-label">Status:</span>
-                          <span class="info-value">{{ component.Status || 'Draft' }}</span>
+                          <span class="info-value">{{ getComponentStatus(component) || 'Draft' }}</span>
                         </div>
-                        @if (component.__mj_UpdatedAt) {
+                        @if (isFileLoadedComponent(component)) {
+                          <div class="info-item">
+                            <span class="info-label">Loaded:</span>
+                            <span class="info-value">{{ getComponentLoadedAt(component) | date:'short' }}</span>
+                          </div>
+                        } @else if (!isFileLoadedComponent(component) && getComponentUpdatedAt(component)) {
                           <div class="info-item">
                             <span class="info-label">Updated:</span>
-                            <span class="info-value">{{ component.__mj_UpdatedAt | date:'short' }}</span>
+                            <span class="info-value">{{ getComponentUpdatedAt(component) | date:'short' }}</span>
                           </div>
                         }
                       </div>
                     </div>
                     
                     <div class="card-actions">
-                      @if (selectedComponent?.ID === component.ID && isRunning) {
+                      @if (selectedComponent && getComponentId(selectedComponent) === getComponentId(component) && isRunning) {
                         <button kendoButton 
                           [themeColor]="'error'"
                           (click)="stopComponent(); $event.stopPropagation()">
                           <span class="fa-solid fa-stop"></span> Stop Component
                         </button>
-                      } @else if (isRunning && selectedComponent?.ID !== component.ID) {
+                      } @else if (isRunning && selectedComponent && getComponentId(selectedComponent) !== getComponentId(component)) {
                         <button kendoButton 
                           [themeColor]="'base'"
                           title="Stop current component and run this one"
