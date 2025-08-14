@@ -251,7 +251,7 @@
             </kendo-splitter-pane>
             
             <!-- Right side - Spec and Code Editors -->
-            <kendo-splitter-pane [min]="'400px'" [collapsible]="true" [collapsed]="isDetailsPaneCollapsed" [size]="'50%'">
+            <kendo-splitter-pane [min]="'400px'" [collapsible]="true" [collapsed]="isDetailsPaneCollapsed">
               <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
                 <!-- Spec Tab -->
                 <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
