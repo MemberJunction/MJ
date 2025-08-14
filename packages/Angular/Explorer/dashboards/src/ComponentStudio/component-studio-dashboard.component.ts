@@ -108,19 +108,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public runComponent(component: ComponentEntity): void {
     // If another component is running, stop it first then start the new one
     if (this.isRunning && this.selectedComponent?.ID !== component.ID) {
-      console.log('Switching from', this.selectedComponent?.Name, 'to', component.Name);
-      // Clear the current component state
-      this.isRunning = false;
-      this.selectedComponent = null;
-      this.componentSpec = null;
-      this.currentError = null;
-      this.cdr.detectChanges();
-      
-      // Small delay to ensure React component cleanup, then start new component
-      setTimeout(() => {
-        this.startComponent(component);
-      }, 100);
-    } else {
+      this.stopComponent();
+      this.startComponent(component);
+    } 
+    else {
       this.startComponent(component);
     }
   }
@@ -131,7 +122,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.isRunning = true;
     this.currentError = null; // Clear any previous errors
     console.log('Running component:', component.Name);
-    this.cdr.detectChanges();
+    try {
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error with cdr.detectChanges():', error);
+    }
   }
 
   public stopComponent(): void {
@@ -139,7 +134,12 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.selectedComponent = null;
     this.componentSpec = null;
     this.currentError = null;
-    this.cdr.detectChanges();
+    try {
+      this.cdr.detectChanges();
+    }
+    catch (error) {
+      console.error('Error with cdr.detectChanges():', error);
+    }
   }
 
   /**
