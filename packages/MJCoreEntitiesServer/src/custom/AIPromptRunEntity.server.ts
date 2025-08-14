@@ -180,7 +180,7 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
             let descendantCost = 0;
             
             // Get all child runs
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const childRuns = await rv.RunView({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `ParentID = '${this.ID}'`,
