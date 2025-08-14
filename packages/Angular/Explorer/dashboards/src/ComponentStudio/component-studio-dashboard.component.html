@@ -162,71 +162,169 @@
       </div>
     </kendo-splitter-pane>
 
-    <!-- Right Panel - Component Display -->
+    <!-- Right Panel - Tabbed Component Display -->
     <kendo-splitter-pane [min]="'400px'">
       <div class="component-display">
-        @if (isRunning && selectedComponent && componentSpec) {
-          @if (currentError) {
-            <!-- Error Display -->
-            <div class="error-display">
-              <div class="error-container">
-                <div class="error-header">
-                  <i class="fa-solid fa-exclamation-triangle"></i>
-                  <h3>Component Error</h3>
-                  <button class="copy-button" (click)="copyErrorToClipboard()" title="Copy error details">
-                    <i class="fa-solid fa-copy"></i>
-                  </button>
-                </div>
-                
-                <p class="error-intro">
-                  The component could not be rendered due to the following error:
-                </p>
-                
-                <div class="error-details">
-                  <strong>Error Type:</strong> {{ currentError.type }}<br>
-                  <strong>Message:</strong> {{ currentError.message }}
-                  @if (currentError.technicalDetails) {
-                    <details class="technical-details">
-                      <summary>Technical Details (click to expand)</summary>
-                      <pre>{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
-                    </details>
+        @if (selectedComponent) {
+          <!-- Tabbed Interface -->
+          <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="component-tabs">
+            <!-- Run Tab -->
+            <kendo-tabstrip-tab [title]="'Run'" [selected]="activeTab === 0">
+              <ng-template kendoTabContent>
+                <div class="tab-content run-tab">
+                  @if (isRunning && componentSpec) {
+                    @if (currentError) {
+                      <!-- Error Display -->
+                      <div class="error-display">
+                        <div class="error-container">
+                          <div class="error-header">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            <h3>Component Error</h3>
+                            <button class="copy-button" (click)="copyErrorToClipboard()" title="Copy error details">
+                              <i class="fa-solid fa-copy"></i>
+                            </button>
+                          </div>
+                          
+                          <p class="error-intro">
+                            The component could not be rendered due to the following error:
+                          </p>
+                          
+                          <div class="error-details">
+                            <strong>Error Type:</strong> {{ currentError.type }}<br>
+                            <strong>Message:</strong> {{ currentError.message }}
+                            @if (currentError.technicalDetails) {
+                              <details class="technical-details">
+                                <summary>Technical Details (click to expand)</summary>
+                                <pre>{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
+                              </details>
+                            }
+                          </div>
+                          
+                          <div class="error-help">
+                            <strong>What to do:</strong>
+                            <ol>
+                              <li>Check that the component code is valid JavaScript/React</li>
+                              <li>Ensure all required dependencies are available</li>
+                              <li>Review the technical details for specific error information</li>
+                              <li>Contact your system administrator if the issue persists</li>
+                            </ol>
+                          </div>
+                          
+                          <div class="error-actions">
+                            <button kendoButton (click)="retryComponent()">
+                              <span class="fa-solid fa-rotate"></span> Retry
+                            </button>
+                            <button kendoButton (click)="stopComponent()" [themeColor]="'error'">
+                              <span class="fa-solid fa-stop"></span> Stop
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    } @else {
+                      <!-- React Component -->
+                      <mj-react-component 
+                        [component]="componentSpec"
+                        (componentEvent)="onComponentEvent($event)"
+                        (openEntityRecord)="onOpenEntityRecord($event)">
+                      </mj-react-component>
+                    }
+                  } @else {
+                    <!-- Run Tab Empty State -->
+                    <div class="run-empty-state">
+                      <i class="fa-solid fa-play-circle fa-3x"></i>
+                      <h3>Component: {{ getComponentName(selectedComponent) }}</h3>
+                      <p>{{ getComponentDescription(selectedComponent) || 'No description available' }}</p>
+                      <button kendoButton [themeColor]="'primary'" [size]="'large'" (click)="runComponent(selectedComponent)">
+                        <span class="fa-solid fa-play"></span> Run Component
+                      </button>
+                    </div>
                   }
                 </div>
-                
-                <div class="error-help">
-                  <strong>What to do:</strong>
-                  <ol>
-                    <li>Check that the component code is valid JavaScript/React</li>
-                    <li>Ensure all required dependencies are available</li>
-                    <li>Review the technical details for specific error information</li>
-                    <li>Contact your system administrator if the issue persists</li>
-                  </ol>
+              </ng-template>
+            </kendo-tabstrip-tab>
+            
+            <!-- Spec Tab -->
+            <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 1">
+              <ng-template kendoTabContent>
+                <div class="tab-content spec-tab">
+                  <div class="editor-header">
+                    <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
+                    <div class="editor-actions">
+                      @if (isEditingSpec) {
+                        <button kendoButton [themeColor]="'primary'" (click)="applySpecChanges()">
+                          <span class="fa-solid fa-check"></span> Apply Changes
+                        </button>
+                        <button kendoButton (click)="initializeEditors()">
+                          <span class="fa-solid fa-times"></span> Cancel
+                        </button>
+                      }
+                      @if (isRunning) {
+                        <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                          <span class="fa-solid fa-sync"></span> Refresh Component
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  <mj-code-editor
+                    [(ngModel)]="editableSpec"
+                    (ngModelChange)="onSpecChange($event)"
+                    [language]="'json'"
+                    [readonly]="false"
+                    style="height: calc(100% - 60px); width: 100%;">
+                  </mj-code-editor>
                 </div>
-                
-                <div class="error-actions">
-                  <button kendoButton (click)="retryComponent()">
-                    <span class="fa-solid fa-rotate"></span> Retry
-                  </button>
-                  <button kendoButton (click)="stopComponent()" [themeColor]="'error'">
-                    <span class="fa-solid fa-stop"></span> Stop
-                  </button>
+              </ng-template>
+            </kendo-tabstrip-tab>
+            
+            <!-- Code Tab -->
+            <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 2">
+              <ng-template kendoTabContent>
+                <div class="tab-content code-tab">
+                  <div class="editor-header">
+                    <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
+                    <div class="editor-actions">
+                      @if (isEditingCode) {
+                        <button kendoButton [themeColor]="'primary'" (click)="applyCodeChanges()">
+                          <span class="fa-solid fa-check"></span> Apply Changes
+                        </button>
+                        <button kendoButton (click)="initializeEditors()">
+                          <span class="fa-solid fa-times"></span> Cancel
+                        </button>
+                      }
+                      @if (isRunning) {
+                        <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                          <span class="fa-solid fa-sync"></span> Refresh Component
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  
+                  <!-- Always use panel bar for consistency and to show all components -->
+                  <kendo-panelbar class="code-sections">
+                    @for (section of getComponentCodeSections(); track section.title; let i = $index) {
+                      <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
+                        <ng-template kendoPanelBarContent>
+                          <mj-code-editor
+                            [ngModel]="section.code"
+                            (ngModelChange)="onCodeSectionChange($event, i)"
+                            [language]="'javascript'"
+                            [readonly]="false"
+                            style="height: 400px; width: 100%;">
+                          </mj-code-editor>
+                        </ng-template>
+                      </kendo-panelbar-item>
+                    }
+                  </kendo-panelbar>
                 </div>
-              </div>
-            </div>
-          } @else {
-            <!-- React Component -->
-            <mj-react-component 
-              [component]="componentSpec"
-              (componentEvent)="onComponentEvent($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
-            </mj-react-component>
-          }
+              </ng-template>
+            </kendo-tabstrip-tab>
+          </kendo-tabstrip>
         } @else {
-          <!-- Empty State -->
+          <!-- Empty State when no component selected -->
           <div class="empty-state">
             <i class="fa-solid fa-rocket fa-3x"></i>
             <h2>Ready to Test Components</h2>
-            <p>Select a component from the list and click "Run Component" to see it in action</p>
+            <p>Select a component from the list to view its details and run it</p>
           </div>
         }
       </div>

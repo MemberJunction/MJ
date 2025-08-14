@@ -8,6 +8,7 @@ import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ReactComponentEvent } from '@memberjunction/ng-react';
 import { SharedService } from '@memberjunction/ng-shared';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 // Interface for components loaded from files (not from database)
 interface FileLoadedComponent {
@@ -47,6 +48,17 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
+  
+  // Tab management
+  public activeTab = 0; // 0 = Run, 1 = Spec, 2 = Code
+  
+  // Editor content
+  public editableSpec = ''; // JSON string for spec editor
+  public editableCode = ''; // JavaScript code for code editor
+  public codeSections: Array<{ title: string; code: string; expanded: boolean; isDependency?: boolean; index?: number }> = [];
+  public isEditingSpec = false;
+  public isEditingCode = false;
+  private lastEditSource: 'spec' | 'code' | null = null;
   
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
@@ -200,6 +212,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.componentSpec = this.getComponentSpec(component);
     this.isRunning = true;
     this.currentError = null; // Clear any previous errors
+    this.initializeEditors(); // Initialize spec and code editors
     console.log('Running component:', this.getComponentName(component));
     try {
       this.cdr.detectChanges();
@@ -414,6 +427,222 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       'Utility': '#64748B'
     };
     return colors[type || ''] || '#9CA3AF';
+  }
+
+  /**
+   * Initialize the spec and code editors when a component is selected
+   */
+  public initializeEditors(): void {
+    if (this.selectedComponent) {
+      const spec = this.getComponentSpec(this.selectedComponent);
+      
+      // Deep parse the spec for better readability
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      const parsed = ParseJSONRecursive(spec, parseOptions);
+      this.editableSpec = JSON.stringify(parsed, null, 2);
+      
+      // Extract code from spec
+      this.editableCode = spec.code || '// No code available';
+      
+      // Build code sections array
+      this.buildCodeSections();
+      
+      // Reset editing flags
+      this.isEditingSpec = false;
+      this.isEditingCode = false;
+      this.lastEditSource = null;
+    }
+  }
+
+  /**
+   * Handle spec editor changes
+   */
+  public onSpecChange(newSpec: string): void {
+    this.editableSpec = newSpec;
+    this.isEditingSpec = true;
+    this.lastEditSource = 'spec';
+  }
+
+  /**
+   * Handle code editor changes
+   */
+  public onCodeChange(newCode: string): void {
+    this.editableCode = newCode;
+    this.isEditingCode = true;
+    this.lastEditSource = 'code';
+  }
+
+  /**
+   * Apply spec changes and update the code tab
+   */
+  public applySpecChanges(): void {
+    try {
+      const parsed = JSON.parse(this.editableSpec);
+      
+      // Update the component spec
+      if (this.selectedComponent) {
+        if (this.isFileLoadedComponent(this.selectedComponent)) {
+          // Update file-loaded component
+          (this.selectedComponent as FileLoadedComponent).specification = parsed;
+        } else {
+          // Update database component (would need to save to DB)
+          // For now, just update the runtime spec
+          this.componentSpec = parsed;
+        }
+        
+        // Update the code editor with new code from spec
+        this.editableCode = parsed.code || '// No code available';
+        
+        // Rebuild code sections from updated spec
+        this.buildCodeSections();
+        
+        // If component is running, refresh it
+        if (this.isRunning) {
+          this.refreshComponent();
+        }
+        
+        this.isEditingSpec = false;
+      }
+    } catch (error) {
+      console.error('Invalid JSON in spec editor:', error);
+      // Could show a toast notification here
+    }
+  }
+
+  /**
+   * Apply code changes and update the spec
+   */
+  public applyCodeChanges(): void {
+    if (this.selectedComponent) {
+      try {
+        // Parse the current spec
+        const spec = JSON.parse(this.editableSpec);
+        
+        // Update main code and dependencies from code sections
+        if (this.codeSections.length > 0) {
+          // First section is always the main component
+          spec.code = this.codeSections[0].code;
+          
+          // Update dependencies if any
+          if (this.codeSections.length > 1 && spec.dependencies) {
+            for (let i = 1; i < this.codeSections.length; i++) {
+              const section = this.codeSections[i];
+              if (section.index !== undefined && spec.dependencies[section.index]) {
+                spec.dependencies[section.index].code = section.code;
+              }
+            }
+          }
+        }
+        
+        // Update the spec editor
+        const parseOptions: ParseJSONOptions = {
+          extractInlineJson: true,
+          maxDepth: 100,
+          debug: false
+        };
+        const parsed = ParseJSONRecursive(spec, parseOptions);
+        this.editableSpec = JSON.stringify(parsed, null, 2);
+        
+        // Update the component
+        if (this.isFileLoadedComponent(this.selectedComponent)) {
+          (this.selectedComponent as FileLoadedComponent).specification = spec;
+        } else {
+          this.componentSpec = spec;
+        }
+        
+        // If component is running, refresh it
+        if (this.isRunning) {
+          this.refreshComponent();
+        }
+        
+        this.isEditingCode = false;
+      } catch (error) {
+        console.error('Error applying code changes:', error);
+      }
+    }
+  }
+
+  /**
+   * Refresh the running component with new spec/code
+   */
+  public refreshComponent(): void {
+    if (this.selectedComponent && this.isRunning) {
+      // Stop and restart to clear registrations
+      this.stopComponent();
+      setTimeout(() => {
+        this.startComponent(this.selectedComponent!);
+      }, 100);
+    }
+  }
+
+  /**
+   * Build code sections array from spec
+   */
+  private buildCodeSections(): void {
+    if (!this.selectedComponent) {
+      this.codeSections = [];
+      return;
+    }
+    
+    const spec = this.getComponentSpec(this.selectedComponent);
+    const sections = [];
+    
+    // Main component code
+    sections.push({
+      title: spec.name || 'Main Component',
+      code: spec.code || '// No code available',
+      expanded: true,
+      isDependency: false
+    });
+    
+    // Add dependent components if any
+    if (spec.dependencies && Array.isArray(spec.dependencies)) {
+      spec.dependencies.forEach((dep: ComponentSpec, index: number) => {
+        sections.push({
+          title: dep.name || `Dependency ${index + 1}`,
+          code: dep.code || '// No code available',
+          expanded: false,
+          isDependency: true,
+          index: index
+        });
+      });
+    }
+    
+    this.codeSections = sections;
+  }
+
+  /**
+   * Get component code sections for panel bar
+   */
+  public getComponentCodeSections(): any[] {
+    return this.codeSections;
+  }
+
+  /**
+   * Handle code section changes
+   */
+  public onCodeSectionChange(newCode: string, sectionIndex: number): void {
+    if (this.codeSections[sectionIndex]) {
+      this.codeSections[sectionIndex].code = newCode;
+      this.isEditingCode = true;
+      this.lastEditSource = 'code';
+    }
+  }
+
+  /**
+   * Handle tab selection
+   */
+  public onTabSelect(event: any): void {
+    this.activeTab = event.index;
+    
+    // Initialize editors when switching to spec or code tabs
+    if (event.index === 1 || event.index === 2) {
+      this.initializeEditors();
+    }
   }
 }
 
