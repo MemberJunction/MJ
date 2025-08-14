@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { AIPromptEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -112,7 +112,7 @@ export class RunAIPromptResolver extends ResolverBase {
             const md = new Metadata();
             
             // Load the AI prompt entity
-            const promptEntity = await md.GetEntityObject<AIPromptEntity>('AI Prompts', currentUser);
+            const promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts', currentUser);
             await promptEntity.Load(promptId);
             
             if (!promptEntity.IsSaved) {

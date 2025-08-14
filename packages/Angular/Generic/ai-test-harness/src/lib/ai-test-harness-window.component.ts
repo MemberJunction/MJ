@@ -1,12 +1,12 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit } from '@angular/core';
-import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 
 export interface AITestHarnessWindowData {
     agentId?: string;
     agent?: AIAgentEntity;
     promptId?: string;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     promptRunId?: string;
     title?: string;
     width?: string | number;
@@ -92,7 +92,7 @@ export class AITestHarnessWindowComponent implements OnInit {
     error = '';
     
     agent?: AIAgentEntity;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     mode: 'agent' | 'prompt' = 'agent';
     
     private metadata = new Metadata();
@@ -135,7 +135,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.prompt = this.data.prompt;
                     this.windowTitle = this.data.title || `Test Prompt: ${this.prompt.Name}`;
                 } else if (this.data.promptId) {
-                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntity>('AI Prompts');
+                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
                     await promptEntity.Load(this.data.promptId);
                     if (promptEntity.IsSaved) {
                         this.prompt = promptEntity;

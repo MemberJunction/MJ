@@ -10,7 +10,7 @@
  * @since 2.50.0
  */
 
-import { AIAgentRunEntity, AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntity, AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -458,9 +458,9 @@ export type AgentConfiguration = {
     /** The loaded agent type entity */
     agentType?: AIAgentTypeEntity;
     /** The loaded system prompt entity */
-    systemPrompt?: AIPromptEntity;
+    systemPrompt?: AIPromptEntityExtended;
     /** The loaded child prompt entity */
-    childPrompt?: AIPromptEntity;
+    childPrompt?: AIPromptEntityExtended;
 }
 
 

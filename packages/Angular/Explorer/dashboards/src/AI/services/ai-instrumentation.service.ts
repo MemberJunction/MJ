@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIPromptRunEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIModelEntity, AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIModelEntity, AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 
 export interface DashboardKPIs {
   totalExecutions: number;

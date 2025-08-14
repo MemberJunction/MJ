@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntityExtended, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -172,7 +172,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @Input() mode: TestHarnessMode = 'agent';
     
     /** The entity to test - either an AI Agent or AI Prompt */
-    @Input() entity: AIAgentEntity | AIPromptEntity | null = null;
+    @Input() entity: AIAgentEntity | AIPromptEntityExtended | null = null;
     
     /** The original prompt run ID when re-running a previous prompt execution */
     @Input() originalPromptRunId: string | null = null;
@@ -610,7 +610,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Filter models by the prompt's AIModelTypeID if it exists
         let filteredModels: any[] = [];
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             if (prompt.AIModelTypeID) {
                 filteredModels = AIEngineBase.Instance.Models.filter(
                     model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
@@ -640,7 +640,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Determine the default model for this prompt
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             this.defaultModelName = await this.getDefaultModelName(prompt);
         }
         
@@ -668,7 +668,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Gets the default model name for a prompt based on its configuration
      */
-    private async getDefaultModelName(prompt: AIPromptEntity): Promise<string> {
+    private async getDefaultModelName(prompt: AIPromptEntityExtended): Promise<string> {
         try {
             // Get prompt-specific model associations
             const promptModels = AIEngineBase.Instance.PromptModels.filter(
@@ -877,7 +877,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private loadPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             // Load default values from prompt entity
             if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
@@ -902,7 +902,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadTemplateParameters() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             if (!prompt.TemplateID) {
                 return; // No template to load parameters from
@@ -971,7 +971,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public resetToPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             // Reset model selection to default
             this.selectedModelId = '';
@@ -1652,7 +1652,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             `;
 
             const variables = {
-                promptId: (this.entity as AIPromptEntity).ID,
+                promptId: (this.entity as AIPromptEntityExtended).ID,
                 data: JSON.stringify(dataContext),
                 overrideModelId: this.selectedModelId || undefined,
                 overrideVendorId: this.selectedVendorId || undefined,
@@ -3122,7 +3122,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Type guard to check if entity is an AI Prompt
      */
-    private isPromptEntity(entity: any): entity is AIPromptEntity {
+    private isPromptEntity(entity: any): entity is AIPromptEntityExtended {
         // Check using the EntityInfo property from BaseEntity
         const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Prompts';
         

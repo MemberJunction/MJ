@@ -1,7 +1,7 @@
 import { Component, ElementRef, ChangeDetectorRef, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptRunEntityExtended, AIPromptEntity, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIPromptEntityExtended, AIModelEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { AIPromptRunFormComponent } from '../../generated/Entities/AIPromptRun/aipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -21,7 +21,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
     public record!: AIPromptRunEntityExtended;
     
     // Related entities
-    public prompt: AIPromptEntity | null = null;
+    public prompt: AIPromptEntityExtended | null = null;
     public model: AIModelEntity | null = null;
     public parentRun: AIPromptRunEntityExtended | null = null;
     public childRuns: AIPromptRunEntityExtended[] = [];
@@ -159,7 +159,7 @@ export class AIPromptRunFormComponentExtended extends AIPromptRunFormComponent i
             
             // Load prompt
             if (this.record.PromptID) {
-                this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
                 if (this.prompt) {
                     await this.prompt.Load(this.record.PromptID);
                 }

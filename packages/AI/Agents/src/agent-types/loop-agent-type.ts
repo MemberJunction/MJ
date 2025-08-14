@@ -14,7 +14,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
-import { AIPromptEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { LoopAgentResponse } from './loop-agent-response-type';
 
 /**
@@ -363,7 +363,7 @@ export class LoopAgentType extends BaseAgentType {
      * @param {ExecuteAgentParams} params - The execution parameters (unused)
      * @param {AgentConfiguration} config - The loaded agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - The previous step decision (unused)
-     * @returns {Promise<AIPromptEntity | null>} Returns config.childPrompt
+     * @returns {Promise<AIPromptEntityExtended | null>} Returns config.childPrompt
      * 
      * @override
      * @since 2.76.0
@@ -374,7 +374,7 @@ export class LoopAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
-    ): Promise<AIPromptEntity | null> {
+    ): Promise<AIPromptEntityExtended | null> {
         // Loop agents always use the default prompt from configuration
         return config.childPrompt || null;
     }

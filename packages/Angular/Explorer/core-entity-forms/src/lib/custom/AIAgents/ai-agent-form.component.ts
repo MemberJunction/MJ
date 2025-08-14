@@ -1,6 +1,6 @@
 import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';

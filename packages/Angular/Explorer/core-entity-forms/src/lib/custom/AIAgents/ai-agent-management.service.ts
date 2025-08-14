@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef, WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
-import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
@@ -132,7 +132,7 @@ export class AIAgentManagementService {
   openContextCompressionPromptSelector(config: {
     currentPromptId?: string;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIPromptEntity | null> {
+  }): Observable<AIPromptEntityExtended | null> {
     return new Observable(observer => {
       this.openPromptSelectorDialog({
         title: 'Select Context Compression Prompt',

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -30,16 +30,16 @@ interface MatrixCell {
   styleUrls: ['./model-prompt-priority-matrix.component.scss']
 })
 export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
-  @Input() selectedPrompts: AIPromptEntity[] = [];
+  @Input() selectedPrompts: AIPromptEntityExtended[] = [];
   @Input() selectedModels: AIModelEntity[] = [];
   @Input() readonly = false;
   
   @Output() associationsChange = new EventEmitter<PromptModelAssociation[]>();
   @Output() stateChange = new EventEmitter<any>();
-  @Output() promptSelected = new EventEmitter<AIPromptEntity>();
+  @Output() promptSelected = new EventEmitter<AIPromptEntityExtended>();
   
   // Data
-  public prompts: AIPromptEntity[] = [];
+  public prompts: AIPromptEntityExtended[] = [];
   public models: AIModelEntity[] = [];
   public associations: PromptModelAssociation[] = [];
   public matrix: MatrixCell[][] = [];
@@ -109,7 +109,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     }
   }
   
-  private async loadPrompts(): Promise<AIPromptEntity[]> {
+  private async loadPrompts(): Promise<AIPromptEntityExtended[]> {
     const rv = new RunView();
     const result = await rv.RunView({
       EntityName: 'AI Prompts',
@@ -121,7 +121,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
     
     if (result && result.Success && result.Results) {
-      return result.Results as AIPromptEntity[];
+      return result.Results as AIPromptEntityExtended[];
     } else {
       throw new Error('Failed to load AI prompts');
     }
@@ -208,7 +208,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
   }
   
-  private canAssignModelToPrompt(prompt: AIPromptEntity, model: AIModelEntity): boolean {
+  private canAssignModelToPrompt(prompt: AIPromptEntityExtended, model: AIModelEntity): boolean {
     // Check model type compatibility
     if (prompt.OutputType && model.AIModelTypeID) {
       // Add business logic for compatibility checking
@@ -566,7 +566,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     URL.revokeObjectURL(url);
   }
 
-  public selectPrompt(prompt: AIPromptEntity): void {
+  public selectPrompt(prompt: AIPromptEntityExtended): void {
     this.promptSelected.emit(prompt);
   }
 }

@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -169,7 +169,7 @@ export class AIPromptRunner {
   protected logError(error: Error | string, options?: {
     category?: string;
     metadata?: Record<string, any>;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     model?: AIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
   }): void {
@@ -451,7 +451,7 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
   private async executeSinglePrompt<T = unknown>(
-    prompt: AIPromptEntity, 
+    prompt: AIPromptEntityExtended, 
     renderedPromptText: string, 
     params: AIPromptParams, 
     startTime: Date,
@@ -563,7 +563,7 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The aggregated execution result
    */
   private async executePromptInParallel<T = unknown>(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
@@ -1006,7 +1006,7 @@ export class AIPromptRunner {
    * @returns Promise<string> - The rendered prompt text with child templates embedded
    */
   private async renderPromptWithChildTemplates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     childTemplates: Record<string, string>
   ): Promise<string> {
@@ -1077,7 +1077,7 @@ export class AIPromptRunner {
    * then selects the first one with an available API key.
    */
   private async selectModel(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -1256,7 +1256,7 @@ export class AIPromptRunner {
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
   private buildModelVendorCandidates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
     preferredVendorId?: string
@@ -1700,7 +1700,7 @@ export class AIPromptRunner {
    * Creates an AIPromptRun entity for execution tracking
    */
   private async createPromptRun(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     model: AIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string, 
@@ -1998,7 +1998,7 @@ export class AIPromptRunner {
   protected async executeModelWithFailover(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
@@ -2144,7 +2144,7 @@ export class AIPromptRunner {
   /**
    * Builds failover candidates for a prompt based on available models and type restrictions
    */
-  protected async buildFailoverCandidates(prompt: AIPromptEntity): Promise<ModelVendorCandidate[]> {
+  protected async buildFailoverCandidates(prompt: AIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
     const aiEngine = AIEngine.Instance;
     
     // Get all models, filtered by type if specified
@@ -2299,7 +2299,7 @@ export class AIPromptRunner {
   private async executeModel(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
@@ -2526,7 +2526,7 @@ export class AIPromptRunner {
   private async executeWithValidationRetries(
     selectedModel: AIModelEntityExtended,
     renderedPromptText: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     promptRun: AIPromptRunEntity,
     vendorDriverClass?: string,
@@ -2679,7 +2679,7 @@ export class AIPromptRunner {
   /**
    * Applies retry delay based on the prompt's retry strategy
    */
-  private async applyRetryDelay(prompt: AIPromptEntity, attemptNumber: number): Promise<void> {
+  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number): Promise<void> {
     const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
     let delay = baseDelay;
 
@@ -2864,7 +2864,7 @@ export class AIPromptRunner {
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
     currentPromptRun: AIPromptRunEntity,
@@ -3091,7 +3091,7 @@ export class AIPromptRunner {
    */
   private async parseObjectOutput(
     rawOutput: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean,
     cleanValidationSyntax: boolean,
     validationErrors: ValidationErrorInfo[],
@@ -3338,7 +3338,7 @@ export class AIPromptRunner {
    */
   private async updatePromptRun(
     promptRun: AIPromptRunEntity,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     modelResult: ChatResult,
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
@@ -3578,9 +3578,9 @@ export class AIPromptRunner {
    * default values when configuration is not specified. Override this method to
    * implement custom failover configuration logic.
    */
-  protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+  protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptWithFailover = prompt as AIPromptEntity & {
+    const promptWithFailover = prompt as AIPromptEntityExtended & {
       FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
       FailoverMaxAttempts?: number;
       FailoverDelaySeconds?: number;

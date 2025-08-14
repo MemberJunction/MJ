@@ -1,7 +1,7 @@
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
-import { AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
 import {
   ExecutionTask,
   ExecutionTaskResult,
@@ -1105,7 +1105,7 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<AIPromptRunEntity> - The created result selector prompt run
    */
   private async createResultSelectorPromptRun(
-    judgePrompt: AIPromptEntity,
+    judgePrompt: AIPromptEntityExtended,
     judgeData: Record<string, unknown>,
     parentPromptRunId: string,
     executionOrder: number,

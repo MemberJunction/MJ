@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntity, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
@@ -809,8 +809,8 @@ export class BaseAgent {
      * Prepares prompt parameters for hierarchical execution.
      * 
      * @param {AIAgentTypeEntity} agentType - The agent type
-     * @param {AIPromptEntity} systemPrompt - The system prompt
-     * @param {AIPromptEntity} childPrompt - The child prompt
+     * @param {AIPromptEntityExtended} systemPrompt - The system prompt
+     * @param {AIPromptEntityExtended} childPrompt - The child prompt
      * @param {ExecuteAgentParams} params - Original execution parameters
      * @returns {Promise<AIPromptParams>} Configured prompt parameters
      * @protected
@@ -821,8 +821,8 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         const agentType: AIAgentTypeEntity = config.agentType;
-        const systemPrompt: AIPromptEntity = config.systemPrompt;
-        const childPrompt: AIPromptEntity = config.childPrompt;
+        const systemPrompt: AIPromptEntityExtended = config.systemPrompt;
+        const childPrompt: AIPromptEntityExtended = config.childPrompt;
 
         // Gather context data
 

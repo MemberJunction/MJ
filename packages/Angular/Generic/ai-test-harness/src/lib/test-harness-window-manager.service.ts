@@ -1,5 +1,5 @@
 import { Injectable, ComponentRef, ApplicationRef, Injector, createComponent, ViewContainerRef } from '@angular/core';
-import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { TestHarnessCustomWindowComponent, CustomWindowData } from './test-harness-custom-window.component';
 import { Observable, Subject } from 'rxjs';
 import { TestResult } from './test-harness-window.service';
@@ -59,7 +59,7 @@ export class TestHarnessWindowManagerService {
      */
     openPromptTestHarness(options: {
         promptId?: string;
-        prompt?: AIPromptEntity;
+        prompt?: AIPromptEntityExtended;
         title?: string;
         width?: string | number;
         height?: string | number;

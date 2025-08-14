@@ -3,7 +3,7 @@
 // import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 // import { RunView, Metadata } from '@memberjunction/core';
-// import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntity } from '@memberjunction/core-entities';
+// import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 // import { MJNotificationService } from '@memberjunction/ng-notifications';
 // import { Router } from '@angular/router';
 // import { AIAgentManagementService } from './ai-agent-management.service';
@@ -59,7 +59,7 @@
 //   agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
   
 //   // Selected compression prompt
-//   selectedCompressionPrompt: AIPromptEntity | null = null;
+//   selectedCompressionPrompt: AIPromptEntityExtended | null = null;
   
 //   // Available options
 //   statusOptions = [
@@ -187,7 +187,7 @@
 //     if (this.agent.ContextCompressionPromptID) {
 //       try {
 //         const rv = new RunView();
-//         const result = await rv.RunView<AIPromptEntity>({
+//         const result = await rv.RunView<AIPromptEntityExtended>({
 //           EntityName: 'AI Prompts',
 //           ExtraFilter: `ID = '${this.agent.ContextCompressionPromptID}'`,
 //           ResultType: 'entity_object',

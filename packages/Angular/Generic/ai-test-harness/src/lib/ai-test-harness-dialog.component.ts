@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { AIAgentEntity, AIPromptEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntity, AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { AITestHarnessComponent } from './ai-test-harness.component';
 import { ChatMessage } from '@memberjunction/ai';
@@ -17,7 +17,7 @@ export interface AITestHarnessDialogData {
     /** ID of the AI prompt to load (alternative to providing prompt entity) */
     promptId?: string;
     /** Pre-loaded AI prompt entity (alternative to providing promptId) */
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     /** Custom dialog title (defaults to agent/prompt name) */
     title?: string;
     /** Dialog width in CSS units or viewport percentage */
@@ -143,7 +143,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
     agent: AIAgentEntity | null = null;
     
     /** The loaded AI prompt entity for testing */
-    prompt: AIPromptEntity | null = null;
+    prompt: AIPromptEntityExtended | null = null;
     
     /** The mode of operation - either 'agent' or 'prompt' */
     mode: 'agent' | 'prompt' = 'agent';
@@ -193,7 +193,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             // Prompt mode
             this.mode = 'prompt';
             if (this.data.promptId && !this.data.prompt) {
-                this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
                 await this.prompt.Load(this.data.promptId);
                 
                 if (this.prompt) {
@@ -306,7 +306,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             console.log('✅ Prompt run loaded successfully');
             // Load the prompt if not already loaded
             if (!this.prompt && promptRun.PromptID) {
-                this.prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+                this.prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
                 await this.prompt.Load(promptRun.PromptID);
                 this.testHarness.entity = this.prompt;
                 

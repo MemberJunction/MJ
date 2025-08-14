@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { BaseEntity, Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
-import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntity, AIPromptEntityExtended, AIAgentPromptEntity, ActionEntity } from "@memberjunction/core-entities";
+import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity, ActionEntity } from "@memberjunction/core-entities";
 
 /**
  * Abstract base class for agent management actions.

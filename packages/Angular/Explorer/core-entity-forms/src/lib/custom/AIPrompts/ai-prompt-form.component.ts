@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntity, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -19,7 +19,7 @@ import { AIPromptManagementService } from './ai-prompt-management.service';
     styleUrls: ['./ai-prompt-form.component.css']
 })
 export class AIPromptFormComponentExtended extends AIPromptFormComponent implements OnInit {
-    public record!: AIPromptEntity;
+    public record!: AIPromptEntityExtended;
     public template: TemplateEntity | null = null;
     public templateContent: TemplateContentEntity | null = null;
     public templateParams: TemplateParamEntity[] = [];
@@ -1321,7 +1321,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Builds the tree structure for result selector
      */
-    private buildResultSelectorTree(categories: AIPromptCategoryEntity[], prompts: AIPromptEntity[]): any[] {
+    private buildResultSelectorTree(categories: AIPromptCategoryEntity[], prompts: AIPromptEntityExtended[]): any[] {
         const tree: any[] = [];
 
         // Add "Clear Selection" option at the top
