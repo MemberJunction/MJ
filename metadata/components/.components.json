@@ -105,8 +105,8 @@
       "ID": "E7A334EA-53FD-40E4-A255-1DDA891D86B7"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.066Z",
-      "checksum": "0a438d2210551a4a03fc03a70700201cf62cbe115729ca9102872bd5998d75e5"
+      "lastModified": "2025-08-14T18:17:52.571Z",
+      "checksum": "6f36e44c10cdf3d617a95beb51acd4f03193385e997f9d1c85f8fa871932e01f"
     }
   },
   {
@@ -195,6 +195,116 @@
     "sync": {
       "lastModified": "2025-08-14T15:50:24.149Z",
       "checksum": "5ca740463986285889e8bf4bf3af31f6f068eec74342b08b504b5f8c97a5c2c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentAnalyticsDashboard",
+      "Namespace": "AI/Agents",
+      "Description": "A comprehensive analytics dashboard for monitoring AI agent executions, performance metrics, hierarchical relationships, and step-by-step analysis with real-time updates and interactive visualizations",
+      "Title": "AI Agent Analytics Dashboard",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-analytics-dashboard.spec.json",
+      "FunctionalRequirements": "Display real-time agent execution status with live updates, show hierarchical agent relationships and sub-agent orchestration, provide step-by-step execution analysis with timing and success metrics, visualize performance metrics including execution time, token usage, and costs",
+      "TechnicalDesign": "Multi-panel dashboard with WebSocket real-time updates, coordinated views across child components, time range filtering, and interactive agent selection"
+    },
+    "primaryKey": {
+      "ID": "EC9FC426-5C79-4C8C-AEB5-211268BCCB9C"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T18:20:40.820Z",
+      "checksum": "2c268ef0e190d03a775edb08073799784d317bb3c57f22c033f036c9df104803"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentExecutionOverview",
+      "Namespace": "AI/Agents",
+      "Description": "Real-time execution monitor with live status indicators, success rate gauges, and execution velocity metrics",
+      "Title": "AI Agent Execution Overview",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-execution-overview.spec.json",
+      "FunctionalRequirements": "Display real-time agent execution status with animated indicators, success rate circular gauges, execution velocity sparklines, and throughput metrics",
+      "TechnicalDesign": "Live monitoring panel with WebSocket updates, circular progress indicators, sparkline charts, and animated status badges"
+    },
+    "primaryKey": {
+      "ID": "8AEB2F97-986D-4A5B-B57E-9556F2EBF3B6"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T18:20:40.846Z",
+      "checksum": "bafc544d05e6bdcbeb1bf59faec4fb2e9c8b01fd517c30e3b3ca379a00339cf0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentHierarchyTree",
+      "Namespace": "AI/Agents",
+      "Description": "Interactive tree visualization showing agent parent-child relationships, sub-agent orchestration patterns, and execution flow with real-time status indicators",
+      "Title": "AI Agent Hierarchy Tree",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-hierarchy-tree.spec.json",
+      "FunctionalRequirements": "Display hierarchical agent relationships as an interactive tree with expandable nodes, execution counts, success rates per node, and real-time status indicators for active runs",
+      "TechnicalDesign": "SVG-based tree visualization with D3-style layouts, interactive node expansion, color-coded status indicators, and drill-down navigation to agent details"
+    },
+    "primaryKey": {
+      "ID": "F559FA95-4C9F-4102-B7B9-9E00592DC307"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T18:20:40.870Z",
+      "checksum": "fd961c98fd8ad936e01c3a0f4e53b6be6ae9e7f23f098b4bd67c326a03875ca5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentStepAnalysis",
+      "Namespace": "AI/Agents",
+      "Description": "Detailed step-by-step execution analysis with waterfall charts, step type distribution, execution timelines, and error pattern detection",
+      "Title": "AI Agent Step Analysis",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-step-analysis.spec.json",
+      "FunctionalRequirements": "Display execution waterfall showing step sequence and timing, visualize step type distribution with donut chart, show execution timeline with concurrent steps, identify error patterns and bottlenecks",
+      "TechnicalDesign": "Multi-panel visualization with waterfall chart for execution flow, donut chart for step type distribution, timeline view for concurrent execution patterns, and error analysis section"
+    },
+    "primaryKey": {
+      "ID": "8F723813-B98C-458A-935C-6FCE3440BE57"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T18:20:40.903Z",
+      "checksum": "d03481cf08b712c6f3ede9128adebbd30c6dea8dd5e9eefca6e7c1553633fb79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIAgentPerformanceMetrics",
+      "Namespace": "AI/Agents",
+      "Description": "Comprehensive performance analytics panel showing execution time distributions, token usage analytics, cost breakdown by agent, error analysis, and trend charts",
+      "Title": "AI Agent Performance Metrics",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-agent-performance-metrics.spec.json",
+      "FunctionalRequirements": "Display execution time histograms, token usage over time, cost breakdown pie chart, error pattern analysis, performance trend lines, and SLA compliance metrics",
+      "TechnicalDesign": "Multi-section panel with histogram for execution times, line chart for token trends, pie chart for cost distribution, error heatmap, and metric cards for key performance indicators"
+    },
+    "primaryKey": {
+      "ID": "B0EDCE8A-62E4-4DCE-AC8B-48168EE5A4AA"
+    },
+    "sync": {
+      "lastModified": "2025-08-14T18:20:40.925Z",
+      "checksum": "22531d6285b2980e3702b64383aa9e1a2cff80cabbf48dee15f4f718daf1fcf0"
     }
   }
 ]

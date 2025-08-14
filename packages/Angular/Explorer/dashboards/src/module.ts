@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
+import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
@@ -108,7 +108,9 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     MemberJunctionCoreEntityFormsModule,
     GridModule,
     MJReactModule,
-    SplitterModule
+    SplitterModule,
+    TabStripModule,
+    PanelBarModule
   ],
   providers: [
     AIInstrumentationService
