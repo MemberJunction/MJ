@@ -1778,7 +1778,10 @@ export class AIPromptRunner {
         _selectedVendorId?: string;
       };
       
-      if (vendorId) {
+      if (modelSelectionInfo) {
+        promptRun.VendorID = modelSelectionInfo.vendorSelected?.ID || vendorId || modelWithVendor._selectedVendorId;
+      } 
+      else if (vendorId) {
         // Explicit vendor ID provided
         promptRun.VendorID = vendorId;
       } else if (modelWithVendor._selectedVendorId) {
