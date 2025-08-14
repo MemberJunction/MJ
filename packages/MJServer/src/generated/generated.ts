@@ -37945,6 +37945,18 @@ export class Component_ {
     @Field({nullable: true, description: `Vector embedding of the technical design for similarity search`}) 
     TechnicalDesignVector?: string;
         
+    @Field(() => Boolean, {description: `Indicates if the component has custom properties defined in its specification. Components with custom props cannot be used directly by deterministic containers.`}) 
+    HasCustomProps: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates if the component has custom events defined in its specification. Components with custom events may have limited functionality in generic containers.`}) 
+    HasCustomEvents: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates if the component requires data access (utilities object with md, rv, rq). Used to determine if component needs data context.`}) 
+    RequiresData: boolean;
+        
+    @Field(() => Int, {description: `Number of component dependencies defined in the specification. Used to assess component complexity.`}) 
+    DependencyCount: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceRegistry?: string;
@@ -38024,6 +38036,18 @@ export class CreateComponentInput {
 
     @Field({ nullable: true })
     TechnicalDesignVector: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomProps?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomEvents?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresData?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DependencyCount?: number;
 }
     
 
@@ -38091,6 +38115,18 @@ export class UpdateComponentInput {
 
     @Field({ nullable: true })
     TechnicalDesignVector?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomProps?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomEvents?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresData?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DependencyCount?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
