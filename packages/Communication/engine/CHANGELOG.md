@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/communication-engine
 
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [df4031f]
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/communication-types@2.88.0
+  - @memberjunction/templates@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes

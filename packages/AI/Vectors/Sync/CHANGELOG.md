@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.88.0
+- @memberjunction/ai-vectors@2.88.0
+- @memberjunction/templates-base-types@2.88.0
+- @memberjunction/templates@2.88.0
+- @memberjunction/ai-vectors-pinecone@2.88.0
+- @memberjunction/ai@2.88.0
+- @memberjunction/ai-mistral@2.88.0
+- @memberjunction/ai-openai@2.88.0
+- @memberjunction/ai-vectordb@2.88.0
+- @memberjunction/core@2.88.0
+- @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes

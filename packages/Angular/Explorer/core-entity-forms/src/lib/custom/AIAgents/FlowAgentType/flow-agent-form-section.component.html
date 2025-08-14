@@ -58,14 +58,14 @@
             <!-- Tab Content -->
             <div class="flow-tab-content">
                 @if (activeTab === 'diagram') {
-                    <mj-flow-agent-diagram
+                    <mj-integrated-flow-editor
                         [agentId]="agentId"
                         [steps]="steps"
                         [paths]="paths"
                         [EditMode]="EditMode"
                         (stepsChanged)="refreshFlow()"
                         (pathsChanged)="refreshFlow()">
-                    </mj-flow-agent-diagram>
+                    </mj-integrated-flow-editor>
                 } @else {
                     <div class="flow-steps-list">
                         <div class="steps-container">

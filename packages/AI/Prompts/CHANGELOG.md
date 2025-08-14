@@ -1,5 +1,19 @@
 # @memberjunction/ai-prompts
 
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [df4031f]
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ai-core-plus@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/templates-base-types@2.88.0
+  - @memberjunction/templates@2.88.0
+  - @memberjunction/ai@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
 ## 2.87.0
 
 ### Patch Changes
