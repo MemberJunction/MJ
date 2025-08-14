@@ -275,13 +275,15 @@
                       }
                     </div>
                   </div>
-                  <mj-code-editor
-                    [(ngModel)]="editableSpec"
-                    (ngModelChange)="onSpecChange($event)"
-                    [language]="'json'"
-                    [readonly]="false"
-                    style="height: calc(100% - 60px); width: 100%;">
-                  </mj-code-editor>
+                  <div class="editor-wrapper">
+                    <mj-code-editor
+                      [(ngModel)]="editableSpec"
+                      (ngModelChange)="onSpecChange($event)"
+                      [language]="'json'"
+                      [readonly]="false"
+                      style="height: 100%; width: 100%;">
+                    </mj-code-editor>
+                  </div>
                   </div>
                 </ng-template>
               </kendo-tabstrip-tab>
@@ -310,7 +312,8 @@
                   </div>
                   
                   <!-- Always use panel bar for consistency and to show all components -->
-                  <kendo-panelbar class="code-sections">
+                  <div class="editor-wrapper">
+                    <kendo-panelbar class="code-sections">
                     @for (section of getComponentCodeSections(); track section.title; let i = $index) {
                       <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
                         <ng-template kendoPanelBarContent>
@@ -325,6 +328,7 @@
                       </kendo-panelbar-item>
                     }
                   </kendo-panelbar>
+                  </div>
                 </div>
               </ng-template>
             </kendo-tabstrip-tab>
