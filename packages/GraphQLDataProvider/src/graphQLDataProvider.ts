@@ -472,7 +472,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
                 innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
-                innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
+                if (params.MaxRows !== undefined)
+                    innerParams.MaxRows = params.MaxRows;
                 if (params.StartRow !== undefined)
                     innerParams.StartRow = params.StartRow; // Add StartRow parameter
                 innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
@@ -595,7 +596,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // pass it straight through, either null or array of strings
                     innerParam.Fields = param.Fields;
                     innerParam.IgnoreMaxRows = param.IgnoreMaxRows || false;
-                    innerParam.MaxRows = param.MaxRows || 0;
+                    if (param.MaxRows !== undefined)
+                        innerParam.MaxRows = param.MaxRows;
                     if (param.StartRow !== undefined)
                         innerParam.StartRow = param.StartRow; // Add StartRow parameter
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;

@@ -1108,12 +1108,16 @@ export class SQLServerDataProvider
         const saveViewResults: boolean = params.SaveViewResults;
 
         let topSQL: string = '';
+        // Only use TOP if we're NOT using OFFSET/FETCH pagination
+        const usingPagination = params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0);
+        
         if (params.IgnoreMaxRows === true) {
           // do nothing, leave it blank, this structure is here to make the code easier to read
-        } else if (params.StartRow && params.StartRow > 0) {
-          // do nothing, leave it blank, this structure is here to make the code easier to read
+        } else if (usingPagination) {
+          // When using OFFSET/FETCH, don't add TOP clause
+          // do nothing, leave it blank
         } else if (params.MaxRows && params.MaxRows > 0) {
-          // user provided a max rows, so we use that
+          // user provided a max rows, so we use that (but not using pagination)
           topSQL = 'TOP ' + params.MaxRows;
         } else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
           topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
@@ -1122,7 +1126,8 @@ export class SQLServerDataProvider
         const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
         let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
-        let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
+        // We need countSQL for pagination (to get total count) or when using TOP (to show limited vs total)
+        let countSQL = (usingPagination || (topSQL && topSQL.length > 0)) ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
         let whereSQL: string = '';
         let bHasWhere: boolean = false;
         let userViewRunID: string = '';
@@ -1229,8 +1234,12 @@ export class SQLServerDataProvider
           viewSQL += ` ORDER BY ${orderBy}`;
         }
 
-        if (params.StartRow && params.StartRow > 0 && params.MaxRows && params.MaxRows > 0 && entityInfo.FirstPrimaryKey) {
-          viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+        // Apply pagination using OFFSET/FETCH if both MaxRows and StartRow are specified
+        if (params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0) && entityInfo.FirstPrimaryKey) {
+          // If no ORDER BY was already added, add one based on primary key (required for OFFSET/FETCH)
+          if (!orderBy) {
+            viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+          }
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
@@ -1238,10 +1247,13 @@ export class SQLServerDataProvider
         const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
 
         // finally, if we have a countSQL, we need to run that to get the row count
-        // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
-        // OR do that if we are doing a count_only
+        // Run the count query if:
+        // 1. We're using pagination (always need total count for pagination)
+        // 2. ResultType is 'count_only'
+        // 3. The number of returned rows equals the max limit (might be more rows available)
         let rowCount = null;
-        if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
+        const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
+        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;

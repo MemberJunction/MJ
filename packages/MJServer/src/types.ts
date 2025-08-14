@@ -76,6 +76,8 @@ export type RunViewGenericParams = {
   saveViewResults?: boolean;
   fields?: string[];
   ignoreMaxRows?: boolean;
+  maxRows?: number;
+  startRow?: number;
   excludeDataFromAllPriorViewRuns?: boolean;
   forceAuditLog?: boolean;
   auditLogDescription?: string;
