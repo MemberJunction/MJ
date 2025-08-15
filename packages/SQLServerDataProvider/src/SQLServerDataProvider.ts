@@ -819,6 +819,7 @@ export class SQLServerDataProvider
       };
     } catch (e) {
       LogError(e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
       return {
         Success: false,
         QueryID: params.QueryID,
@@ -827,7 +828,7 @@ export class SQLServerDataProvider
         RowCount: 0,
         TotalRowCount: 0,
         ExecutionTime: 0,
-        ErrorMessage: e.message,
+        ErrorMessage: errorMessage,
       };
     }
   }
@@ -838,7 +839,18 @@ export class SQLServerDataProvider
   protected async findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<QueryInfo> {
     const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath, true);
     if (!query) {
-      throw new Error('Query not found');
+      let errorDetails = 'Query not found';
+      if (params.QueryName) {
+        errorDetails = `Query '${params.QueryName}' not found`;
+        if (params.CategoryPath) {
+          errorDetails += ` in category path '${params.CategoryPath}'`;
+        } else if (params.CategoryID) {
+          errorDetails += ` in category ID '${params.CategoryID}'`;
+        }
+      } else if (params.QueryID) {
+        errorDetails = `Query with ID '${params.QueryID}' not found`;
+      }
+      throw new Error(errorDetails);
     }
     
     // Check permissions and status
