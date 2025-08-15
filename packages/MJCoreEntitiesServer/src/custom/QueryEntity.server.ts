@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult } from "@memberjunction/core";
 import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -6,6 +6,7 @@ import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
 import { LoadLocalEmbedding } from "@memberjunction/ai-local-embeddings";
+import { EmbedTextLocalHelper } from "./util";
 
 LoadLocalEmbedding(); // Ensure local embedding model is registered
 
@@ -61,6 +62,15 @@ export class QueryEntityExtended extends QueryEntity {
         return this._queryPermissions;
     }
 
+    /**
+     * Simple proxy to local helper method for embeddings. Needed for BaseEntity sub-classes that want to use embeddings built into BaseEntity
+     * @param textToEmbed 
+     * @returns 
+     */
+    protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
+        return EmbedTextLocalHelper(this, textToEmbed);
+    }
+    
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
             // Check if this is a new record or if SQL/Description has changed
@@ -70,8 +80,8 @@ export class QueryEntityExtended extends QueryEntity {
             const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
             
             // Generate embedding for Description if needed, before saving
-            if (shouldGenerateEmbedding && this.Description && this.Description.trim().length > 0) {
-                await this.generateDescriptionEmbedding();
+            if (shouldGenerateEmbedding) {
+                await this.GenerateEmbeddingByFieldName("Description", "EmbeddingVector", "EmbeddingModelID");
             } else if (!this.Description || this.Description.trim().length === 0) {
                 // Clear embedding if description is empty
                 this.EmbeddingVector = null;
@@ -104,77 +114,7 @@ export class QueryEntityExtended extends QueryEntity {
             return false;
         }
     }
-    
-    /**
-     * Generates an embedding vector for the query description using the configured embedding model.
-     * This method:
-     * 1. Finds the highest-ranked embedding model in the system
-     * 2. Creates an embedding instance using the model's driver
-     * 3. Generates a vector embedding for the Description field
-     * 4. Stores the vector as JSON in EmbeddingVector field
-     * 5. Stores the model ID in EmbeddingModelID field for tracking
-     * 
-     * The embedding generation is optional and will not fail the save operation if:
-     * - No embedding models are configured
-     * - No API key is available
-     * - The embedding generation fails
-     */
-    private async generateDescriptionEmbedding(): Promise<void> {
-        try {
-            // Ensure AIEngine is configured
-            await AIEngine.Instance.Config(false, this.ContextCurrentUser);
-            
-            // Find an embedding model - prioritize models with AIModelType = 'Embedding'
-            const embeddingModels = AIEngine.Instance.Models.filter(m => 
-                m.AIModelType && m.AIModelType.trim().toLowerCase() === 'embeddings' &&
-                m.Vendor && m.Vendor.trim().toLowerCase() === 'localembeddings' // Only use local embedding models
-            );
-            
-            if (embeddingModels.length === 0) {
-                // No embedding models configured, skip embedding generation
-                console.warn('No local embedding models configured in the system. Skipping embedding generation.');
-                return;
-            }
-            
-            // Sort by PowerRank (higher is better) and select the most powerful embedding model
-            const sortedModels = embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
-            const embeddingModel = sortedModels[0];
-            
-            // Create the embedding instance
-            // For local embeddings that don't need an API key, pass 'local' or let the constructor handle it
-            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                BaseEmbeddings, 
-                embeddingModel.DriverClass, 
-                null, // No API key needed for local embeddings
-            );
-            
-            if (!embedding) {
-                console.warn(`Failed to create embedding instance for model ${embeddingModel.Name}. Skipping embedding generation.`);
-                return;
-            }
-            
-            // Generate the embedding for the description
-            const params: EmbedTextParams = {
-                text: this.Description,
-                model: embeddingModel.APIName
-            };
-            
-            const result = await embedding.EmbedText(params);
-            
-            if (result && result.vector) {
-                // Store the embedding vector as JSON and the model ID
-                this.EmbeddingVector = JSON.stringify(result.vector);
-                this.EmbeddingModelID = embeddingModel.ID;
-            } else {
-                console.warn('Failed to generate embedding: No vector returned');
-            }
-        } catch (e) {
-            // Log error but don't fail the save operation
-            LogError('Error generating description embedding:', e.message);
-            // Don't throw - embedding generation is optional and shouldn't block saving
-        }
-    }
-    
+     
     /**
      * Asynchronous version of extractAndSyncData that runs outside the main save operation
      * to prevent connection pool exhaustion
