@@ -8,6 +8,8 @@ import { marked } from 'marked';
 import { MJReactComponent, StateChangeEvent, ReactComponentEvent, AngularAdapterService } from '@memberjunction/ng-react';
 import { SetupStyles } from '@memberjunction/react-runtime';
 import { SKIP_CHAT_ADDITIONAL_LIBRARIES } from '../skip-chat-library-config';
+import { ToolbarConfig, ToolbarActionEvent, TOOLBAR_BUTTONS } from '@memberjunction/ng-code-editor';
+import { EditorView } from '@codemirror/view';
 
 @Component({
   selector: 'skip-dynamic-ui-component',
@@ -41,6 +43,13 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     public showDataRequirements: boolean = false;
     public showTechnicalDesign: boolean = false;
     public showCode: boolean = false;
+    public showSpec: boolean = false;
+    
+    // Toolbar configuration for code editors
+    public codeToolbarConfig: ToolbarConfig = {
+        enabled: true,
+        buttons: [TOOLBAR_BUTTONS.COPY]
+    };
     
     // Details panel height for resizing
     public detailsPanelHeight: string = '300px';
@@ -165,6 +174,21 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     }
 
     /**
+     * Handle toolbar actions from code editor
+     */
+    public handleCodeToolbarAction(event: ToolbarActionEvent): void {
+        if (event.buttonId === 'copy' && event.editor) {
+            // Get the editor content and copy to clipboard
+            const content = event.editor.state.doc.toString();
+            navigator.clipboard.writeText(content).then(() => {
+                console.log('Code copied to clipboard');
+            }).catch(err => {
+                console.error('Failed to copy to clipboard:', err);
+            });
+        }
+    }
+    
+    /**
      * Copy error details to clipboard for user to send back to
      */
     public copyErrorToClipboard(): void {
@@ -262,13 +286,18 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.showCode = !this.showCode;
         this.adjustDetailsPanelHeight();
     }
+
+    public toggleShowSpec(): void {
+        this.showSpec = !this.showSpec;
+        this.adjustDetailsPanelHeight();
+    }
     
     /**
      * Adjust the details panel height when toggling views
      */
     private adjustDetailsPanelHeight(): void {
         const anyVisible = this.showFunctionalRequirements || this.showDataRequirements || 
-                          this.showTechnicalDesign || this.showCode;
+                          this.showTechnicalDesign || this.showCode || this.showSpec;
         
         if (anyVisible && this.detailsPanelHeight === '0px') {
             this.detailsPanelHeight = '300px';
@@ -359,6 +388,17 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             return BuildComponentCompleteCode(option.option);
         } catch (e) {
             return `// Error building complete component code:\n// ${e}`;
+        }
+    }
+
+    /**
+     * Get the component spec
+     */
+    public getComponentSpec(option: ComponentOption): string {
+        try {
+            return JSON.stringify(option.option, null, 2);
+        } catch (e) {
+            return `// Error building complete component spec:\n// ${e}`;
         }
     }
     

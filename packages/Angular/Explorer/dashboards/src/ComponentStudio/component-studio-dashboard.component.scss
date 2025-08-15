@@ -26,6 +26,51 @@
       .header-buttons {
         display: flex;
         gap: 8px;
+        
+        .import-dropdown {
+          position: relative;
+          
+          .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            min-width: 180px;
+            
+            .dropdown-item {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              width: 100%;
+              padding: 10px 16px;
+              border: none;
+              background: none;
+              text-align: left;
+              cursor: pointer;
+              font-size: 14px;
+              color: #212529;
+              transition: background-color 0.2s;
+              
+              &:hover {
+                background-color: #f8f9fa;
+              }
+              
+              &:not(:last-child) {
+                border-bottom: 1px solid #e9ecef;
+              }
+              
+              i {
+                width: 16px;
+                text-align: center;
+                color: #6366f1;
+              }
+            }
+          }
+        }
       }
       
       h1 {
@@ -247,6 +292,11 @@
                 &.file {
                   background: #e0f2fe;
                   color: #0369a1;
+                }
+                
+                &.text {
+                  background: #f3e8ff;
+                  color: #6b21a8;
                 }
               }
             }
