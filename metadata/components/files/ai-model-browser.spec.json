@@ -12,7 +12,7 @@
         "description": "Core AI model definitions and specifications",
         "displayFields": [
           "ID",
-          "Name",
+          "Name", 
           "APIName",
           "Description",
           "AIModelTypeID",

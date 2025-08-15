@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey } from '@memberjunction/core';
@@ -9,6 +9,8 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ReactComponentEvent } from '@memberjunction/ng-react';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
+import { TextImportDialogComponent } from './components/text-import-dialog.component';
 
 // Interface for components loaded from files (not from database)
 interface FileLoadedComponent {
@@ -66,9 +68,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
   
+  // Import dropdown state
+  public importDropdownOpen = false;
+  
+  // Text import dialog reference
+  private textImportDialog?: DialogRef;
+  
   private destroy$ = new Subject<void>();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService,
+    private viewContainerRef: ViewContainerRef
+  ) {
     super();
   }
 
@@ -312,9 +324,84 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     await this.loadData();
   }
 
-  // File upload handling methods
-  public triggerFileInput(): void {
+  // Import handling methods
+  public toggleImportDropdown(): void {
+    this.importDropdownOpen = !this.importDropdownOpen;
+  }
+  
+  public closeImportDropdown(): void {
+    this.importDropdownOpen = false;
+  }
+  
+  @HostListener('document:click', ['$event'])
+  public onDocumentClick(event: MouseEvent): void {
+    // Close dropdown if clicking outside
+    const target = event.target as HTMLElement;
+    const dropdown = target.closest('.import-dropdown');
+    if (!dropdown && this.importDropdownOpen) {
+      this.importDropdownOpen = false;
+    }
+  }
+  
+  public importFromFile(): void {
+    this.closeImportDropdown();
     this.fileInput?.nativeElement.click();
+  }
+  
+  public importFromText(): void {
+    this.closeImportDropdown();
+    this.openTextImportDialog();
+  }
+  
+  private openTextImportDialog(): void {
+    this.textImportDialog = this.dialogService.open({
+      content: TextImportDialogComponent,
+      width: 700,
+      height: 600,
+      minWidth: 500,
+      title: '',  // Title is in the component
+      actions: [],  // Actions are in the component
+      appendTo: this.viewContainerRef
+    });
+    
+    // Handle the import event from the dialog component
+    const dialogComponentRef = this.textImportDialog.content.instance as TextImportDialogComponent;
+    
+    // Subscribe to import event
+    dialogComponentRef.importSpec.subscribe((spec: ComponentSpec) => {
+      this.handleTextImport(spec);
+      this.textImportDialog?.close();
+    });
+    
+    // Subscribe to cancel event
+    dialogComponentRef.cancelDialog.subscribe(() => {
+      this.textImportDialog?.close();
+    });
+  }
+  
+  private async handleTextImport(spec: ComponentSpec): Promise<void> {
+    // Create a file-loaded component (reusing the same structure)
+    const textComponent: FileLoadedComponent = {
+      id: this.generateId(),
+      name: spec.name,
+      description: spec.description,
+      specification: spec,
+      filename: 'text-import.json',
+      loadedAt: new Date(),
+      isFileLoaded: true,
+      type: spec.type || 'Component',
+      status: 'Text'
+    };
+    
+    // Add to the list and refresh
+    this.fileLoadedComponents.push(textComponent);
+    this.combineAndFilterComponents();
+    
+    console.log(`Loaded component "${spec.name}" from text input`);
+    
+    // Automatically select and run the newly loaded component
+    this.expandedComponent = textComponent;
+    this.runComponent(textComponent);
   }
 
   public async handleFileSelect(event: Event): Promise<void> {

@@ -9850,6 +9850,16 @@ export const ComponentSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Number of component dependencies defined in the specification. Used to assess component complexity.`),
+    TechnicalDesignVectorEmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesignVectorEmbeddingModelID
+        * * Display Name: Technical Design Vector Embedding Model ID
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The ID of the AI model used to generate the vector embedding for the technical design`),
+    FunctionalRequirementsVectorEmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirementsVectorEmbeddingModelID
+        * * Display Name: Functional Requirements Vector Embedding Model ID
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The ID of the AI model used to generate the vector embedding for the functional requirements`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -39755,6 +39765,32 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     }
     set DependencyCount(value: number) {
         this.Set('DependencyCount', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesignVectorEmbeddingModelID
+    * * Display Name: Technical Design Vector Embedding Model ID
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The ID of the AI model used to generate the vector embedding for the technical design
+    */
+    get TechnicalDesignVectorEmbeddingModelID(): string | null {
+        return this.Get('TechnicalDesignVectorEmbeddingModelID');
+    }
+    set TechnicalDesignVectorEmbeddingModelID(value: string | null) {
+        this.Set('TechnicalDesignVectorEmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirementsVectorEmbeddingModelID
+    * * Display Name: Functional Requirements Vector Embedding Model ID
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The ID of the AI model used to generate the vector embedding for the functional requirements
+    */
+    get FunctionalRequirementsVectorEmbeddingModelID(): string | null {
+        return this.Get('FunctionalRequirementsVectorEmbeddingModelID');
+    }
+    set FunctionalRequirementsVectorEmbeddingModelID(value: string | null) {
+        this.Set('FunctionalRequirementsVectorEmbeddingModelID', value);
     }
 
     /**

@@ -158,6 +158,20 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
+    
+    // === Loading States ===
+    /** Main loading state for initial data load */
+    public isLoadingData = false;
+    
+    /** Individual loading states for each section */
+    public loadingStates = {
+        executionHistory: false,
+        subAgents: false,
+        prompts: false,
+        actions: false,
+        learningCycles: false,
+        notes: false
+    };
 
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
@@ -521,6 +535,18 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     private async loadRelatedCounts(): Promise<void> {
         if (!this.record?.ID) return;
         
+        // Set loading state
+        this.isLoadingData = true;
+        this.loadingStates = {
+            executionHistory: true,
+            subAgents: true,
+            prompts: true,
+            actions: true,
+            learningCycles: true,
+            notes: true
+        };
+        this.cdr.detectChanges();
+        
         try {
             const rv = new RunView();
             
@@ -603,6 +629,18 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.learningCycleCount = 0;
             this.noteCount = 0;
             this.executionHistoryCount = 0;
+        } finally {
+            // Clear loading states
+            this.isLoadingData = false;
+            this.loadingStates = {
+                executionHistory: false,
+                subAgents: false,
+                prompts: false,
+                actions: false,
+                learningCycles: false,
+                notes: false
+            };
+            this.cdr.detectChanges();
         }
     }
 

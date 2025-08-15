@@ -12,7 +12,7 @@
     {"name": "promptRuns", "type": "array", "required": true, "description": "Array of prompt runs for this model"},
     {"name": "isOpen", "type": "boolean", "required": true, "description": "Whether the details panel is open"}
   ],
-  "events": [
+  "events": [ 
     {"name": "onClose", "description": "Fired when the details panel should close", "parameters": []},
     {"name": "onOpenRecord", "description": "Fired when the open record button is clicked", "parameters": [{"name": "modelName", "type": "string", "description": "Name of the model to open"}]}
   ],

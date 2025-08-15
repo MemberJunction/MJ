@@ -16,9 +16,22 @@
             }
           </button>
         }
-        <button kendoButton (click)="triggerFileInput()" [themeColor]="'info'">
-          <span class="fa-solid fa-file-import"></span> Import from File
-        </button>
+        <div class="import-dropdown" [class.open]="importDropdownOpen">
+          <button kendoButton (click)="toggleImportDropdown()" [themeColor]="'info'">
+            <span class="fa-solid fa-file-import"></span> Import
+            <span class="fa-solid fa-chevron-down" style="margin-left: 5px; font-size: 10px;"></span>
+          </button>
+          @if (importDropdownOpen) {
+            <div class="dropdown-menu">
+              <button class="dropdown-item" (click)="importFromFile()">
+                <i class="fa-solid fa-file"></i> Import from File
+              </button>
+              <button class="dropdown-item" (click)="importFromText()">
+                <i class="fa-solid fa-keyboard"></i> Import from Text
+              </button>
+            </div>
+          }
+        </div>
         <button kendoButton (click)="refreshData()" [disabled]="isLoading">
           <span class="fa-solid fa-sync"></span> Refresh
         </button>
@@ -75,8 +88,12 @@
                     <div class="card-name">
                       {{ getComponentName(component) }}
                       @if (isFileLoadedComponent(component)) {
-                        <span class="file-badge" title="Loaded from {{ getComponentFilename(component) }}">
-                          <i class="fa-solid fa-file"></i> {{ getComponentFilename(component) }}
+                        <span class="file-badge" [title]="getComponentStatus(component) === 'Text' ? 'Imported from text input' : 'Loaded from ' + getComponentFilename(component)">
+                          @if (getComponentStatus(component) === 'Text') {
+                            <i class="fa-solid fa-keyboard"></i> Text Import
+                          } @else {
+                            <i class="fa-solid fa-file"></i> {{ getComponentFilename(component) }}
+                          }
                         </span>
                       }
                     </div>
@@ -84,7 +101,11 @@
                       <span class="card-type">{{ getComponentType(component) || 'Component' }}</span>
                       <span class="card-version">v{{ getComponentVersion(component) }}</span>
                       @if (isFileLoadedComponent(component)) {
-                        <span class="status-badge file">File</span>
+                        @if (getComponentStatus(component) === 'Text') {
+                          <span class="status-badge text">Text</span>
+                        } @else {
+                          <span class="status-badge file">File</span>
+                        }
                       } @else if (getComponentStatus(component) === 'Published') {
                         <span class="status-badge published">Published</span>
                       } @else {

@@ -1183,6 +1183,182 @@ if (dashboard.Success) {
 
 ISC License - see LICENSE file for details
 
+## Vector Embeddings Support (v2.90.0+)
+
+MemberJunction now provides built-in support for generating and managing vector embeddings for text fields in entities. This feature enables similarity search, duplicate detection, and AI-powered features across your data.
+
+### Overview
+
+The BaseEntity class now includes methods for generating vector embeddings from text fields and storing them alongside the original data. This functionality is designed to be used by server-side entity subclasses that have access to AI embedding models.
+
+### Core Methods
+
+BaseEntity provides four methods for managing vector embeddings:
+
+```typescript
+// Generate embeddings for multiple fields by field names
+protected async GenerateEmbeddingsByFieldName(fields: Array<{
+    fieldName: string,           // Source text field name
+    vectorFieldName: string,     // Target vector storage field name
+    modelFieldName: string       // Field to store the model ID used
+}>): Promise<boolean>
+
+// Generate embedding for a single field by name
+protected async GenerateEmbeddingByFieldName(
+    fieldName: string, 
+    vectorFieldName: string, 
+    modelFieldName: string
+): Promise<boolean>
+
+// Generate embeddings for multiple fields using EntityField objects
+protected async GenerateEmbeddings(fields: Array<{
+    field: EntityField,
+    vectorField: EntityField,
+    modelField: EntityField
+}>): Promise<boolean>
+
+// Generate embedding for a single field
+protected async GenerateEmbedding(
+    field: EntityField,
+    vectorField: EntityField,
+    modelField: EntityField
+): Promise<boolean>
+```
+
+### Implementation Pattern
+
+To use vector embeddings in your entity:
+
+1. **Add Vector Storage Fields** to your database table:
+   - A field to store the vector (typically NVARCHAR(MAX))
+   - A field to store the model ID that generated the vector
+
+2. **Implement EmbedTextLocal** in your server-side entity subclass:
+
+```typescript
+import { BaseEntity, SimpleEmbeddingResult } from "@memberjunction/core";
+import { AIEngine } from "@memberjunction/aiengine";
+
+export class MyEntityServer extends MyEntity {
+    protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
+        await AIEngine.Instance.Config(false, this.ContextCurrentUser);
+        const result = await AIEngine.Instance.EmbedTextLocal(textToEmbed);
+        
+        if (!result?.result?.vector || !result?.model?.ID) {
+            throw new Error('Failed to generate embedding');
+        }
+        
+        return {
+            vector: result.result.vector,
+            modelID: result.model.ID
+        };
+    }
+}
+```
+
+3. **Call GenerateEmbeddings** in your Save method:
+
+```typescript
+public async Save(): Promise<boolean> {
+    // Generate embeddings before saving
+    await this.GenerateEmbeddingsByFieldName([
+        {
+            fieldName: "Description",
+            vectorFieldName: "DescriptionVector",
+            modelFieldName: "DescriptionVectorModelID"
+        },
+        {
+            fieldName: "Content",
+            vectorFieldName: "ContentVector",
+            modelFieldName: "ContentVectorModelID"
+        }
+    ]);
+    
+    return await super.Save();
+}
+```
+
+### Automatic Features
+
+The embedding generation system includes several automatic optimizations:
+
+- **Dirty Detection**: Only generates embeddings for new records or when source text changes
+- **Null Handling**: Clears vector fields when source text is empty
+- **Parallel Processing**: Multiple embeddings are generated concurrently for performance
+- **Error Resilience**: Returns false on failure without throwing exceptions
+
+### Type Definitions
+
+The `SimpleEmbeddingResult` type is defined in @memberjunction/core:
+
+```typescript
+export type SimpleEmbeddingResult = {
+    vector: number[];    // The embedding vector
+    modelID: string;     // ID of the AI model used
+}
+```
+
+### Architecture Benefits
+
+This design provides:
+- **Clean Separation**: Core orchestration logic in BaseEntity, AI integration in subclasses
+- **No Dependency Issues**: BaseEntity doesn't depend on AI packages
+- **Reusability**: Any server-side entity can add embeddings with minimal code
+- **Type Safety**: Full TypeScript support throughout
+
+### Example: Complete Implementation
+
+```typescript
+// In your server-side entity file
+import { BaseEntity, SimpleEmbeddingResult } from "@memberjunction/core";
+import { RegisterClass } from "@memberjunction/global";
+import { ComponentEntityExtended } from "@memberjunction/core-entities";
+import { AIEngine } from "@memberjunction/aiengine";
+
+@RegisterClass(BaseEntity, 'Components')
+export class ComponentEntityServer extends ComponentEntityExtended {
+    public async Save(): Promise<boolean> {
+        // Generate embeddings for text fields
+        await this.GenerateEmbeddingsByFieldName([
+            {
+                fieldName: "TechnicalDesign",
+                vectorFieldName: "TechnicalDesignVector",
+                modelFieldName: "TechnicalDesignVectorModelID"
+            },
+            {
+                fieldName: "FunctionalRequirements",
+                vectorFieldName: "FunctionalRequirementsVector",
+                modelFieldName: "FunctionalRequirementsVectorModelID"
+            }
+        ]);
+        
+        return await super.Save();
+    }
+    
+    protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
+        await AIEngine.Instance.Config(false, this.ContextCurrentUser);
+        const e = await AIEngine.Instance.EmbedTextLocal(textToEmbed);
+        
+        if (!e?.result?.vector || !e?.model?.ID) {
+            throw new Error('Failed to generate embedding - no vector or model ID returned');
+        }
+        
+        return {
+            vector: e.result.vector,
+            modelID: e.model.ID
+        };
+    }
+}
+```
+
+### Best Practices
+
+1. **Database Schema**: Store vectors as JSON strings in NVARCHAR(MAX) fields
+2. **Model Tracking**: Always store the model ID to track which model generated each vector
+3. **Error Handling**: Implement proper error handling in your EmbedTextLocal override
+4. **Performance**: Use batch methods when generating multiple embeddings
+5. **Security**: Ensure proper user context is passed for multi-tenant scenarios
+
 ## Support
 
 For support, documentation, and examples, visit [MemberJunction.com](https://www.memberjunction.com)

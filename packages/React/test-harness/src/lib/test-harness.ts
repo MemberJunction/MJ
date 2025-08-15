@@ -87,6 +87,39 @@ export class ReactTestHarness {
 
 
   /**
+   * Test a simple component from code string
+   * This is a convenience method for testing component code directly
+   */
+  async testComponentCode(
+    componentCode: string,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    const componentName = 'Component';
+    const spec = {
+      name: componentName,
+      code: componentCode,
+      dependencies: [],
+      description: 'Test component',
+      title: componentName,
+      type: 'React',
+      functionalRequirements: {},
+      technicalDesign: {},
+      dataRequirements: {},
+      exampleUsage: ''
+    } as any as ComponentSpec;
+    
+    const fullOptions: ComponentExecutionOptions = {
+      componentSpec: spec,
+      props: props || {},
+      contextUser: options?.contextUser || { Name: 'Test User', Email: 'test@test.com' } as any,
+      ...options
+    };
+    
+    return this.testComponent(fullOptions);
+  }
+
+  /**
    * Test a component from a file path
    * This is a convenience method for the CLI
    */
