@@ -335,6 +335,12 @@ export abstract class BaseLLM extends BaseModel {
         content: string;
         thinking?: string;
     } {
+        if (!content)
+            return {
+                content,
+                thinking: undefined
+            };
+
         let processedContent = content.trim();
         let thinkingContent: string | undefined = undefined;
         
