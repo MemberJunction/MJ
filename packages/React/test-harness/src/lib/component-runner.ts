@@ -24,6 +24,7 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   libraryConfiguration?: LibraryConfiguration;
   isRootComponent?: boolean; // Whether this is a root component (for prop validation)
+  debug?: boolean; // Enable debug output - default true
 }
  
 
@@ -101,6 +102,15 @@ export class ComponentRunner {
     const criticalWarnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     let renderCount = 0;
+    
+    // Default debug to true
+    const debug = options.debug !== false;
+    
+    if (debug) {
+      console.log('\n🔍 === Component Execution Debug Mode ===');
+      console.log('Component:', options.componentSpec.name);
+      console.log('Props:', JSON.stringify(options.props || {}, null, 2));
+    }
 
     try {
       const page = await this.browserManager.getPage();
@@ -152,8 +162,8 @@ export class ComponentRunner {
       
       // Add any additional errors
       errors.push(...additionalErrors);
-
-      return {
+      
+      const result = {
         success,
         html,
         errors: errors.map(e => {
@@ -174,9 +184,15 @@ export class ComponentRunner {
         executionTime: Date.now() - startTime,
         renderCount
       };
+      
+      if (debug) {
+        this.dumpDebugInfo(result);
+      }
+
+      return result;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
-      return {
+      const result = {
         success: false,
         html: '',
         errors: errors.map(e => {
@@ -196,7 +212,64 @@ export class ComponentRunner {
         executionTime: Date.now() - startTime,
         renderCount
       };
+      
+      if (debug) {
+        console.log('\n❌ Component execution failed with error:', error);
+        this.dumpDebugInfo(result);
+      }
+      
+      return result;
     }
+  }
+  
+  /**
+   * Dumps debug information to console for easier troubleshooting
+   */
+  private dumpDebugInfo(result: ComponentExecutionResult): void {
+    console.log('\n📊 === Component Execution Results ===');
+    console.log('Success:', result.success ? '✅' : '❌');
+    console.log('Execution time:', result.executionTime + 'ms');
+    console.log('Render count:', result.renderCount);
+    
+    if (result.console && result.console.length > 0) {
+      console.log('\n📝 Console Output:');
+      result.console.forEach(log => {
+        const icon = log.type === 'error' ? '❌' : 
+                     log.type === 'warning' ? '⚠️' : 
+                     log.type === 'log' ? '📝' : '💬';
+        console.log(`  ${icon} [${log.type}] ${log.text}`);
+      });
+    }
+    
+    if (result.errors && result.errors.length > 0) {
+      console.log('\n❌ Errors:', result.errors.length);
+      result.errors.forEach((err, i) => {
+        const message = typeof err === 'string' ? err : err.message;
+        console.log(`  ${i + 1}. ${message}`);
+      });
+    }
+    
+    if (result.warnings && result.warnings.length > 0) {
+      console.log('\n⚠️ Warnings:', result.warnings.length);
+      result.warnings.forEach((warn, i) => {
+        const message = typeof warn === 'string' ? warn : warn.message;
+        console.log(`  ${i + 1}. ${message}`);
+      });
+    }
+    
+    if (result.criticalWarnings && result.criticalWarnings.length > 0) {
+      console.log('\n🔴 Critical Warnings:', result.criticalWarnings.length);
+      result.criticalWarnings.forEach((warn, i) => {
+        console.log(`  ${i + 1}. ${warn}`);
+      });
+    }
+    
+    if (result.html) {
+      const htmlPreview = result.html.substring(0, 200);
+      console.log('\n📄 HTML Preview:', htmlPreview + (result.html.length > 200 ? '...' : ''));
+    }
+    
+    console.log('\n========================================\n');
   }
 
   private createHTMLTemplate(options: ComponentExecutionOptions): string {
@@ -244,8 +317,28 @@ ${runtimeScripts}
 ${componentScripts}
 ${cssLinks}
   <style>
-    body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    #root { min-height: 100vh; }
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f0f0f0; /* Light gray background to see contrast */
+    }
+    #root { 
+      min-height: 100vh;
+      background-color: white;
+      border: 2px solid #007bff;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .test-harness-header {
+      background-color: #28a745;
+      color: white;
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      font-weight: bold;
+      text-align: center;
+    }
   </style>
   <script>
     // Initialize error and console tracking
@@ -316,8 +409,17 @@ ${cssLinks}
   </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div class="test-harness-header">
+    🧪 React Test Harness - Component Loaded Successfully
+  </div>
+  <div id="root" data-testid="react-root">
+    <!-- Component will render here -->
+  </div>
   <script type="text/babel">
+    // Immediate debug message
+    console.log('🚀 Test harness script started executing');
+    document.getElementById('root').innerHTML = '<div style="background: lime; padding: 20px; color: black; font-size: 18px;">📝 Script is running...</div>';
+    
     ${options.setupCode || ''}
     
     // Create runtime context with dynamic libraries
@@ -592,11 +694,40 @@ ${cssLinks}
     const props = ${propsJson};
     
     (async () => {
+      console.log('📦 Starting component initialization...');
+      console.log('React available:', typeof React !== 'undefined');
+      console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
+      console.log('Babel available:', typeof Babel !== 'undefined');
+      
+      // Update the root to show progress
+      document.getElementById('root').innerHTML = '<div style="background: cyan; padding: 20px; color: black;">🔄 Initializing components...</div>';
+      
+      // First, test that React is working with a simple component
+      const TestComponent = () => React.createElement('div', {
+        style: { 
+          background: 'yellow', 
+          padding: '10px', 
+          margin: '10px 0',
+          border: '2px solid orange',
+          color: 'black',
+          fontSize: '16px',
+          fontWeight: 'bold'
+        }
+      }, '🔧 React is working! Now loading your component...');
+      
+      const testRoot = ReactDOM.createRoot(document.getElementById('root'));
+      testRoot.render(React.createElement(TestComponent));
+      
+      // Wait a moment to show the test component
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now proceed with the actual component
       // Register the component hierarchy
       const result = await hierarchyRegistrar.registerHierarchy(componentSpec);
       
       if (!result.success) {
         console.error('Failed to register components:', result.errors);
+        document.getElementById('root').innerHTML = '<div style="color: red; padding: 20px;">Failed to register components: ' + JSON.stringify(result.errors) + '</div>';
         return;
       }
       
@@ -619,6 +750,10 @@ ${cssLinks}
       
       // Function to render with current settings
       const renderWithSettings = () => {
+        console.log('🎯 Starting component render...');
+        console.log('Props:', props);
+        console.log('Root component found:', !!RootComponent);
+        
         const enhancedProps = {
           ...props,
           components: components,
@@ -634,15 +769,60 @@ ${cssLinks}
           }
         };
         
-        root.render(
-          React.createElement(ErrorBoundary, null,
-            React.createElement(RootComponent, enhancedProps)
-          )
-        );
+        console.log('Enhanced props created:', Object.keys(enhancedProps));
+        
+        try {
+          root.render(
+            React.createElement(ErrorBoundary, null,
+              React.createElement(RootComponent, enhancedProps)
+            )
+          );
+          console.log('✅ Component rendered successfully');
+        } catch (error) {
+          console.error('❌ Render error:', error);
+          document.getElementById('root').innerHTML = '<div style="color: red; padding: 20px;">Render Error: ' + error.message + '</div>';
+        }
       };
       
       // Initial render
       renderWithSettings();
+      
+      // Add a fallback message if nothing renders after a delay
+      setTimeout(() => {
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+          const hasContent = rootElement.innerHTML.trim().length > 0;
+          const hasVisibleChildren = rootElement.querySelector('*');
+          
+          console.log('Root element check:', {
+            hasContent,
+            innerHTML: rootElement.innerHTML.substring(0, 100),
+            hasVisibleChildren: !!hasVisibleChildren,
+            childCount: rootElement.childNodes.length
+          });
+          
+          if (!hasContent || !hasVisibleChildren) {
+            rootElement.innerHTML = '<div style="color: red; font-size: 18px; padding: 20px; border: 2px dashed red; background: #ffe6e6;">⚠️ Component did not render any visible content</div>';
+          } else {
+            // Force visibility on all children as a test
+            const allElements = rootElement.querySelectorAll('*');
+            allElements.forEach(el => {
+              if (el instanceof HTMLElement) {
+                // Make sure elements are visible
+                if (window.getComputedStyle(el).display === 'none') {
+                  el.style.display = 'block !important';
+                }
+                if (window.getComputedStyle(el).visibility === 'hidden') {
+                  el.style.visibility = 'visible !important';
+                }
+                // Add a test border to see if elements exist
+                el.style.border = '1px dotted red';
+              }
+            });
+            console.log('Applied debug borders to', allElements.length, 'elements');
+          }
+        }
+      }, 2000);
     })();
   </script>
 </body>
