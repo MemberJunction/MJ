@@ -596,7 +596,6 @@ export class GraphQLSystemUserClient {
                         QueryID
                         EntityID
                         EntityName
-                        Sequence
                     }
                     Permissions {
                         ID

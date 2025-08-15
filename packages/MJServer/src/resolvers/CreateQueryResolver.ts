@@ -216,6 +216,9 @@ export class QueryEntityType {
 
     @Field(() => String, { nullable: true })
     EntityName?: string;
+
+    @Field(() => Number, { nullable: true })
+    Sequence?: number; // TEMPORARY - we will remove those once the new 2.89 GraphQLSystemClient update is out there now we are just including here as it is easeir to fix this end
 }
 
 @ObjectType()
