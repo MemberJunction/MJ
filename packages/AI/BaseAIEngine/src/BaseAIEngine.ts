@@ -16,7 +16,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIConfigurationEntity,
          AIConfigurationParamEntity,
          AIAgentStepEntity,
-         AIAgentStepPathEntity} from "@memberjunction/core-entities";
+         AIAgentStepPathEntity,
+         AIAgentRelationshipEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -32,6 +33,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _agentRelationships: AIAgentRelationshipEntity[] = [];
     private _agentTypes: AIAgentTypeEntity[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
@@ -90,6 +92,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agents',
                 EntityName: 'AI Agents'
+            },
+            {
+                PropertyName: '_agentRelationships',
+                EntityName: 'MJ: AI Agent Relationships'
             },
             {
                 PropertyName: '_agentTypes',
@@ -247,6 +253,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get Agents(): AIAgentEntityExtended[] {
         return this._agents;
+    }
+
+    public get AgentRelationships(): AIAgentRelationshipEntity[] {
+        return this._agentRelationships;
     }
 
     /**

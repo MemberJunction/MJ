@@ -49,6 +49,37 @@ export class CerebrasLLM extends BaseLLM {
     }
 
     /**
+     * Set the reasoning_effort parameter for Cerebras models
+     * Currently only supported for OpenAI GPT OSS models
+     */
+    protected setCerebrasParamsEffortLevel(cerebrasParams: Chat.ChatCompletionCreateParams, params: ChatParams): void {
+        let convertedEffortLevel = params.effortLevel;
+        if (convertedEffortLevel) {
+            const isGptOSSModel = params.model.toLowerCase().includes("gpt-oss");
+            const numericEffortLevel = Number.isNaN(params.effortLevel) ? null : Number.parseInt(params.effortLevel);
+            
+            if (isGptOSSModel) {
+                // Map our effort levels as follows:
+                // 0-33 = "low"
+                // 34-66 = "medium"
+                // 67-100 = "high"
+                if (numericEffortLevel !== null) {
+                    if (numericEffortLevel >= 0 && numericEffortLevel <= 33) {
+                        convertedEffortLevel = "low";
+                    } else if (numericEffortLevel > 33 && numericEffortLevel <= 66) {
+                        convertedEffortLevel = "medium";
+                    } else if (numericEffortLevel > 66 && numericEffortLevel <= 100) {
+                        convertedEffortLevel = "high";
+                    }
+                }
+                
+                // Only set reasoning_effort for GPT OSS models
+                cerebrasParams.reasoning_effort = convertedEffortLevel as "low" | "medium" | "high";
+            }
+        }
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Cerebras
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -82,6 +113,9 @@ export class CerebrasLLM extends BaseLLM {
             temperature: params.temperature
         };
         
+        // Add reasoning_effort if supported by the model
+        this.setCerebrasParamsEffortLevel(cerebrasParams, params);
+        
         // Handle response format if specified
         switch (params.responseFormat) {
             case 'Any':
@@ -100,7 +134,7 @@ export class CerebrasLLM extends BaseLLM {
         const endTime = new Date();
 
         // Cast to any to extract the choices
-        const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice) => {
+        const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice: any) => {
             const rawMessage = choice.message.content;
             // in some cases, Cerebras models do thinking and return that as the first part 
             // of the message the very first characters will be <think> and it ends with
@@ -112,7 +146,7 @@ export class CerebrasLLM extends BaseLLM {
                 message: {
                     role: ChatMessageRole.assistant,
                     content: extracted.content,
-                    thinking: extracted.thinking
+                    thinking: extracted.thinking || choice.message.reasoning // Include reasoning field if present
                 },
                 finish_reason: choice.finish_reason,
                 index: choice.index
@@ -173,6 +207,9 @@ export class CerebrasLLM extends BaseLLM {
             temperature: params.temperature,
             stream: true
         };
+        
+        // Add reasoning_effort if supported by the model
+        this.setCerebrasParamsEffortLevel(cerebrasParams, params);
         
         // Set response format if specified
         switch (params.responseFormat) {

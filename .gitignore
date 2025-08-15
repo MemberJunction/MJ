@@ -128,3 +128,4 @@ metadata/demo-prompt.md
 notes.txt
 plans/
 packages/AI/Providers/LocalEmbeddings/.cache/**
+packages/MJAPI/.cache/** 

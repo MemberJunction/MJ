@@ -1752,7 +1752,14 @@ export class BaseAgent {
             // Find sub-agents using AIEngine
             const activeSubAgents = engine.Agents.filter(a => a.ParentID === agent.ID && a.Status === 'Active')
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-            
+            const activeAgentRelationships = engine.AgentRelationships.filter(ar => ar.AgentID === agent.ID && ar.Status === 'Active');
+            // now combine the child sub-agents from the direct parentID relationships with the agentRelationships array, distinct to not repeat
+            // unique ID values
+            const uniqueActiveSubAgentIDs = new Set<string>();
+            activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
+            activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => a.ID === id));
+
             // Load available actions (placeholder for now - would integrate with Actions framework)
             const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
             const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
@@ -1762,8 +1769,8 @@ export class BaseAgent {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
-                subAgentCount: activeSubAgents.length,
-                subAgentDetails: this.formatSubAgentDetails(activeSubAgents),
+                subAgentCount: uniqueActiveSubAgents.length,
+                subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
                 actionCount: actions.length,
                 actionDetails: this.formatActionDetails(activeActions),
             };
@@ -1960,7 +1967,7 @@ export class BaseAgent {
         return JSON.stringify(subAgents.map(sa => {
             const result = {
                 Name: sa.Name,
-                Description: sa.Description,
+                Description: sa.Description
             };
             if (sa.ExecutionMode !== 'Sequential') {
                 // no need to include these two attributes for sub-agents

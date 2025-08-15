@@ -9,6 +9,20 @@ export class ComponentSpec {
     name: string;
 
     /**
+     * Components can be embedded or registry. Registry means we don't have the
+     * code directly here nor do we generate the code, we simply use the component from its registry
+     */
+    location: "embedded" | "registry";
+
+    /**
+     * Only used when location == "registry", a hierarchical namespace such as "crm/analytics/accounts". The combination of the 
+     * namespace and name are how a registry component is loaded. Registry components might have
+     * a root level segment that starts with @ such as "@memberjunction/examples/entities" or if the root
+     * segment doesn't have @ that means the component is local to that registry
+     */
+    namespace?: string;
+
+    /**
      * End-user friendly description of what the component does
      */
     description: string;
