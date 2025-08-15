@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.89.0
+- @memberjunction/global@2.89.0
+
 ## 2.88.0
 
 ### Patch Changes
