@@ -37957,6 +37957,12 @@ export class Component_ {
     @Field(() => Int, {description: `Number of component dependencies defined in the specification. Used to assess component complexity.`}) 
     DependencyCount: number;
         
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the technical design`}) 
+    TechnicalDesignVectorEmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the functional requirements`}) 
+    FunctionalRequirementsVectorEmbeddingModelID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceRegistry?: string;
@@ -38048,6 +38054,12 @@ export class CreateComponentInput {
 
     @Field(() => Int, { nullable: true })
     DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID: string | null;
 }
     
 
@@ -38127,6 +38139,12 @@ export class UpdateComponentInput {
 
     @Field(() => Int, { nullable: true })
     DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
