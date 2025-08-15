@@ -17,7 +17,7 @@
       "ID": "77571F8B-A4A2-4CD3-AC23-A59D6E989F5D"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:23.963Z",
+      "lastModified": "2025-08-15T12:11:06.857Z",
       "checksum": "9bc5dde2356922fc0cbc4f0f91493865f7685cb9218b704a5a2c19e03172fc90"
     }
   },
@@ -39,7 +39,7 @@
       "ID": "894F252D-1ED3-4196-AB01-DCA71382D752"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:23.986Z",
+      "lastModified": "2025-08-15T12:11:06.865Z",
       "checksum": "1ae167e71e1e5e80d563f0a78764ff90a0c7755534fcd4f7db3f247558d0401f"
     }
   },
@@ -61,7 +61,7 @@
       "ID": "85027C84-2321-4F18-9280-4959F4EC4668"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.008Z",
+      "lastModified": "2025-08-15T12:11:06.876Z",
       "checksum": "d757bb42cfedbb05a72c7bd19898960bb34eae397409f4505c7a5e6174029300"
     }
   },
@@ -83,7 +83,7 @@
       "ID": "386543D8-C739-4C52-8FAC-E941C078AA8F"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.030Z",
+      "lastModified": "2025-08-15T12:11:06.887Z",
       "checksum": "4a1040be14baa79637c3e001aef65d5533d011513f3d01a26413c5c00cd87341"
     }
   },
@@ -105,8 +105,8 @@
       "ID": "E7A334EA-53FD-40E4-A255-1DDA891D86B7"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:17:52.571Z",
-      "checksum": "6f36e44c10cdf3d617a95beb51acd4f03193385e997f9d1c85f8fa871932e01f"
+      "lastModified": "2025-08-15T16:45:19.091Z",
+      "checksum": "13cafd0fb3959bd364d5c1aea730a25ad148b5386c07ea466e4a0993c34ab870"
     }
   },
   {
@@ -127,7 +127,7 @@
       "ID": "3E5B43DE-1F29-4268-8DBB-A5FA0CE56B70"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.086Z",
+      "lastModified": "2025-08-15T12:11:06.908Z",
       "checksum": "830ab0ea6ccf6369b8dbc018523c73c655cb81d2ad8d3cb4bd2190bdc551134c"
     }
   },
@@ -149,8 +149,8 @@
       "ID": "7B36D078-5B69-47EC-BDFB-D119524116F6"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.107Z",
-      "checksum": "1ba0a12ae0d8123e47a7520e319dd450d20d2a9384136ebe4db3351f7c064bb3"
+      "lastModified": "2025-08-15T16:45:19.132Z",
+      "checksum": "31c9a8b8b6387951ea486a42b56a2eec71d4093be02fe6628a0b22ec4b1693d3"
     }
   },
   {
@@ -171,7 +171,7 @@
       "ID": "04395751-8D07-4906-BAE1-9D1789543E14"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.128Z",
+      "lastModified": "2025-08-15T12:11:06.927Z",
       "checksum": "f1a973649ba70d22b5a9f4c19e7494dd8a8285406c36a488a0e7d78a52778ffc"
     }
   },
@@ -193,7 +193,7 @@
       "ID": "509FF2B7-692D-490B-A282-D80FD370E5EB"
     },
     "sync": {
-      "lastModified": "2025-08-14T15:50:24.149Z",
+      "lastModified": "2025-08-15T12:11:06.935Z",
       "checksum": "5ca740463986285889e8bf4bf3af31f6f068eec74342b08b504b5f8c97a5c2c5"
     }
   },
@@ -206,8 +206,7 @@
       "Type": "Dashboard",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:files/ai-agent-analytics-dashboard.spec.json",
+      "Status": "Deprecated",
       "FunctionalRequirements": "Display real-time agent execution status with live updates, show hierarchical agent relationships and sub-agent orchestration, provide step-by-step execution analysis with timing and success metrics, visualize performance metrics including execution time, token usage, and costs",
       "TechnicalDesign": "Multi-panel dashboard with WebSocket real-time updates, coordinated views across child components, time range filtering, and interactive agent selection"
     },
@@ -215,96 +214,118 @@
       "ID": "EC9FC426-5C79-4C8C-AEB5-211268BCCB9C"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:20:40.820Z",
-      "checksum": "2c268ef0e190d03a775edb08073799784d317bb3c57f22c033f036c9df104803"
+      "lastModified": "2025-08-15T16:45:19.177Z",
+      "checksum": "5017ea7d4e5fd273636bf05834b18b81354d4ba560644bfe14afe39a82faf998"
     }
   },
   {
     "fields": {
-      "Name": "AIAgentExecutionOverview",
-      "Namespace": "AI/Agents",
-      "Description": "Real-time execution monitor with live status indicators, success rate gauges, and execution velocity metrics",
-      "Title": "AI Agent Execution Overview",
-      "Type": "Chart",
+      "Name": "AIPerformanceDashboard",
+      "Namespace": "AI/Analytics/Performance",
+      "Description": "Comprehensive dashboard for analyzing AI agent and prompt performance with time-series charts, cost analysis, and drill-down capabilities",
+      "Title": "AI Performance Dashboard",
+      "Type": "Dashboard",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-agent-execution-overview.spec.json",
-      "FunctionalRequirements": "Display real-time agent execution status with animated indicators, success rate circular gauges, execution velocity sparklines, and throughput metrics",
-      "TechnicalDesign": "Live monitoring panel with WebSocket updates, circular progress indicators, sparkline charts, and animated status badges"
+      "Specification": "@file:files/ai-performance-dashboard.spec.json",
+      "FunctionalRequirements": "Display multi-line time series charts showing total runs, tokens, and costs over time. Support multiple time groupings: day, week, month, quarter. Dual Y-axis display (tokens on left, runs/costs on right). Click-to-drill-down on any chart point to see details for that period. Show distribution charts (pie/bar) for selected time period. Separate tabs for Agent Runs and Prompt Runs analysis.",
+      "TechnicalDesign": "Root component manages overall dashboard state and data loading. Handles time range selection and grouping. Coordinates drill-down state between components. Manages tab switching between Agent and Prompt views. Child components: AITimeSeriesChart for multi-line charts with dual Y-axes, AIDistributionChart for pie/bar charts showing breakdown, AIDetailTable for detailed table view, AIMetricsSummary for key metrics cards."
     },
     "primaryKey": {
-      "ID": "8AEB2F97-986D-4A5B-B57E-9556F2EBF3B6"
+      "ID": "313ED35B-462C-439F-8F56-91AD90CCB252"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:20:40.846Z",
-      "checksum": "bafc544d05e6bdcbeb1bf59faec4fb2e9c8b01fd517c30e3b3ca379a00339cf0"
+      "lastModified": "2025-08-15T16:45:19.215Z",
+      "checksum": "079620ef9db7d339ace5c0d906a35f4e8929e0574b6ed606614ad5769858f1cc"
     }
   },
   {
     "fields": {
-      "Name": "AIAgentHierarchyTree",
-      "Namespace": "AI/Agents",
-      "Description": "Interactive tree visualization showing agent parent-child relationships, sub-agent orchestration patterns, and execution flow with real-time status indicators",
-      "Title": "AI Agent Hierarchy Tree",
+      "Name": "AITimeSeriesChart",
+      "Namespace": "AI/Analytics/Performance",
+      "Description": "Multi-line time series chart with dual Y-axes showing AI runs, token usage, and costs over time",
+      "Title": "AI Time Series Chart",
       "Type": "Chart",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-agent-hierarchy-tree.spec.json",
-      "FunctionalRequirements": "Display hierarchical agent relationships as an interactive tree with expandable nodes, execution counts, success rates per node, and real-time status indicators for active runs",
-      "TechnicalDesign": "SVG-based tree visualization with D3-style layouts, interactive node expansion, color-coded status indicators, and drill-down navigation to agent details"
+      "Specification": "@file:files/ai-time-series-chart.spec.json",
+      "FunctionalRequirements": "Display three data series: total runs, total tokens, total cost. Dual Y-axis configuration (left: tokens, right: runs and cost). Interactive tooltips showing all values on hover. Click on data points to trigger drill-down. Smooth line interpolation with data point markers. Legend with series toggle capability.",
+      "TechnicalDesign": "Uses SVG for chart rendering with custom scales. Dual Y-axis setup with synchronized tooltips. Custom tick formatters for large numbers. Responsive container with aspect ratio preservation."
     },
     "primaryKey": {
-      "ID": "F559FA95-4C9F-4102-B7B9-9E00592DC307"
+      "ID": "12796365-7678-410F-867D-3EF0598E0BEB"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:20:40.870Z",
-      "checksum": "fd961c98fd8ad936e01c3a0f4e53b6be6ae9e7f23f098b4bd67c326a03875ca5"
+      "lastModified": "2025-08-15T16:45:19.235Z",
+      "checksum": "1b4c008b52674614fc44416f1a96797e428f4c6b64dfa7cd61f4a352f8501ed0"
     }
   },
   {
     "fields": {
-      "Name": "AIAgentStepAnalysis",
-      "Namespace": "AI/Agents",
-      "Description": "Detailed step-by-step execution analysis with waterfall charts, step type distribution, execution timelines, and error pattern detection",
-      "Title": "AI Agent Step Analysis",
+      "Name": "AIDistributionChart",
+      "Namespace": "AI/Analytics/Performance",
+      "Description": "Pie and bar charts showing distribution of runs, tokens, and costs by agent or prompt for drill-down analysis",
+      "Title": "AI Distribution Chart",
       "Type": "Chart",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-agent-step-analysis.spec.json",
-      "FunctionalRequirements": "Display execution waterfall showing step sequence and timing, visualize step type distribution with donut chart, show execution timeline with concurrent steps, identify error patterns and bottlenecks",
-      "TechnicalDesign": "Multi-panel visualization with waterfall chart for execution flow, donut chart for step type distribution, timeline view for concurrent execution patterns, and error analysis section"
+      "Specification": "@file:files/ai-distribution-chart.spec.json",
+      "FunctionalRequirements": "Display distribution breakdown for selected time period. Toggle between pie chart and bar chart views. Show top 10 items with 'Others' grouping. Display runs, tokens, and cost metrics. Interactive tooltips with detailed values. Color-coded segments with legend.",
+      "TechnicalDesign": "Aggregates data by agent/prompt. Calculates percentages. Sorts by total value. Groups small items into 'Others' category. Smooth transitions between chart types."
     },
     "primaryKey": {
-      "ID": "8F723813-B98C-458A-935C-6FCE3440BE57"
+      "ID": "1EBD8365-41EB-41E4-B71F-418628DB4EB5"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:20:40.903Z",
-      "checksum": "d03481cf08b712c6f3ede9128adebbd30c6dea8dd5e9eefca6e7c1553633fb79"
+      "lastModified": "2025-08-15T16:45:19.254Z",
+      "checksum": "b8a3e2aac0d477b32475e68bd762d9e7e9a5239abf53d12baa5a7d8acd63ab6e"
     }
   },
   {
     "fields": {
-      "Name": "AIAgentPerformanceMetrics",
-      "Namespace": "AI/Agents",
-      "Description": "Comprehensive performance analytics panel showing execution time distributions, token usage analytics, cost breakdown by agent, error analysis, and trend charts",
-      "Title": "AI Agent Performance Metrics",
-      "Type": "Chart",
+      "Name": "AIDetailTable",
+      "Namespace": "AI/Analytics/Performance",
+      "Description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering",
+      "Title": "AI Detail Table",
+      "Type": "Table",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-agent-performance-metrics.spec.json",
-      "FunctionalRequirements": "Display execution time histograms, token usage over time, cost breakdown pie chart, error pattern analysis, performance trend lines, and SLA compliance metrics",
-      "TechnicalDesign": "Multi-section panel with histogram for execution times, line chart for token trends, pie chart for cost distribution, error heatmap, and metric cards for key performance indicators"
+      "Specification": "@file:files/ai-detail-table.spec.json",
+      "FunctionalRequirements": "Display individual run records in a sortable table. Show key fields: timestamp, name, success status, tokens, cost, execution time. Color-coded success/failure indicators. Sortable columns with visual indicators. Paginated results for large datasets. Export to CSV functionality. Expandable rows for additional details.",
+      "TechnicalDesign": "Client-side sorting and pagination with 25 rows per page. Column sorting state management. Row expansion for details. CSV export functionality."
     },
     "primaryKey": {
-      "ID": "B0EDCE8A-62E4-4DCE-AC8B-48168EE5A4AA"
+      "ID": "D1420CCB-4502-47D5-B18C-4E268C18D659"
     },
     "sync": {
-      "lastModified": "2025-08-14T18:20:40.925Z",
-      "checksum": "22531d6285b2980e3702b64383aa9e1a2cff80cabbf48dee15f4f718daf1fcf0"
+      "lastModified": "2025-08-15T16:45:19.271Z",
+      "checksum": "e0c308469d3cc5d4c600d99111c54f782fdb31a307607774f9107550bb57d661"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIMetricsSummary",
+      "Namespace": "AI/Analytics/Performance",
+      "Description": "Summary cards displaying key performance metrics for the selected time period",
+      "Title": "AI Metrics Summary",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:files/ai-metrics-summary.spec.json",
+      "FunctionalRequirements": "Display key metrics in card format. Show total runs, tokens, and costs. Calculate averages per run. Display success rate percentage. Show trend indicators. Responsive card layout.",
+      "TechnicalDesign": "Responsive grid of metric cards. Each card shows metric name, value, and icon. Consistent styling with theme. Hover effects for additional information."
+    },
+    "primaryKey": {
+      "ID": "57548CB2-944C-443D-8345-0F2E5CD673D1"
+    },
+    "sync": {
+      "lastModified": "2025-08-15T16:45:19.288Z",
+      "checksum": "1bb1c4b3ae12346d97b169f8d9b9e9a2a9cc0362951b3349359d15c2aecf96dc"
     }
   }
 ]

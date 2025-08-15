@@ -17,7 +17,8 @@ export interface ComponentExecutionOptions {
   props?: Record<string, any>;
   setupCode?: string;
   timeout?: number;
-  renderWaitTime?: number; // New option - default 1000ms
+  renderWaitTime?: number; // Default 2000ms for better async error capture
+  asyncErrorWaitTime?: number; // Additional wait for async operations - default 3000ms
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
@@ -125,6 +126,11 @@ export class ComponentRunner {
       // Collect runtime errors
       const runtimeErrors = await this.collectRuntimeErrors(page);
       errors.push(...runtimeErrors);
+      
+      // Capture async errors (wait for delayed operations like setTimeout, promises, etc.)
+      const asyncWaitTime = options.asyncErrorWaitTime || 3000; // Default 3 seconds
+      const asyncErrors = await this.captureAsyncErrors(page, asyncWaitTime);
+      errors.push(...asyncErrors);
       
       // Perform deep render validation
       const deepRenderErrors = await this.validateDeepRender(page);
@@ -242,8 +248,19 @@ ${cssLinks}
     #root { min-height: 100vh; }
   </style>
   <script>
-    // Initialize error tracking
+    // Initialize error and console tracking
     window.__testHarnessRuntimeErrors = [];
+    window.__testHarnessConsoleLogs = [];
+    
+    // Track console output for async error detection
+    const originalConsoleError = console.error;
+    console.error = function(...args) {
+      window.__testHarnessConsoleLogs.push({
+        type: 'error',
+        text: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
+      });
+      originalConsoleError.apply(console, args);
+    };
     
     // Global error handler
     window.addEventListener('error', (event) => {
@@ -253,6 +270,18 @@ ${cssLinks}
         stack: event.error.stack,
         type: 'runtime'
       });
+    });
+    
+    // Unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      window.__testHarnessRuntimeErrors.push({
+        message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason || 'Unknown reason'),
+        stack: event.reason?.stack || 'No stack trace available',
+        type: 'promise-rejection'
+      });
+      // Prevent the default handling (which would log to console)
+      event.preventDefault();
     });
     
     // Render tracking injection
@@ -686,7 +715,7 @@ ${cssLinks}
     errors: string[]
   ): Promise<boolean> {
     const timeout = options.timeout || 10000; // 10 seconds default
-    const renderWaitTime = options.renderWaitTime || 1000; // Default 1000ms
+    const renderWaitTime = options.renderWaitTime || 2000; // Default 2000ms for better async capture
     
     try {
       if (options.waitForSelector) {
@@ -743,6 +772,57 @@ ${cssLinks}
         errors.push(`Component stack: ${error.componentStack}`);
       }
     });
+    
+    return errors;
+  }
+  
+  /**
+   * Captures async errors by waiting for asynchronous operations to complete
+   * This catches errors from setTimeout, setInterval, Promises, and async effects
+   */
+  private async captureAsyncErrors(page: any, waitTime: number): Promise<string[]> {
+    const errors: string[] = [];
+    
+    try {
+      // Clear any existing errors to track only new ones
+      const initialErrorCount = await page.evaluate(() => {
+        return (window as any).__testHarnessRuntimeErrors?.length || 0;
+      });
+      
+      // Wait for async operations to potentially fail
+      await page.waitForTimeout(waitTime);
+      
+      // Collect any new errors that occurred during the wait
+      const allErrors = await page.evaluate(() => {
+        return (window as any).__testHarnessRuntimeErrors || [];
+      });
+      
+      // Process only new errors
+      const newErrors = allErrors.slice(initialErrorCount);
+      newErrors.forEach((error: any) => {
+        if (error.type === 'promise-rejection') {
+          errors.push(`Async operation failed: ${error.message}`);
+        } else if (error.message && !errors.includes(`${error.type} error: ${error.message}`)) {
+          errors.push(`Delayed ${error.type} error: ${error.message}`);
+        }
+      });
+      
+      // Also check if any console errors appeared
+      const consoleErrors = await page.evaluate(() => {
+        const logs = (window as any).__testHarnessConsoleLogs || [];
+        return logs.filter((log: any) => log.type === 'error').map((log: any) => log.text);
+      });
+      
+      // Add unique console errors
+      consoleErrors.forEach((error: string) => {
+        if (!errors.some(e => e.includes(error))) {
+          errors.push(`Console error during async wait: ${error}`);
+        }
+      });
+      
+    } catch (e) {
+      errors.push(`Failed to capture async errors: ${e}`);
+    }
     
     return errors;
   }
