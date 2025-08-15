@@ -1770,6 +1770,13 @@ export abstract class BaseEntity<T = unknown> {
         const field = this.GetFieldByName(fieldName);
         const vectorField = this.GetFieldByName(vectorFieldName);
         const modelField = this.GetFieldByName(modelFieldName);
+        if (!field)
+            throw new Error(`Field not found: ${fieldName}`);
+        if (!vectorField)
+            throw new Error(`Vector field not found: ${vectorFieldName}`);
+        if (modelFieldName?.trim().length > 0 && !modelField)
+            throw new Error(`Model field not found: ${modelFieldName}`);
+        
         return await this.GenerateEmbedding(field, vectorField, modelField);
     }
 
@@ -1805,12 +1812,14 @@ export abstract class BaseEntity<T = unknown> {
                     const e = await this.EmbedTextLocal(field.Value)
                     if (e && e.vector) {
                         vectorField.Value = JSON.stringify(e.vector);
-                        modelField.Value = e.modelID;
+                        if (modelField)
+                            modelField.Value = e.modelID;
                     }
                 }
                 else {
                     vectorField.Value = null;
-                    modelField.Value = null;
+                    if (modelField)
+                        modelField.Value = null;
                 }
             }        
             return true;
