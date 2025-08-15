@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+- Updated dependencies [34d456e]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/sqlserver-dataprovider@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
 ## 2.88.0
 
 ### Patch Changes

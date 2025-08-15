@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.89.0
+
+### Patch Changes
+
+- 34d456e: Patch issues with GraphQLClientUser creating and running queries.
+- Updated dependencies [d1911ed]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/aiengine@2.89.0
+  - @memberjunction/actions@2.89.0
+  - @memberjunction/ai-vector-dupe@2.89.0
+  - @memberjunction/queue@2.89.0
+  - @memberjunction/ai@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
 ## 2.88.0
 
 ### Patch Changes

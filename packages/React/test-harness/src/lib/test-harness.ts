@@ -142,6 +142,7 @@ export class ReactTestHarness {
     // Create a minimal ComponentSpec for the file
     const spec: ComponentSpec = {
       name: componentName,
+      location: 'embedded',
       code: componentCode,
       description: `Component loaded from ${filePath}`,
       title: componentName,

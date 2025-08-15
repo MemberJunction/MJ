@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/aiengine@2.89.0
+  - @memberjunction/ai-vectors@2.89.0
+  - @memberjunction/ai-vectors-pinecone@2.89.0
+  - @memberjunction/ai-vector-sync@2.89.0
+  - @memberjunction/ai@2.89.0
+  - @memberjunction/ai-vectordb@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
 ## 2.88.0
 
 ### Patch Changes

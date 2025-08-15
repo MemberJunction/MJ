@@ -1,5 +1,16 @@
 # @memberjunction/actions-bizapps-lms
 
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/actions@2.89.0
+  - @memberjunction/actions-base@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
 ## 2.88.0
 
 ### Patch Changes
