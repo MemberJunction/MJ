@@ -876,6 +876,160 @@ Benefits:
 - **Flexibility**: Build complex documents from modular parts
 - **Validation**: Automatic checking of included file existence and circular references
 
+### @include References in JSON Files (NEW)
+
+Enable modular JSON composition by including external JSON files directly into your metadata files. This feature allows you to break large JSON configurations into smaller, reusable components.
+
+#### Syntax Options
+
+**Object Context - Property Spreading (Default)**
+```json
+{
+  "name": "Parent Record",
+  "@include": "child.json",
+  "description": "Additional fields"
+}
+```
+The included file's properties are spread into the parent object.
+
+**Array Context - Element Insertion**
+```json
+[
+  {"name": "First item"},
+  "@include:child.json",
+  {"name": "Last item"}
+]
+```
+The included file's content is inserted as array element(s).
+
+**Explicit Mode Control**
+```json
+{
+  "@include": {
+    "file": "child.json",
+    "mode": "spread"  // or "element"
+  }
+}
+```
+
+#### Modes Explained
+
+**"spread" mode**: 
+- Merges all properties from the included file into the parent object
+- Only works when including an object into an object
+- Parent properties override child properties if there are conflicts
+- Default mode for objects
+
+**"element" mode**:
+- Directly inserts the JSON content at that position
+- Works with any JSON type (object, array, string, number, etc.)
+- Replaces the @include directive with the actual content
+- Default mode for arrays when using string syntax
+
+#### Path Resolution
+- All paths are relative to the file containing the @include
+- Supports: `"child.json"`, `"./child.json"`, `"../shared/base.json"`, `"subfolder/config.json"`
+- Circular references are detected and prevented
+
+#### Complex Example
+
+Directory structure:
+```
+metadata/
+├── components/
+│   ├── dashboard.json
+│   ├── base-props.json
+│   └── items/
+│       └── dashboard-items.json
+└── shared/
+    └── common-settings.json
+```
+
+dashboard.json:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "@include": "../shared/common-settings.json",
+    "Type": "Dashboard",
+    "Configuration": {
+      "@include": {"file": "./base-props.json", "mode": "element"}
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      "@include:./items/dashboard-items.json"
+    ]
+  }
+}
+```
+
+common-settings.json:
+```json
+{
+  "CategoryID": "@lookup:Categories.Name=Analytics",
+  "Status": "Active",
+  "Priority": 1
+}
+```
+
+base-props.json:
+```json
+{
+  "refreshInterval": 60,
+  "theme": "dark",
+  "layout": "grid"
+}
+```
+
+dashboard-items.json:
+```json
+[
+  {"name": "Revenue Chart", "type": "chart"},
+  {"name": "User Stats", "type": "stats"},
+  {"name": "Activity Feed", "type": "feed"}
+]
+```
+
+Result after processing:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "CategoryID": "@lookup:Categories.Name=Analytics",
+    "Status": "Active", 
+    "Priority": 1,
+    "Type": "Dashboard",
+    "Configuration": {
+      "refreshInterval": 60,
+      "theme": "dark",
+      "layout": "grid"
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      {"name": "Revenue Chart", "type": "chart"},
+      {"name": "User Stats", "type": "stats"},
+      {"name": "Activity Feed", "type": "feed"}
+    ]
+  }
+}
+```
+
+#### Use Cases
+- **Shared Configurations**: Reuse common settings across multiple entities
+- **Modular Records**: Build complex records from smaller components
+- **Template Libraries**: Create libraries of reusable JSON fragments
+- **Environment Configs**: Include environment-specific settings
+- **Large Data Sets**: Break up large JSON files for better maintainability
+
+#### Processing Order
+1. @include directives are processed first (recursively)
+2. Then @template references
+3. Finally, other @ references (@file, @lookup, etc.)
+
+This ensures that included content can contain other special references that will be properly resolved.
+
 ### @template: References (NEW)
 Enable JSON template composition for reusable configurations:
 
