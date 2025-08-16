@@ -17,8 +17,8 @@ export interface ComponentExecutionOptions {
   props?: Record<string, any>;
   setupCode?: string;
   timeout?: number;
-  renderWaitTime?: number; // Default 2000ms for better async error capture
-  asyncErrorWaitTime?: number; // Additional wait for async operations - default 3000ms
+  renderWaitTime?: number; // Default 500ms for render completion
+  asyncErrorWaitTime?: number; // Optional wait for async operations - no default
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
@@ -137,10 +137,11 @@ export class ComponentRunner {
       const runtimeErrors = await this.collectRuntimeErrors(page);
       errors.push(...runtimeErrors);
       
-      // Capture async errors (wait for delayed operations like setTimeout, promises, etc.)
-      const asyncWaitTime = options.asyncErrorWaitTime || 3000; // Default 3 seconds
-      const asyncErrors = await this.captureAsyncErrors(page, asyncWaitTime);
-      errors.push(...asyncErrors);
+      // Capture async errors only if wait time is specified
+      if (options.asyncErrorWaitTime && options.asyncErrorWaitTime > 0) {
+        const asyncErrors = await this.captureAsyncErrors(page, options.asyncErrorWaitTime);
+        errors.push(...asyncErrors);
+      }
       
       // Perform deep render validation
       const deepRenderErrors = await this.validateDeepRender(page);
@@ -895,7 +896,7 @@ ${cssLinks}
     errors: string[]
   ): Promise<boolean> {
     const timeout = options.timeout || 10000; // 10 seconds default
-    const renderWaitTime = options.renderWaitTime || 2000; // Default 2000ms for better async capture
+    const renderWaitTime = options.renderWaitTime || 500; // Default 500ms for render completion
     
     try {
       if (options.waitForSelector) {
