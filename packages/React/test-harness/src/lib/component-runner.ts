@@ -114,14 +114,17 @@ export class ComponentRunner {
 
     try {
       const page = await this.browserManager.getPage();
-
-      // Set up monitoring
-      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
-      this.setupErrorHandling(page, errors);
-      await this.injectRenderTracking(page);
+      
+      // Clear the page before each test for isolation
+      await page.goto('about:blank');
       
       // Expose MJ utilities to the page
       await this.exposeMJUtilities(page, options.contextUser);
+      
+      // Then set up monitoring
+      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
+      this.setupErrorHandling(page, errors);
+      await this.injectRenderTracking(page);
 
       // Create and load the component
       const htmlContent = this.createHTMLTemplate(options);
@@ -148,10 +151,10 @@ export class ComponentRunner {
       errors.push(...deepRenderErrors);
 
       // Get the rendered HTML
-      const html = await this.browserManager.getContent();
+      const html = await page.content();
 
       // Take screenshot if needed
-      const screenshot = await this.browserManager.screenshot();
+      const screenshot = await page.screenshot();
 
       // Determine success and collect any additional errors
       const { success, additionalErrors } = this.determineSuccess(
@@ -900,11 +903,11 @@ ${cssLinks}
     
     try {
       if (options.waitForSelector) {
-        await this.browserManager.waitForSelector(options.waitForSelector, { timeout });
+        await page.waitForSelector(options.waitForSelector, { timeout });
       }
 
       if (options.waitForLoadState) {
-        await this.browserManager.waitForLoadState(options.waitForLoadState);
+        await page.waitForLoadState(options.waitForLoadState);
       } else {
         // Wait for React to finish rendering with configurable time
         await page.waitForTimeout(renderWaitTime);
@@ -1089,7 +1092,7 @@ ${cssLinks}
    * Expose MemberJunction utilities to the browser context
    */
   private async exposeMJUtilities(page: any, contextUser: UserInfo): Promise<void> {
-    // Check if utilities are already exposed
+    // Check if utilities are already exposed (they persist across navigations)
     const alreadyExposed = await page.evaluate(() => {
       return typeof (window as any).__mjGetEntityObject === 'function';
     });
@@ -1097,13 +1100,15 @@ ${cssLinks}
     if (alreadyExposed) {
       return; // Already exposed, skip
     }
-    // Create instances in Node.js context
-    const metadata = new Metadata();
-    const runView = new RunView();
-    const runQuery = new RunQuery();
     
-    // Expose individual functions since we can't pass complex objects
-    await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
+    try {
+      // Create instances in Node.js context
+      const metadata = new Metadata();
+      const runView = new RunView();
+      const runQuery = new RunQuery();
+      
+      // Expose individual functions since we can't pass complex objects
+      await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
       try {
         const entity = await metadata.GetEntityObject(entityName, contextUser);
         return entity;
@@ -1137,19 +1142,27 @@ ${cssLinks}
       } catch (error) {
         console.error('Error in __mjRunViews:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
+          return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
       }
     });
     
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
-      try {
-        return await runQuery.RunQuery(params, contextUser);
-      } catch (error) {
-        console.error('Error in __mjRunQuery:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+        try {
+          return await runQuery.RunQuery(params, contextUser);
+        } catch (error) {
+          console.error('Error in __mjRunQuery:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { Success: false, ErrorMessage: errorMessage, Results: [] };
+        }
+      });
+    } catch (error) {
+      console.error('Failed to expose MJ utilities to page:', error);
+      // Log more details about the error
+      if (error instanceof Error && error.message.includes('addBinding')) {
+        console.error('addBinding error - this usually means the page context is invalid');
       }
-    });
+      throw error; // Re-throw to be caught by the main error handler
+    }
   }
 
   /**
