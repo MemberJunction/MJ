@@ -180,13 +180,33 @@ const AccountsByIndustry = (props) => {
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
         height: '400px',
-        fontSize: '16px',
-        color: '#6B7280'
+        gap: '16px'
       }}>
-        Loading accounts data...
+        <div style={{
+          width: '48px',
+          height: '48px',
+          border: '4px solid #E5E7EB',
+          borderTop: '4px solid #3B82F6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <div style={{
+          fontSize: '16px',
+          color: '#6B7280',
+          fontWeight: '500'
+        }}>
+          Loading accounts data...
+        </div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }

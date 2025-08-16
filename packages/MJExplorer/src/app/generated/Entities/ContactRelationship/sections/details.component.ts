@@ -1,18 +1,18 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ActivityEntity } from 'mj_generatedentities';
+import { ContactRelationshipEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Activities.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Contact Relationships.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-activity-form-details',
+    selector: 'gen-contactrelationship-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="AccountID"
+            FieldName="PrimaryContactID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -21,7 +21,7 @@ import { ActivityEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContactID"
+            FieldName="RelatedContactID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -30,23 +30,11 @@ import { ActivityEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ActivityType"
-            Type="dropdownlist"
+            FieldName="RelationshipTypeID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Subject"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -65,36 +53,15 @@ import { ActivityEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
+            FieldName="Notes"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Priority"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Direction"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Location"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Result"
-            Type="textbox"
+            FieldName="IsActive"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -116,12 +83,12 @@ import { ActivityEntity } from 'mj_generatedentities';
 </div>
     `
 })
-export class ActivityDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ActivityEntity;
+export class ContactRelationshipDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ContactRelationshipEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadActivityDetailsComponent() {
+export function LoadContactRelationshipDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

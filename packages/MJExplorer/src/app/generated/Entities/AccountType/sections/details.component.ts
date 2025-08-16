@@ -1,19 +1,19 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { IndustryEntity } from 'mj_generatedentities';
+import { AccountTypeEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Industries.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Account Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-industry-form-details',
+    selector: 'gen-accounttype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IndustryName"
-            Type="textbox"
+            FieldName="TypeName"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -35,12 +35,12 @@ import { IndustryEntity } from 'mj_generatedentities';
 </div>
     `
 })
-export class IndustryDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: IndustryEntity;
+export class AccountTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AccountTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadIndustryDetailsComponent() {
+export function LoadAccountTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
