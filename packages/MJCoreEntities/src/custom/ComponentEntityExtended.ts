@@ -18,6 +18,7 @@ export class ComponentEntityExtended extends ComponentEntity {
                 const spec = JSON.parse(this.Specification || '{}') as ComponentSpec;
                 if (spec) {
                     this.HasCustomProps = spec.properties?.length > 0;
+                    this.HasRequiredCustomProps = spec.properties?.some(p => p.required) || false;
                     this.HasCustomEvents = spec.events?.length > 0;
                     this.RequiresData = spec.dataRequirements?.mode?.length > 0; // check one element of the dataRequirements
                     this.DependencyCount = spec.dependencies?.length || 0;
