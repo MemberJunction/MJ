@@ -12,6 +12,7 @@ import {
   ComponentError,
   RuntimeContext
 } from '../types';
+import { LibraryRegistry } from '../utilities/library-registry';
 
 /**
  * Default compiler configuration
@@ -78,6 +79,9 @@ export class ComponentCompiler {
       // Validate inputs
       this.validateCompileOptions(options);
 
+      // Load required libraries if specified
+      const loadedLibraries = await this.loadRequiredLibraries(options.libraries);
+
       // Transpile the component code
       const transpiledCode = this.transpileComponent(
         options.componentCode,
@@ -85,10 +89,11 @@ export class ComponentCompiler {
         options
       );
 
-      // Create the component factory
+      // Create the component factory with loaded libraries
       const componentFactory = this.createComponentFactory(
         transpiledCode,
-        options.componentName
+        options.componentName,
+        loadedLibraries
       );
 
       // Build the compiled component
@@ -137,7 +142,7 @@ export class ComponentCompiler {
       throw new Error('Babel instance not set. Call setBabelInstance() first.');
     }
 
-    const wrappedCode = this.wrapComponentCode(code, componentName);
+    const wrappedCode = this.wrapComponentCode(code, componentName, options.libraries);
 
     try {
       const result = this.babelInstance.transform(wrappedCode, {
@@ -158,16 +163,25 @@ export class ComponentCompiler {
    * Wraps component code in a factory function for execution
    * @param componentCode - Raw component code
    * @param componentName - Name of the component
+   * @param libraries - Optional library dependencies
    * @returns Wrapped component code
    */
-  private wrapComponentCode(componentCode: string, componentName: string): string {
+  private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[]): string {
+    // Generate library declarations if libraries are provided
+    const libraryDeclarations = libraries && libraries.length > 0
+      ? libraries
+          .filter(lib => lib.globalVariable) // Only include libraries with globalVariable
+          .map(lib => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
+          .join('\n        ')
+      : '';
+
     return `
       function createComponent(
         React, ReactDOM, 
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console
       ) {
-        ${componentCode}
+        ${libraryDeclarations ? libraryDeclarations + '\n        ' : ''}${componentCode}
         
         // Ensure the component exists
         if (typeof ${componentName} === 'undefined') {
@@ -191,12 +205,162 @@ export class ComponentCompiler {
   }
 
   /**
+   * Load required libraries from the registry
+   * @param libraries - Array of library dependencies
+   * @returns Map of loaded libraries
+   */
+  private async loadRequiredLibraries(libraries?: any[]): Promise<Map<string, any>> {
+    const loadedLibraries = new Map<string, any>();
+    
+    if (!libraries || libraries.length === 0) {
+      return loadedLibraries;
+    }
+
+    // Only works in browser environment
+    if (typeof window === 'undefined') {
+      console.warn('Library loading is only supported in browser environments');
+      return loadedLibraries;
+    }
+
+    const loadPromises = libraries.map(async (lib) => {
+      // Check if library is approved
+      if (!LibraryRegistry.isApproved(lib.name)) {
+        throw new Error(`Library '${lib.name}' is not approved. Only approved libraries can be used.`);
+      }
+
+      // Get library definition for complete info
+      const libraryDef = LibraryRegistry.getLibrary(lib.name);
+      if (!libraryDef) {
+        throw new Error(`Library '${lib.name}' not found in registry`);
+      }
+
+      // Get CDN URL for the library
+      const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
+      const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
+      
+      if (!cdnUrl) {
+        throw new Error(`No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
+      }
+
+      // Check if already loaded
+      if ((window as any)[lib.globalVariable]) {
+        loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
+        return;
+      }
+
+      // Load CSS files if the library requires them
+      const versionInfo = libraryDef.versions[resolvedVersion || libraryDef.defaultVersion];
+      if (versionInfo?.cssUrls) {
+        await this.loadStyles(versionInfo.cssUrls);
+      }
+
+      // Load the library dynamically
+      await this.loadScript(cdnUrl, lib.globalVariable);
+      
+      // Capture the library value from global scope
+      // Note: Libraries loaded from CDN typically attach to window automatically
+      // We capture them here to pass through the component's closure
+      const libraryValue = (window as any)[lib.globalVariable];
+      if (libraryValue) {
+        loadedLibraries.set(lib.globalVariable, libraryValue);
+      } else {
+        throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
+      }
+    });
+
+    await Promise.all(loadPromises);
+    return loadedLibraries;
+  }
+
+  /**
+   * Load CSS stylesheets dynamically
+   * @param urls - Array of CSS URLs to load
+   * @returns Promise that resolves when all stylesheets are loaded
+   */
+  private async loadStyles(urls: string[]): Promise<void> {
+    const loadPromises = urls.map(url => {
+      return new Promise<void>((resolve) => {
+        // Check if stylesheet already exists
+        const existingLink = document.querySelector(`link[href="${url}"]`);
+        if (existingLink) {
+          resolve();
+          return;
+        }
+
+        // Create new link element
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        
+        // CSS load events are not reliable cross-browser, so resolve immediately
+        // The CSS will load asynchronously but won't block component rendering
+        document.head.appendChild(link);
+        resolve();
+      });
+    });
+
+    await Promise.all(loadPromises);
+  }
+
+  /**
+   * Load a script dynamically
+   * @param url - Script URL
+   * @param globalName - Expected global variable name
+   * @returns Promise that resolves when script is loaded
+   */
+  private loadScript(url: string, globalName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Check if script already exists
+      const existingScript = document.querySelector(`script[src="${url}"]`);
+      if (existingScript) {
+        // Wait for it to finish loading
+        const checkLoaded = () => {
+          if ((window as any)[globalName]) {
+            resolve();
+          } else {
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+        return;
+      }
+
+      // Create new script element
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      
+      script.onload = () => {
+        // Give the library a moment to initialize
+        setTimeout(() => {
+          if ((window as any)[globalName]) {
+            resolve();
+          } else {
+            reject(new Error(`${globalName} not found after loading script`));
+          }
+        }, 100);
+      };
+      
+      script.onerror = () => {
+        reject(new Error(`Failed to load script: ${url}`));
+      };
+      
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
    * Creates a component factory function from transpiled code
    * @param transpiledCode - Transpiled JavaScript code
    * @param componentName - Name of the component
+   * @param loadedLibraries - Map of loaded libraries
    * @returns Component factory function
    */
-  private createComponentFactory(transpiledCode: string, componentName: string): Function {
+  private createComponentFactory(
+    transpiledCode: string, 
+    componentName: string,
+    loadedLibraries: Map<string, any>
+  ): Function {
     try {
       // Create the factory function with all React hooks
       const factoryCreator = new Function(
@@ -209,6 +373,12 @@ export class ComponentCompiler {
       // Return a function that executes the factory with runtime context
       return (context: RuntimeContext, styles: any = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
+        
+        // Merge loaded libraries with context libraries
+        const mergedLibraries = { ...libraries };
+        loadedLibraries.forEach((value, key) => {
+          mergedLibraries[key] = value;
+        });
 
         // Execute the factory creator to get the createComponent function
         const createComponentFn = factoryCreator(
@@ -222,7 +392,7 @@ export class ComponentCompiler {
           React.useContext,
           React.useReducer,
           React.useLayoutEffect,
-          libraries,
+          mergedLibraries,
           styles,
           console
         );
@@ -239,7 +409,7 @@ export class ComponentCompiler {
           React.useContext,
           React.useReducer,
           React.useLayoutEffect,
-          libraries,
+          mergedLibraries,
           styles,
           console
         );

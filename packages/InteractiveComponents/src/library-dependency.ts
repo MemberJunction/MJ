@@ -20,5 +20,5 @@ export interface ComponentLibraryDependency {
      * SemVer string describing minimum version requirement
      * Example: "2.5.0" for fixed version, "^1.0.0" for minimum version
      */
-    minVersion?: string;
+    version?: string;
 }
