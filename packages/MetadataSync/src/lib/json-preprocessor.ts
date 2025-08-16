@@ -86,58 +86,67 @@ export class JsonPreprocessor {
    */
   private async processObject(obj: any, currentFilePath: string): Promise<any> {
     const result: any = {};
-    let hasInclude = false;
-    let includeDirective: IncludeDirective | null = null;
+    const includeKeys: string[] = [];
+    const includeDirectives: Map<string, IncludeDirective> = new Map();
     
-    // Check for @include property
-    if ('@include' in obj) {
-      hasInclude = true;
-      const includeValue = obj['@include'];
-      
-      if (typeof includeValue === 'string') {
-        // Simple string include - default to spread mode in objects
-        includeDirective = { file: includeValue, mode: 'spread' };
-      } else if (includeValue && typeof includeValue === 'object') {
-        // Explicit include configuration
-        includeDirective = includeValue as IncludeDirective;
-        // Default to spread mode if not specified
-        if (!includeDirective.mode) {
-          includeDirective.mode = 'spread';
+    // First pass: identify all @include keys (both @include and @include.*)
+    for (const key of Object.keys(obj)) {
+      if (key === '@include' || key.startsWith('@include.')) {
+        includeKeys.push(key);
+        const includeValue = obj[key];
+        
+        if (typeof includeValue === 'string') {
+          // Simple string include - default to spread mode in objects
+          includeDirectives.set(key, { file: includeValue, mode: 'spread' });
+        } else if (includeValue && typeof includeValue === 'object') {
+          // Explicit include configuration
+          const directive = includeValue as IncludeDirective;
+          // Default to spread mode if not specified
+          if (!directive.mode) {
+            directive.mode = 'spread';
+          }
+          includeDirectives.set(key, directive);
         }
       }
     }
     
-    // Process the include if found
-    if (hasInclude && includeDirective) {
-      const resolvedPath = this.resolvePath(includeDirective.file, currentFilePath);
-      const includedContent = await this.loadAndProcessInclude(resolvedPath);
-      
-      if (includeDirective.mode === 'spread') {
-        // Spread mode: merge included object properties
-        if (includedContent && typeof includedContent === 'object' && !Array.isArray(includedContent)) {
-          Object.assign(result, includedContent);
-        } else {
-          throw new Error(`Cannot spread non-object content from ${includeDirective.file}. Use mode: "element" for non-object includes.`);
-        }
-      } else if (includeDirective.mode === 'element') {
-        // Element mode: directly insert the content
-        // This essentially replaces the entire object with the included content
-        return includedContent;
-      }
-    }
-    
-    // Process remaining properties
+    // Second pass: process all properties in order, spreading includes when encountered
     for (const [key, value] of Object.entries(obj)) {
-      if (key === '@include') {
-        // Skip the @include property itself
-        continue;
-      }
-      
-      // Recursively process nested structures
-      if (value && typeof value === 'object') {
-        result[key] = await this.processIncludesInternal(value, currentFilePath);
+      if (key === '@include' || key.startsWith('@include.')) {
+        // Process this include directive
+        const includeDirective = includeDirectives.get(key);
+        if (includeDirective) {
+          const resolvedPath = this.resolvePath(includeDirective.file, currentFilePath);
+          const includedContent = await this.loadAndProcessInclude(resolvedPath);
+          
+          if (includeDirective.mode === 'spread') {
+            // Spread mode: merge included object properties at this position
+            if (includedContent && typeof includedContent === 'object' && !Array.isArray(includedContent)) {
+              Object.assign(result, includedContent);
+            } else {
+              throw new Error(`Cannot spread non-object content from ${includeDirective.file}. Use mode: "element" for non-object includes.`);
+            }
+          } else if (includeDirective.mode === 'element') {
+            // Element mode: directly insert the content
+            // For dot notation includes, we can't replace the whole object,
+            // so we'll add it as a property instead (though this is unusual)
+            if (key.includes('.')) {
+              // Extract the part after the dot to use as property name
+              const propName = key.split('.').slice(1).join('.');
+              result[propName] = includedContent;
+            } else {
+              // For plain @include with element mode, replace the entire object
+              return includedContent;
+            }
+          }
+        }
       } else {
-        result[key] = value;
+        // Regular property - process recursively
+        if (value && typeof value === 'object') {
+          result[key] = await this.processIncludesInternal(value, currentFilePath);
+        } else {
+          result[key] = value;
+        }
       }
     }
     

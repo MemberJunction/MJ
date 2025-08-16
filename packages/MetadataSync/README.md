@@ -711,11 +711,13 @@ When a field value starts with `@file:`, the tool will:
 1. Read content from the specified file for push operations
 2. Write content to the specified file for pull operations
 3. Track both files for change detection
+4. **For JSON files**: Automatically process any `@include` directives within them
 
 Examples:
 - `@file:greeting.prompt.md` - File in same directory as JSON
 - `@file:./shared/common-prompt.md` - Relative path
 - `@file:../templates/standard-header.md` - Parent directory reference
+- `@file:spec.json` - JSON file with `@include` directives (processed automatically)
 
 ### @url: References
 When a field value starts with `@url:`, the tool will:
@@ -798,7 +800,7 @@ Examples:
 
 The `Configuration`, `Tags`, and `Metadata` fields will automatically be converted to JSON strings when pushed to the database, while maintaining their structured format in your source files.
 
-### {@include} References in Files (NEW)
+### {@include} References in Files
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
 - Pattern: `{@include path/to/file.ext}`
 - Supports relative paths from the containing file
@@ -876,7 +878,7 @@ Benefits:
 - **Flexibility**: Build complex documents from modular parts
 - **Validation**: Automatic checking of included file existence and circular references
 
-### @include References in JSON Files (NEW)
+### @include References in JSON Files
 
 Enable modular JSON composition by including external JSON files directly into your metadata files. This feature allows you to break large JSON configurations into smaller, reusable components.
 
@@ -891,6 +893,18 @@ Enable modular JSON composition by including external JSON files directly into y
 }
 ```
 The included file's properties are spread into the parent object.
+
+**Multiple Includes with Dot Notation (Eliminates VS Code Warnings)**
+```json
+{
+  "name": "Parent Record",
+  "@include.data": "shared/data-fields.json",
+  "description": "Middle field",
+  "@include.config": "shared/config-fields.json",
+  "status": "Active"
+}
+```
+Use dot notation (`@include.anything`) to include multiple files at different positions in your object. The part after the dot is ignored by the processor but makes each key unique, eliminating VS Code's duplicate key warnings. The includes are processed in the order they appear, allowing precise control over property ordering.
 
 **Array Context - Element Insertion**
 ```json
@@ -950,8 +964,9 @@ dashboard.json:
 {
   "fields": {
     "Name": "Analytics Dashboard",
-    "@include": "../shared/common-settings.json",
+    "@include.common": "../shared/common-settings.json",
     "Type": "Dashboard",
+    "@include.defaults": "../shared/default-values.json",
     "Configuration": {
       "@include": {"file": "./base-props.json", "mode": "element"}
     }
@@ -1022,6 +1037,47 @@ Result after processing:
 - **Template Libraries**: Create libraries of reusable JSON fragments
 - **Environment Configs**: Include environment-specific settings
 - **Large Data Sets**: Break up large JSON files for better maintainability
+- **VS Code Compatibility**: Use dot notation to avoid duplicate key warnings when including multiple files
+
+#### Practical Example: Component with Multiple Includes
+```json
+{
+  "name": "DashboardComponent",
+  "type": "dashboard",
+  "@include.dataRequirements": "../shared/data-requirements.json",
+  "functionalRequirements": "Dashboard displays real-time metrics...",
+  "@include.libraries": "../shared/chart-libraries.json",
+  "technicalDesign": "Component uses React hooks for state...",
+  "@include.eventHandlers": "../shared/event-handlers.json",
+  "code": "const Dashboard = () => { ... }"
+}
+```
+In this example, data requirements, libraries, and event handlers are spread into the component definition at their specific positions, maintaining a logical property order while avoiding VS Code warnings about duplicate `@include` keys.
+
+#### @include in Referenced JSON Files
+When using `@file:` to reference a JSON file, any `@include` directives within that JSON file are automatically processed:
+
+```json
+// main-entity.json
+{
+  "fields": {
+    "Name": "MyComponent",
+    "Specification": "@file:files/component-spec.json"
+  }
+}
+
+// files/component-spec.json
+{
+  "name": "ComponentSpec",
+  "@include.base": "../shared/base-spec.json",
+  "customFields": {
+    "feature": "advanced"
+  },
+  "@include.libs": "../shared/libraries.json"
+}
+```
+
+The `component-spec.json` file's `@include` directives are processed before the content is returned to the `Specification` field, ensuring all includes are resolved.
 
 #### Processing Order
 1. @include directives are processed first (recursively)
