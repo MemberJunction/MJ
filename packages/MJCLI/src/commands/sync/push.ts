@@ -32,6 +32,12 @@ export default class Push extends Command {
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
+    'parallel-batch-size': Flags.integer({ 
+      description: 'Number of records to process in parallel (default: 10)', 
+      default: 10,
+      min: 1,
+      max: 50 
+    }),
   };
 
   async run(): Promise<void> {
@@ -113,6 +119,7 @@ export default class Push extends Command {
           dryRun: flags['dry-run'],
           verbose: flags.verbose,
           noValidate: flags['no-validate'],
+          parallelBatchSize: flags['parallel-batch-size'],
         },
         {
           onProgress: (message) => {

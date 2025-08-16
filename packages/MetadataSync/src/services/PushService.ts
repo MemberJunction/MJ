@@ -13,11 +13,15 @@ import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-depende
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
+// Configuration for parallel processing
+const PARALLEL_BATCH_SIZE = 10; // Number of records to process in parallel at each dependency level
+
 export interface PushOptions {
   dir?: string;
   dryRun?: boolean;
   verbose?: boolean;
   noValidate?: boolean;
+  parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
 }
 
 export interface PushCallbacks {
@@ -353,29 +357,87 @@ export class PushService {
         }
         
         // Create batch context for in-memory entity resolution
+        // Note: While JavaScript is single-threaded, async operations can interleave.
+        // Map operations themselves are atomic, but we ensure records are added to
+        // the context AFTER successful save to maintain consistency.
         const batchContext = new Map<string, BaseEntity>();
         
-        // Process all flattened records in dependency order
-        for (const flattenedRecord of analysisResult.sortedRecords) {
-          try {
-            const result = await this.processFlattenedRecord(
-              flattenedRecord,
-              entityDir,
-              options,
-              batchContext,
-              callbacks
-            );
+        // Process records using dependency levels for parallel processing
+        if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
+          // Use parallel processing with dependency levels
+          for (let levelIndex = 0; levelIndex < analysisResult.dependencyLevels.length; levelIndex++) {
+            const level = analysisResult.dependencyLevels[levelIndex];
             
-            // Update stats
-            if (!result.isDuplicate) {
-              if (result.status === 'created') created++;
-              else if (result.status === 'updated') updated++;
-              else if (result.status === 'unchanged') unchanged++;
+            if (options.verbose && level.length > 1) {
+              callbacks?.onLog?.(`   Processing dependency level ${levelIndex} with ${level.length} records in parallel...`);
             }
-          } catch (recordError) {
-            const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
-            callbacks?.onError?.(errorMsg);
-            errors++;
+            
+            // Process records in this level in parallel batches
+            const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
+            for (let i = 0; i < level.length; i += batchSize) {
+              const batch = level.slice(i, Math.min(i + batchSize, level.length));
+              
+              // Process batch in parallel
+              const batchResults = await Promise.all(
+                batch.map(async (flattenedRecord) => {
+                  try {
+                    const result = await this.processFlattenedRecord(
+                      flattenedRecord,
+                      entityDir,
+                      options,
+                      batchContext,
+                      callbacks
+                    );
+                    return { success: true, result };
+                  } catch (error) {
+                    // Return error instead of throwing to handle after Promise.all
+                    return { success: false, error, record: flattenedRecord };
+                  }
+                })
+              );
+              
+              // Process results and check for errors
+              for (const batchResult of batchResults) {
+                if (!batchResult.success) {
+                  // Fail fast on first error
+                  const err = batchResult.error as Error;
+                  const rec = batchResult.record as FlattenedRecord;
+                  throw new Error(`Failed to process ${rec.entityName} record at ${rec.path}: ${err.message}`);
+                }
+                
+                // Update stats for successful results
+                const result = batchResult.result!;
+                if (!result.isDuplicate) {
+                  if (result.status === 'created') created++;
+                  else if (result.status === 'updated') updated++;
+                  else if (result.status === 'unchanged') unchanged++;
+                }
+              }
+            }
+          }
+        } else {
+          // Fallback to sequential processing if no dependency levels available
+          for (const flattenedRecord of analysisResult.sortedRecords) {
+            try {
+              const result = await this.processFlattenedRecord(
+                flattenedRecord,
+                entityDir,
+                options,
+                batchContext,
+                callbacks
+              );
+              
+              // Update stats
+              if (!result.isDuplicate) {
+                if (result.status === 'created') created++;
+                else if (result.status === 'updated') updated++;
+                else if (result.status === 'unchanged') unchanged++;
+              }
+            } catch (recordError) {
+              const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
+              callbacks?.onError?.(errorMsg);
+              errors++;
+            }
           }
         }
         
