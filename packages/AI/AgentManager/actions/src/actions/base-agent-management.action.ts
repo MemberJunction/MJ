@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
-import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity, ActionEntity } from "@memberjunction/core-entities";
+import { Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
+import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
 
 /**
  * Abstract base class for agent management actions.
@@ -91,12 +91,12 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      * Load an AI Agent entity by ID
      */
     protected async loadAgent(agentID: string, contextUser: any): Promise<{
-        agent?: AIAgentEntity;
+        agent?: AIAgentEntityExtended;
         error?: ActionResultSimple;
     }> {
         try {
             const md = this.getMetadata();
-            const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents', contextUser);
+            const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', contextUser);
             
             if (!agent) {
                 return {
@@ -193,7 +193,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      * Creates a prompt and associates it with an agent
      */
     protected async createAndAssociatePrompt(
-        agent: AIAgentEntity,
+        agent: AIAgentEntityExtended,
         promptText: string,
         contextUser: UserInfo
     ): Promise<{ success: boolean; promptId?: string; error?: string }> {

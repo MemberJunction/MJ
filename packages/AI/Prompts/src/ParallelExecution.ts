@@ -1,4 +1,4 @@
-import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
@@ -87,7 +87,7 @@ export interface ExecutionTaskResult {
   errorMessage?: string;
 
   /** The AIPromptRun entity created for tracking */
-  promptRun?: AIPromptRunEntity;
+  promptRun?: AIPromptRunEntityExtended;
 
   /** Execution time for this specific task in milliseconds */
   executionTimeMS: number;

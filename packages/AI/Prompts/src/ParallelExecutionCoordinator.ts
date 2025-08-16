@@ -1,7 +1,7 @@
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
-import { AIPromptEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import {
   ExecutionTask,
   ExecutionTaskResult,
@@ -543,7 +543,7 @@ export class ParallelExecutionCoordinator {
     // For now, implementing a simplified version
 
     const startTime = new Date();
-    let childPromptRun: AIPromptRunEntity | null = null;
+    let childPromptRun: AIPromptRunEntityExtended | null = null;
 
     try {
       // Create child prompt run log if parent ID is provided
@@ -777,7 +777,7 @@ export class ParallelExecutionCoordinator {
       ];
 
       // Create a ResultSelector prompt run log entry if parent ID is provided
-      let resultSelectorPromptRun: AIPromptRunEntity | null = null;
+      let resultSelectorPromptRun: AIPromptRunEntityExtended | null = null;
       if (parentPromptRunId) {
         resultSelectorPromptRun = await this.createResultSelectorPromptRun(
           judgePrompt,
@@ -1001,11 +1001,11 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
    * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
-   * @returns Promise<AIPromptRunEntity> - The created child prompt run
+   * @returns Promise<AIPromptRunEntityExtended> - The created child prompt run
    */
-  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<AIPromptRunEntity> {
+  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<AIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', task.contextUser);
+      const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
 
       promptRun.PromptID = task.prompt.ID;
@@ -1066,7 +1066,7 @@ export class ParallelExecutionCoordinator {
    * @param endTime - When the execution completed
    * @param executionTimeMS - Total execution time in milliseconds
    */
-  private async updateChildPromptRun(promptRun: AIPromptRunEntity, modelResult: ChatResult, endTime: Date, executionTimeMS: number): Promise<void> {
+  private async updateChildPromptRun(promptRun: AIPromptRunEntityExtended, modelResult: ChatResult, endTime: Date, executionTimeMS: number): Promise<void> {
     try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
@@ -1102,16 +1102,16 @@ export class ParallelExecutionCoordinator {
    * @param judgeData - The data being sent to the judge
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
-   * @returns Promise<AIPromptRunEntity> - The created result selector prompt run
+   * @returns Promise<AIPromptRunEntityExtended> - The created result selector prompt run
    */
   private async createResultSelectorPromptRun(
     judgePrompt: AIPromptEntityExtended,
     judgeData: Record<string, unknown>,
     parentPromptRunId: string,
     executionOrder: number,
-  ): Promise<AIPromptRunEntity> {
+  ): Promise<AIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs');
+      const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');
       promptRun.NewRecord();
 
       promptRun.PromptID = judgePrompt.ID;

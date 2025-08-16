@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntityExtended, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -141,7 +141,7 @@ export interface SavedConversation {
  * @example
  * ```typescript
  * // Using with agent entity
- * const agent = await metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+ * const agent = await metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
  * await agent.Load('agent-id');
  * this.testHarness.aiAgent = agent;
  * this.testHarness.isVisible = true;
@@ -172,7 +172,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @Input() mode: TestHarnessMode = 'agent';
     
     /** The entity to test - either an AI Agent or AI Prompt */
-    @Input() entity: AIAgentEntity | AIPromptEntityExtended | null = null;
+    @Input() entity: AIAgentEntityExtended | AIPromptEntityExtended | null = null;
     
     /** The original prompt run ID when re-running a previous prompt execution */
     @Input() originalPromptRunId: string | null = null;
@@ -188,10 +188,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
-    get aiAgent(): AIAgentEntity | null {
+    get aiAgent(): AIAgentEntityExtended | null {
         return this.isAgentEntity(this.entity) ? this.entity : null;
     }
-    set aiAgent(value: AIAgentEntity | null) {
+    set aiAgent(value: AIAgentEntityExtended | null) {
         this.entity = value;
         if (value) {
             this.mode = 'agent';
@@ -1400,7 +1400,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             `;
 
             const variables = {
-                agentId: (this.entity as AIAgentEntity).ID,
+                agentId: (this.entity as AIAgentEntityExtended).ID,
                 messages: JSON.stringify(messages),
                 sessionId: sessionId,
                 data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
@@ -3114,7 +3114,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Type guard to check if entity is an AI Agent
      */
-    private isAgentEntity(entity: any): entity is AIAgentEntity {
+    private isAgentEntity(entity: any): entity is AIAgentEntityExtended {
         // Check using the EntityInfo property from BaseEntity
         return entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Agents';
     }

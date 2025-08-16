@@ -3,7 +3,7 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, AIPromptEntityExtended, ActionEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, AIPromptEntityExtended, ActionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentManagementService } from './ai-agent-management.service';
 
@@ -22,7 +22,7 @@ export interface CreateSubAgentConfig {
 
 export interface CreateSubAgentResult {
   /** Created sub-agent entity (not saved to database) */
-  subAgent: AIAgentEntity;
+  subAgent: AIAgentEntityExtended;
   /** Agent prompt link entities (not saved to database) */
   agentPrompts?: AIAgentPromptEntity[];
   /** Agent action link entities (not saved to database) */
@@ -65,7 +65,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   availableActions$ = new BehaviorSubject<ActionEntity[]>([]);
   
   // Entities (not saved to database)
-  subAgentEntity: AIAgentEntity | null = null;
+  subAgentEntity: AIAgentEntityExtended | null = null;
   linkedPrompts: AIPromptEntityExtended[] = [];
   linkedActions: ActionEntity[] = [];
   
@@ -182,7 +182,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
       // Create the sub-agent entity
       const md = new Metadata();
-      this.subAgentEntity = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+      this.subAgentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
       this.subAgentEntity.NewRecord();
       
       // Set default values
@@ -224,7 +224,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     this.subAgentEntity.ExecutionMode = formValue.executionMode;
     this.subAgentEntity.Set('Purpose', formValue.purpose || '');
     this.subAgentEntity.Set('UserMessage', formValue.userMessage || '');
-    // Note: SystemMessage does not exist on AIAgentEntity, removing this line
+    // Note: SystemMessage does not exist on AIAgentEntityExtended, removing this line
     this.subAgentEntity.ModelSelectionMode = formValue.modelSelectionMode;
     this.subAgentEntity.Set('Temperature', formValue.temperature);
     this.subAgentEntity.Set('TopP', formValue.topP);

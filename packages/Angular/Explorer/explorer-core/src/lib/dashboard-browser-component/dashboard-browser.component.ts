@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { DashboardCategoryEntityType, DashboardEntity } from '@memberjunction/core-entities';
+import { DashboardCategoryEntityType, DashboardEntityExtended } from '@memberjunction/core-entities';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
@@ -22,7 +22,7 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
   public upsertDashboardDialogVisible: boolean = false;
   public upsertDashboardName: string = "";
   public upsertDashboardDescription: string = "";
-  public selectedDashboard: DashboardEntity | null = null;
+  public selectedDashboard: DashboardEntityExtended | null = null;
 
   public NewItemOptions: NewItemOption[] = [
     {
@@ -68,7 +68,7 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
 
     console.log(item);
     if(item.Type === ItemType.Resource){
-      let dashboard: DashboardEntity = <DashboardEntity>item.Data;
+      let dashboard: DashboardEntityExtended = <DashboardEntityExtended>item.Data;
       dataID = dashboard.FirstPrimaryKey.Value;
     }
 
@@ -101,7 +101,7 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
     event.Cancel = true;
 
     let item: Item = event.Item;
-    let dashboard: DashboardEntity = item.Data;
+    let dashboard: DashboardEntityExtended = item.Data;
     this.selectedDashboard = dashboard;
     this.toggleUpsertDashboardDialog(true);
   }
@@ -128,7 +128,7 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
     }
     
     const md: Metadata = new Metadata();
-    const dashboard: DashboardEntity = await md.GetEntityObject<DashboardEntity>("Dashboards");
+    const dashboard: DashboardEntityExtended = await md.GetEntityObject<DashboardEntityExtended>("Dashboards");
     
     dashboard.NewRecord();
     dashboard.Name = this.upsertDashboardName;

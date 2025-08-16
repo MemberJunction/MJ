@@ -1,6 +1,6 @@
 import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, 
-         AIModelActionEntity, AIModelEntity, AIModelEntityExtended,
+         AIModelActionEntity, AIModelEntityExtended,
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
          AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
@@ -492,7 +492,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Utility method that will cache the result of a prompt in the AI Result Cache entity
      */
-    public async CacheResult(model: AIModelEntity, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         const md = new Metadata();
         const cacheItem = await md.GetEntityObject<AIResultCacheEntity>('AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;

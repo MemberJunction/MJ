@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -31,7 +31,7 @@ interface MatrixCell {
 })
 export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   @Input() selectedPrompts: AIPromptEntityExtended[] = [];
-  @Input() selectedModels: AIModelEntity[] = [];
+  @Input() selectedModels: AIModelEntityExtended[] = [];
   @Input() readonly = false;
   
   @Output() associationsChange = new EventEmitter<PromptModelAssociation[]>();
@@ -40,7 +40,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   
   // Data
   public prompts: AIPromptEntityExtended[] = [];
-  public models: AIModelEntity[] = [];
+  public models: AIModelEntityExtended[] = [];
   public associations: PromptModelAssociation[] = [];
   public matrix: MatrixCell[][] = [];
   
@@ -127,7 +127,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     }
   }
   
-  private async loadModels(): Promise<AIModelEntity[]> {
+  private async loadModels(): Promise<AIModelEntityExtended[]> {
     const rv = new RunView();
     const result = await rv.RunView({
       EntityName: 'AI Models',
@@ -139,7 +139,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
     
     if (result && result.Success && result.Results) {
-      return result.Results as AIModelEntity[];
+      return result.Results as AIModelEntityExtended[];
     } else {
       throw new Error('Failed to load AI models');
     }
@@ -208,7 +208,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
   }
   
-  private canAssignModelToPrompt(prompt: AIPromptEntityExtended, model: AIModelEntity): boolean {
+  private canAssignModelToPrompt(prompt: AIPromptEntityExtended, model: AIModelEntityExtended): boolean {
     // Check model type compatibility
     if (prompt.OutputType && model.AIModelTypeID) {
       // Add business logic for compatibility checking

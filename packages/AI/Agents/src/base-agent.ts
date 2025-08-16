@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
@@ -234,7 +234,7 @@ export class BaseAgent {
     protected logError(error: Error | string, options?: {
         category?: string;
         metadata?: Record<string, any>;
-        agent?: AIAgentEntity;
+        agent?: AIAgentEntityExtended;
         agentType?: AIAgentTypeEntity;
         severity?: 'warning' | 'error' | 'critical';
     }): void {
@@ -329,7 +329,7 @@ export class BaseAgent {
      * all required metadata is present and handles errors gracefully.
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution
-     * @param {AIAgentEntity} params.agent - The agent entity to execute
+     * @param {AIAgentEntityExtended} params.agent - The agent entity to execute
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
      * @param {any} [params.context] - Optional context object passed to sub-agents and actions
@@ -600,11 +600,11 @@ export class BaseAgent {
     /**
      * Validates that the agent is active and ready for execution.
      * 
-     * @param {AIAgentEntity} agent - The agent to validate
+     * @param {AIAgentEntityExtended} agent - The agent to validate
      * @returns {ExecuteAgentResult | null} Error result if validation fails, null if valid
      * @protected
      */
-    protected async validateAgent(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
+    protected async validateAgent(agent: AIAgentEntityExtended): Promise<ExecuteAgentResult | null> {
         if (agent.Status !== 'Active') {
             // Set error on the agent run
             if (this._agentRun) {
@@ -738,11 +738,11 @@ export class BaseAgent {
     /**
      * Loads all required configuration for agent execution.
      * 
-     * @param {AIAgentEntity} agent - The agent to load configuration for
+     * @param {AIAgentEntityExtended} agent - The agent to load configuration for
      * @returns {Promise<AgentConfiguration>} Configuration object with loaded entities
      * @protected
      */
-    protected async loadAgentConfiguration(agent: AIAgentEntity): Promise<AgentConfiguration> {
+    protected async loadAgentConfiguration(agent: AIAgentEntityExtended): Promise<AgentConfiguration> {
         const engine = AIEngine.Instance;
 
         // first check to see if we have a custom driver class if we do, we do NOT validate the rest of
@@ -1735,7 +1735,7 @@ export class BaseAgent {
      * structured to provide the LLM with comprehensive context about the agent's
      * capabilities and hierarchical relationships.
      * 
-     * @param {AIAgentEntity} agent - The agent to gather context for
+     * @param {AIAgentEntityExtended} agent - The agent to gather context for
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
      * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * 
@@ -1745,7 +1745,7 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async gatherPromptTemplateData(agent: AIAgentEntity, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
+    private async gatherPromptTemplateData(agent: AIAgentEntityExtended, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
             
@@ -1959,11 +1959,11 @@ export class BaseAgent {
     /**
      * Formats sub-agent details for inclusion in prompt context.
      * 
-     * @param {AIAgentEntity[]} subAgents - Array of sub-agent entities
+     * @param {AIAgentEntityExtended[]} subAgents - Array of sub-agent entities
      * @returns {string} JSON formatted string with sub-agent details
      * @private
      */
-    private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
+    private formatSubAgentDetails(subAgents: AIAgentEntityExtended[]): string {
         return JSON.stringify(subAgents.map(sa => {
             const result = {
                 Name: sa.Name,
@@ -1987,7 +1987,7 @@ export class BaseAgent {
      * prompt.
      * @param agent 
      */
-    protected getAgentPromptParameters(agent: AIAgentEntity): Array<TemplateParamEntity> {
+    protected getAgentPromptParameters(agent: AIAgentEntityExtended): Array<TemplateParamEntity> {
         const engine = AIEngine.Instance;
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
@@ -2002,7 +2002,7 @@ export class BaseAgent {
         return prompt.TemplateParams;
     }
 
-    protected getAgentPromptParametersJSON(agent: AIAgentEntity): string {
+    protected getAgentPromptParametersJSON(agent: AIAgentEntityExtended): string {
         const params = this.getAgentPromptParameters(agent);
         return JSON.stringify(params.map(param => ({
             Name: param.Name,
@@ -2103,7 +2103,7 @@ export class BaseAgent {
     }
  
     /**
-     * Initializes the agent run tracking by creating AIAgentRunEntity and setting up context.
+     * Initializes the agent run tracking by creating AIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
@@ -2225,10 +2225,10 @@ export class BaseAgent {
      * Validates the agent with tracking.
      * 
      * @private
-     * @param {AIAgentEntity} agent - The agent to validate
+     * @param {AIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
      */
-    private async validateAgentWithTracking(agent: AIAgentEntity, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
+    private async validateAgentWithTracking(agent: AIAgentEntityExtended, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
         try {
             // Original validation logic
             const validationResult = await this.validateAgent(agent);
@@ -2266,7 +2266,7 @@ export class BaseAgent {
      * @param {string} [targetId] - Optional ID of the target entity
      * @param {any} [inputData] - Optional input data to capture for this step
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
-     * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
+     * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
      */
     private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
@@ -2319,7 +2319,7 @@ export class BaseAgent {
      * Finalizes a step entity with completion status.
      * 
      * @private
-     * @param {AIAgentRunStepEntity} stepEntity - The step entity to finalize
+     * @param {AIAgentRunStepEntityExtended} stepEntity - The step entity to finalize
      * @param {boolean} success - Whether the step was successful
      * @param {string} [errorMessage] - Optional error message
      * @param {any} [outputData] - Optional output data to capture for this step
@@ -2692,7 +2692,7 @@ export class BaseAgent {
 
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
-            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
+            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntityExtended)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
@@ -3003,7 +3003,7 @@ export class BaseAgent {
             // Prepare output data
             const outputData = {
                 subAgentResult: {
-                    // we have a link to the AIAgentRunEntity via the TargetLogID above
+                    // we have a link to the AIAgentRunEntityExtended via the TargetLogID above
                     // but we throw in just a few things here for convenience/summary that are
                     // light - we don't want to store the payload again for example
                     // that is stored in PayloadAtEnd on the step and also in PayloadAtEnd in the sub-agent's run
@@ -3547,7 +3547,7 @@ export class BaseAgent {
      * @param agentRun - The current agent run
      * @returns Array of violation messages (empty if all requirements are met)
      */
-    protected async checkMinimumExecutionRequirements(agent: AIAgentEntity, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
+    protected async checkMinimumExecutionRequirements(agent: AIAgentEntityExtended, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
         const violations: string[] = [];
         
         // Check action minimum requirements

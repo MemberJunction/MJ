@@ -10,9 +10,9 @@
  * @since 2.50.0
  */
 
-import { AIAgentRunEntity, AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
@@ -256,7 +256,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  */
 export type ExecuteAgentParams<TContext = any, P = any> = {
     /** The agent entity to execute, containing all metadata and configuration */
-    agent: AIAgentEntity;
+    agent: AIAgentEntityExtended;
     /** Array of chat messages representing the conversation history */
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
@@ -272,7 +272,7 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
     /** Optional parent agent run entity for nested sub-agent execution */
-    parentRun?: AIAgentRunEntity;
+    parentRun?: AIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
@@ -439,7 +439,7 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of AIAgentEntity objects representing sub-agents */
+    /** JSON stringified array of AIAgentEntityExtended objects representing sub-agents */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;

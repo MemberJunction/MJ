@@ -13,7 +13,7 @@ import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView } from '@memberjunction/core';
-import { AIPromptRunEntity, AIAgentRunEntity, AIModelEntity, AIPromptEntityExtended, AIAgentEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
 
 export interface DrillDownTab {
   id: string;
@@ -2338,12 +2338,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<AIPromptRunEntity>({
+        new RunView().RunView<AIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC' 
         }),
-        new RunView().RunView<AIAgentRunEntity>({
+        new RunView().RunView<AIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC' 
@@ -2417,7 +2417,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     try {
       // Find model by name
       const rv = new RunView();
-      const result = await rv.RunView<AIModelEntity>({
+      const result = await rv.RunView<AIModelEntityExtended>({
         EntityName: 'AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
       });

@@ -1,11 +1,11 @@
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { FastMCP, Resource, ResourceResult } from "fastmcp";
+import { FastMCP } from "fastmcp";
 import * as sql from "mssql";
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntity, AIAgentRunEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
 import { ChatMessage } from "@memberjunction/ai";
 
@@ -156,7 +156,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                         const aiEngine = AIEngine.Instance;
                         await aiEngine.Config(false, contextUser);
                         
-                        let agent: AIAgentEntity | null = null;
+                        let agent: AIAgentEntityExtended | null = null;
                         
                         if (props.agentId) {
                             agent = aiEngine.Agents.find(a => a.ID === props.agentId) || null;
@@ -247,7 +247,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                 }),
                 async execute(props: any) {
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', contextUser);
                     const loaded = await agentRun.Load(props.runId);
                     
                     if (!loaded) {
@@ -280,7 +280,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', contextUser);
                     const loaded = await agentRun.Load(props.runId);
                     
                     if (!loaded || agentRun.Status !== 'Running') {
@@ -299,7 +299,7 @@ async function loadAgentTools(contextUser: UserInfo) {
     }
 }
 
-async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntity[]> {
+async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<AIAgentEntityExtended[]> {
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, contextUser);
     
@@ -324,7 +324,7 @@ async function discoverAgents(pattern: string, contextUser?: UserInfo): Promise<
     return allAgents.filter(a => a.Name && regex.test(a.Name));
 }
 
-function addAgentExecuteTool(agent: AIAgentEntity, contextUser: UserInfo) {
+function addAgentExecuteTool(agent: AIAgentEntityExtended, contextUser: UserInfo) {
     const agentRunner = new AgentRunner();
     
     server.addTool({

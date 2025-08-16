@@ -3,7 +3,7 @@
 // import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 // import { RunView, Metadata } from '@memberjunction/core';
-// import { AIAgentEntity, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+// import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 // import { MJNotificationService } from '@memberjunction/ng-notifications';
 // import { Router } from '@angular/router';
 // import { AIAgentManagementService } from './ai-agent-management.service';
@@ -44,7 +44,7 @@
 // export class AgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
 //   // Input properties set by service
-//   agent!: AIAgentEntity;
+//   agent!: AIAgentEntityExtended;
   
 //   // Reactive state management
 //   private destroy$ = new Subject<void>();

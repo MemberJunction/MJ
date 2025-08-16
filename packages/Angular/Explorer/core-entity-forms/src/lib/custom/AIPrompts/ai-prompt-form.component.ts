@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AIPromptEntityExtended, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntity, AIVendorEntity, AIPromptCategoryEntity, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, TemplateEntity, TemplateContentEntity, TemplateParamEntity, AIPromptModelEntity, AIModelEntityExtended, AIVendorEntity, AIPromptCategoryEntityExtended, AIModelVendorEntity, AIPromptTypeEntity, AIPromptRunEntityExtended, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -30,7 +30,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     
     // Model management
     public promptModels: AIPromptModelEntity[] = [];
-    public availableModels: AIModelEntity[] = [];
+    public availableModels: AIModelEntityExtended[] = [];
     public availableVendors: AIVendorEntity[] = [];
     public isLoadingModels = false;
     
@@ -53,7 +53,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public draggedIndex: number = -1;
     
     // Execution History
-    public executionHistory: AIPromptRunEntity[] = [];
+    public executionHistory: AIPromptRunEntityExtended[] = [];
     public isLoadingHistory = false;
     public historySortField: 'runAt' | 'executionTime' | 'cost' | 'tokens' = 'runAt';
     public historySortDirection: 'asc' | 'desc' = 'desc';
@@ -1321,7 +1321,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     /**
      * Builds the tree structure for result selector
      */
-    private buildResultSelectorTree(categories: AIPromptCategoryEntity[], prompts: AIPromptEntityExtended[]): any[] {
+    private buildResultSelectorTree(categories: AIPromptCategoryEntityExtended[], prompts: AIPromptEntityExtended[]): any[] {
         const tree: any[] = [];
 
         // Add "Clear Selection" option at the top
@@ -1575,7 +1575,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         this.isLoadingHistory = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIPromptRunEntity>({
+            const result = await rv.RunView<AIPromptRunEntityExtended>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
                 OrderBy: 'RunAt DESC' 

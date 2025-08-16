@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIPromptRunEntity, AIAgentRunEntity, AIAgentRunStepEntity, AIModelEntity, AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIModelEntityExtended, AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
 
 export interface DashboardKPIs {
   totalExecutions: number;
@@ -145,8 +145,8 @@ export class AIInstrumentationService {
       }
     ]);
 
-    const promptRuns = promptResults.Results as AIPromptRunEntity[];
-    const agentRuns = agentResults.Results as AIAgentRunEntity[];
+    const promptRuns = promptResults.Results as AIPromptRunEntityExtended[];
+    const agentRuns = agentResults.Results as AIAgentRunEntityExtended[];
 
     // Calculate KPIs
     const totalExecutions = promptRuns.length + agentRuns.length;
@@ -209,8 +209,8 @@ export class AIInstrumentationService {
       }
     ]);
 
-    const allPromptRuns = promptResults.Results as AIPromptRunEntity[];
-    const allAgentRuns = agentResults.Results as AIAgentRunEntity[];
+    const allPromptRuns = promptResults.Results as AIPromptRunEntityExtended[];
+    const allAgentRuns = agentResults.Results as AIAgentRunEntityExtended[];
     
     // Now aggregate data into buckets on the client side
     const trends: TrendData[] = [];
@@ -261,8 +261,8 @@ export class AIInstrumentationService {
       }
     ]);
 
-    const promptRuns = promptResults.Results as AIPromptRunEntity[];
-    const agentRuns = agentResults.Results as AIAgentRunEntity[];
+    const promptRuns = promptResults.Results as AIPromptRunEntityExtended[];
+    const agentRuns = agentResults.Results as AIAgentRunEntityExtended[];
 
     const liveExecutions: LiveExecution[] = [];
 
@@ -314,7 +314,7 @@ export class AIInstrumentationService {
     const dateFilter = `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`;
 
     const promptRv = new RunView();
-    const promptResults = await promptRv.RunView<AIPromptRunEntity>({
+    const promptResults = await promptRv.RunView<AIPromptRunEntityExtended>({
       EntityName: 'MJ: AI Prompt Runs',
       ExtraFilter: dateFilter 
     });
@@ -334,25 +334,25 @@ export class AIInstrumentationService {
   }
 
   // Helper methods
-  private countActiveExecutions(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private countActiveExecutions(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const activePrompts = promptRuns.filter(r => !r.CompletedAt && r.Success !== false).length;
     const activeAgents = agentRuns.filter(r => r.Status === 'Running').length;
     return activePrompts + activeAgents;
   }
 
-  private sumCosts(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private sumCosts(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const promptCost = promptRuns.reduce((sum, r) => sum + (r.Cost || 0), 0);
     const agentCost = agentRuns.reduce((sum, r) => sum + (r.TotalCost || 0), 0);
     return promptCost + agentCost;
   }
 
-  private sumTokens(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private sumTokens(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const promptTokens = promptRuns.reduce((sum, r) => sum + (r.TokensUsed || 0), 0);
     const agentTokens = agentRuns.reduce((sum, r) => sum + (r.TotalTokensUsed || 0), 0);
     return promptTokens + agentTokens;
   }
 
-  private calculateAverageExecutionTime(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private calculateAverageExecutionTime(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const promptTimes = promptRuns
       .filter(r => r.ExecutionTimeMS)
       .map(r => r.ExecutionTimeMS!);
@@ -365,7 +365,7 @@ export class AIInstrumentationService {
     return allTimes.length > 0 ? allTimes.reduce((sum, time) => sum + time, 0) / allTimes.length : 0;
   }
 
-  private calculateSuccessRate(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private calculateSuccessRate(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const totalExecutions = promptRuns.length + agentRuns.length;
     if (totalExecutions === 0) return 1;
 
@@ -375,13 +375,13 @@ export class AIInstrumentationService {
     return (successfulPrompts + successfulAgents) / totalExecutions;
   }
 
-  private countErrors(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private countErrors(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const promptErrors = promptRuns.filter(r => !r.Success).length;
     const agentErrors = agentRuns.filter(r => !r.Success).length;
     return promptErrors + agentErrors;
   }
 
-  private calculateDailyCostBurn(promptRuns: AIPromptRunEntity[], agentRuns: AIAgentRunEntity[]): number {
+  private calculateDailyCostBurn(promptRuns: AIPromptRunEntityExtended[], agentRuns: AIAgentRunEntityExtended[]): number {
     const now = new Date();
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
@@ -423,7 +423,7 @@ export class AIInstrumentationService {
 
 
 
-  private async getTopModel(promptRuns: AIPromptRunEntity[]): Promise<string> {
+  private async getTopModel(promptRuns: AIPromptRunEntityExtended[]): Promise<string> {
     const modelCounts = new Map<string, number>();
     const modelNames = new Map<string, string>();
     
@@ -444,7 +444,7 @@ export class AIInstrumentationService {
     return modelNames.get(topModelId) || 'Unknown Model';
   }
 
-  private async getTopAgent(agentRuns: AIAgentRunEntity[]): Promise<string> {
+  private async getTopAgent(agentRuns: AIAgentRunEntityExtended[]): Promise<string> {
     const agentCounts = new Map<string, number>();
     const agentNames = new Map<string, string>();
     
@@ -465,7 +465,7 @@ export class AIInstrumentationService {
     return agentNames.get(topAgentId) || 'Unknown Agent';
   }
 
-  private async analyzeCostByModel(promptRuns: AIPromptRunEntity[]): Promise<{ model: string; cost: number; tokens: number }[]> {
+  private async analyzeCostByModel(promptRuns: AIPromptRunEntityExtended[]): Promise<{ model: string; cost: number; tokens: number }[]> {
     const modelStats = new Map<string, { cost: number; tokens: number; name: string }>();
 
     for (const run of promptRuns) {
@@ -489,7 +489,7 @@ export class AIInstrumentationService {
     return results.sort((a, b) => b.cost - a.cost);
   }
 
-  private async analyzePerformanceMatrix(promptRuns: AIPromptRunEntity[]): Promise<{ agent: string; model: string; avgTime: number; successRate: number }[]> {
+  private async analyzePerformanceMatrix(promptRuns: AIPromptRunEntityExtended[]): Promise<{ agent: string; model: string; avgTime: number; successRate: number }[]> {
     const combinations = new Map<string, { times: number[]; successes: number; total: number; agentName: string; modelName: string }>();
 
     for (const run of promptRuns) {
@@ -524,7 +524,7 @@ export class AIInstrumentationService {
     return results;
   }
 
-  private async analyzeTokenEfficiency(promptRuns: AIPromptRunEntity[]): Promise<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]> {
+  private async analyzeTokenEfficiency(promptRuns: AIPromptRunEntityExtended[]): Promise<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]> {
     const modelEfficiency = new Map<string, { input: number; output: number; cost: number; name: string }>();
 
     for (const run of promptRuns) {
@@ -566,7 +566,7 @@ export class AIInstrumentationService {
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
     const rv = new RunView();
-    const result = await rv.RunView<AIPromptRunEntity>({
+    const result = await rv.RunView<AIPromptRunEntityExtended>({
       EntityName: 'MJ: AI Prompt Runs',
       ExtraFilter: `ID = '${promptRunId}'` 
     });
@@ -574,7 +574,7 @@ export class AIInstrumentationService {
     const run = result.Results[0];
     if (!run) throw new Error('Prompt run not found');
 
-    const childrenResult = await rv.RunView<AIPromptRunEntity>({
+    const childrenResult = await rv.RunView<AIPromptRunEntityExtended>({
       EntityName: 'MJ: AI Prompt Runs',
       ExtraFilter: `ParentID = '${promptRunId}'` 
     });
@@ -602,7 +602,7 @@ export class AIInstrumentationService {
 
   private async getAgentExecutionDetails(agentRunId: string): Promise<ExecutionDetails> {
     const rv = new RunView();
-    const result = await rv.RunView<AIAgentRunEntity>({
+    const result = await rv.RunView<AIAgentRunEntityExtended>({
       EntityName: 'MJ: AI Agent Runs',
       ExtraFilter: `ID = '${agentRunId}'` 
     });
@@ -610,7 +610,7 @@ export class AIInstrumentationService {
     const run = result.Results[0];
     if (!run) throw new Error('Agent run not found');
 
-    const childrenResult = await rv.RunView<AIAgentRunEntity>({
+    const childrenResult = await rv.RunView<AIAgentRunEntityExtended>({
       EntityName: 'MJ: AI Agent Runs',
       ExtraFilter: `ParentRunID = '${agentRunId}'` 
     });

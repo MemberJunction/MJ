@@ -1,6 +1,6 @@
 import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, AIAgentActionEntity, AIAgentEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntity, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentActionEntity, AIAgentEntityExtended, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
@@ -53,7 +53,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 })
 export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit, OnDestroy {
     /** The AI Agent entity being edited */
-    public record!: AIAgentEntity;
+    public record!: AIAgentEntityExtended;
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -138,7 +138,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display */
-    public subAgents: AIAgentEntity[] = [];
+    public subAgents: AIAgentEntityExtended[] = [];
     
     /** Array of agent prompt entities for card display */
     public agentPrompts: AIPromptEntityExtended[] = [];
@@ -154,7 +154,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public agentNotes: AIAgentNoteEntity[] = [];
     
     /** Array of recent execution records for history display */
-    public recentExecutions: AIAgentRunEntity[] = [];
+    public recentExecutions: AIAgentRunEntityExtended[] = [];
     
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
@@ -469,7 +469,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     private originalSnapshots: {
         agentPrompts: AIPromptEntityExtended[];
         agentActions: ActionEntity[];
-        subAgents: AIAgentEntity[];
+        subAgents: AIAgentEntityExtended[];
         promptCount: number;
         actionCount: number;
         subAgentCount: number;
@@ -594,7 +594,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             // Process results in the same order as queries
             if (results.length >= 6) {
                 // Sub-agents (index 0)
-                this.subAgents = results[0].Results as AIAgentEntity[] || [];
+                this.subAgents = results[0].Results as AIAgentEntityExtended[] || [];
                 this.subAgentCount = results[0].TotalRowCount || 0;
                 
                 // Prompts (index 1)
@@ -614,7 +614,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.noteCount = results[4].TotalRowCount || 0;
                 
                 // Execution history (index 5)
-                this.recentExecutions = results[5].Results as AIAgentRunEntity[] || [];
+                this.recentExecutions = results[5].Results as AIAgentRunEntityExtended[] || [];
                 this.executionHistoryCount = results[5].TotalRowCount || 0;
             }
 
@@ -896,7 +896,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the icon for a sub-agent
      * Prioritizes LogoURL, falls back to IconClass, then default robot icon
      */
-    public getSubAgentIcon(subAgent: AIAgentEntity): string {
+    public getSubAgentIcon(subAgent: AIAgentEntityExtended): string {
         if (subAgent?.LogoURL) {
             // LogoURL is used in img tag, not here
             return '';
@@ -915,7 +915,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Checks if a sub-agent has a logo URL
      */
-    public hasSubAgentLogoURL(subAgent: AIAgentEntity): boolean {
+    public hasSubAgentLogoURL(subAgent: AIAgentEntityExtended): boolean {
         return !!subAgent?.LogoURL;
     }
 
@@ -1433,7 +1433,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: AIAgentRunEntity, trimLongMessages: boolean): string {
+    public getExecutionResultPreview(execution: AIAgentRunEntityExtended, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -1468,7 +1468,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets the full execution result message for expanded view
      */
-    public getExecutionResultMessage(execution: AIAgentRunEntity): string {
+    public getExecutionResultMessage(execution: AIAgentRunEntityExtended): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -1775,7 +1775,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const agent of newAgents) {
-                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
                             subAgentToUpdate.ParentID = this.record.ID;
                             // Database constraint requires ExposeAsAction = false for sub-agents
@@ -1829,7 +1829,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Removes a sub-agent from this agent (deferred until save)
      */
-    public async removeSubAgent(subAgent: AIAgentEntity, event: Event) {
+    public async removeSubAgent(subAgent: AIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -1861,7 +1861,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     } else {
                         // Add to pending removals (will restore to root agent)
                         const md = new Metadata();
-                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
                         
@@ -2088,18 +2088,18 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Opens the advanced settings dialog for a sub-agent
      */
-    public async openSubAgentAdvancedSettings(subAgent: AIAgentEntity, event: Event) {
+    public async openSubAgentAdvancedSettings(subAgent: AIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
             // Load the full sub-agent entity for editing
             const md = new Metadata();
-            const subAgentEntity = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+            const subAgentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
             await subAgentEntity.Load(subAgent.ID);
 
             // Get all sub-agents under the same parent for validation
             const rv = new RunView();
-            const allSubAgentsResult = await rv.RunView<AIAgentEntity>({
+            const allSubAgentsResult = await rv.RunView<AIAgentEntityExtended>({
                 EntityName: 'AI Agents',
                 ExtraFilter: `ParentID='${this.record.ID}'`,
                 ResultType: 'entity_object'
@@ -2324,8 +2324,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             );
             
             for (const subAgentRecord of subAgentRecords) {
-                // Cast to AIAgentEntity to access ParentID property
-                const subAgent = subAgentRecord.entityObject as AIAgentEntity;
+                // Cast to AIAgentEntityExtended to access ParentID property
+                const subAgent = subAgentRecord.entityObject as AIAgentEntityExtended;
                 // Set the proper ParentID now that parent is saved
                 subAgent.ParentID = this.record.ID;
                 // Clear the temporary reference

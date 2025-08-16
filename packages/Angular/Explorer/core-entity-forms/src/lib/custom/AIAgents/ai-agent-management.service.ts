@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef, WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
 import { Observable } from 'rxjs';
-import { ActionEntity, AIAgentEntity, AIAgentPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentEntityExtended, AIAgentPromptEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
@@ -247,8 +247,8 @@ export class AIAgentManagementService {
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
   openSubAgentAdvancedSettingsDialog(config: {
-    subAgent: AIAgentEntity;
-    allSubAgents: AIAgentEntity[];
+    subAgent: AIAgentEntityExtended;
+    allSubAgents: AIAgentEntityExtended[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<SubAgentAdvancedSettingsFormData | null> {
     const windowSettings: WindowSettings = {
@@ -384,9 +384,9 @@ export class AIAgentManagementService {
    */
   openCreateAgentDialog(config: {
     parentAgentId?: string;
-    initialData?: Partial<AIAgentEntity>;
+    initialData?: Partial<AIAgentEntityExtended>;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIAgentEntity | null> {
+  }): Observable<AIAgentEntityExtended | null> {
     // TODO: Implement agent creation dialog
     // This will reuse the same form components and advanced settings
     // but in a creation context rather than editing context
@@ -399,7 +399,7 @@ export class AIAgentManagementService {
    * Validates agent configuration and relationships
    * Used by both creation and editing workflows
    */
-  validateAgentConfiguration(agent: AIAgentEntity): { isValid: boolean; errors: string[] } {
+  validateAgentConfiguration(agent: AIAgentEntityExtended): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     // ParentID vs ExposeAsAction validation
@@ -434,8 +434,8 @@ export class AIAgentManagementService {
    * in the context of the parent agent's sub-agents section
    */
   openSubAgentManagementDialog(config: {
-    parentAgent: AIAgentEntity;
-    subAgent?: AIAgentEntity; // For editing existing sub-agent relationship
+    parentAgent: AIAgentEntityExtended;
+    subAgent?: AIAgentEntityExtended; // For editing existing sub-agent relationship
     viewContainerRef?: ViewContainerRef;
   }): Observable<any> {
     // TODO: Implement sub-agent management dialog

@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit } from '@angular/core';
-import { AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 
 export interface AITestHarnessWindowData {
     agentId?: string;
-    agent?: AIAgentEntity;
+    agent?: AIAgentEntityExtended;
     promptId?: string;
     prompt?: AIPromptEntityExtended;
     promptRunId?: string;
@@ -91,7 +91,7 @@ export class AITestHarnessWindowComponent implements OnInit {
     loading = true;
     error = '';
     
-    agent?: AIAgentEntity;
+    agent?: AIAgentEntityExtended;
     prompt?: AIPromptEntityExtended;
     mode: 'agent' | 'prompt' = 'agent';
     
@@ -119,7 +119,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.agent = this.data.agent;
                     this.windowTitle = this.data.title || `Test Agent: ${this.agent.Name}`;
                 } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
                     await agentEntity.Load(this.data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;

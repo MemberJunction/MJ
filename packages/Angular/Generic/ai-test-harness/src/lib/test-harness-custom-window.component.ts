@@ -1,12 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, Renderer2, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { AITestHarnessComponent } from './ai-test-harness.component';
 
 export interface CustomWindowData {
     agentId?: string;
-    agent?: AIAgentEntity;
+    agent?: AIAgentEntityExtended;
     promptId?: string;
     prompt?: AIPromptEntityExtended;
     title?: string;
@@ -227,7 +227,7 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
     private readonly MINIMIZED_WIDTH = 400;
     private readonly MINIMIZED_HEIGHT = 60;
     
-    agent?: AIAgentEntity;
+    agent?: AIAgentEntityExtended;
     prompt?: AIPromptEntityExtended;
     mode: 'agent' | 'prompt' = 'agent';
     
@@ -272,7 +272,7 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
                     this.agent = this.data.agent;
                     this.windowTitle = this.data.title || `Test: ${this.agent.Name}`;
                 } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
                     await agentEntity.Load(this.data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;

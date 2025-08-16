@@ -1,6 +1,6 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
@@ -37,7 +37,7 @@ export class AgentService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
+      const result = await rv.RunView<AIAgentEntityExtended>({
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
@@ -73,12 +73,12 @@ For help with agent configuration, see the MJ documentation.`);
     }
   }
 
-  async findAgent(agentName: string): Promise<AIAgentEntity | null> {
+  async findAgent(agentName: string): Promise<AIAgentEntityExtended | null> {
     await this.ensureInitialized();
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
+      const result = await rv.RunView<AIAgentEntityExtended>({
         EntityName: 'AI Agents',
         ExtraFilter: `Name = '${agentName.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
