@@ -1,7 +1,7 @@
 {
   "name": "AIModelList",
   "title": "AI Model List",
-  "description": "Displays AI models in grid or list view with vendor information and sorting",
+  "description": "Displays AI models in grid or list view with vendor information and sorting.",
   "type": "table",
   "functionalRequirements": "Display models with vendor counts, support grid and list views, handle sorting and selection",
   "dataRequirements": null,

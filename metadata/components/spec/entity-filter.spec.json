@@ -1,7 +1,7 @@
 {
     "name": "EntityFilter",
     "title": "Entity Filter Panel",
-    "description": "Collapsible filter panel for filtering entities by various criteria",
+    "description": "Collapsible filter panel for filtering entities by various criteria.",
     "type": "form",
     "functionalRequirements": "## Entity Filter Requirements\n\n- Collapsible panel on the left side\n- Filter by schema name (dropdown)\n- Filter by base table (dropdown)\n- Search box for text search\n- Clear all filters button\n- Show active filter count\n- Smooth collapse/expand animation\n- Remember collapsed state",
     "dataRequirements": null,

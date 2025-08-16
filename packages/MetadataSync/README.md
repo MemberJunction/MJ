@@ -1057,6 +1057,9 @@ In this example, data requirements, libraries, and event handlers are spread int
 #### @include in Referenced JSON Files
 When using `@file:` to reference a JSON file, any `@include` directives within that JSON file are automatically processed:
 
+#### @file References in Included JSON Files
+The system now automatically resolves `@file` references found within JSON files that are pulled in via `@include`. This allows for complete nesting of references:
+
 ```json
 // main-entity.json
 {
@@ -1081,10 +1084,17 @@ The `component-spec.json` file's `@include` directives are processed before the 
 
 #### Processing Order
 1. @include directives are processed first (recursively)
-2. Then @template references
-3. Finally, other @ references (@file, @lookup, etc.)
+2. @file references within @included JSON files are also resolved
+3. Then @template references
+4. Finally, other @ references (@lookup, etc.)
 
 This ensures that included content can contain other special references that will be properly resolved.
+
+**New Feature**: @file references within @included JSON files are now automatically resolved. This means you can have:
+- A main JSON file with `@include` directives
+- The included JSON files can have `@file` references to load code, templates, etc.
+- Those @file references are resolved to their actual content
+- If the @file points to a JSON file with @include directives, those are also processed
 
 ### @template: References (NEW)
 Enable JSON template composition for reusable configurations:

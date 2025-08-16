@@ -2,7 +2,7 @@
   "name": "AIDistributionChart",
   "location": "embedded",
   "title": "AI Distribution Chart",
-  "description": "Pie and bar charts showing distribution of runs, tokens, and costs by agent or prompt for drill-down analysis",
+  "description": "Pie and bar charts showing distribution of runs, tokens, and costs by agent or prompt for drill-down analysis.",
   "type": "chart",
   "functionalRequirements": "## Distribution Chart Requirements\n\n### Core Functionality\n- Display distribution breakdown for selected time period\n- Toggle between pie chart and bar chart views\n- Show top 10 items with 'Others' grouping\n- Display runs, tokens, and cost metrics\n- Interactive tooltips with detailed values\n- Click on segments to filter detail table\n- Color-coded segments with legend\n\n### Visual Features\n- Smooth transitions between chart types\n- Percentage labels on pie segments\n- Value labels on bar chart\n- Responsive sizing\n- Hover effects for interactivity",
   "dataRequirements": {

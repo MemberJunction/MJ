@@ -1,7 +1,7 @@
 {
   "name": "AIModelAnalytics",
   "title": "AI Model Analytics",
-  "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
+  "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series.",
   "type": "chart",
   "functionalRequirements": "Display pie chart for prompt usage, bar chart for performance, time series for usage trends",
   "dataRequirements": null,

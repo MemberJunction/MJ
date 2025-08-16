@@ -254,8 +254,8 @@ export class ComponentCompiler {
         await this.loadStyles(versionInfo.cssUrls);
       }
 
-      // Load the library dynamically
-      await this.loadScript(cdnUrl, lib.globalVariable);
+      // Load the library dynamically (cdnUrl is guaranteed to be non-null here due to check above)
+      await this.loadScript(cdnUrl!, lib.globalVariable);
       
       // Capture the library value from global scope
       // Note: Libraries loaded from CDN typically attach to window automatically
@@ -536,7 +536,8 @@ export class ComponentCompiler {
     if (this.compilationCache.size >= this.config.maxCacheSize) {
       // Remove oldest entry (first in map)
       const firstKey = this.compilationCache.keys().next().value;
-      this.compilationCache.delete(firstKey);
+      if (firstKey)
+        this.compilationCache.delete(firstKey);
     }
 
     const cacheKey = this.createCacheKey(component.name, code);

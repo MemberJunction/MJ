@@ -141,8 +141,13 @@ export class JsonPreprocessor {
           }
         }
       } else {
-        // Regular property - process recursively
-        if (value && typeof value === 'object') {
+        // Regular property - process recursively and handle @file references
+        if (typeof value === 'string' && value.startsWith('@file:')) {
+          // Process @file reference
+          const filePath = value.substring(6); // Remove '@file:' prefix
+          const resolvedPath = this.resolvePath(filePath, currentFilePath);
+          result[key] = await this.loadFileContent(resolvedPath);
+        } else if (value && typeof value === 'object') {
           result[key] = await this.processIncludesInternal(value, currentFilePath);
         } else {
           result[key] = value;
@@ -180,6 +185,42 @@ export class JsonPreprocessor {
     } finally {
       // Remove from visited paths after processing
       this.visitedPaths.delete(absolutePath);
+    }
+  }
+
+  /**
+   * Load file content and process it if it's JSON with @include directives
+   * @param filePath - Path to the file to load
+   * @returns The file content (processed if JSON with @includes)
+   */
+  private async loadFileContent(filePath: string): Promise<any> {
+    if (!await fs.pathExists(filePath)) {
+      // Return the original @file reference if file doesn't exist
+      // This matches the behavior of SyncEngine.processFieldValue
+      return `@file:${path.relative(path.dirname(filePath), filePath)}`;
+    }
+
+    try {
+      if (filePath.endsWith('.json')) {
+        // For JSON files, load and check for @include directives
+        const jsonContent = await fs.readJson(filePath);
+        const jsonString = JSON.stringify(jsonContent);
+        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+        
+        if (hasIncludes) {
+          // Process @include directives in the JSON file
+          return await this.processIncludesInternal(jsonContent, filePath);
+        } else {
+          // Return the JSON content as-is
+          return jsonContent;
+        }
+      } else {
+        // For non-JSON files, return the text content
+        return await fs.readFile(filePath, 'utf-8');
+      }
+    } catch (error) {
+      // On error, return the original @file reference
+      return `@file:${path.relative(path.dirname(filePath), filePath)}`;
     }
   }
 

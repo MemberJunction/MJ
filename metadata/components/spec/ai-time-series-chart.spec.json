@@ -2,7 +2,7 @@
   "name": "AITimeSeriesChart",
   "location": "embedded",
   "title": "AI Time Series Chart",
-  "description": "Multi-line time series chart with dual Y-axes showing AI runs, token usage, and costs over time",
+  "description": "Multi-line time series chart with dual Y-axes showing AI runs, token usage, and costs over time.",
   "type": "chart",
   "functionalRequirements": "## Time Series Chart Requirements\n\n### Core Functionality\n- Display three data series: total runs, total tokens, total cost\n- Dual Y-axis configuration (left: tokens, right: runs and cost)\n- Interactive tooltips showing all values on hover\n- Click on data points to trigger drill-down\n- Smooth line interpolation with data point markers\n- Legend with series toggle capability\n- Responsive to container size changes\n\n### Visual Features\n- Consistent color coding (runs: blue, tokens: green, cost: orange)\n- Grid lines for better readability\n- Axis labels with appropriate formatting\n- Highlighted selection state for clicked points\n- Animated transitions on data updates\n- Zero-baseline for better comparison",
   "dataRequirements": {

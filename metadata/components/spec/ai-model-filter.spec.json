@@ -1,7 +1,7 @@
 {
   "name": "AIModelFilter",
   "title": "AI Model Filter",
-  "description": "Collapsible filter panel for filtering models by type, status, developer, and provider",
+  "description": "Collapsible filter panel for filtering models by type, status, developer, and provider.",
   "type": "form",
   "functionalRequirements": "Provide filters for model type, status, developer, and provider with active filter indicators",
   "dataRequirements": null,

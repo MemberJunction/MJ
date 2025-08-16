@@ -2,7 +2,7 @@
   "name": "AIDetailTable",
   "location": "embedded",
   "title": "AI Detail Table",
-  "description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering",
+  "description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering.",
   "type": "table",
   "functionalRequirements": "## Detail Table Requirements\n\n### Core Functionality\n- Display individual run records in a sortable table\n- Show key fields: timestamp, name, success status, tokens, cost, execution time\n- Color-coded success/failure indicators\n- Sortable columns with visual indicators\n- Paginated results for large datasets\n- Export to CSV functionality\n- Expandable rows for additional details\n\n### Table Features\n- Responsive column widths\n- Hover row highlighting\n- Sticky header during scroll\n- Loading state for data updates\n- Empty state message",
   "dataRequirements": {
@@ -18,7 +18,7 @@
       "type": "array",
       "required": true,
       "description": "Array of run records to display"
-    },
+    }, 
     {
       "name": "activeTab",
       "type": "string",

@@ -1,0 +1,309 @@
+{
+  "name": "EntityBrowser",
+  "title": "Entity Browser",
+  "description": "A comprehensive entity browser with multi-panel display showing entities in a grid or card view with a sliding details panel, collapsible filters, sorting, and entity record opening capability",
+  "type": "dashboard",
+  "functionalRequirements": "## Entity Browser Requirements\n\n### Core Functionality\n- Display entities in a responsive grid or card layout based on user preference\n- Allow users to select view mode (grid vs card)\n- Click on an entity to slide in a details panel from the right\n- Show entity metadata including fields and relationships in the details panel\n- Provide a collapsible filter panel on the left side\n- Support sorting by multiple fields with visual indicators\n- Include a search bar for quick entity filtering\n- Provide an 'Open' button to trigger the OpenEntityRecord callback\n- Remember user's last selected entity and view preferences\n\n### UX Considerations\n- Smooth animations for panel transitions\n- Responsive design that works on different screen sizes\n- Loading states while fetching data\n- Empty states with helpful messages\n- Keyboard navigation support (arrow keys, tab, enter)\n- Visual feedback for hover and selection states\n- Maintain scroll position when switching between entities",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Entities",
+        "description": "Metadata about all entities in the system",
+        "displayFields": [
+          "ID",
+          "Name",
+          "DisplayName",
+          "NameSuffix",
+          "Description",
+          "SchemaName",
+          "BaseTable",
+          "BaseView"
+        ], 
+        "filterFields": [
+          "SchemaName",
+          "BaseTable"
+        ],
+        "sortFields": [
+          "Name",
+          "DisplayName"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the entity"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the entity"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly display name for the entity"
+          },
+          {
+            "name": "NameSuffix",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Optional suffix appended to entity names for display purposes"
+          },
+          {
+            "name": "Description",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Description of the entity"
+          },
+          {
+            "name": "SchemaName",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Database schema name"
+          },
+          {
+            "name": "BaseTable",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Base table in the database"
+          },
+          {
+            "name": "BaseView",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Base view used for the entity"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Main entity list display and filtering"
+      },
+      {
+        "name": "Entity Fields",
+        "description": "Fields belonging to each entity",
+        "displayFields": [
+          "Name",
+          "DisplayName",
+          "Type",
+          "Length",
+          "AllowsNull",
+          "IsPrimaryKey",
+          "IsUnique"
+        ],
+        "filterFields": [
+          "EntityID"
+        ],
+        "sortFields": [
+          "Sequence",
+          "Name"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "EntityID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to parent entity"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Field name"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly field name"
+          },
+          {
+            "name": "Type",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Data type of the field"
+          },
+          {
+            "name": "Length",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum length for string fields"
+          },
+          {
+            "name": "AllowsNull",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field allows null values"
+          },
+          {
+            "name": "IsPrimaryKey",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field is part of primary key"
+          },
+          {
+            "name": "IsUnique",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field must be unique"
+          },
+          {
+            "name": "Sequence",
+            "sequence": 9,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Display order of the field"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Details panel to show entity fields"
+      },
+      {
+        "name": "Entity Relationships",
+        "description": "Relationships between entities",
+        "displayFields": [
+          "RelatedEntity",
+          "Type",
+          "DisplayName",
+          "RelatedEntityJoinField"
+        ],
+        "filterFields": [
+          "EntityID"
+        ],
+        "sortFields": [
+          "Sequence",
+          "RelatedEntity"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "EntityID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to parent entity"
+          },
+          {
+            "name": "RelatedEntity",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "The related entity in the relationship"
+          },
+          {
+            "name": "Type",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Type of relationship (One to Many, Many to One, etc.)"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly name for the relationship"
+          },
+          {
+            "name": "RelatedEntityJoinField",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "The field in the related entity that joins to this entity"
+          },
+          {
+            "name": "Sequence",
+            "sequence": 6,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Display order"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Details panel to show entity relationships"
+      }
+    ],
+    "queries": [],
+    "description": "This component requires access to entity metadata including entities, their fields, and relationships to provide a comprehensive entity browsing experience"
+  },
+  "technicalDesign": "## Technical Architecture\n\n### Component Structure\n- **Root Component (EntityBrowser)**: Manages overall layout and state coordination\n- **EntityList (Child)**: Displays entities in grid/card view with sorting\n- **EntityDetails (Child)**: Sliding panel showing entity fields and relationships\n- **EntityFilter (Child)**: Collapsible filter panel with dynamic filters\n\n### State Management\n- Selected entity ID (persisted in savedUserSettings)\n- View mode (grid/card) (persisted)\n- Active filters (persisted)\n- Sort configuration (persisted)\n- Panel visibility states (details open, filters collapsed)\n- Search query\n- Loading states for async operations\n\n### Layout\n```\n+------------------+------------------------+------------------+\n|                  |                        |                  |\n|   Filter Panel   |    Entity Grid/Cards   |  Details Panel   |\n|   (Collapsible)  |    (Main Content)      |    (Sliding)     |\n|                  |                        |                  |\n|  [Schema Filter] |  +-----+  +-----+      |  Entity: Orders  |\n|  [Table Filter]  |  | Card |  | Card |     |                  |\n|  [Search Box]    |  +-----+  +-----+      |  Fields:         |\n|                  |                        |  - ID            |\n|  Sort By:        |  +-----+  +-----+      |  - CustomerID    |\n|  [Name \u2193]        |  | Card |  | Card |     |  - OrderDate     |\n|                  |  +-----+  +-----+      |                  |\n|                  |                        |  Relationships:  |\n|                  |                        |  \u2192 Customers     |\n|                  |                        |  \u2192 OrderItems    |\n|                  |                        |                  |\n|                  |                        |  [Open Record]   |\n+------------------+------------------------+------------------+\n```\n\n### Data Flow\n1. Root component loads entities on mount\n2. Passes entity data to EntityList\n3. EntityList handles selection and passes selectedId up\n4. Root loads fields/relationships for selected entity\n5. Passes detailed data to EntityDetails\n6. Filter changes trigger data reload\n7. All user preferences saved via onSaveUserSettings\n\n### Interaction Patterns\n- Click entity card \u2192 Select and open details\n- Click filter \u2192 Apply and reload data\n- Click sort \u2192 Update sort and reload\n- Click 'Open' \u2192 Trigger OpenEntityRecord callback\n- Press Escape \u2192 Close details panel\n- Click outside \u2192 Close details panel",
+  "properties": [],
+  "events": [],
+  "exampleUsage": "<EntityBrowser\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>",
+  "dependencies": [
+    "@include:entity-list.spec.json",
+    "@include:entity-details.spec.json",
+    "@include:entity-filter.spec.json"
+  ],
+  "libraries": [],
+  "code": "function EntityBrowser({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  // Extract child components\n  const { EntityList, EntityDetails, EntityFilter } = components;\n  \n  // Initialize state from saved settings where appropriate\n  const [selectedEntityId, setSelectedEntityId] = useState(savedUserSettings?.selectedEntityId);\n  const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'grid');\n  const [filters, setFilters] = useState(savedUserSettings?.filters || {});\n  const [sortBy, setSortBy] = useState(savedUserSettings?.sortBy || 'Name');\n  const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || 'asc');\n  const [filterPanelCollapsed, setFilterPanelCollapsed] = useState(savedUserSettings?.filterPanelCollapsed || false);\n  \n  // Runtime UI state (not persisted)\n  const [entities, setEntities] = useState([]);\n  const [entityFields, setEntityFields] = useState([]);\n  const [entityRelationships, setEntityRelationships] = useState([]);\n  const [loading, setLoading] = useState(true);\n  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);\n  const [searchQuery, setSearchQuery] = useState('');\n  const [uniqueSchemas, setUniqueSchemas] = useState([]);\n  const [uniqueTables, setUniqueTables] = useState([]);\n  \n  // Load entities on mount and when filters/sort change\n  useEffect(() => {\n    const loadEntities = async () => {\n      setLoading(true);\n      try {\n        // Build filter string\n        let filterParts = [];\n        if (filters.schema) {\n          filterParts.push(`SchemaName = '${filters.schema}'`);\n        }\n        if (filters.table) {\n          filterParts.push(`BaseTable = '${filters.table}'`);\n        }\n        if (searchQuery) {\n          filterParts.push(`(Name LIKE '%${searchQuery}%' OR DisplayName LIKE '%${searchQuery}%' OR Description LIKE '%${searchQuery}%')`);\n        }\n        \n        const result = await utilities.rv.RunView({\n          EntityName: 'Entities',\n          Fields: ['ID', 'Name', 'DisplayName', 'NameSuffix', 'Description', 'SchemaName', 'BaseTable', 'BaseView'],\n          OrderBy: `${sortBy} ${sortDirection.toUpperCase()}`,\n          ExtraFilter: filterParts.length > 0 ? filterParts.join(' AND ') : undefined\n        });\n        \n        if (result?.Success && result?.Results) {\n          setEntities(result.Results);\n          \n          // Extract unique schemas and tables for filter dropdowns\n          const schemas = [...new Set(result.Results.map(e => e.SchemaName).filter(Boolean))];\n          const tables = [...new Set(result.Results.map(e => e.BaseTable).filter(Boolean))];\n          setUniqueSchemas(schemas);\n          setUniqueTables(tables);\n        } else {\n          console.error('Failed to load entities:', result?.ErrorMessage);\n          setEntities([]);\n        }\n      } catch (error) {\n        console.error('Error loading entities:', error);\n        setEntities([]);\n      } finally {\n        setLoading(false);\n      }\n    };\n    \n    loadEntities();\n  }, [filters, sortBy, sortDirection, searchQuery, utilities.rv]);\n  \n  // Load entity details when selection changes\n  useEffect(() => {\n    const loadEntityDetails = async () => {\n      if (!selectedEntityId) {\n        setEntityFields([]);\n        setEntityRelationships([]);\n        return;\n      }\n      \n      try {\n        // Load fields\n        const fieldsResult = await utilities.rv.RunView({\n          EntityName: 'Entity Fields',\n          Fields: ['Name', 'DisplayName', 'Type', 'Length', 'AllowsNull', 'IsPrimaryKey', 'IsUnique', 'Sequence'],\n          OrderBy: 'Sequence ASC, Name ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (fieldsResult?.Success && fieldsResult?.Results) {\n          setEntityFields(fieldsResult.Results);\n        } else {\n          setEntityFields([]);\n        }\n        \n        // Load relationships\n        const relationshipsResult = await utilities.rv.RunView({\n          EntityName: 'Entity Relationships',\n          Fields: ['RelatedEntity', 'Type', 'DisplayName', 'RelatedEntityJoinField', 'Sequence'],\n          OrderBy: 'Sequence ASC, RelatedEntity ASC',\n          ExtraFilter: `EntityID = '${selectedEntityId}'`\n        });\n        \n        if (relationshipsResult?.Success && relationshipsResult?.Results) {\n          setEntityRelationships(relationshipsResult.Results);\n        } else {\n          setEntityRelationships([]);\n        }\n      } catch (error) {\n        console.error('Error loading entity details:', error);\n        setEntityFields([]);\n        setEntityRelationships([]);\n      }\n    };\n    \n    loadEntityDetails();\n  }, [selectedEntityId, utilities.rv]);\n  \n  // Handle entity selection\n  const handleSelectEntity = useCallback((entityId) => {\n    setSelectedEntityId(entityId);\n    setDetailsPanelOpen(true);\n    \n    // Save user preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      selectedEntityId: entityId\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle view mode change\n  const handleViewModeChange = useCallback((mode) => {\n    setViewMode(mode);\n    \n    // Save preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      viewMode: mode\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter changes\n  const handleFilterChange = useCallback((newFilters) => {\n    setFilters(newFilters);\n    \n    // Save filter preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filters: newFilters\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle sort changes\n  const handleSortChange = useCallback((newSortBy, newSortDirection) => {\n    setSortBy(newSortBy);\n    setSortDirection(newSortDirection);\n    \n    // Save sort preferences\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortBy: newSortBy,\n      sortDirection: newSortDirection\n    });\n  }, [savedUserSettings, onSaveUserSettings]);\n  \n  // Handle filter panel toggle\n  const handleToggleFilter = useCallback(() => {\n    const newCollapsed = !filterPanelCollapsed;\n    setFilterPanelCollapsed(newCollapsed);\n    \n    // Save collapsed state\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filterPanelCollapsed: newCollapsed\n    });\n  }, [filterPanelCollapsed, savedUserSettings, onSaveUserSettings]);\n  \n  // Handle opening entity record\n  const handleOpenRecord = useCallback((entityName) => {\n    console.log('Root handleOpenRecord called with entityName:', entityName);\n    console.log('Callbacks object:', callbacks);\n    if (callbacks?.OpenEntityRecord && entityName) {\n      console.log('Calling OpenEntityRecord callback with:', 'Entities', entityName);\n      // Open the Entities entity record for the selected entity\n      callbacks.OpenEntityRecord('Entities', [{ FieldName: 'Name', Value: entityName }]);\n    } else {\n      console.error('OpenEntityRecord callback not available or entityName missing');\n    }\n  }, [callbacks]);\n  \n  // Handle closing details panel\n  const handleCloseDetails = useCallback(() => {\n    setDetailsPanelOpen(false);\n  }, []);\n  \n  // Handle search\n  const handleSearch = useCallback((query) => {\n    setSearchQuery(query);\n  }, []);\n  \n  // Get selected entity object\n  const selectedEntity = entities.find(e => e.ID === selectedEntityId);\n  \n  // Helper function to get border radius value\n  const getBorderRadius = (size) => {\n    return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;\n  };\n  \n  // Loading state\n  if (loading && entities.length === 0) {\n    return (\n      <div style={{\n        display: 'flex',\n        justifyContent: 'center',\n        alignItems: 'center',\n        height: '100vh',\n        fontSize: styles.typography.fontSize.lg,\n        color: styles.colors.textSecondary\n      }}>\n        Loading entities...\n      </div>\n    );\n  }\n  \n  return (\n    <div style={{\n      display: 'flex',\n      height: '100vh',\n      backgroundColor: styles.colors.background,\n      overflow: 'hidden'\n    }}>\n      {/* Filter Panel */}\n      {EntityFilter && (\n        <EntityFilter\n          filters={filters}\n          onFilterChange={handleFilterChange}\n          schemas={uniqueSchemas}\n          tables={uniqueTables}\n          isCollapsed={filterPanelCollapsed}\n          onToggleCollapse={handleToggleFilter}\n          savedUserSettings={savedUserSettings?.filterPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            filterPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n      \n      {/* Main Content Area */}\n      <div style={{\n        flex: 1,\n        display: 'flex',\n        flexDirection: 'column',\n        overflow: 'hidden'\n      }}>\n        {/* Header */}\n        <div style={{\n          padding: styles.spacing.lg,\n          borderBottom: `1px solid ${styles.colors.border}`,\n          backgroundColor: styles.colors.surface\n        }}>\n          <div style={{\n            display: 'flex',\n            justifyContent: 'space-between',\n            alignItems: 'center',\n            marginBottom: styles.spacing.md\n          }}>\n            <h1 style={{\n              margin: 0,\n              fontSize: styles.typography.fontSize.xxl || styles.typography.fontSize.xl,\n              fontWeight: styles.typography.fontWeight?.bold || '700',\n              color: styles.colors.text\n            }}>\n              Entity Browser\n            </h1>\n            \n            {/* View Mode Toggle */}\n            <div style={{\n              display: 'flex',\n              gap: styles.spacing.sm,\n              alignItems: 'center'\n            }}>\n              <span style={{\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.textSecondary\n              }}>\n                View:\n              </span>\n              <button\n                onClick={() => handleViewModeChange('grid')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'grid' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'grid' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Grid\n              </button>\n              <button\n                onClick={() => handleViewModeChange('card')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: viewMode === 'card' ? styles.colors.primary : styles.colors.background,\n                  color: viewMode === 'card' ? 'white' : styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Cards\n              </button>\n            </div>\n          </div>\n          \n          {/* Search Bar */}\n          <div style={{\n            display: 'flex',\n            gap: styles.spacing.md\n          }}>\n            <input\n              type=\"text\"\n              placeholder=\"Search entities...\"\n              value={searchQuery}\n              onChange={(e) => handleSearch(e.target.value)}\n              style={{\n                flex: 1,\n                padding: styles.spacing.md,\n                fontSize: styles.typography.fontSize.md,\n                border: `1px solid ${styles.colors.border}`,\n                borderRadius: getBorderRadius('sm'),\n                backgroundColor: styles.colors.background\n              }}\n            />\n            {searchQuery && (\n              <button\n                onClick={() => handleSearch('')}\n                style={{\n                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,\n                  backgroundColor: styles.colors.surfaceHover || styles.colors.surface,\n                  color: styles.colors.text,\n                  border: `1px solid ${styles.colors.border}`,\n                  borderRadius: getBorderRadius('sm'),\n                  cursor: 'pointer',\n                  fontSize: styles.typography.fontSize.md\n                }}\n              >\n                Clear\n              </button>\n            )}\n          </div>\n        </div>\n        \n        {/* Entity List */}\n        <div style={{\n          flex: 1,\n          overflow: 'auto',\n          padding: styles.spacing.lg\n        }}>\n          {EntityList && (\n            <EntityList\n              entities={entities}\n              viewMode={viewMode}\n              selectedEntityId={selectedEntityId}\n              onSelectEntity={handleSelectEntity}\n              sortBy={sortBy}\n              sortDirection={sortDirection}\n              onSortChange={handleSortChange}\n              savedUserSettings={savedUserSettings?.entityList}\n              onSaveUserSettings={(settings) => onSaveUserSettings?.({\n                ...savedUserSettings,\n                entityList: settings\n              })}\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n            />\n          )}\n          \n          {/* Empty State */}\n          {entities.length === 0 && !loading && (\n            <div style={{\n              display: 'flex',\n              flexDirection: 'column',\n              alignItems: 'center',\n              justifyContent: 'center',\n              padding: styles.spacing.xxl || styles.spacing.xl,\n              color: styles.colors.textSecondary\n            }}>\n              <div style={{\n                fontSize: styles.typography.fontSize.xl,\n                marginBottom: styles.spacing.md\n              }}>\n                No entities found\n              </div>\n              <div style={{\n                fontSize: styles.typography.fontSize.md\n              }}>\n                {searchQuery || Object.keys(filters).length > 0\n                  ? 'Try adjusting your filters or search query'\n                  : 'No entities are available'}\n              </div>\n            </div>\n          )}\n        </div>\n      </div>\n      \n      {/* Details Panel */}\n      {EntityDetails && (\n        <EntityDetails\n          entity={selectedEntity}\n          fields={entityFields}\n          relationships={entityRelationships}\n          isOpen={detailsPanelOpen}\n          onClose={handleCloseDetails}\n          onOpenRecord={() => handleOpenRecord(selectedEntity?.Name)}\n          savedUserSettings={savedUserSettings?.detailsPanel}\n          onSaveUserSettings={(settings) => onSaveUserSettings?.({\n            ...savedUserSettings,\n            detailsPanel: settings\n          })}\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n        />\n      )}\n    </div>\n  );\n}"
+}

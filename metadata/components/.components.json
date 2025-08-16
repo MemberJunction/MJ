@@ -9,7 +9,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/entity-browser.spec.json",
+      "Specification": "@file:spec/entity-browser.spec.json",
       "FunctionalRequirements": "## Entity Browser\n\n### Core Functionality\n- Display entities in a responsive grid or card layout based on user preference\n- Allow users to select view mode (grid vs card)\n- Click on an entity to slide in a details panel from the right\n- Show entity metadata including fields and relationships in the details panel\n- Provide a collapsible filter panel on the left side\n- Support sorting by multiple fields with visual indicators\n- Include a search bar for quick entity filtering\n- Provide an 'Open' button to trigger the OpenEntityRecord callback\n- Remember user's last selected entity and view preferences\n\n### UX Considerations\n- Smooth animations for panel transitions\n- Responsive design that works on different screen sizes\n- Loading states while fetching data\n- Empty states with helpful messages\n- Keyboard navigation support (arrow keys, tab, enter)\n- Visual feedback for hover and selection states\n- Maintain scroll position when switching between entities",
       "TechnicalDesign": "## Technical Design\n\n### Component Structure\n- **Root Component (EntityBrowser)**: Manages overall layout and state coordination\n- **EntityList (Child)**: Displays entities in grid/card view with sorting\n- **EntityDetails (Child)**: Sliding panel showing entity fields and relationships\n- **EntityFilter (Child)**: Collapsible filter panel with dynamic filters\n\n### State Management\n- Selected entity ID (persisted in savedUserSettings)\n- View mode (grid/card) (persisted)\n- Active filters (persisted)\n- Sort configuration (persisted)\n- Panel visibility states (details open, filters collapsed)\n- Search query\n- Loading states for async operations\n\n### Layout\n```\n+------------------+------------------------+------------------+\n|                  |                        |                  |\n|   Filter Panel   |    Entity Grid/Cards   |  Details Panel   |\n|   (Collapsible)  |    (Main Content)      |    (Sliding)     |\n|                  |                        |                  |\n|  [Schema Filter] |  +-----+  +-----+      |  Entity: Orders  |\n|  [Table Filter]  |  | Card |  | Card |     |                  |\n|  [Search Box]    |  +-----+  +-----+      |  Fields:         |\n|                  |                        |  - ID            |\n|  Sort By:        |  +-----+  +-----+      |  - CustomerID    |\n|  [Name ↓]        |  | Card |  | Card |     |  - OrderDate     |\n|                  |  +-----+  +-----+      |                  |\n|                  |                        |  Relationships:  |\n|                  |                        |  → Customers     |\n|                  |                        |  → OrderItems    |\n|                  |                        |                  |\n|                  |                        |  [Open Record]   |\n+------------------+------------------------+------------------+\n```\n\n### Data Flow\n1. Root component loads entities on mount\n2. Passes entity data to EntityList\n3. EntityList handles selection and passes selectedId up\n4. Root loads fields/relationships for selected entity\n5. Passes detailed data to EntityDetails\n6. Filter changes trigger data reload\n7. All user preferences saved via onSaveUserSettings\n\n### Interaction Patterns\n- Click entity card → Select and open details\n- Click filter → Apply and reload data\n- Click sort → Update sort and reload\n- Click 'Open' → Trigger OpenEntityRecord callback\n- Press Escape → Close details panel\n- Click outside → Close details panel"
     },
@@ -17,8 +17,8 @@
       "ID": "77571F8B-A4A2-4CD3-AC23-A59D6E989F5D"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:37.018Z",
-      "checksum": "47562af11c97834f2321f7481c69034fd0de65e56979266f4ef9f4caeb317518"
+      "lastModified": "2025-08-16T22:20:16.329Z",
+      "checksum": "ffaea30b463b483d224e6e2436e7a2b52cb5cc80cc7e1c6541749bb0af8cfe01"
     }
   },
   {
@@ -31,7 +31,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/entity-details.spec.json",
+      "Specification": "@file:spec/entity-details.spec.json",
       "FunctionalRequirements": "## Entity Details\n\n- Slide in from the right when an entity is selected\n- Display entity metadata at the top\n- Show fields in a formatted table\n- Display relationships with icons\n- Include 'Open Record' button\n- Support closing via X button or Escape key\n- Smooth slide animation\n- Scrollable content area",
       "TechnicalDesign": "## Design\n\n### Props\n- entity: Selected entity object\n- fields: Array of entity fields\n- relationships: Array of entity relationships\n- isOpen: Whether panel is visible\n- onClose: Callback to close panel\n- onOpenRecord: Callback to open entity record\n\n### Layout\n- Fixed position overlay\n- Slide animation using transform\n- Header with entity name and close button\n- Sections for metadata, fields, relationships\n- Sticky 'Open Record' button at bottom"
     },
@@ -39,8 +39,8 @@
       "ID": "894F252D-1ED3-4196-AB01-DCA71382D752"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:37.439Z",
-      "checksum": "db6560d72fd25b77c3f309543d1639fdca79ba0245e33f8a4fb524aafcab5477"
+      "lastModified": "2025-08-16T22:20:16.325Z",
+      "checksum": "3a0cd044b329fc66ad801b97dbdcf7fcc93f1c1d0aef2090dc0d85fda96ef9a8"
     }
   },
   {
@@ -53,7 +53,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/entity-list.spec.json",
+      "Specification": "@file:spec/entity-list.spec.json",
       "FunctionalRequirements": "## Entity List\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
       "TechnicalDesign": "## Design\n\n### Props\n- entities: Array of entity objects\n- viewMode: 'grid' | 'card'\n- selectedEntityId: Currently selected entity\n- onSelectEntity: Callback when entity selected\n- sortBy: Current sort field\n- sortDirection: 'asc' | 'desc'\n- onSortChange: Callback for sort changes\n\n### Rendering\n- Grid mode: Compact table with columns\n- Card mode: Cards with entity info\n- Sort indicators in headers\n- Selection highlighting"
     },
@@ -61,8 +61,8 @@
       "ID": "85027C84-2321-4F18-9280-4959F4EC4668"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:37.855Z",
-      "checksum": "a49b2aa40aeb68af8585215f539d62aa74718471d66cd08d275dc3639bae639a"
+      "lastModified": "2025-08-16T22:20:16.328Z",
+      "checksum": "1dcea8c708e00b92cefba5a33d469cacdd8ee600651ad5f2af2e721c77f2df8d"
     }
   },
   {
@@ -75,7 +75,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/entity-filter.spec.json",
+      "Specification": "@file:spec/entity-filter.spec.json",
       "FunctionalRequirements": "## Entity Filter\n\n- Collapsible panel on the left side\n- Filter by schema name (dropdown)\n- Filter by base table (dropdown)\n- Search box for text search\n- Clear all filters button\n- Show active filter count\n- Smooth collapse/expand animation\n- Remember collapsed state",
       "TechnicalDesign": "## Design\n\n### Props\n- filters: Current filter values\n- onFilterChange: Callback when filters change\n- schemas: Available schema options\n- tables: Available table options\n- isCollapsed: Whether panel is collapsed\n- onToggleCollapse: Callback to toggle collapse\n\n### Components\n- Collapse toggle button\n- Schema dropdown\n- Table dropdown\n- Search input\n- Clear filters button\n- Active filter badges"
     },
@@ -83,8 +83,8 @@
       "ID": "386543D8-C739-4C52-8FAC-E941C078AA8F"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.262Z",
-      "checksum": "0ba8464857013d5d0e01acd2337864ed6685c41ea5717c64507d285d06300389"
+      "lastModified": "2025-08-16T22:20:16.331Z",
+      "checksum": "6e84263f55c55f4d6e7f9d248cd365ed7650d191ab04f0d7f6deb0592975014b"
     }
   },
   {
@@ -97,7 +97,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-model-browser.spec.json",
+      "Specification": "@file:spec/ai-model-browser.spec.json",
       "FunctionalRequirements": "## AI Model Browser\n\n### Core Functionality\n- Display AI models in grid or list view with comprehensive information\n- Filter models by Model Type, Status, Model Developer, and Inference Provider\n- View detailed model specifications including context window, token limits, and cost ranking\n- Display all vendors associated with a model (model developers and inference providers)\n- Show prompt run history and usage statistics for selected models\n- Visualize prompt usage with pie charts showing distribution across different prompts\n- Display performance metrics with bar charts showing average execution times\n- Show time series data for model usage over time\n- Support sorting by multiple fields with visual indicators\n- Include search functionality for quick model filtering\n- Provide 'Open' button to trigger OpenEntityRecord callback for detailed editing\n\n### Analytics Features\n- Pie chart visualization of prompt usage distribution\n- Performance bar charts showing average execution times per prompt\n- Time series chart showing model usage trends over last 7 days\n- Summary statistics including total runs, success rates, and token usage\n- Grouped vendor display by type (Model Developer vs Inference Provider)\n\n### UX Considerations\n- Collapsible filter panel with active filter count indicator\n- Sliding details panel for comprehensive model information\n- Inline analytics panel with tabbed views for different visualizations\n- Smooth animations for panel transitions and chart rendering\n- Responsive design adapting to different screen sizes\n- Loading states while fetching data\n- Empty states with helpful messages\n- Visual feedback for hover and selection states\n- Maintain user preferences for view mode and filter state",
       "TechnicalDesign": "## Architecture\n\n### Root Component (AIModelBrowser)\n- Manages overall state and data loading\n- Coordinates between filter, list, details, and analytics components\n- Handles user preferences and saved settings\n- Manages search and sort state\n\n### Child Components\n1. **AIModelList**: Displays models in grid or list view with vendor information\n2. **AIModelDetails**: Sliding panel showing comprehensive model information and vendors\n3. **AIModelFilter**: Collapsible filter panel for model type, status, and vendor filtering\n4. **AIModelAnalytics**: Inline analytics panel with charts and statistics\n\n### Data Flow\n- Root component loads all models and vendor associations\n- Filters are applied at the root level and filtered data passed to list\n- Selection in list triggers detail loading and analytics calculation\n- Analytics component processes prompt runs to generate visualizations\n\n### Chart Implementation\n- Pie charts using SVG for prompt usage distribution\n- Bar charts for performance metrics\n- Time series charts for usage trends\n- All charts are responsive and interactive"
     },
@@ -105,8 +105,8 @@
       "ID": "E7A334EA-53FD-40E4-A255-1DDA891D86B7"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.797Z",
-      "checksum": "1e5ad8889c13414e3d5ffcda44bddbbd8eec7f01248c65c77482d486aa9e73d1"
+      "lastModified": "2025-08-16T22:20:16.346Z",
+      "checksum": "49a547c20ba763e5e4bffaada7798b8432796ef16b397654e158b90b5905a6cf"
     }
   },
   {
@@ -119,7 +119,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-model-list.spec.json",
+      "Specification": "@file:spec/ai-model-list.spec.json",
       "FunctionalRequirements": "Display models with vendor counts, support grid and list views, handle sorting and selection.",
       "TechnicalDesign": ""
     },
@@ -127,8 +127,8 @@
       "ID": "3E5B43DE-1F29-4268-8DBB-A5FA0CE56B70"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.839Z",
-      "checksum": "d116e982d5107c124a96344b7c44782b493e4e526943e8b5cf3dcd9be3fc5690"
+      "lastModified": "2025-08-16T22:20:16.337Z",
+      "checksum": "c187b0b01ad56cea32ff85176e2f76b19354273e1066fc6ecbae27d0ae40606d"
     }
   },
   {
@@ -141,7 +141,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-model-details.spec.json",
+      "Specification": "@file:spec/ai-model-details.spec.json",
       "FunctionalRequirements": "Show model specs, vendor associations grouped by type, usage stats, and open record button",
       "TechnicalDesign": ""
     },
@@ -149,8 +149,8 @@
       "ID": "7B36D078-5B69-47EC-BDFB-D119524116F6"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.880Z",
-      "checksum": "89b08d2dfda3376d5d5820995c6fc18801719450d4e87db6fe2aa405c90ba53d"
+      "lastModified": "2025-08-16T22:20:16.339Z",
+      "checksum": "5b4d7b8db791ebe07360b64126bb0f84df035a6b7b8e5e2d89df85cb058485dd"
     }
   },
   {
@@ -163,7 +163,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-model-filter.spec.json",
+      "Specification": "@file:spec/ai-model-filter.spec.json",
       "FunctionalRequirements": "Provide filters for model type, status, developer, and provider with active filter indicators.",
       "TechnicalDesign": ""
     },
@@ -171,8 +171,8 @@
       "ID": "04395751-8D07-4906-BAE1-9D1789543E14"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.917Z",
-      "checksum": "4236dffcdb22477fce4354167e30ffc3353e2915a0b861c790240ff5af92c6fb"
+      "lastModified": "2025-08-16T22:20:16.341Z",
+      "checksum": "b279c6f1b2a376e7e4224b589eafed546879a7ba32ecb5c9848a710795c928ed"
     }
   },
   {
@@ -185,7 +185,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-model-analytics.spec.json",
+      "Specification": "@file:spec/ai-model-analytics.spec.json",
       "FunctionalRequirements": "Display pie chart for prompt usage, bar chart for performance, time series for usage trends.",
       "TechnicalDesign": ""
     },
@@ -193,8 +193,8 @@
       "ID": "509FF2B7-692D-490B-A282-D80FD370E5EB"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:38.952Z",
-      "checksum": "f131572b0987c3e0850a0be99499be7c4c1c6270e5bdc6d84aa7064d33ee7f40"
+      "lastModified": "2025-08-16T22:20:16.343Z",
+      "checksum": "0a025dbedc8ff7f6ae57881b83bf675c9d853368e3b2a74b8e3a0ef1a7cdbffe"
     }
   },
   {
@@ -215,7 +215,7 @@
       "ID": "EC9FC426-5C79-4C8C-AEB5-211268BCCB9C"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:39.544Z",
+      "lastModified": "2025-08-16T20:11:54.895Z",
       "checksum": "798a1afed8eb5a2e836e5927eca5a46ab96eb879807d5596c069017302d0d6b6"
     }
   },
@@ -229,7 +229,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-performance-dashboard.spec.json",
+      "Specification": "@file:spec/ai-performance-dashboard.spec.json",
       "FunctionalRequirements": "Display multi-line time series charts showing total runs, tokens, and costs over time. Support multiple time groupings: day, week, month, quarter. Dual Y-axis display (tokens on left, runs/costs on right). Click-to-drill-down on any chart point to see details for that period. Show distribution charts (pie/bar) for selected time period. Separate tabs for Agent Runs and Prompt Runs analysis",
       "TechnicalDesign": "Root component manages overall dashboard state and data loading. Handles time range selection and grouping. Coordinates drill-down state between components. Manages tab switching between Agent and Prompt views. Child components: AITimeSeriesChart for multi-line charts with dual Y-axes, AIDistributionChart for pie/bar charts showing breakdown, AIDetailTable for detailed table view, AIMetricsSummary for key metrics cards"
     },
@@ -237,8 +237,8 @@
       "ID": "313ED35B-462C-439F-8F56-91AD90CCB252"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:40.034Z",
-      "checksum": "2418e22c2322c938d150690949d27170b93c82611910b24e9d80a0ef54fcf7c3"
+      "lastModified": "2025-08-16T22:20:16.416Z",
+      "checksum": "01e70113cf08266354a5ee2edeca2415bbc86400befe147dffaa310077c7d46a"
     }
   },
   {
@@ -251,7 +251,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-time-series-chart.spec.json",
+      "Specification": "@file:spec/ai-time-series-chart.spec.json",
       "FunctionalRequirements": "Display three data series: total runs, total tokens, total cost. Dual Y-axis configuration (left: tokens, right: runs and cost). Interactive tooltips showing all values on hover. Click on data points to trigger drill-down. Smooth line interpolation with data point markers. Legend with series toggle capability",
       "TechnicalDesign": "Uses SVG for chart rendering with custom scales. Dual Y-axis setup with synchronized tooltips. Custom tick formatters for large numbers. Responsive container with aspect ratio preservation"
     },
@@ -259,8 +259,8 @@
       "ID": "12796365-7678-410F-867D-3EF0598E0BEB"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:40.432Z",
-      "checksum": "f06009bf1228c63eec26c7e1b720d248c35bd5da22e74533945edbfa808bb9f8"
+      "lastModified": "2025-08-16T22:20:16.408Z",
+      "checksum": "0dd0024a73a19433cd22605d14f9009013683ca657d4d126e4025ba51c63d087"
     }
   },
   {
@@ -273,7 +273,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-distribution-chart.spec.json",
+      "Specification": "@file:spec/ai-distribution-chart.spec.json",
       "FunctionalRequirements": "Display distribution breakdown for selected time period. Toggle between pie chart and bar chart views. Show top 10 items with 'Others' grouping. Display runs, tokens, and cost metrics. Interactive tooltips with detailed values. Color-coded segments with legend",
       "TechnicalDesign": "Aggregates data by agent/prompt. Calculates percentages. Sorts by total value. Groups small items into 'Others' category. Smooth transitions between chart types"
     },
@@ -281,8 +281,8 @@
       "ID": "1EBD8365-41EB-41E4-B71F-418628DB4EB5"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:40.828Z",
-      "checksum": "a3cdf21850c49a441c7c840b74b9fae7d7100b256806df1e8b0908ed9dd421e5"
+      "lastModified": "2025-08-16T22:20:16.410Z",
+      "checksum": "577a98a94ef3337dc41933e023ecb1d27a053536cd9f544c2fe29e58514204b6"
     }
   },
   {
@@ -295,7 +295,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-detail-table.spec.json",
+      "Specification": "@file:spec/ai-detail-table.spec.json",
       "FunctionalRequirements": "Display individual run records in a sortable table. Show key fields: timestamp, name, success status, tokens, cost, execution time. Color-coded success/failure indicators. Sortable columns with visual indicators. Paginated results for large datasets. Export to CSV functionality. Expandable rows for additional details",
       "TechnicalDesign": "Client-side sorting and pagination with 25 rows per page. Column sorting state management. Row expansion for details. CSV export functionality"
     },
@@ -303,8 +303,8 @@
       "ID": "D1420CCB-4502-47D5-B18C-4E268C18D659"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:41.227Z",
-      "checksum": "fd36dcdd58449197936a4449f2745d142daa203c681288ba62a30b3eebc79f1c"
+      "lastModified": "2025-08-16T22:20:16.415Z",
+      "checksum": "46401b6bb0b29f891d98d74583971a20cc314afaf5c9c4e3df34c9e93aedf694"
     }
   },
   {
@@ -317,7 +317,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/ai-metrics-summary.spec.json",
+      "Specification": "@file:spec/ai-metrics-summary.spec.json",
       "FunctionalRequirements": "Display key metrics in card format. Show total runs, tokens, and costs. Calculate averages per run. Display success rate percentage. Show trend indicators. Responsive card layout",
       "TechnicalDesign": "Responsive grid of metric cards. Each card shows metric name, value, and icon. Consistent styling with theme. Hover effects for additional information"
     },
@@ -325,8 +325,8 @@
       "ID": "57548CB2-944C-443D-8345-0F2E5CD673D1"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:41.630Z",
-      "checksum": "63fd89f7831d7c41e4735b44314480ca4d4b0f35d405db9ea7a4b6e8b3c70b4d"
+      "lastModified": "2025-08-16T22:20:16.417Z",
+      "checksum": "0244894ed8e722d39142754f2fd82083346e21413c41033f4f8b7196e5545a2e"
     }
   },
   {
@@ -339,7 +339,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/accounts-by-industry.spec.json",
+      "Specification": "@file:spec/accounts-by-industry.spec.json",
       "FunctionalRequirements": "## Accounts by Industry Dashboard\n\n### Core Functionality\n- Display an interactive pie chart showing account distribution across industries\n- Calculate and show percentages for each industry segment\n- Support click-to-filter: clicking a pie slice filters the account list below\n- Display filtered account list with key information (name, revenue, status)\n- Enable row selection to view detailed account information in a slide-in panel\n- Provide sorting capabilities on all columns (client-side)\n- Implement pagination for large datasets (server-side via RunView)\n- Include an 'Open' button on account details to trigger OpenEntityRecord callback\n- Remember user's last selected industry and sort preferences\n\n### Visual Features\n- Smooth hover animations on pie slices with tooltips\n- Highlighted state for selected pie slice\n- Color-coded legend with industry names and counts\n- Responsive layout adapting to different screen sizes\n- Loading states during data fetching\n- Empty states with helpful messages\n- Smooth slide-in animation for detail panel\n\n### Interactive Elements\n- Click pie slice to select/deselect and filter accounts\n- Click legend items to toggle slice visibility\n- Sort columns by clicking headers\n- Select account rows to view details\n- Close detail panel via X button or clicking outside\n- Pagination controls for navigating large datasets",
       "TechnicalDesign": "## Technical Architecture\n\n### Component Structure\n- **Root Component (AccountsByIndustry)**: Manages overall state and data loading\n- **PieChart (inline)**: Chart.js-based interactive pie visualization\n- **AccountList (inline)**: Filtered, sortable table with pagination\n- **AccountDetails (inline)**: Sliding panel with comprehensive account info\n\n### State Management\n- Selected industry (persisted in savedUserSettings)\n- Sort configuration (field, direction) (persisted)\n- Current page number\n- Selected account ID\n- Detail panel visibility\n- Loading states for async operations\n\n### Data Flow\n1. Load all accounts via RunView on mount\n2. Group accounts by Industry field client-side\n3. Calculate percentages and prepare chart data\n4. Render pie chart with Chart.js\n5. Filter account list based on selected slice\n6. Load account details when row selected\n7. Persist user preferences via onSaveUserSettings\n\n### Layout Design\n```\n+-----------------------------------------------+\n|  📊 Accounts by Industry                     |\n|  ─────────────────────────                   |\n|                                               |\n|     [Interactive Pie Chart]    [Legend]      |\n|                                               |\n+-----------------------------------------------+\n|  Selected: Technology (12 accounts)          | ← Conditional\n|  ─────────────────────────────────           |\n|  Name ↕ | Revenue ↕ | Status | Type          |\n|  ─────────────────────────────────           |\n|  TechNova | $12.5M | Active | Customer   [>] |\n|  Quantum  | $75M   | Active | Customer   [>] |\n|  ─────────────────────────────────           |\n|  < 1 2 3 ... 5 >                             |\n+-----------------------------------------------+\n                          ← Slide-in Panel\n                    ┌─────────────────────┐\n                    │ Account Details  [X] │\n                    │ ──────────────       │\n                    │ Name: TechNova       │\n                    │ Revenue: $12.5M      │\n                    │ [Open Record ↗]      │\n                    └─────────────────────┘\n```\n\n### Performance Optimizations\n- Use React.memo for chart component\n- Implement useMemo for data grouping\n- Client-side filtering/sorting to reduce server calls\n- Debounced search if implemented\n- Virtual scrolling for very large lists (future)"
     },
@@ -347,8 +347,8 @@
       "ID": "24648BE5-0355-446F-86BC-AFF654FE77B7"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:42.194Z",
-      "checksum": "0530d88efd9fcf818cada080e61eecdd7e811c5f7d24314d589a0e1e2873d64b"
+      "lastModified": "2025-08-16T22:26:15.514Z",
+      "checksum": "3ea91a122cfb267aee988ea60a5945fefba73f9e0a70b79e65bedef3bd9c3a9e"
     }
   },
   {
@@ -361,7 +361,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/accounts-by-industry-chart.spec.json",
+      "Specification": "@file:spec/accounts-by-industry-chart.spec.json",
       "FunctionalRequirements": "## Pie Chart Component\n\n- Display interactive pie chart using Chart.js\n- Show industry names with counts in legend\n- Calculate and display percentages in tooltips\n- Support click-to-select functionality\n- Animate on hover with visual feedback\n- Configurable color schemes\n- Handle 'Others' grouping for small segments",
       "TechnicalDesign": "## Technical Design\n\n### Props\n- industryData: Grouped and calculated industry data\n- selectedIndustry: Currently selected slice\n- onSliceClick: Callback for slice selection\n- colorScheme: Color palette selection\n- maxIndustries: Maximum slices to show\n\n### Implementation\n- Uses Chart.js for rendering\n- Ref-based chart instance management\n- Cleanup on unmount to prevent memory leaks"
     },
@@ -369,8 +369,8 @@
       "ID": "B2B8B0D6-5CD1-4D03-9E1C-E32B5C74AE37"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:42.595Z",
-      "checksum": "6034f9dd36fa4102d30e15de2a28a3606e2296a1b09a01e9e105d23c49c37c06"
+      "lastModified": "2025-08-16T22:20:16.420Z",
+      "checksum": "1ef3f5e3426c0dc34193514030a291796b12ad43f0319a5134cd1474abf42fd5"
     }
   },
   {
@@ -383,7 +383,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/accounts-by-industry-list.spec.json",
+      "Specification": "@file:spec/accounts-by-industry-list.spec.json",
       "FunctionalRequirements": "## Account List Component\n\n- Display accounts in sortable table format\n- Support column sorting with visual indicators\n- Implement client-side pagination\n- Enable row hover effects\n- Handle row click for account selection\n- Format currency values appropriately\n- Show status badges with color coding\n- Display clear filter button",
       "TechnicalDesign": "## Technical Design\n\n### Props\n- accounts: Filtered account array\n- sortConfig: Current sort settings\n- onSort: Sort handler callback\n- onAccountClick: Row selection callback\n- currentPage: Current pagination page\n- pageSize: Items per page\n- onPageChange: Pagination callback\n\n### Features\n- Client-side sorting logic\n- Pagination calculation\n- Hover state management\n- Status badge styling"
     },
@@ -391,8 +391,8 @@
       "ID": "47446FE2-90FA-48FB-8CE5-2AEC77512428"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:42.992Z",
-      "checksum": "fb9408ecbe6c16607cfe77991242312b2289ba1ba076c84cb2a133f48842bd22"
+      "lastModified": "2025-08-16T22:20:16.425Z",
+      "checksum": "2970cfe5dbdd583187c8fe75f9577e33ab92069a5a0a7f57d2b8e18c544105bd"
     }
   },
   {
@@ -405,7 +405,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:files/accounts-by-industry-details.spec.json",
+      "Specification": "@file:spec/accounts-by-industry-details.spec.json",
       "FunctionalRequirements": "## Account Details Panel\n\n- Slide in from right with smooth animation\n- Display account name and industry prominently\n- Show key metrics (revenue, status, type)\n- Include contact information section\n- Display location details if available\n- Provide 'Open Record' action button\n- Support close via X button or overlay click\n- Format all data appropriately",
       "TechnicalDesign": "## Technical Design\n\n### Props\n- account: Selected account object\n- isOpen: Panel visibility state\n- onClose: Close handler callback\n- onOpenRecord: Open record callback\n\n### Layout\n- Fixed positioning overlay\n- Transform-based slide animation\n- Sections for different data types\n- Sticky header with close button\n- Scrollable content area"
     },
@@ -413,8 +413,8 @@
       "ID": "212F30E2-C117-49FA-9278-46B587FFC745"
     },
     "sync": {
-      "lastModified": "2025-08-16T19:44:43.387Z",
-      "checksum": "9fc024c512ff01a75c0a10c83a47676fcf76f38d50c65c47727c4aa911ff6811"
+      "lastModified": "2025-08-16T22:20:16.425Z",
+      "checksum": "6b0dfccc390ab4370657727085bc3c24dffd26f549473b482b2cb0171996c6db"
     }
   }
 ]

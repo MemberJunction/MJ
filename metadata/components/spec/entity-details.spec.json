@@ -1,7 +1,7 @@
 {
     "name": "EntityDetails",
     "title": "Entity Details Panel",
-    "description": "Sliding panel that displays detailed information about a selected entity including fields and relationships",
+    "description": "Sliding panel that displays detailed information about a selected entity including fields and relationships.",
     "type": "form",
     "functionalRequirements": "## Entity Details Requirements\n\n- Slide in from the right when an entity is selected\n- Display entity metadata at the top\n- Show fields in a formatted table\n- Display relationships with icons\n- Include 'Open Record' button\n- Support closing via X button or Escape key\n- Smooth slide animation\n- Scrollable content area",
     "dataRequirements": null,

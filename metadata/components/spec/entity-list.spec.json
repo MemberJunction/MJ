@@ -1,7 +1,7 @@
 {
     "name": "EntityList",
     "title": "Entity List",
-    "description": "Displays entities in a grid or card layout with sorting capabilities",
+    "description": "Displays entities in a grid or card layout with sorting capabilities.",
     "type": "table",
     "functionalRequirements": "## Entity List Requirements\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
     "dataRequirements": null,

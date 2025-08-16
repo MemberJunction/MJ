@@ -1,7 +1,7 @@
 {
   "name": "AccountsByIndustryList",
   "title": "Accounts by Industry List",
-  "description": "Sortable, paginated table component displaying filtered account records with row selection capability",
+  "description": "Sortable, paginated table component displaying filtered account records with row selection capability.",
   "type": "component",
   "location": "embedded",
   "namespace": "CRM/Analytics",
