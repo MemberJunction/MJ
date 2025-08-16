@@ -36,6 +36,8 @@ export interface CompileOptions {
   babelPlugins?: string[];
   /** Custom Babel presets to use */
   babelPresets?: string[];
+  /** Library dependencies that the component requires */
+  libraries?: any[]; // Using any[] to avoid circular dependency with InteractiveComponents
 }
 
 /**

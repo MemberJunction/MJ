@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
+import { JsonPreprocessor } from './json-preprocessor';
 
 /**
  * Represents the structure of a metadata record with optional sync tracking
@@ -147,10 +148,39 @@ export class SyncEngine {
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
-        const fileContent = await fs.readFile(fullPath, 'utf-8');
-        
-        // Process the file content for {@include} references
-        return await this.processFileContentWithIncludes(fileContent, fullPath);
+        // Check if this is a JSON file that might contain @include directives
+        if (fullPath.endsWith('.json')) {
+          try {
+            // Parse as JSON and check for @include directives
+            const jsonContent = await fs.readJson(fullPath);
+            
+            // Check if the JSON contains any @include directives
+            const jsonString = JSON.stringify(jsonContent);
+            const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+            
+            if (hasIncludes) {
+              // Process @include directives with a fresh preprocessor instance
+              const preprocessor = new JsonPreprocessor();
+              const processedJson = await preprocessor.processFile(fullPath);
+              
+              // Return as JSON string since @file references typically expect string content
+              return JSON.stringify(processedJson, null, 2);
+            } else {
+              // No @include directives, just return the JSON as a formatted string
+              return JSON.stringify(jsonContent, null, 2);
+            }
+          } catch (jsonError) {
+            // Not valid JSON or error processing, fall back to text file handling
+            const fileContent = await fs.readFile(fullPath, 'utf-8');
+            // Process the file content for {@include} references in text files
+            return await this.processFileContentWithIncludes(fileContent, fullPath);
+          }
+        } else {
+          // Not a JSON file, process as text with {@include} support
+          const fileContent = await fs.readFile(fullPath, 'utf-8');
+          // Process the file content for {@include} references
+          return await this.processFileContentWithIncludes(fileContent, fullPath);
+        }
       } else {
         throw new Error(`File not found: ${fullPath}`);
       }
@@ -549,9 +579,34 @@ export class SyncEngine {
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
           
           if (await fs.pathExists(fullPath)) {
-            const content = await fs.readFile(fullPath, 'utf-8');
-            // Process any @include directives within the file
-            const processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            let processedContent: string;
+            
+            // Check if this is a JSON file that might contain @include directives
+            if (fullPath.endsWith('.json')) {
+              try {
+                const jsonContent = await fs.readJson(fullPath);
+                const jsonString = JSON.stringify(jsonContent);
+                const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+                
+                if (hasIncludes) {
+                  // Process @include directives
+                  const preprocessor = new JsonPreprocessor();
+                  const processedJson = await preprocessor.processFile(fullPath);
+                  processedContent = JSON.stringify(processedJson, null, 2);
+                } else {
+                  processedContent = JSON.stringify(jsonContent, null, 2);
+                }
+              } catch {
+                // Not valid JSON, process as text
+                const content = await fs.readFile(fullPath, 'utf-8');
+                processedContent = await this.processFileContentWithIncludes(content, fullPath);
+              }
+            } else {
+              // Text file - process {@include} references
+              const content = await fs.readFile(fullPath, 'utf-8');
+              processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            }
+            
             result[key] = {
               _checksumType: 'file',
               _reference: value,

@@ -1,0 +1,11 @@
+{
+  "libraries": [
+    {
+      "name": "Chart.js",
+      "version": "4.4.0",
+      "cdnUrl": "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js",
+      "globalVariable": "Chart",
+      "required": true
+    }
+  ]
+}

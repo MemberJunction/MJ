@@ -105,7 +105,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
-        ExtraFilter: 'HasCustomProps = 0', // Only load components without custom props
+        ExtraFilter: 'HasRequiredCustomProps = 0', // Only load components without required custom props
         OrderBy: 'Name',
         MaxRows: 1000,
         ResultType: 'entity_object'

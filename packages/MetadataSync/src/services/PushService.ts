@@ -10,6 +10,7 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
+import { JsonPreprocessor } from '../lib/json-preprocessor';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export interface PushOptions {
@@ -319,7 +320,20 @@ export class PushService {
           await fileBackupManager.backupFile(filePath);
         }
         
-        const fileData = await fs.readJson(filePath);
+        // Read the raw file data first
+        const rawFileData = await fs.readJson(filePath);
+        
+        // Only preprocess if there are @include directives
+        let fileData = rawFileData;
+        const hasIncludes = JSON.stringify(rawFileData).includes('"@include"');
+        
+        if (hasIncludes) {
+          // Preprocess the JSON file to handle @include directives
+          // Create a new preprocessor instance for each file to ensure clean state
+          const jsonPreprocessor = new JsonPreprocessor();
+          fileData = await jsonPreprocessor.processFile(filePath);
+        }
+        
         const records = Array.isArray(fileData) ? fileData : [fileData];
         const isArray = Array.isArray(fileData);
         

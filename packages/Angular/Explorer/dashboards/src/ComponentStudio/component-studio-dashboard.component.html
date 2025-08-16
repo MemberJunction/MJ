@@ -4,7 +4,7 @@
     <div class="header-content">
       <div>
         <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
-        <p class="header-subtitle">Testing components without custom properties</p>
+        <p class="header-subtitle">Testing components without required custom properties</p>
       </div>
       <div class="header-buttons">
         @if (selectedComponent && isRunning) {
@@ -68,9 +68,9 @@
             </div>
           } @else if (filteredComponents.length === 0) {
             <div class="empty-message">
-              <i class="fa-solid fa-info-circle"></i> No components found without custom properties.
+              <i class="fa-solid fa-info-circle"></i> No components found without required custom properties.
               <br>
-              <small>Only components that don't require custom props can be tested here.</small>
+              <small>Components with optional custom props can be tested, but not those with required props.</small>
             </div>
           } @else {
             @for (component of filteredComponents; track getComponentId(component)) {

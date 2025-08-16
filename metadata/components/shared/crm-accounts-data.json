@@ -1,0 +1,153 @@
+{
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "CRM account records with industry, revenue, and status information",
+        "displayFields": [
+          "ID",
+          "AccountName",
+          "Industry",
+          "AnnualRevenue",
+          "AccountType",
+          "AccountStatus",
+          "Website",
+          "Phone",
+          "BillingCity",
+          "BillingState",
+          "BillingCountry",
+          "IsActive"
+        ],
+        "filterFields": [
+          "Industry",
+          "AccountStatus",
+          "AccountType",
+          "IsActive"
+        ],
+        "sortFields": [
+          "AccountName",
+          "AnnualRevenue",
+          "AccountStatus",
+          "AccountType"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the account"
+          },
+          {
+            "name": "AccountName",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Official name of the organization"
+          },
+          {
+            "name": "Industry",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Industry sector the account belongs to"
+          },
+          {
+            "name": "AnnualRevenue",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "decimal",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Estimated annual revenue in currency"
+          },
+          {
+            "name": "AccountType",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Type of account (Customer, Prospect, etc.)"
+          },
+          {
+            "name": "AccountStatus",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Current status of the account"
+          },
+          {
+            "name": "Website",
+            "sequence": 7,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Primary website URL"
+          },
+          {
+            "name": "Phone",
+            "sequence": 8,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Main phone number"
+          },
+          {
+            "name": "BillingCity",
+            "sequence": 9,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Billing address city"
+          },
+          {
+            "name": "BillingState",
+            "sequence": 10,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Billing address state"
+          },
+          {
+            "name": "BillingCountry",
+            "sequence": 11,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Billing address country"
+          },
+          {
+            "name": "IsActive",
+            "sequence": 12,
+            "defaultInView": false,
+            "type": "bit",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Whether the account is currently active"
+          }
+        ],
+        "permissions": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        }
+      }
+    ]
+  }
+}

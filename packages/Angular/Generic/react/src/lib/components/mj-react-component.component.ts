@@ -233,11 +233,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       // Register component hierarchy
       await this.registerComponentHierarchy();
       
-      // Compile main component
+      // Compile main component with its library dependencies
       const result = await this.adapter.compileComponent({
         componentName: this.component.name,
         componentCode: this.component.code,
-        styles: this.styles
+        styles: this.styles,
+        libraries: this.component.libraries // Pass library dependencies from ComponentSpec
       });
 
       if (!result.success) {
