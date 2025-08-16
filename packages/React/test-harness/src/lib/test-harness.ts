@@ -9,6 +9,32 @@ export interface TestHarnessOptions extends BrowserContextOptions {
   screenshotPath?: string;
 }
 
+/**
+ * React Test Harness for testing React components in an isolated browser environment
+ * 
+ * IMPORTANT: Parallel Testing Limitation
+ * ----------------------------------------
+ * This test harness uses a single browser page instance and is NOT safe for parallel test execution
+ * on the same instance. For parallel testing, create separate ReactTestHarness instances:
+ * 
+ * @example
+ * // ✅ CORRECT - Parallel testing with separate instances
+ * const results = await Promise.all(tests.map(async (test) => {
+ *   const harness = new ReactTestHarness(options);
+ *   await harness.initialize();
+ *   try {
+ *     return await harness.testComponent(test);
+ *   } finally {
+ *     await harness.close();
+ *   }
+ * }));
+ * 
+ * @example  
+ * // ❌ WRONG - Parallel testing on same instance (will cause conflicts)
+ * const harness = new ReactTestHarness(options);
+ * await harness.initialize();
+ * const results = await Promise.all(tests.map(test => harness.testComponent(test)));
+ */
 export class ReactTestHarness {
   private browserManager: BrowserManager;
   private componentRunner: ComponentRunner;
