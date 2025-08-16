@@ -1,0 +1,68 @@
+{
+  "name": "AccountsByIndustryList",
+  "title": "Accounts by Industry List",
+  "description": "Sortable, paginated table component displaying filtered account records with row selection capability",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "CRM/Analytics",
+  "functionalRequirements": "## Account List Component\n\n- Display accounts in sortable table format\n- Support column sorting with visual indicators\n- Implement client-side pagination\n- Enable row hover effects\n- Handle row click for account selection\n- Format currency values appropriately\n- Show status badges with color coding\n- Display clear filter button",
+  "technicalDesign": "## Technical Design\n\n### Props\n- accounts: Filtered account array\n- sortConfig: Current sort settings\n- onSort: Sort handler callback\n- onAccountClick: Row selection callback\n- currentPage: Current pagination page\n- pageSize: Items per page\n- onPageChange: Pagination callback\n\n### Features\n- Client-side sorting logic\n- Pagination calculation\n- Hover state management\n- Status badge styling",
+  "properties": [
+    {
+      "name": "accounts",
+      "type": "array",
+      "required": true,
+      "description": "Array of account objects to display"
+    },
+    {
+      "name": "selectedIndustry",
+      "type": "string",
+      "required": false,
+      "description": "Currently selected industry for display"
+    },
+    {
+      "name": "sortConfig",
+      "type": "object",
+      "required": true,
+      "description": "Object with field and direction properties"
+    },
+    {
+      "name": "onSort",
+      "type": "function",
+      "required": true,
+      "description": "Callback when column header is clicked for sorting"
+    },
+    {
+      "name": "onAccountClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback when account row is clicked"
+    },
+    {
+      "name": "currentPage",
+      "type": "number",
+      "required": true,
+      "description": "Current page number for pagination"
+    },
+    {
+      "name": "pageSize",
+      "type": "number",
+      "required": true,
+      "description": "Number of items per page"
+    },
+    {
+      "name": "onPageChange",
+      "type": "function",
+      "required": true,
+      "description": "Callback when page is changed"
+    },
+    {
+      "name": "onClearFilter",
+      "type": "function",
+      "required": false,
+      "description": "Callback to clear the industry filter"
+    }
+  ],
+  "exampleUsage": "<AccountsByIndustryList\n  accounts={filteredAccounts}\n  selectedIndustry={selectedIndustry}\n  sortConfig={sortConfig}\n  onSort={handleSort}\n  onAccountClick={handleAccountClick}\n  currentPage={currentPage}\n  pageSize={pageSize}\n  onPageChange={setCurrentPage}\n  onClearFilter={handleClearFilter}\n/>",
+  "code": "const AccountsByIndustryList = ({\n  accounts,\n  selectedIndustry,\n  sortConfig,\n  onSort,\n  onAccountClick,\n  currentPage,\n  pageSize,\n  onPageChange,\n  onClearFilter\n}) => {\n  // Calculate pagination\n  const totalPages = Math.ceil(accounts.length / pageSize);\n  const paginatedAccounts = accounts.slice(\n    (currentPage - 1) * pageSize,\n    currentPage * pageSize\n  );\n  \n  // Format currency\n  const formatCurrency = (value) => {\n    if (!value) return '-';\n    return new Intl.NumberFormat('en-US', {\n      style: 'currency',\n      currency: 'USD',\n      notation: 'compact',\n      maximumFractionDigits: 1\n    }).format(value);\n  };\n  \n  if (!selectedIndustry) {\n    return null;\n  }\n  \n  return (\n    <div style={{ \n      marginTop: '32px',\n      padding: '20px',\n      backgroundColor: '#F9FAFB',\n      borderRadius: '8px',\n      border: '1px solid #E5E7EB'\n    }}>\n      <div style={{ \n        fontSize: '18px', \n        fontWeight: '600', \n        color: '#111827',\n        marginBottom: '16px',\n        display: 'flex',\n        justifyContent: 'space-between',\n        alignItems: 'center'\n      }}>\n        <span>Selected: {selectedIndustry} ({accounts.length} accounts)</span>\n        {onClearFilter && (\n          <button\n            onClick={onClearFilter}\n            style={{\n              padding: '6px 12px',\n              fontSize: '14px',\n              color: '#6B7280',\n              backgroundColor: '#fff',\n              border: '1px solid #D1D5DB',\n              borderRadius: '6px',\n              cursor: 'pointer'\n            }}\n          >\n            Clear Filter\n          </button>\n        )}\n      </div>\n      \n      {/* Account Table */}\n      <div style={{ backgroundColor: '#fff', borderRadius: '6px', overflow: 'hidden' }}>\n        <table style={{ width: '100%', borderCollapse: 'collapse' }}>\n          <thead>\n            <tr style={{ backgroundColor: '#F3F4F6' }}>\n              <th \n                onClick={() => onSort('AccountName')}\n                style={{ \n                  padding: '12px', \n                  textAlign: 'left',\n                  fontSize: '12px',\n                  fontWeight: '600',\n                  color: '#374151',\n                  cursor: 'pointer',\n                  userSelect: 'none'\n                }}\n              >\n                Account Name {sortConfig.field === 'AccountName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}\n              </th>\n              <th \n                onClick={() => onSort('AnnualRevenue')}\n                style={{ \n                  padding: '12px', \n                  textAlign: 'left',\n                  fontSize: '12px',\n                  fontWeight: '600',\n                  color: '#374151',\n                  cursor: 'pointer',\n                  userSelect: 'none'\n                }}\n              >\n                Revenue {sortConfig.field === 'AnnualRevenue' && (sortConfig.direction === 'asc' ? '↑' : '↓')}\n              </th>\n              <th \n                onClick={() => onSort('AccountStatus')}\n                style={{ \n                  padding: '12px', \n                  textAlign: 'left',\n                  fontSize: '12px',\n                  fontWeight: '600',\n                  color: '#374151',\n                  cursor: 'pointer',\n                  userSelect: 'none'\n                }}\n              >\n                Status {sortConfig.field === 'AccountStatus' && (sortConfig.direction === 'asc' ? '↑' : '↓')}\n              </th>\n              <th \n                onClick={() => onSort('AccountType')}\n                style={{ \n                  padding: '12px', \n                  textAlign: 'left',\n                  fontSize: '12px',\n                  fontWeight: '600',\n                  color: '#374151',\n                  cursor: 'pointer',\n                  userSelect: 'none'\n                }}\n              >\n                Type {sortConfig.field === 'AccountType' && (sortConfig.direction === 'asc' ? '↑' : '↓')}\n              </th>\n              <th style={{ padding: '12px', width: '50px' }}></th>\n            </tr>\n          </thead>\n          <tbody>\n            {paginatedAccounts.map(account => (\n              <tr \n                key={account.ID}\n                style={{ \n                  borderBottom: '1px solid #E5E7EB',\n                  cursor: 'pointer',\n                  transition: 'background-color 0.2s'\n                }}\n                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}\n                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}\n                onClick={() => onAccountClick(account)}\n              >\n                <td style={{ padding: '12px', fontSize: '14px', color: '#111827' }}>\n                  {account.AccountName}\n                </td>\n                <td style={{ padding: '12px', fontSize: '14px', color: '#111827' }}>\n                  {formatCurrency(account.AnnualRevenue)}\n                </td>\n                <td style={{ padding: '12px' }}>\n                  <span style={{\n                    padding: '2px 8px',\n                    fontSize: '12px',\n                    fontWeight: '500',\n                    borderRadius: '4px',\n                    backgroundColor: account.AccountStatus === 'Active' ? '#D1FAE5' : '#FEE2E2',\n                    color: account.AccountStatus === 'Active' ? '#065F46' : '#991B1B'\n                  }}>\n                    {account.AccountStatus}\n                  </span>\n                </td>\n                <td style={{ padding: '12px', fontSize: '14px', color: '#6B7280' }}>\n                  {account.AccountType}\n                </td>\n                <td style={{ padding: '12px', textAlign: 'center' }}>\n                  <span style={{ color: '#9CA3AF' }}>›</span>\n                </td>\n              </tr>\n            ))}\n          </tbody>\n        </table>\n        \n        {/* Pagination */}\n        {totalPages > 1 && (\n          <div style={{ \n            padding: '12px',\n            display: 'flex',\n            justifyContent: 'center',\n            gap: '4px',\n            borderTop: '1px solid #E5E7EB'\n          }}>\n            <button\n              onClick={() => onPageChange(Math.max(1, currentPage - 1))}\n              disabled={currentPage === 1}\n              style={{\n                padding: '6px 12px',\n                fontSize: '14px',\n                color: currentPage === 1 ? '#D1D5DB' : '#374151',\n                backgroundColor: '#fff',\n                border: '1px solid #D1D5DB',\n                borderRadius: '4px',\n                cursor: currentPage === 1 ? 'default' : 'pointer'\n              }}\n            >\n              ‹\n            </button>\n            \n            {[...Array(Math.min(5, totalPages))].map((_, i) => {\n              let pageNum;\n              if (totalPages <= 5) {\n                pageNum = i + 1;\n              } else if (currentPage <= 3) {\n                pageNum = i + 1;\n              } else if (currentPage >= totalPages - 2) {\n                pageNum = totalPages - 4 + i;\n              } else {\n                pageNum = currentPage - 2 + i;\n              }\n              \n              return (\n                <button\n                  key={i}\n                  onClick={() => onPageChange(pageNum)}\n                  style={{\n                    padding: '6px 12px',\n                    fontSize: '14px',\n                    color: pageNum === currentPage ? '#fff' : '#374151',\n                    backgroundColor: pageNum === currentPage ? '#3B82F6' : '#fff',\n                    border: '1px solid ' + (pageNum === currentPage ? '#3B82F6' : '#D1D5DB'),\n                    borderRadius: '4px',\n                    cursor: 'pointer'\n                  }}\n                >\n                  {pageNum}\n                </button>\n              );\n            })}\n            \n            <button\n              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}\n              disabled={currentPage === totalPages}\n              style={{\n                padding: '6px 12px',\n                fontSize: '14px',\n                color: currentPage === totalPages ? '#D1D5DB' : '#374151',\n                backgroundColor: '#fff',\n                border: '1px solid #D1D5DB',\n                borderRadius: '4px',\n                cursor: currentPage === totalPages ? 'default' : 'pointer'\n              }}\n            >\n              ›\n            </button>\n          </div>\n        )}\n      </div>\n    </div>\n  );\n};"
+}
