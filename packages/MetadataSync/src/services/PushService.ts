@@ -329,7 +329,8 @@ export class PushService {
         
         // Only preprocess if there are @include directives
         let fileData = rawFileData;
-        const hasIncludes = JSON.stringify(rawFileData).includes('"@include"');
+        const jsonString = JSON.stringify(rawFileData);
+        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
         
         if (hasIncludes) {
           // Preprocess the JSON file to handle @include directives
