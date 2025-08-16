@@ -125,7 +125,29 @@ export default class Push extends Command {
             this.error(message);
           },
           onWarn: (message) => {
-            this.warn(message);
+            // Check if this is a user-friendly warning that doesn't need a stack trace
+            const userFriendlyPatterns = [
+              'Record not found:',
+              'To auto-create missing records',
+              'Circular dependencies detected',
+              'Skipping',
+              'File backups rolled back',
+              'Failed to rollback file backups',
+              'SQL logging requested but provider does not support it',
+              'Failed to close SQL logging session'
+            ];
+            
+            const isUserFriendly = userFriendlyPatterns.some(pattern => 
+              message.includes(pattern)
+            );
+            
+            if (isUserFriendly) {
+              // Log as a styled warning without stack trace
+              this.log(chalk.yellow(`⚠️  ${message}`));
+            } else {
+              // Use standard warn for unexpected warnings that need debugging info
+              this.warn(message);
+            }
           },
           onLog: (message) => {
             this.log(message);
