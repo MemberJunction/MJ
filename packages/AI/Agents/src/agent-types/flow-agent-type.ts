@@ -153,7 +153,7 @@ export class FlowAgentType extends BaseAgentType {
                     // Merge the prompt response into the current payload
                     // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
                     // that key in the payload object
-                    for (const key in Object.keys(promptResponse)) {
+                    for (const key of Object.keys(promptResponse)) {
                         payload[key] = promptResponse[key];
                     }
                 }
