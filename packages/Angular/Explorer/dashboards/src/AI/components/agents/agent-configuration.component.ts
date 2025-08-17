@@ -1,6 +1,6 @@
 import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
 interface AgentFilter {
@@ -27,8 +27,8 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   public viewMode: 'grid' | 'list' = 'grid';
   public expandedAgentId: string | null = null;
   
-  public agents: AIAgentEntity[] = [];
-  public filteredAgents: AIAgentEntity[] = [];
+  public agents: AIAgentEntityExtended[] = [];
+  public filteredAgents: AIAgentEntityExtended[] = [];
   
   public currentFilters: AgentFilter = {
     searchTerm: '',
@@ -39,7 +39,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     exposeAsAction: 'all'
   };
 
-  public selectedAgentForTest: AIAgentEntity | null = null;
+  public selectedAgentForTest: AIAgentEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -157,7 +157,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     try {
       this.isLoading = true;
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntity>({
+      const result = await rv.RunView<AIAgentEntityExtended>({
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
@@ -285,7 +285,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: null as any });
   }
 
-  public runAgent(agent: AIAgentEntity): void {
+  public runAgent(agent: AIAgentEntityExtended): void {
     // Use the test harness service for window management features
     this.testHarnessService.openForAgent(agent.ID);
   }
@@ -295,7 +295,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     this.selectedAgentForTest = null;
   }
 
-  public getAgentIconColor(agent: AIAgentEntity): string {
+  public getAgentIconColor(agent: AIAgentEntityExtended): string {
     // Generate a consistent color based on agent properties
     const colors = ['#17a2b8', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#007bff'];
     const index = (agent.Name?.charCodeAt(0) || 0) % colors.length;
@@ -326,7 +326,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
    * Gets the agent's display icon
    * Prioritizes LogoURL, falls back to IconClass, then default robot icon
    */
-  public getAgentIcon(agent: AIAgentEntity): string {
+  public getAgentIcon(agent: AIAgentEntityExtended): string {
     if (agent?.LogoURL) {
       // LogoURL is used in img tag, not here
       return '';
@@ -337,7 +337,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   /**
    * Checks if the agent has a logo URL (for image display)
    */
-  public hasLogoURL(agent: AIAgentEntity): boolean {
+  public hasLogoURL(agent: AIAgentEntityExtended): boolean {
     return !!agent?.LogoURL;
   }
 
