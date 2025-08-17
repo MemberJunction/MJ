@@ -274,7 +274,12 @@ export class ValidationService {
         // Check if this might be a virtual property (getter/setter)
         try {
           const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
-          const hasProperty = !!entityInstance.GetFieldByName(fieldName);
+          // we use this approach instead of checking Entity Fields because
+          // some sub-classes implement setter properties that allow you to set
+          // values that are not physically in the database but are resolved by the sub-class
+          // a good example is the sub-class for AI Prompts that has a property called TemplateText
+          // that is automatically resolved into a separate record in the Templates/Template Contents entity
+          const hasProperty = fieldName in entityInstance;
 
           if (!hasProperty) {
             this.addError({
