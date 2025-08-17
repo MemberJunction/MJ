@@ -1,0 +1,82 @@
+{
+  "name": "DealVelocityDealDetail",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-deal-detail.js",
+  "functionalRequirements": "## Deal Velocity Deal Detail\n\n### Purpose\nDisplay comprehensive information about a specific deal in a compact modal format with quick access to the full record.\n\n### Information Display\n- **Deal Name**: Prominently displayed in the header\n- **Amount**: Large, formatted currency display\n- **Stage**: Current deal stage\n- **Close Date**: Expected or actual close date\n- **Probability**: Win probability percentage\n- **Deal Source**: Origin of the deal (if available)\n- **Next Step**: Upcoming action or milestone (if available)\n\n### Actions\n- **Open Record**: Icon button (↗) to open full entity record\n- **Close Modal**: X button or click outside to dismiss\n\n### Visual Design\n- Compact modal overlay (500px max width)\n- Clean, organized layout with labeled fields\n- Grid layout for efficient space usage\n- Prominent display of key metrics (amount)\n- Sticky action button at bottom\n- Icon-only design for open button to save space\n\n### User Experience\n- Quick access to deal information\n- One-click navigation to full record\n- Escape key support for closing\n- Click outside to dismiss",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "fields": [
+          {
+            "name": "ID",
+            "type": "string",
+            "description": "Unique identifier for the deal"
+          },
+          {
+            "name": "DealName",
+            "type": "string",
+            "description": "Name or title of the deal"
+          },
+          {
+            "name": "Amount",
+            "type": "number",
+            "description": "Deal value in currency"
+          },
+          {
+            "name": "Stage",
+            "type": "string",
+            "description": "Current stage of the deal"
+          },
+          {
+            "name": "CloseDate",
+            "type": "date",
+            "description": "Expected or actual close date"
+          },
+          {
+            "name": "Probability",
+            "type": "number",
+            "description": "Win probability percentage"
+          },
+          {
+            "name": "DealSource",
+            "type": "string",
+            "description": "Origin or source of the deal"
+          },
+          {
+            "name": "NextStep",
+            "type": "string",
+            "description": "Next action or milestone"
+          }
+        ],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation Details\n\n### Component Function\n`DealVelocityDealDetail({ deal, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings })`\n\n### Props\n- **deal**: Deal entity object with all fields\n- **onClose**: Callback to close the modal\n- **Standard props**: utilities, styles, components, callbacks, etc.\n\n### Layout Structure\n1. **Modal Overlay**: Fixed position with semi-transparent background\n2. **Modal Container**: Centered, white background, rounded corners\n3. **Header**: Deal name with close button\n4. **Content Grid**: 2-column layout for field pairs\n5. **Action Footer**: Border-separated section with open button\n\n### Field Display\n- Grid layout with responsive columns\n- Labels in small, muted text\n- Values in larger, bold text\n- Conditional rendering for optional fields\n- Currency formatting for amounts\n- Date formatting for dates\n\n### Open Record Integration\n```javascript\ncallbacks.OpenEntityRecord('Deals', [\n  { FieldName: 'ID', Value: deal.ID }\n]);\n```\n\n### Styling\n- Modal max width: 500px\n- 90% viewport width on mobile\n- Consistent padding and spacing\n- Icon button: 40x40px with ↗ symbol\n- Hover effects on interactive elements",
+  "properties": [
+    {
+      "name": "deal",
+      "type": "object",
+      "required": true,
+      "description": "Deal entity object with all fields"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "required": true,
+      "description": "Callback to close the modal"
+    }
+  ],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Triggered when user clicks the open button to view full record"
+    }
+  ],
+  "dependencies": [],
+  "libraries": []
+}

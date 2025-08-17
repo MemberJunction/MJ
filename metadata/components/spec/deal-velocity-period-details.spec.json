@@ -1,0 +1,78 @@
+{
+  "name": "DealVelocityPeriodDetails",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-period-details.js",
+  "functionalRequirements": "## Deal Velocity Period Details\n\n### Purpose\nProvide a detailed, sortable table view of all deals within a selected time period from the Deal Velocity Chart.\n\n### Features\n- **Modal Overlay**: Full-screen modal that overlays the main content\n- **Period Header**: Shows the selected period label and deal count\n- **Sortable Table**: Interactive table with sortable columns\n- **Stage Badges**: Visual indicators for deal stages with color coding\n- **Currency Formatting**: Proper formatting for monetary values\n- **Date Formatting**: User-friendly date display\n- **Row Selection**: Click any row to view detailed deal information\n\n### Table Columns\n1. **Deal Name** (sortable): Name/title of the deal\n2. **Stage**: Current stage with colored badge\n3. **Amount** (sortable): Deal value with currency formatting\n4. **Close Date** (sortable): Expected or actual close date\n5. **Created Date** (sortable): When the deal was created\n\n### Interactions\n- Click column headers to sort (toggle ASC/DESC)\n- Visual indicators show current sort column and direction\n- Click any row to drill down to deal details\n- Click X or outside modal to close\n- Hover effects on rows for better interactivity\n\n### Empty State\n- Clear message when no deals exist for the selected period",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "fields": [
+          {
+            "name": "ID",
+            "type": "string",
+            "description": "Unique identifier for the deal"
+          },
+          {
+            "name": "DealName",
+            "type": "string",
+            "description": "Name or title of the deal"
+          },
+          {
+            "name": "Stage",
+            "type": "string",
+            "description": "Current stage of the deal"
+          },
+          {
+            "name": "Amount",
+            "type": "number",
+            "description": "Deal value in currency"
+          },
+          {
+            "name": "CloseDate",
+            "type": "date",
+            "description": "Expected or actual close date"
+          },
+          {
+            "name": "__mj_CreatedAt",
+            "type": "datetime",
+            "description": "System timestamp when deal was created"
+          }
+        ],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation Details\n\n### Component Function\n`DealVelocityPeriodDetails({ periodData, deals, onClose, onDealSelect, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings })`\n\n### Props\n- **periodData**: Object with period label and metadata\n- **deals**: Array of deals within the selected period\n- **onClose**: Callback to close the modal\n- **onDealSelect**: Callback when a deal is selected\n- **Standard props**: utilities, styles, components, callbacks, etc.\n\n### State Management\n- **sortBy**: Current sort field (default: 'CloseDate')\n- **sortDirection**: 'ASC' or 'DESC' (default: 'DESC')\n\n### Sorting Implementation\n1. Parse dates for proper comparison\n2. Numeric comparison for amounts\n3. String comparison for names\n4. Toggle direction when same column clicked\n5. Default to DESC for amounts, ASC for others\n\n### Stage Color Mapping\n```javascript\nconst stageColors = {\n  'Prospecting': { bg: '#F3F4F6', text: '#6B7280' },\n  'Qualification': { bg: '#DBEAFE', text: '#1E40AF' },\n  'Proposal': { bg: '#FEF3C7', text: '#92400E' },\n  'Negotiation': { bg: '#FED7AA', text: '#9A3412' },\n  'Closed Won': { bg: '#D1FAE5', text: '#065F46' },\n  'Closed Lost': { bg: '#FEE2E2', text: '#991B1B' }\n}\n```\n\n### Layout Structure\n- Fixed position overlay with semi-transparent background\n- Centered modal (90% width, max 1200px)\n- Header with title and close button\n- Scrollable table body\n- Alternating row colors for readability",
+  "properties": [
+    {
+      "name": "periodData",
+      "type": "object",
+      "required": true,
+      "description": "Selected period information including label"
+    },
+    {
+      "name": "deals",
+      "type": "array",
+      "required": true,
+      "description": "Array of deals within the selected period"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "required": true,
+      "description": "Callback to close the modal"
+    },
+    {
+      "name": "onDealSelect",
+      "type": "function",
+      "required": true,
+      "description": "Callback when a deal is selected"
+    }
+  ],
+  "dependencies": [],
+  "libraries": []
+}

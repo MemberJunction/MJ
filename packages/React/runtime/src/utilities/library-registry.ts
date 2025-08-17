@@ -117,6 +117,15 @@ export class LibraryRegistry {
         },
         defaultVersion: '7.8.5'
       },
+      {
+        name: 'topojson-client',
+        globalVariable: 'topojson',
+        category: 'maps/topology',
+        versions: {
+          '3.1.0': { cdnUrl: 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js' }
+        },
+        defaultVersion: '3.1.0'
+      },
 
       // Date/Time Libraries
       {

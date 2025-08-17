@@ -479,7 +479,7 @@
       "ID": "24F6BC4C-E8C1-4757-8C95-3CC65FF9B0B7"
     },
     "sync": {
-      "lastModified": "2025-08-17T01:30:37.703Z",
+      "lastModified": "2025-08-17T02:06:06.551Z",
       "checksum": "cd7779d7433bd2c11708a4b5e3194965b82c276d21330f84f803bcd4229f8907"
     }
   },
@@ -501,7 +501,7 @@
       "ID": "EE5E1201-0177-495F-8D28-8F79011C829B"
     },
     "sync": {
-      "lastModified": "2025-08-17T01:30:37.735Z",
+      "lastModified": "2025-08-17T02:06:06.585Z",
       "checksum": "9ade92bf9d6345ab312ddbb21a8a85bd89a69518bf027b1ed818d3d230452b42"
     }
   },
@@ -523,8 +523,96 @@
       "ID": "7C4E2A8F-9B3D-4E2A-8F5C-1E7D3A9B4C6E"
     },
     "sync": {
-      "lastModified": "2025-08-17T01:35:05.641Z",
+      "lastModified": "2025-08-17T02:07:34.260Z",
       "checksum": "f9c2545411afcf0bee77e3d0d6bf498153c29f9fe8efcbb5c34c356ada815e8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DealVelocitySummary",
+      "Namespace": "CRM/Analytics",
+      "Description": "Summary statistics cards showing key deal metrics including total deals, won deals, win rate, and values",
+      "Title": "Deal Velocity Summary",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/deal-velocity-summary.spec.json",
+      "FunctionalRequirements": "## Deal Velocity Summary\n\n### Purpose\nDisplay key deal metrics in a grid of summary cards\n\n### Metrics Displayed\n- Total Deals count\n- Won Deals count\n- Win Rate percentage\n- Total Pipeline Value\n- Won Deal Value\n\n### Visual Design\n- Grid layout responsive to screen size\n- Color-coded cards with left border accent\n- Large metric values with labels\n- Currency formatting for values\n- Percentage formatting for rates",
+      "TechnicalDesign": "## Implementation\n\n### Props\n- deals: Array of deal records\n- Standard props (utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings)\n\n### Calculations\n- Filter deals by stage for counts\n- Calculate win rate from closed deals\n- Sum amounts for value metrics\n\n### Layout\n- CSS Grid with auto-fit columns\n- Minimum 150px column width\n- Cards with padding and border accent\n- Responsive font sizes"
+    },
+    "primaryKey": {
+      "ID": "563130CE-4016-4640-94AD-9161A94B122F"
+    },
+    "sync": {
+      "lastModified": "2025-08-17T02:06:07.591Z",
+      "checksum": "d9e2e4d071058fce4f788765bbf7a8fbf72f8b31ef21398fc77dd6e10a24f49c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DealVelocityPeriodDetails",
+      "Namespace": "CRM/Analytics",
+      "Description": "Modal component displaying a sortable table of deals for a selected time period with drill-down capability",
+      "Title": "Deal Velocity Period Details",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/deal-velocity-period-details.spec.json",
+      "FunctionalRequirements": "## Deal Velocity Period Details\n\n### Purpose\nShow detailed list of deals for a selected time period from the chart\n\n### Features\n- Full-screen modal overlay\n- Sortable table with deal information\n- Click to select individual deal\n- Stage badges with colors\n- Currency formatting\n- Date formatting\n\n### Table Columns\n- Deal Name (sortable)\n- Stage (visual badge)\n- Amount (sortable, currency)\n- Close Date (sortable)\n- Created Date (sortable)\n\n### Interactions\n- Click column headers to sort\n- Click row to view deal details\n- Click outside or X to close",
+      "TechnicalDesign": "## Implementation\n\n### Props\n- periodData: Selected period information\n- deals: Array of deals in period\n- onClose: Callback to close modal\n- onDealSelect: Callback for deal selection\n- Standard props\n\n### State Management\n- sortBy: Current sort field\n- sortDirection: ASC or DESC\n\n### Sorting Logic\n- Date fields parsed for comparison\n- Numeric amount comparison\n- String comparison for names\n\n### Visual Design\n- Fixed position overlay\n- White modal with rounded corners\n- Alternating row colors\n- Hover effects on rows\n- Stage color coding"
+    },
+    "primaryKey": {
+      "ID": "F80A3DFF-5B28-4718-B470-898F66341E69"
+    },
+    "sync": {
+      "lastModified": "2025-08-17T02:06:07.610Z",
+      "checksum": "8886d8c867a74b104ad74d08ef4c1de62181e8149923b34e12c44e0e3062ff19"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DealVelocityDealDetail",
+      "Namespace": "CRM/Analytics",
+      "Description": "Modal component showing detailed information about a specific deal with an option to open the full record",
+      "Title": "Deal Velocity Deal Detail",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/deal-velocity-deal-detail.spec.json",
+      "FunctionalRequirements": "## Deal Velocity Deal Detail\n\n### Purpose\nDisplay detailed information about a selected deal\n\n### Information Shown\n- Deal Name (header)\n- Amount with currency formatting\n- Current Stage\n- Close Date\n- Probability percentage\n- Deal Source (if available)\n- Next Step (if available)\n\n### Actions\n- Open record button (icon only)\n- Close modal (X button or click outside)\n\n### Visual Design\n- Compact modal overlay\n- Grid layout for fields\n- Prominent amount display\n- Icon-only open button",
+      "TechnicalDesign": "## Implementation\n\n### Props\n- deal: Deal entity object\n- onClose: Callback to close modal\n- Standard props with callbacks\n\n### Layout\n- Fixed position overlay\n- Centered modal (500px max width)\n- Grid layout for field pairs\n- Sticky action button at bottom\n\n### Callbacks\n- Uses callbacks.OpenEntityRecord\n- Passes entity name and ID\n- Closes modal after opening"
+    },
+    "primaryKey": {
+      "ID": "678ABE45-531A-45A7-981D-A8B3C9D4C376"
+    },
+    "sync": {
+      "lastModified": "2025-08-17T02:06:07.566Z",
+      "checksum": "9551e43e05ab721f6899852a92d14613e4165abc29c68e64999a1bf44ec7d4b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "USAccountHeatmap",
+      "Namespace": "CRM/Geography",
+      "Description": "Interactive choropleth map showing account distribution across US states with drill-down capability",
+      "Title": "US Account Distribution Map",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/us-account-heatmap.spec.json",
+      "FunctionalRequirements": "## US Account Heatmap\n\n### Core Features\n- Choropleth map visualization of US states\n- Color intensity based on account concentration\n- Two view modes: by count or by revenue\n- Interactive hover tooltips with state metrics\n- Click states to see detailed account list\n- Summary statistics cards\n\n### Map Visualization\n- D3.js powered interactive map\n- Blue gradient color scheme\n- State abbreviations on map\n- Dynamic legend showing value range\n- Gray states indicate no accounts\n\n### State Drill-Down\n- Modal with account list for selected state\n- Shows account name, city, industry, revenue\n- Direct links to open account records\n- Sortable table columns",
+      "TechnicalDesign": "## Implementation\n\n### Data Loading\n- Single RunView to load all accounts\n- Client-side aggregation by state\n- Calculate counts and revenue totals\n\n### Map Rendering\n- D3.js with TopoJSON for US geography\n- AlbersUSA projection\n- Sequential color scale\n- SVG-based rendering\n\n### Interactivity\n- Hover events for tooltips\n- Click events for drill-down\n- Dynamic tooltip positioning\n- State highlighting on hover\n\n### Performance\n- Efficient D3 rendering\n- Client-side data processing\n- Lazy TopoJSON loading\n- Proper cleanup on re-render"
+    },
+    "primaryKey": {
+      "ID": "AB3DF794-99C3-4A3E-8C84-EF3E5175A568"
+    },
+    "sync": {
+      "lastModified": "2025-08-17T02:38:32.824Z",
+      "checksum": "204629ebd066b4a8d7eb42aba14ee0ccf380442b4dd8182d162f9a2954c15492"
     }
   }
 ]

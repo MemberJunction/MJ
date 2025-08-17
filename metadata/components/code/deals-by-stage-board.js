@@ -604,11 +604,6 @@ function DealsByStageBoard({ utilities, styles, components, callbacks, savedUser
             }}>
               <button
                 onClick={() => {
-                  // callsbacks.OpenEntityRecord expects:
-                  // 1. Entity name as string
-                  // 2. Array of key-value pairs: [{FieldName: 'fieldname', Value: value}]
-                  //    - For single PK: [{FieldName: 'ID', Value: 12345}]
-                  //    - For composite PK: [{FieldName: 'Key1', Value: val1}, {FieldName: 'Key2', Value: val2}]
                   if (callbacks.OpenEntityRecord) {
                     callbacks.OpenEntityRecord('Deals', [
                       { FieldName: 'ID', Value: selectedDeal.ID }
@@ -619,20 +614,22 @@ function DealsByStageBoard({ utilities, styles, components, callbacks, savedUser
                   }
                 }}
                 style={{
-                  padding: '8px 16px',
+                  padding: '8px 12px',
                   backgroundColor: '#3B82F6',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '20px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  justifyContent: 'center',
+                  width: '40px',
+                  height: '40px'
                 }}
+                title="Open record"
               >
-                <span style={{ fontSize: '16px' }}>📂</span>
-                Open in Explorer
+                ↗
               </button>
             </div>
           </div>

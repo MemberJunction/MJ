@@ -5,8 +5,14 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
   const [timeRange, setTimeRange] = useState(savedUserSettings?.timeRange || '6months');
   const [metricType, setMetricType] = useState(savedUserSettings?.metricType || 'count');
   const [chartData, setChartData] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState(null);
+  const [periodDeals, setPeriodDeals] = useState([]);
+  const [selectedDeal, setSelectedDeal] = useState(null);
+  const [sortBy, setSortBy] = useState('CloseDate');
+  const [sortDirection, setSortDirection] = useState('DESC');
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
+  const bucketsRef = useRef([]);
 
   // Time range options
   const timeRanges = {
@@ -73,6 +79,9 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
   };
 
   const processChartData = () => {
+    // Store buckets for drill-down functionality
+    bucketsRef.current = [];
+    
     const range = timeRanges[timeRange];
     const endDate = new Date();
     const startDate = new Date();
@@ -97,7 +106,7 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
         label = currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       }
       
-      buckets.push({
+      const bucket = {
         start: new Date(currentDate),
         end: new Date(bucketEnd),
         label: label,
@@ -109,8 +118,12 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
         wonValue: 0,
         avgCycleTime: 0,
         cycleTimeCount: 0,
-        cycleTimeSum: 0
-      });
+        cycleTimeSum: 0,
+        dealIds: [] // Track deal IDs for drill-down
+      };
+      
+      buckets.push(bucket);
+      bucketsRef.current.push(bucket);
       
       currentDate.setTime(bucketEnd.getTime());
     }
@@ -123,6 +136,9 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
       if (createdBucket) {
         createdBucket.created++;
         createdBucket.value += deal.Amount || 0;
+        if (!createdBucket.dealIds.includes(deal.ID)) {
+          createdBucket.dealIds.push(deal.ID);
+        }
       }
       
       // Find bucket for close date if closed
@@ -137,6 +153,10 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
             closeBucket.wonValue += deal.Amount || 0;
           } else {
             closeBucket.lost++;
+          }
+          
+          if (!closeBucket.dealIds.includes(deal.ID)) {
+            closeBucket.dealIds.push(deal.ID);
           }
           
           // Calculate cycle time (days from creation to close)
@@ -294,6 +314,17 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
           }
         }
       },
+      onClick: (event, elements) => {
+        if (elements.length > 0) {
+          const index = elements[0].index;
+          handleChartClick(index);
+        }
+      },
+      onHover: (event, elements) => {
+        if (chartRef.current) {
+          chartRef.current.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+        }
+      },
       scales: {
         y: {
           beginAtZero: true,
@@ -362,6 +393,46 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
     onSaveUserSettings({ ...savedUserSettings, metricType: metric });
   };
 
+  const handleChartClick = (index) => {
+    const bucket = bucketsRef.current[index];
+    if (bucket && bucket.dealIds.length > 0) {
+      setSelectedPeriod(bucket);
+      
+      // Filter deals for this period
+      const bucketDeals = deals.filter(deal => bucket.dealIds.includes(deal.ID));
+      setPeriodDeals(bucketDeals);
+    }
+  };
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortDirection(sortDirection === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      setSortBy(field);
+      setSortDirection(field === 'Amount' ? 'DESC' : 'ASC');
+    }
+  };
+
+  const getSortedDeals = () => {
+    const sorted = [...periodDeals].sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      
+      if (sortBy === 'CloseDate' || sortBy === '__mj_CreatedAt') {
+        aVal = new Date(aVal || 0).getTime();
+        bVal = new Date(bVal || 0).getTime();
+      }
+      
+      if (sortDirection === 'ASC') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+    
+    return sorted;
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -402,13 +473,66 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
     );
   }
 
-  // Calculate summary metrics
-  const totalDeals = deals.length;
-  const closedDeals = deals.filter(d => d.Stage === 'Closed Won' || d.Stage === 'Closed Lost').length;
-  const wonDeals = deals.filter(d => d.Stage === 'Closed Won').length;
-  const winRate = closedDeals > 0 ? Math.round((wonDeals / closedDeals) * 100) : 0;
-  const totalValue = deals.reduce((sum, d) => sum + (d.Amount || 0), 0);
-  const wonValue = deals.filter(d => d.Stage === 'Closed Won').reduce((sum, d) => sum + (d.Amount || 0), 0);
+  // Internal component for summary stats
+  const renderSummaryStats = () => {
+    const totalDeals = deals.length;
+    const closedDeals = deals.filter(d => d.Stage === 'Closed Won' || d.Stage === 'Closed Lost').length;
+    const wonDeals = deals.filter(d => d.Stage === 'Closed Won').length;
+    const winRate = closedDeals > 0 ? Math.round((wonDeals / closedDeals) * 100) : 0;
+    const totalValue = deals.reduce((sum, d) => sum + (d.Amount || 0), 0);
+    const wonValue = deals.filter(d => d.Stage === 'Closed Won').reduce((sum, d) => sum + (d.Amount || 0), 0);
+    
+    const metrics = [
+      { label: 'Total Deals', value: totalDeals, color: '#3B82F6', format: 'number' },
+      { label: 'Won Deals', value: wonDeals, color: '#10B981', format: 'number' },
+      { label: 'Win Rate', value: winRate, color: '#F59E0B', format: 'percent' },
+      { label: 'Total Value', value: totalValue, color: '#8B5CF6', format: 'currency' },
+      { label: 'Won Value', value: wonValue, color: '#EC4899', format: 'currency' }
+    ];
+    
+    const formatValue = (value, format) => {
+      switch (format) {
+        case 'currency':
+          return formatCurrency(value);
+        case 'percent':
+          return `${value}%`;
+        default:
+          return value.toLocaleString();
+      }
+    };
+    
+    return (
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '12px',
+        marginBottom: '20px'
+      }}>
+        {metrics.map((metric, index) => (
+          <div 
+            key={index}
+            style={{ 
+              padding: '12px', 
+              backgroundColor: '#F9FAFB', 
+              borderRadius: '8px',
+              borderLeft: `4px solid ${metric.color}`
+            }}
+          >
+            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>
+              {metric.label}
+            </div>
+            <div style={{ 
+              fontSize: metric.format === 'currency' ? '20px' : '24px', 
+              fontWeight: 'bold', 
+              color: '#111827' 
+            }}>
+              {formatValue(metric.value, metric.format)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -519,58 +643,8 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
         </div>
         
         {/* Summary Stats */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '12px',
-          marginBottom: '20px'
-        }}>
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#F9FAFB', 
-            borderRadius: '8px',
-            borderLeft: '4px solid #3B82F6'
-          }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Total Deals</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>{totalDeals}</div>
-          </div>
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#F9FAFB', 
-            borderRadius: '8px',
-            borderLeft: '4px solid #10B981'
-          }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Won Deals</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669' }}>{wonDeals}</div>
-          </div>
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#F9FAFB', 
-            borderRadius: '8px',
-            borderLeft: '4px solid #F59E0B'
-          }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Win Rate</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#D97706' }}>{winRate}%</div>
-          </div>
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#F9FAFB', 
-            borderRadius: '8px',
-            borderLeft: '4px solid #8B5CF6'
-          }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Total Value</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#7C3AED' }}>{formatCurrency(totalValue)}</div>
-          </div>
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#F9FAFB', 
-            borderRadius: '8px',
-            borderLeft: '4px solid #EC4899'
-          }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Won Value</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#DB2777' }}>{formatCurrency(wonValue)}</div>
-          </div>
-        </div>
+        {renderSummaryStats()}
+        
       </div>
       
       {/* Chart Container */}
@@ -589,6 +663,343 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
       {deals.length === 0 && (
         <div style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>
           No deals found in the selected time range
+        </div>
+      )}
+
+      {/* Period Details Modal */}
+      {selectedPeriod && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}
+        onClick={() => {
+          setSelectedPeriod(null);
+          setSelectedDeal(null);
+        }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              width: '90%',
+              maxWidth: '1200px',
+              height: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid #E5E7EB',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
+                Deals for {selectedPeriod.label}
+                <span style={{ marginLeft: '12px', fontSize: '16px', color: '#6B7280' }}>
+                  ({periodDeals.length} deals)
+                </span>
+              </h3>
+              <button
+                onClick={() => {
+                  setSelectedPeriod(null);
+                  setSelectedDeal(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+              {periodDeals.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#6B7280' }}>
+                  No deals found for this period
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                      <th 
+                        onClick={() => handleSort('DealName')}
+                        style={{ 
+                          padding: '12px', 
+                          textAlign: 'left', 
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          color: sortBy === 'DealName' ? '#3B82F6' : '#374151'
+                        }}
+                      >
+                        Deal Name
+                        {sortBy === 'DealName' && (
+                          <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '\u2191' : '\u2193'}</span>
+                        )}
+                      </th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Stage</th>
+                      <th 
+                        onClick={() => handleSort('Amount')}
+                        style={{ 
+                          padding: '12px', 
+                          textAlign: 'right', 
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          color: sortBy === 'Amount' ? '#3B82F6' : '#374151'
+                        }}
+                      >
+                        Amount
+                        {sortBy === 'Amount' && (
+                          <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '\u2191' : '\u2193'}</span>
+                        )}
+                      </th>
+                      <th 
+                        onClick={() => handleSort('CloseDate')}
+                        style={{ 
+                          padding: '12px', 
+                          textAlign: 'left', 
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          color: sortBy === 'CloseDate' ? '#3B82F6' : '#374151'
+                        }}
+                      >
+                        Close Date
+                        {sortBy === 'CloseDate' && (
+                          <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '\u2191' : '\u2193'}</span>
+                        )}
+                      </th>
+                      <th 
+                        onClick={() => handleSort('__mj_CreatedAt')}
+                        style={{ 
+                          padding: '12px', 
+                          textAlign: 'left', 
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          color: sortBy === '__mj_CreatedAt' ? '#3B82F6' : '#374151'
+                        }}
+                      >
+                        Created
+                        {sortBy === '__mj_CreatedAt' && (
+                          <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '\u2191' : '\u2193'}</span>
+                        )}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getSortedDeals().map((deal, index) => {
+                      const stageColors = {
+                        'Prospecting': { bg: '#F3F4F6', text: '#6B7280' },
+                        'Qualification': { bg: '#DBEAFE', text: '#1E40AF' },
+                        'Proposal': { bg: '#FEF3C7', text: '#92400E' },
+                        'Negotiation': { bg: '#FED7AA', text: '#9A3412' },
+                        'Closed Won': { bg: '#D1FAE5', text: '#065F46' },
+                        'Closed Lost': { bg: '#FEE2E2', text: '#991B1B' }
+                      };
+                      const stageStyle = stageColors[deal.Stage] || stageColors['Prospecting'];
+                      
+                      return (
+                        <tr 
+                          key={deal.ID}
+                          style={{ 
+                            borderBottom: '1px solid #E5E7EB',
+                            cursor: 'pointer',
+                            backgroundColor: index % 2 === 0 ? 'white' : '#F9FAFB'
+                          }}
+                          onClick={() => setSelectedDeal(deal)}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#F9FAFB'}
+                        >
+                          <td style={{ padding: '12px', fontWeight: '500' }}>{deal.DealName}</td>
+                          <td style={{ padding: '12px' }}>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: stageStyle.bg,
+                              color: stageStyle.text
+                            }}>
+                              {deal.Stage}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#059669' }}>
+                            {formatCurrency(deal.Amount)}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            {deal.CloseDate ? new Date(deal.CloseDate).toLocaleDateString() : '-'}
+                          </td>
+                          <td style={{ padding: '12px' }}>
+                            {new Date(deal.__mj_CreatedAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deal Detail Modal */}
+      {selectedDeal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001
+        }}
+        onClick={() => setSelectedDeal(null)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{selectedDeal.DealName}</h3>
+              <button
+                onClick={() => setSelectedDeal(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Amount</label>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669' }}>
+                    {formatCurrency(selectedDeal.Amount)}
+                  </div>
+                </div>
+                
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Stage</label>
+                  <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                    {selectedDeal.Stage}
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Close Date</label>
+                  <div style={{ fontSize: '14px', color: '#111827' }}>
+                    {selectedDeal.CloseDate ? new Date(selectedDeal.CloseDate).toLocaleDateString() : 'Not set'}
+                  </div>
+                </div>
+                
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Probability</label>
+                  <div style={{ fontSize: '14px', color: '#111827' }}>
+                    {selectedDeal.Probability || 0}%
+                  </div>
+                </div>
+              </div>
+              
+              {selectedDeal.DealSource && (
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Source</label>
+                  <div style={{ fontSize: '14px', color: '#111827' }}>
+                    {selectedDeal.DealSource}
+                  </div>
+                </div>
+              )}
+              
+              {selectedDeal.NextStep && (
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Next Step</label>
+                  <div style={{ fontSize: '14px', color: '#111827' }}>
+                    {selectedDeal.NextStep}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div style={{ 
+              marginTop: '20px', 
+              paddingTop: '20px', 
+              borderTop: '1px solid #E5E7EB',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => {
+                  // callbacks.OpenEntityRecord expects:
+                  // 1. Entity name as string
+                  // 2. Array of key-value pairs: [{FieldName: 'fieldname', Value: value}]
+                  if (callbacks.OpenEntityRecord) {
+                    callbacks.OpenEntityRecord('Deals', [
+                      { FieldName: 'ID', Value: selectedDeal.ID }
+                    ]);
+                    setSelectedDeal(null);
+                    setSelectedPeriod(null);
+                  } else {
+                    console.warn('OpenEntityRecord callback not available');
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#3B82F6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>📂</span>
+                Open
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
