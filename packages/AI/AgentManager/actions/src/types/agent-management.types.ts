@@ -1,5 +1,4 @@
 import { ActionResultSimple } from "@memberjunction/actions-base";
-import { UserInfo } from "@memberjunction/core";
 import { AIAgentEntity, AIAgentTypeEntity } from "@memberjunction/core-entities";
 
 /**
