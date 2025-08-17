@@ -1,10 +1,11 @@
 {
   "name": "Customer360View",
-  "namespace": "CRM/Customer",
-  "type": "Profile",
+  "description": "Comprehensive customer profile showing all interactions, transactions, and insights",
+  "category": "CRM",
+  "type": "dashboard",
   "location": "embedded",
   "code": "@file:../code/customer-360-view.js",
-  "functionalRequirements": "## Customer 360 View\n\n### Purpose\nComprehensive customer profile showing all interactions, transactions, and insights in a unified view.\n\n### Core Features\n- **Customer Summary**: Key metrics and scores\n- **Interaction Timeline**: All touchpoints chronologically\n- **Purchase History**: Products and revenue analysis\n- **Support Tickets**: Issue tracking and resolution\n- **Engagement Score**: Customer health indicators\n- **Interactive Tabs**: Using Semantic UI components\n- **Slide-out Details**: Deep dive panels\n- **Activity Feed**: Real-time updates\n\n### Sections\n- Profile header with key stats\n- Tabbed interface for different data views\n- Timeline visualization\n- Relationship mapping\n- Predictive insights",
+  "functionalRequirements": "- Display comprehensive customer profile with key metrics\n- Show interaction timeline chronologically\n- Display contacts and deals associated with account\n- Calculate and show engagement score\n- Provide tabbed interface for different views\n- Enable drill-down into related entities\n- Show customer insights and recommendations",
   "dataRequirements": {
     "mode": "views",
     "entities": [
@@ -34,25 +35,45 @@
       }
     ]
   },
-  "technicalDesign": "## Implementation\n\n### Components\n- Main: Customer360View\n- Sub-components:\n  - CustomerHeader: Profile summary\n  - InteractionTimeline: Activity history\n  - PurchaseAnalysis: Transaction insights\n  - EngagementMetrics: Health scores\n  - RelationshipMap: Contact network\n\n### Features\n- Tab-based navigation\n- Lazy loading for performance\n- Real-time data updates\n- Predictive analytics",
-  "properties": [],
-  "events": [
+  "technicalDesign": "Main orchestrator component that loads customer data and manages sub-components. Uses parallel data loading for performance. Calculates engagement score based on activities and deals. Implements tab-based navigation with state persistence.",
+  "properties": [
     {
-      "name": "OpenEntityRecord",
-      "description": "Navigate to related entities"
-    }
-  ],
-  "dependencies": [],
-  "libraries": [
-    {
-      "name": "semantic-ui",
-      "version": "^2.5.0",
-      "globalVariable": "semanticUI"
+      "name": "utilities",
+      "type": "object",
+      "description": "MemberJunction utilities for data access"
     },
     {
-      "name": "Victory",
-      "version": "^36.9.1",
-      "globalVariable": "Victory"
+      "name": "styles",
+      "type": "object",
+      "description": "Style utilities and theme configuration"
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "description": "Registry of available child components"
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Event callbacks including OpenEntityRecord"
+    },
+    {
+      "name": "savedUserSettings",
+      "type": "object",
+      "description": "Persisted user preferences"
+    },
+    {
+      "name": "onSaveUserSettings",
+      "type": "function",
+      "description": "Callback to persist user settings"
     }
-  ]
+  ],
+  "events": [],
+  "dependencies": [
+    "@include:customer-360-view-tab-navigation.spec.json",
+    "@include:customer-360-view-overview.spec.json",
+    "@include:customer-360-view-timeline.spec.json"
+  ],
+  "libraries": [],
+  "usageExample": "```javascript\n<Customer360View\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n```"
 }

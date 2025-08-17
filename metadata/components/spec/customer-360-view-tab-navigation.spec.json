@@ -1,0 +1,36 @@
+{
+  "name": "Customer360TabNavigation",
+  "location": "embedded",
+  "code": "@file:../code/customer-360-view-tab-navigation.js",
+  "description": "Tab navigation for Customer 360 View",
+  "category": "Navigation",
+  "type": "navigation",
+  "properties": [
+    {
+      "name": "activeTab",
+      "type": "string",
+      "description": "Currently active tab ID"
+    },
+    {
+      "name": "onTabChange",
+      "type": "function",
+      "description": "Callback when tab is changed"
+    }
+  ],
+  "events": [
+    {
+      "name": "onTabSelect",
+      "description": "Fired when a tab is selected",
+      "parameters": [
+        {
+          "name": "tabId",
+          "type": "string",
+          "description": "ID of the selected tab"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<Customer360TabNavigation\n  activeTab={activeTab}\n  onTabChange={(tabId) => setActiveTab(tabId)}\n/>\n```",
+  "functionalRequirements": "- Display tabs for Overview, Timeline, Contacts, Deals, and Insights\n- Highlight active tab with color and underline\n- Support click to switch tabs\n- Show hover effects on tabs",
+  "technicalDesign": "Renders horizontal tab navigation with active state styling. Uses flexbox layout with hover and active states."
+}

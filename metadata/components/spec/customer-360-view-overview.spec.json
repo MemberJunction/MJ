@@ -1,0 +1,33 @@
+{
+  "name": "Customer360Overview",
+  "location": "embedded",
+  "code": "@file:../code/customer-360-view-overview.js",
+  "description": "Overview tab showing customer summary and key metrics",
+  "category": "Customer",
+  "type": "overview",
+  "properties": [
+    {
+      "name": "account",
+      "type": "object",
+      "description": "Account entity object"
+    },
+    {
+      "name": "contacts",
+      "type": "array",
+      "description": "Array of contact objects"
+    },
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal objects"
+    },
+    {
+      "name": "engagementScore",
+      "type": "number",
+      "description": "Calculated engagement score (0-100)"
+    }
+  ],
+  "usageExample": "```javascript\n<Customer360Overview\n  account={account}\n  contacts={contacts}\n  deals={deals}\n  engagementScore={engagementScore}\n/>\n```",
+  "functionalRequirements": "- Display customer key information\n- Show engagement score with color coding\n- Display total revenue and active deals\n- Show number of contacts\n- Calculate and display customer lifetime value\n- Use color-coded metrics based on values",
+  "technicalDesign": "Renders metric cards in a grid layout. Calculates lifetime value from deals. Color codes engagement score (green/yellow/red). Uses formatCurrency helper for monetary values."
+}

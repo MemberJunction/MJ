@@ -6,8 +6,11 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(savedUserSettings?.activeTab || 'overview');
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  
+  // Load sub-components from registry
+  const TabNavigation = components['Customer360TabNavigation'];
+  const Overview = components['Customer360Overview'];
+  const Timeline = components['Customer360Timeline'];
   
   // For demo, we'll use the first account
   const accountId = savedUserSettings?.accountId || null;
@@ -43,7 +46,7 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
         return;
       }
       
-      // Load all related data
+      // Load all related data in parallel
       const [contactsResult, dealsResult, activitiesResult] = await Promise.all([
         utilities.rv.RunView({
           EntityName: 'Contacts',
@@ -98,434 +101,160 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
     score += Math.min(activeDeals.length * 5, 20);
     
     // Revenue tier boost
-    if (account?.AnnualRevenue > 1000000) score += 10;
+    if (account?.AnnualRevenue) {
+      if (account.AnnualRevenue > 1000000) score += 10;
+      else if (account.AnnualRevenue > 500000) score += 5;
+    }
     
-    return Math.min(score, 100);
+    return Math.min(Math.round(score), 100);
   };
 
-  const getHealthStatus = (score) => {
-    if (score >= 80) return { label: 'Excellent', color: '#10B981' };
-    if (score >= 60) return { label: 'Good', color: '#3B82F6' };
-    if (score >= 40) return { label: 'Fair', color: '#F59E0B' };
-    return { label: 'At Risk', color: '#EF4444' };
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    onSaveUserSettings({ ...savedUserSettings, activeTab: tabId });
   };
 
-  const formatCurrency = (amount) => {
-    if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
-    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
-    return `$${amount?.toFixed(0) || 0}`;
+  const handleActivityClick = (activity) => {
+    // Could open a detail panel or navigate to the activity
+    console.log('Activity clicked:', activity);
   };
 
-  // Sub-component: Customer Header
-  const CustomerHeader = () => {
-    if (!account) return null;
-    
-    const engagementScore = calculateEngagementScore();
-    const healthStatus = getHealthStatus(engagementScore);
-    const totalRevenue = deals
-      .filter(d => d.Stage === 'Closed Won')
-      .reduce((sum, d) => sum + (d.Amount || 0), 0);
-    
-    return (
-      <div style={{
-        background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-        color: 'white',
-        padding: '24px',
-        borderRadius: '8px',
-        marginBottom: '20px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>
-              {account.AccountName}
-            </h1>
-            <div style={{ marginTop: '8px', opacity: 0.9 }}>
-              {account.Industry || 'No Industry'} • Customer since {new Date(account.CreatedAt || account.__mj_CreatedAt).getFullYear()}
-            </div>
-          </div>
-          <button
-            onClick={() => callbacks.OpenEntityRecord('Accounts', [{ FieldName: 'ID', Value: account.ID }])}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              color: 'white',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            View Full Profile ↗
-          </button>
-        </div>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '16px',
-          marginTop: '24px'
-        }}>
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Lifetime Value</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{formatCurrency(totalRevenue)}</div>
-          </div>
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Active Deals</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-              {deals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage)).length}
-            </div>
-          </div>
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Contacts</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{contacts.length}</div>
-          </div>
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Health Score</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-              <span style={{ color: healthStatus.color }}>{engagementScore}</span>
-              <span style={{ fontSize: '14px', marginLeft: '8px' }}>{healthStatus.label}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const formatCurrency = (value) => {
+    if (!value) return '$0';
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
   };
 
-  // Sub-component: Tab Navigation
-  const TabNavigation = () => {
-    const tabs = [
-      { id: 'overview', label: 'Overview', icon: '📊' },
-      { id: 'timeline', label: 'Timeline', icon: '📅' },
-      { id: 'contacts', label: 'Contacts', icon: '👥' },
-      { id: 'deals', label: 'Deals', icon: '💼' },
-      { id: 'insights', label: 'Insights', icon: '💡' }
-    ];
-    
-    return (
-      <div style={{
-        display: 'flex',
-        gap: '4px',
-        marginBottom: '20px',
-        borderBottom: '2px solid #E5E7EB',
-        backgroundColor: 'white',
-        borderRadius: '8px 8px 0 0',
-        padding: '4px 4px 0 4px'
-      }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              setActiveTab(tab.id);
-              onSaveUserSettings({ ...savedUserSettings, activeTab: tab.id });
-            }}
-            style={{
-              padding: '12px 20px',
-              backgroundColor: activeTab === tab.id ? 'white' : 'transparent',
-              color: activeTab === tab.id ? '#4F46E5' : '#6B7280',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid #4F46E5' : '2px solid transparent',
-              borderRadius: '8px 8px 0 0',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeTab === tab.id ? 'bold' : 'normal',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span style={{ marginRight: '8px' }}>{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-    );
-  };
-
-  // Sub-component: Overview Tab
-  const OverviewTab = () => {
-    const recentDeals = deals.slice(0, 5);
-    const recentActivities = activities.slice(0, 10);
-    
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Recent Deals</h3>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {recentDeals.map(deal => (
-              <div
-                key={deal.ID}
-                style={{
-                  padding: '12px',
-                  backgroundColor: '#F9FAFB',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  borderLeft: `4px solid ${deal.Stage === 'Closed Won' ? '#10B981' : '#3B82F6'}`
-                }}
-                onClick={() => callbacks.OpenEntityRecord('Deals', [{ FieldName: 'ID', Value: deal.ID }])}
-              >
-                <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{deal.DealName}</div>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                  {deal.Stage} • {formatCurrency(deal.Amount)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        
-        <div>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Activity Feed</h3>
-          <div style={{ maxHeight: '400px', overflow: 'auto' }}>
-            {recentActivities.map(activity => (
-              <div
-                key={activity.ID}
-                style={{
-                  padding: '8px',
-                  borderBottom: '1px solid #E5E7EB',
-                  fontSize: '12px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: 'bold' }}>{activity.Type}</span>
-                  <span style={{ color: '#6B7280' }}>
-                    {new Date(activity.CreatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <div style={{ color: '#4B5563' }}>{activity.Subject}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Sub-component: Timeline Tab
-  const TimelineTab = () => {
-    const allEvents = [
-      ...deals.map(d => ({ ...d, type: 'deal', date: d.CloseDate || d.CreatedAt })),
-      ...activities.map(a => ({ ...a, type: 'activity', date: a.CreatedAt }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    return (
-      <div style={{ position: 'relative', paddingLeft: '40px' }}>
-        <div style={{
-          position: 'absolute',
-          left: '20px',
-          top: 0,
-          bottom: 0,
-          width: '2px',
-          backgroundColor: '#E5E7EB'
-        }} />
-        
-        {allEvents.slice(0, 20).map((event, index) => (
-          <div key={event.ID} style={{ position: 'relative', marginBottom: '24px' }}>
-            <div style={{
-              position: 'absolute',
-              left: '-26px',
-              width: '12px',
-              height: '12px',
-              borderRadius: '50%',
-              backgroundColor: event.type === 'deal' ? '#8B5CF6' : '#3B82F6',
-              border: '2px solid white'
-            }} />
-            
-            <div style={{
-              padding: '12px',
-              backgroundColor: '#F9FAFB',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-            onClick={() => {
-              if (event.type === 'deal') {
-                callbacks.OpenEntityRecord('Deals', [{ FieldName: 'ID', Value: event.ID }]);
-              }
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                  {event.type === 'deal' ? event.DealName : event.Type}
-                </span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>
-                  {new Date(event.date).toLocaleDateString()}
-                </span>
-              </div>
-              <div style={{ fontSize: '12px', color: '#4B5563' }}>
-                {event.type === 'deal' ? `${event.Stage} - ${formatCurrency(event.Amount)}` : event.Subject}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // Sub-component: Contacts Tab
+  // Simple implementations for tabs not yet componentized
   const ContactsTab = () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-      {contacts.map(contact => (
-        <div
-          key={contact.ID}
-          style={{
+    <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px' }}>
+      <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Contacts ({contacts.length})</h3>
+      <div style={{ display: 'grid', gap: '12px' }}>
+        {contacts.map(contact => (
+          <div key={contact.ID} style={{
             padding: '16px',
-            backgroundColor: '#F9FAFB',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            border: '1px solid #E5E7EB'
-          }}
-          onClick={() => callbacks.OpenEntityRecord('Contacts', [{ FieldName: 'ID', Value: contact.ID }])}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#8B5CF6',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '12px',
-              fontWeight: 'bold'
-            }}>
-              {(contact.FirstName?.[0] || '') + (contact.LastName?.[0] || '')}
-            </div>
+            border: '1px solid #E5E7EB',
+            borderRadius: '6px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
             <div>
-              <div style={{ fontWeight: 'bold' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
                 {contact.FirstName} {contact.LastName}
               </div>
-              <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                {contact.Title || 'No Title'}
-              </div>
+              <div style={{ fontSize: '14px', color: '#6B7280' }}>{contact.Email}</div>
+              <div style={{ fontSize: '14px', color: '#6B7280' }}>{contact.Phone}</div>
             </div>
+            <button
+              onClick={() => callbacks.OpenEntityRecord('Contacts', [{FieldName: 'ID', Value: contact.ID}])}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#F3F4F6',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              View Details
+            </button>
           </div>
-          <div style={{ fontSize: '12px', color: '#4B5563' }}>
-            {contact.Email && <div>📧 {contact.Email}</div>}
-            {contact.Phone && <div>📞 {contact.Phone}</div>}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 
-  // Sub-component: Deals Tab
   const DealsTab = () => {
-    const dealsByStage = {};
-    deals.forEach(deal => {
-      if (!dealsByStage[deal.Stage]) {
-        dealsByStage[deal.Stage] = [];
-      }
-      dealsByStage[deal.Stage].push(deal);
-    });
-    
+    const getStageColor = (stage) => {
+      const colors = {
+        'Lead': '#9CA3AF',
+        'Qualified': '#3B82F6',
+        'Proposal': '#8B5CF6',
+        'Negotiation': '#F59E0B',
+        'Closed Won': '#10B981',
+        'Closed Lost': '#EF4444'
+      };
+      return colors[stage] || '#6B7280';
+    };
+
     return (
-      <div>
-        {Object.entries(dealsByStage).map(([stage, stageDeals]) => (
-          <div key={stage} style={{ marginBottom: '24px' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#374151' }}>
-              {stage} ({stageDeals.length})
-            </h3>
-            <div style={{ display: 'grid', gap: '8px' }}>
-              {stageDeals.map(deal => (
-                <div
-                  key={deal.ID}
-                  style={{
-                    padding: '12px',
-                    backgroundColor: 'white',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                  onClick={() => callbacks.OpenEntityRecord('Deals', [{ FieldName: 'ID', Value: deal.ID }])}
-                >
-                  <div>
-                    <div style={{ fontWeight: 'bold' }}>{deal.DealName}</div>
-                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                      Close: {new Date(deal.CloseDate).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#059669' }}>
-                      {formatCurrency(deal.Amount)}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                      {deal.Probability}% likely
-                    </div>
-                  </div>
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px' }}>
+        <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Deals ({deals.length})</h3>
+        <div style={{ display: 'grid', gap: '12px' }}>
+          {deals.map(deal => (
+            <div key={deal.ID} style={{
+              padding: '16px',
+              border: '1px solid #E5E7EB',
+              borderRadius: '6px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ fontWeight: 'bold' }}>{deal.DealName}</div>
+                <div style={{ 
+                  padding: '4px 12px',
+                  backgroundColor: getStageColor(deal.Stage) + '20',
+                  color: getStageColor(deal.Stage),
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}>
+                  {deal.Stage}
                 </div>
-              ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '14px', color: '#6B7280' }}>
+                <div>Amount: {formatCurrency(deal.Amount)}</div>
+                <div>Close Date: {new Date(deal.CloseDate).toLocaleDateString()}</div>
+                <div>Probability: {deal.Probability}%</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   };
 
-  // Sub-component: Insights Tab
   const InsightsTab = () => {
-    const engagementScore = calculateEngagementScore();
-    const healthStatus = getHealthStatus(engagementScore);
-    const avgDealSize = deals.length > 0 ? 
-      deals.reduce((sum, d) => sum + (d.Amount || 0), 0) / deals.length : 0;
-    const winRate = deals.length > 0 ?
-      (deals.filter(d => d.Stage === 'Closed Won').length / deals.filter(d => ['Closed Won', 'Closed Lost'].includes(d.Stage)).length * 100) : 0;
+    const avgDealSize = deals.length > 0 
+      ? deals.reduce((sum, d) => sum + (d.Amount || 0), 0) / deals.length
+      : 0;
     
+    const winRate = deals.length > 0
+      ? (deals.filter(d => d.Stage === 'Closed Won').length / 
+         deals.filter(d => ['Closed Won', 'Closed Lost'].includes(d.Stage)).length * 100) || 0
+      : 0;
+
     return (
-      <div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-          <div style={{ padding: '20px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Key Metrics</h3>
-            <div style={{ display: 'grid', gap: '12px' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px' }}>
+        <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Customer Insights</h3>
+        <div style={{ display: 'grid', gap: '20px' }}>
+          <div>
+            <h4 style={{ color: '#4F46E5', marginBottom: '12px' }}>Key Metrics</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>Average Deal Size</div>
+                <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>Average Deal Size</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{formatCurrency(avgDealSize)}</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>Win Rate</div>
+                <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>Win Rate</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{winRate.toFixed(0)}%</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>Days Since Last Activity</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {activities.length > 0 ? 
-                    Math.floor((Date.now() - new Date(activities[0].CreatedAt)) / (1000 * 60 * 60 * 24)) : 'N/A'}
-                </div>
               </div>
             </div>
           </div>
           
-          <div style={{ padding: '20px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Recommendations</h3>
-            <ul style={{ paddingLeft: '20px', margin: 0 }}>
-              {engagementScore < 60 && (
-                <li style={{ marginBottom: '8px' }}>
-                  Schedule a check-in call - engagement is declining
-                </li>
-              )}
-              {deals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage)).length === 0 && (
-                <li style={{ marginBottom: '8px' }}>
-                  No active opportunities - consider upsell/cross-sell
-                </li>
-              )}
-              {contacts.length < 3 && (
-                <li style={{ marginBottom: '8px' }}>
-                  Limited contacts - identify additional stakeholders
-                </li>
-              )}
-              {avgDealSize < 50000 && (
-                <li style={{ marginBottom: '8px' }}>
-                  Explore larger deal opportunities
-                </li>
-              )}
+          <div>
+            <h4 style={{ color: '#4F46E5', marginBottom: '12px' }}>Recommendations</h4>
+            <ul style={{ marginLeft: '20px', lineHeight: '1.8' }}>
+              {calculateEngagementScore() < 50 && 
+                <li>Engagement is low - consider scheduling a check-in call</li>
+              }
+              {deals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage)).length > 0 &&
+                <li>Active opportunities present - maintain regular contact</li>
+              }
+              {activities.length < 5 &&
+                <li>Limited recent activity - increase touchpoints</li>
+              }
             </ul>
-          </div>
-        </div>
-        
-        <div style={{ padding: '20px', backgroundColor: healthStatus.color + '20', borderRadius: '8px', border: `2px solid ${healthStatus.color}` }}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', color: healthStatus.color }}>
-            Customer Health: {healthStatus.label}
-          </h3>
-          <div style={{ fontSize: '14px', color: '#4B5563' }}>
-            Engagement Score: {engagementScore}/100
           </div>
         </div>
       </div>
@@ -535,28 +264,73 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
   if (loading) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading customer profile...</div>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading customer data...</div>
       </div>
     );
   }
 
-  if (error || !account) {
+  if (error) {
     return (
-      <div style={{ padding: '20px', backgroundColor: '#FEE2E2', borderRadius: '8px', margin: '20px' }}>
-        <div style={{ color: '#991B1B', fontWeight: 'bold' }}>Error loading customer data</div>
-        <div style={{ color: '#DC2626', marginTop: '8px' }}>{error || 'No account found'}</div>
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#EF4444' }}>Error: {error}</div>
       </div>
     );
   }
+
+  if (!account) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>No customer data available</div>
+      </div>
+    );
+  }
+
+  const engagementScore = calculateEngagementScore();
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
-      <CustomerHeader />
-      <TabNavigation />
-      
-      <div style={{ backgroundColor: 'white', borderRadius: '0 8px 8px 8px', padding: '20px', minHeight: '400px' }}>
-        {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'timeline' && <TimelineTab />}
+    <div style={{ padding: '24px', backgroundColor: '#F9FAFB', minHeight: '100vh' }}>
+      {/* Customer Header */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '8px', 
+        padding: '24px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}>
+        <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: 'bold' }}>
+          {account.AccountName}
+        </h1>
+        <div style={{ display: 'flex', gap: '24px', color: '#6B7280', fontSize: '14px' }}>
+          <span>Industry: {account.Industry || 'Not specified'}</span>
+          <span>Annual Revenue: {formatCurrency(account.AnnualRevenue)}</span>
+          <span>Created: {new Date(account.CreatedAt).toLocaleDateString()}</span>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      {TabNavigation && (
+        <TabNavigation 
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
+
+      {/* Tab Content */}
+      <div>
+        {activeTab === 'overview' && Overview && (
+          <Overview 
+            account={account}
+            contacts={contacts}
+            deals={deals}
+            engagementScore={engagementScore}
+          />
+        )}
+        {activeTab === 'timeline' && Timeline && (
+          <Timeline 
+            activities={activities}
+            onActivityClick={handleActivityClick}
+          />
+        )}
         {activeTab === 'contacts' && <ContactsTab />}
         {activeTab === 'deals' && <DealsTab />}
         {activeTab === 'insights' && <InsightsTab />}
