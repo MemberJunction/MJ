@@ -47,7 +47,47 @@
     <kendo-splitter-pane [min]="'350px'" [max]="'600px'" [size]="'400px'">
       <div class="components-panel">
         <div class="panel-header">
-          <h3>Components</h3>
+          <div class="panel-header-top">
+            <h3>Components</h3>
+            <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
+          </div>
+          
+          <!-- Modern Category Filter Pills -->
+          <div class="category-filters">
+            @if (availableCategories.length > 0) {
+              <div class="filter-pills">
+                @for (category of getVisibleCategories(); track category.name) {
+                  <button 
+                    class="category-pill"
+                    [class.active]="isCategorySelected(category.name)"
+                    [style.--pill-color]="category.color"
+                    (click)="toggleCategory(category.name)">
+                    <span class="pill-name">{{ category.name }}</span>
+                    <span class="pill-count">{{ category.count }}</span>
+                  </button>
+                }
+                @if (availableCategories.length > 5) {
+                  <button 
+                    class="more-button"
+                    (click)="toggleShowAllCategories()">
+                    @if (showAllCategories) {
+                      <i class="fa-solid fa-chevron-up"></i> Less
+                    } @else {
+                      <i class="fa-solid fa-chevron-down"></i> +{{ availableCategories.length - 5 }} more
+                    }
+                  </button>
+                }
+                @if (selectedCategories.size > 0) {
+                  <button 
+                    class="clear-filters-button"
+                    (click)="clearCategoryFilters()">
+                    <i class="fa-solid fa-times"></i> Clear
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          
           <div class="search-box">
             <kendo-textbox 
               [value]="searchQuery"
@@ -73,6 +113,7 @@
               <small>Components with optional custom props can be tested, but not those with required props.</small>
             </div>
           } @else {
+            <!-- Component Cards -->
             @for (component of filteredComponents; track getComponentId(component)) {
               <div class="component-card" 
                 [class.expanded]="expandedComponent && getComponentId(expandedComponent) === getComponentId(component)"
@@ -111,6 +152,15 @@
                       } @else {
                         <span class="status-badge draft">Draft</span>
                       }
+                    </div>
+                    <!-- Namespace chip with color coding -->
+                    <div class="card-namespace">
+                      <span class="namespace-chip" 
+                        [style.background-color]="getNamespaceColor(getComponentNamespace(component))"
+                        [title]="getComponentNamespace(component) || 'Uncategorized'">
+                        <i class="fa-solid fa-folder-tree"></i>
+                        {{ formatNamespace(getComponentNamespace(component)) }}
+                      </span>
                     </div>
                   </div>
                   <div class="card-chevron">

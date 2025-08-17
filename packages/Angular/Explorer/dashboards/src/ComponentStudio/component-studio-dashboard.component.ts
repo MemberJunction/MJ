@@ -28,6 +28,14 @@ interface FileLoadedComponent {
 // Union type for both database and file-loaded components
 type DisplayComponent = (ComponentEntity & { isFileLoaded?: false }) | FileLoadedComponent;
 
+// Modern category interface
+interface Category {
+  name: string;
+  count: number;
+  color: string;
+  isActive?: boolean;
+}
+
 @Component({
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
@@ -47,6 +55,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public isLoading = false;
   public searchQuery = '';
   public isRunning = false; // Track if component is currently running
+  
+  // View and filtering
+  public selectedCategories: Set<string> = new Set();
+  public availableCategories: { name: string; count: number; color: string }[] = [];
+  public showAllCategories = false; // Show only top categories by default
   
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
@@ -136,17 +149,183 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       ...this.components
     ] as DisplayComponent[];
 
+    // Build available categories from all components
+    this.buildCategories();
+
+    // Apply filters
+    let filtered = [...this.allComponents];
+
+    // Apply category filter
+    if (this.selectedCategories.size > 0) {
+      filtered = filtered.filter(c => {
+        const namespace = this.getComponentNamespace(c) || 'Uncategorized';
+        const category = this.extractCategoryFromNamespace(namespace);
+        return this.selectedCategories.has(category);
+      });
+    }
+
     // Apply search filter
-    if (!this.searchQuery) {
-      this.filteredComponents = [...this.allComponents];
-    } else {
+    if (this.searchQuery) {
       const query = this.searchQuery.toLowerCase();
-      this.filteredComponents = this.allComponents.filter(c => {
+      filtered = filtered.filter(c => {
         const name = this.getComponentName(c)?.toLowerCase() || '';
         const description = this.getComponentDescription(c)?.toLowerCase() || '';
         const type = this.getComponentType(c)?.toLowerCase() || '';
-        return name.includes(query) || description.includes(query) || type.includes(query);
+        const namespace = this.getComponentNamespace(c)?.toLowerCase() || '';
+        return name.includes(query) || description.includes(query) || type.includes(query) || namespace.includes(query);
       });
+    }
+
+    this.filteredComponents = filtered;
+  }
+
+  /**
+   * Build categories from components
+   */
+  private buildCategories(): void {
+    const categoryMap = new Map<string, number>();
+    const allNamespaces = new Set<string>();
+    
+    // Count components per top-level category and track all namespaces
+    for (const component of this.allComponents) {
+      const namespace = this.getComponentNamespace(component) || 'Uncategorized';
+      const category = this.extractCategoryFromNamespace(namespace);
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+      
+      // Track full namespace paths for better display
+      if (namespace && namespace !== 'Uncategorized') {
+        allNamespaces.add(namespace);
+      }
+    }
+
+    // Convert to array and sort by count
+    this.availableCategories = Array.from(categoryMap.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        color: this.getCategoryColor(name)
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  /**
+   * Extract main category from namespace
+   */
+  private extractCategoryFromNamespace(namespace: string): string {
+    if (!namespace || namespace === 'Uncategorized') return 'Uncategorized';
+    
+    // Get the first part of the namespace path
+    const parts = namespace.split('/').filter(p => p.length > 0);
+    return parts[0] || 'Uncategorized';
+  }
+
+  /**
+   * Get color for category
+   */
+  private getCategoryColor(category: string): string {
+    const colors = [
+      '#3B82F6', // blue
+      '#8B5CF6', // purple
+      '#10B981', // green
+      '#F97316', // orange
+      '#06B6D4', // cyan
+      '#EC4899', // pink
+      '#6366F1', // indigo
+      '#14B8A6', // teal
+      '#EAB308', // yellow
+      '#EF4444', // red
+    ];
+    
+    // Use hash of category name to get consistent color
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = category.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  /**
+   * Get color for a full namespace path
+   */
+  public getNamespaceColor(namespace: string | undefined): string {
+    if (!namespace || namespace === 'Uncategorized') {
+      return '#6C757D'; // Gray for uncategorized
+    }
+    
+    // Extract the main category (first part) for consistent coloring
+    const category = this.extractCategoryFromNamespace(namespace);
+    return this.getCategoryColor(category);
+  }
+
+  /**
+   * Format namespace for display (handle long paths)
+   */
+  public formatNamespace(namespace: string | undefined): string {
+    if (!namespace || namespace === 'Uncategorized') {
+      return 'Uncategorized';
+    }
+    
+    const parts = namespace.split('/').filter(p => p.length > 0);
+    
+    // If it's really long, show abbreviated version
+    if (parts.length > 3) {
+      return `${parts[0]} / ... / ${parts[parts.length - 1]}`;
+    }
+    
+    // Otherwise show full path with spacing
+    return parts.join(' / ');
+  }
+
+  /**
+   * Toggle category filter
+   */
+  public toggleCategory(category: string): void {
+    if (this.selectedCategories.has(category)) {
+      this.selectedCategories.delete(category);
+    } else {
+      this.selectedCategories.add(category);
+    }
+    this.combineAndFilterComponents();
+  }
+
+  /**
+   * Clear all category filters
+   */
+  public clearCategoryFilters(): void {
+    this.selectedCategories.clear();
+    this.combineAndFilterComponents();
+  }
+
+  /**
+   * Check if category is selected
+   */
+  public isCategorySelected(category: string): boolean {
+    return this.selectedCategories.has(category);
+  }
+
+  /**
+   * Get visible categories (top 5 or all)
+   */
+  public getVisibleCategories(): Category[] {
+    return this.showAllCategories ? this.availableCategories : this.availableCategories.slice(0, 5);
+  }
+
+  /**
+   * Toggle showing all categories
+   */
+  public toggleShowAllCategories(): void {
+    this.showAllCategories = !this.showAllCategories;
+  }
+
+  /**
+   * Get component namespace
+   */
+  public getComponentNamespace(component: DisplayComponent): string | undefined {
+    if (component.isFileLoaded) {
+      // File-loaded components might not have namespace
+      return (component as FileLoadedComponent).specification.namespace;
+    } else {
+      return (component as ComponentEntity).Namespace || undefined;
     }
   }
 
