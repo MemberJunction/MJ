@@ -1,5 +1,6 @@
 // Export all agent management actions
 export * from './actions/base-agent-management.action';
+export * from './types/agent-management.types';
 export * from './actions/create-agent.action';
 export * from './actions/create-sub-agent.action';
 export * from './actions/update-agent.action';

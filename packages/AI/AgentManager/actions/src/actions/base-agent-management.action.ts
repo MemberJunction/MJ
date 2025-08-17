@@ -1,8 +1,15 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { DatabaseProviderBase } from "@memberjunction/core";
-import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity, ActionEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { 
+    AgentLoadResult,
+    ParameterResult,
+    AgentTypeValidationResult, 
+    PromptCreationResult, 
+    ObjectParameter 
+} from "../types/agent-management.types";
 
 /**
  * Abstract base class for agent management actions.
@@ -34,10 +41,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Extract and validate a string parameter
      */
-    protected getStringParam(params: RunActionParams, paramName: string, required: boolean = true): { 
-        value?: string; 
-        error?: ActionResultSimple 
-    } {
+    protected getStringParam(params: RunActionParams, paramName: string, required: boolean = true): ParameterResult<string> {
         const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.trim().toLowerCase());
         
         if (!param || !param.Value) {
@@ -59,10 +63,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Extract and validate an object parameter
      */
-    protected getObjectParam(params: RunActionParams, paramName: string, required: boolean = true): { 
-        value?: Record<string, any>; 
-        error?: ActionResultSimple 
-    } {
+    protected getObjectParam(params: RunActionParams, paramName: string, required: boolean = true): ParameterResult<ObjectParameter> {
         const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
         
         if (!param || !param.Value) {
@@ -78,7 +79,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             return { value: undefined };
         }
         
-        return { value: param.Value as Record<string, any> };
+        return { value: param.Value as ObjectParameter };
     }
 
     /**
@@ -99,10 +100,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Extract and validate a UUID parameter
      */
-    protected getUuidParam(params: RunActionParams, paramName: string, required: boolean = true): { 
-        value?: string; 
-        error?: ActionResultSimple 
-    } {
+    protected getUuidParam(params: RunActionParams, paramName: string, required: boolean = true): ParameterResult<string> {
         const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.trim().toLowerCase());
         
         if (!param || !param.Value) {
@@ -205,10 +203,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Load an AI Agent entity by ID
      */
-    protected async loadAgent(agentID: string, contextUser: any): Promise<{
-        agent?: AIAgentEntityExtended;
-        error?: ActionResultSimple;
-    }> {
+    protected async loadAgent(agentID: string, contextUser: UserInfo): Promise<AgentLoadResult> {
         try {
             const md = this.getMetadata();
             const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', contextUser);
@@ -249,10 +244,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Validate agent type exists
      */
-    protected async validateAgentType(typeID: string, contextUser: any): Promise<{
-        type?: AIAgentTypeEntity;
-        error?: ActionResultSimple;
-    }> {
+    protected async validateAgentType(typeID: string, contextUser: UserInfo): Promise<AgentTypeValidationResult> {
         try {
             const md = this.getMetadata();
             const agentType = await md.GetEntityObject<AIAgentTypeEntity>('MJ: AI Agent Types', contextUser);
@@ -293,7 +285,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     /**
      * Common error handler
      */
-    protected handleError(error: any, operation: string): ActionResultSimple {
+    protected handleError(error: unknown, operation: string): ActionResultSimple {
         const message = error instanceof Error ? error.message : 'Unknown error';
         LogError(`Agent Management Action error during ${operation}: ${message}`);
         
@@ -311,7 +303,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
         agent: AIAgentEntityExtended,
         promptText: string,
         contextUser: UserInfo
-    ): Promise<{ success: boolean; promptId?: string; error?: string }> {
+    ): Promise<PromptCreationResult> {
         try {
             const md = this.getMetadata();
             
@@ -383,7 +375,11 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             ResultType: 'simple'
         }, contextUser);
         
-        if (result.Success && result.Results && result.Results.length > 0) {
+        if (!result.Success) {
+            throw new Error(`Failed to query prompt types: ${result.ErrorMessage || 'Unknown error'}`);
+        }
+        
+        if (result.Results && result.Results.length > 0) {
             return result.Results[0].ID;
         }
         

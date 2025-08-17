@@ -36,7 +36,7 @@ export class ListAgentsAction extends BaseAgentManagementAction {
             const typeIDResult = this.getStringParam(params, 'TypeID', false);
 
             const parentID = parentIDResult.value === "null" ? null : parentIDResult.value;
-            const typeID = typeIDResult.value === "null" ? null : typeIDResult
+            const typeID = typeIDResult.value === "null" ? null : typeIDResult.value;
 
             // Build filter
             let filters: string[] = [];

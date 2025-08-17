@@ -242,7 +242,7 @@ export class ExportAgentBundleAction extends BaseAgentManagementAction {
         
         // Get agent action associations
         const result = await rv.RunView({
-            EntityName: 'MJ: AI Agent Actions',
+            EntityName: 'AI Agent Actions',
             ExtraFilter: `AgentID = '${agentId}'`,
             OrderBy: 'Action'
         }, contextUser);
