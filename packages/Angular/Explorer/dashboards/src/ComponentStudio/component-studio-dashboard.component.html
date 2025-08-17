@@ -49,7 +49,20 @@
         <div class="panel-header">
           <div class="panel-header-top">
             <h3>Components</h3>
-            <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
+            <div class="header-actions">
+              <button 
+                class="favorites-toggle"
+                [class.active]="showOnlyFavorites"
+                (click)="toggleShowOnlyFavorites()"
+                title="Show only favorites">
+                @if (showOnlyFavorites) {
+                  <i class="fa-solid fa-star"></i> Favorites
+                } @else {
+                  <i class="fa-regular fa-star"></i> All
+                }
+              </button>
+              <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
+            </div>
           </div>
           
           <!-- Modern Category Filter Pills -->
@@ -125,6 +138,19 @@
                   <div class="card-icon" [style.color]="getComponentTypeColor(getComponentType(component))">
                     <i class="fa-solid" [ngClass]="getComponentTypeIcon(getComponentType(component))"></i>
                   </div>
+                  @if (!isFileLoadedComponent(component)) {
+                    <button 
+                      class="favorite-btn"
+                      [class.is-favorite]="isFavorite(component)"
+                      (click)="toggleFavorite(component, $event)"
+                      [title]="isFavorite(component) ? 'Remove from favorites' : 'Add to favorites'">
+                      @if (isFavorite(component)) {
+                        <i class="fa-solid fa-star"></i>
+                      } @else {
+                        <i class="fa-regular fa-star"></i>
+                      }
+                    </button>
+                  }
                   <div class="card-info">
                     <div class="card-name">
                       {{ getComponentName(component) }}

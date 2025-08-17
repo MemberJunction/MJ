@@ -134,13 +134,53 @@
           color: #212529;
         }
         
-        .component-count {
-          font-size: 13px;
-          color: #6c757d;
-          background: #f8f9fa;
-          padding: 4px 10px;
-          border-radius: 12px;
-          font-weight: 500;
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          
+          .favorites-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid #dee2e6;
+            background: white;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            
+            &:hover {
+              background: #f8f9fa;
+              border-color: #adb5bd;
+            }
+            
+            &.active {
+              background: #fff3cd;
+              border-color: #ffc107;
+              color: #856404;
+              
+              i {
+                color: #ffc107;
+              }
+            }
+            
+            i {
+              font-size: 14px;
+            }
+          }
+          
+          .component-count {
+            font-size: 13px;
+            color: #6c757d;
+            background: #f8f9fa;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+          }
         }
       }
       
@@ -324,6 +364,42 @@
             width: 32px;
             text-align: center;
             flex-shrink: 0;
+          }
+          
+          .favorite-btn {
+            position: absolute;
+            top: 12px;
+            right: 48px; // Leave room for chevron
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6c757d;
+            
+            &:hover {
+              background: #f8f9fa;
+              transform: scale(1.1);
+            }
+            
+            &.is-favorite {
+              color: #ffc107;
+              border-color: #ffc107;
+              background: #fff3cd;
+              
+              &:hover {
+                background: #ffe69c;
+              }
+            }
+            
+            i {
+              font-size: 14px;
+            }
           }
           
           .card-info {

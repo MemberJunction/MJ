@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView, CompositeKey } from '@memberjunction/core';
+import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
 import { ComponentEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -60,6 +60,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public selectedCategories: Set<string> = new Set();
   public availableCategories: { name: string; count: number; color: string }[] = [];
   public showAllCategories = false; // Show only top categories by default
+  
+  // Favorites
+  public favoriteComponents: Set<string> = new Set(); // Set of component IDs
+  public showOnlyFavorites = false; // Filter to show only favorites
+  private metadata: Metadata = new Metadata();
   
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
@@ -126,6 +131,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
       if (result.Success) {
         this.components = result.Results || [];
+        // Load favorites for all components
+        await this.loadFavorites();
         this.combineAndFilterComponents();
       } else {
         console.error('Failed to load components:', result.ErrorMessage);
@@ -135,6 +142,93 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Load favorite status for all components
+   */
+  private async loadFavorites(): Promise<void> {
+    const md = new Metadata();
+    const currentUserId = md.CurrentUser?.ID;
+    if (!currentUserId) return;
+
+    this.favoriteComponents.clear();
+    
+    // Check favorite status for each component
+    for (const component of this.components) {
+      try {
+        const isFavorite = await this.metadata.GetRecordFavoriteStatus(
+          currentUserId,
+          'MJ: Components',
+          CompositeKey.FromID(component.ID)
+        );
+        
+        if (isFavorite) {
+          this.favoriteComponents.add(component.ID);
+        }
+      } catch (error) {
+        console.error(`Error loading favorite status for component ${component.ID}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Toggle favorite status for a component
+   */
+  public async toggleFavorite(component: DisplayComponent, event?: Event): Promise<void> {
+    if (event) {
+      event.stopPropagation(); // Prevent card expansion
+    }
+    const md = new Metadata();
+    const currentUserId = md.CurrentUser?.ID;
+    if (!currentUserId) return;
+    
+    // File-loaded components can't be favorited
+    if (this.isFileLoadedComponent(component)) {
+      return;
+    }
+    
+    const componentId = this.getComponentId(component);
+    const isFavorite = this.favoriteComponents.has(componentId);
+    
+    try {
+      await this.metadata.SetRecordFavoriteStatus(
+        currentUserId,
+        'MJ: Components',
+        CompositeKey.FromID(componentId),
+        !isFavorite
+      );
+      
+      // Update local state
+      if (isFavorite) {
+        this.favoriteComponents.delete(componentId);
+      } else {
+        this.favoriteComponents.add(componentId);
+      }
+      
+      // Trigger change detection
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error toggling favorite status:', error);
+    }
+  }
+
+  /**
+   * Check if component is favorited
+   */
+  public isFavorite(component: DisplayComponent): boolean {
+    if (this.isFileLoadedComponent(component)) {
+      return false;
+    }
+    return this.favoriteComponents.has(this.getComponentId(component));
+  }
+
+  /**
+   * Toggle showing only favorites
+   */
+  public toggleShowOnlyFavorites(): void {
+    this.showOnlyFavorites = !this.showOnlyFavorites;
+    this.combineAndFilterComponents();
   }
 
   public onSearchChange(query: string): void {
@@ -154,6 +248,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     // Apply filters
     let filtered = [...this.allComponents];
+
+    // Apply favorites filter first if enabled
+    if (this.showOnlyFavorites) {
+      filtered = filtered.filter(c => this.isFavorite(c));
+    }
 
     // Apply category filter
     if (this.selectedCategories.size > 0) {
