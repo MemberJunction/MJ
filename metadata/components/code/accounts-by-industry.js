@@ -5,7 +5,7 @@ const AccountsByIndustry = (props) => {
   const AccountsByIndustryChart = components?.AccountsByIndustryChart;
   const AccountsByIndustryList = components?.AccountsByIndustryList;
   const AccountsByIndustryDetails = components?.AccountsByIndustryDetails;
-  
+   
   // Optional custom props with defaults
   const maxIndustries = props.maxIndustries || 10;
   const showOthers = props.showOthers !== false;

@@ -1,0 +1,309 @@
+{   "name": "RecentDealsList",   "title": "Recent Deals List",   "description": "Displays a list of the most recent deals with stage indicators and key metrics",   "type": "component",   "location": "embedded",   "namespace": "CRM/Sales",   "functionalRequirements": "## Recent Deals Display
+
+### Core Features
+- Display 10-20 most recent deals
+- Show key deal information: name, account, amount, stage
+- Color-code rows by stage for quick visual scanning
+- Format currency values appropriately
+- Show days until close date
+
+### Interactivity
+- Clickable rows to view deal details
+- Hover effects for better UX
+- Optional refresh button to reload data
+
+### Visual Design
+- Clean table layout with good spacing
+- Stage badges with semantic colors
+- Highlight deals closing soon
+- Show probability as progress bar",   "dataRequirements": {     "mode": "views",     "entities": [       {         "name": "Deal",         "fields": [           {             "name": "ID",             "type": "string",             "required": true           },           {             "name": "DealName",             "type": "string",             "required": true           },           {             "name": "AccountID",             "type": "number",             "required": true           },           {             "name": "Stage",             "type": "string",             "required": true           },           {             "name": "Amount",             "type": "number",             "required": true           },           {             "name": "Probability",             "type": "number",             "required": true           },           {             "name": "CloseDate",             "type": "date",             "required": true           },           {             "name": "DealSource",             "type": "string",             "required": false           },           {             "name": "OwnerID",             "type": "number",             "required": false           }         ]       }     ]   },   "technicalDesign": "## Implementation
+
+### Data Loading
+- Use RunView to load recent deals
+- Sort by CreatedDate DESC or CloseDate ASC
+- Limit to configurable number of rows (default 15)
+
+### Stage Styling
+- Prospecting: Gray
+- Qualification: Blue
+- Proposal: Yellow
+- Negotiation: Orange
+- Closed Won: Green
+- Closed Lost: Red
+
+### Calculations
+- Days to close: CloseDate - today
+- Expected revenue: Amount * Probability / 100
+- Format amounts with currency symbol",   "properties": [     {       "name": "maxRows",       "type": "number",       "required": false,       "defaultValue": 15,       "description": "Maximum number of deals to display"     },     {       "name": "sortBy",       "type": "string",       "required": false,       "defaultValue": "CloseDate",       "description": "Field to sort by (CloseDate, Amount, DealName)"     },     {       "name": "filterStage",       "type": "string",       "required": false,       "description": "Optional stage filter"     },     {       "name": "onDealClick",       "type": "function",       "required": false,       "description": "Callback when a deal row is clicked"     }   ],   "exampleUsage": "<RecentDealsList
+  maxRows={20}
+  sortBy=\"CloseDate\"
+  onDealClick={handleDealClick}
+/>",   "code": "function RecentDealsList({ utilities, savedUserSettings, onSaveUserSettings }) {
+  const [deals, setDeals] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+  const [sortBy, setSortBy] = React.useState(savedUserSettings?.sortBy || 'CloseDate');
+  const [maxRows] = React.useState(savedUserSettings?.maxRows || 15);
+
+  // Stage colors mapping
+  const stageColors = {
+    'Prospecting': { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB' },
+    'Qualification': { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
+    'Proposal': { bg: '#FEF3C7', text: '#92400E', border: '#FDE047' },
+    'Negotiation': { bg: '#FED7AA', text: '#9A3412', border: '#FB923C' },
+    'Closed Won': { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
+    'Closed Lost': { bg: '#FEE2E2', text: '#991B1B', border: '#FCA5A5' }
+  };
+
+  React.useEffect(() => {
+    loadDeals();
+  }, [sortBy, maxRows]);
+
+  const loadDeals = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await utilities.rv.RunView({
+        EntityName: 'Deal',
+        OrderBy: `${sortBy} ${sortBy === 'Amount' ? 'DESC' : 'ASC'}`,
+        MaxRows: maxRows,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success) {
+        setDeals(result.Results || []);
+      } else {
+        setError(result.ErrorMessage || 'Failed to load deals');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  const getDaysToClose = (closeDate) => {
+    if (!closeDate) return null;
+    const close = new Date(closeDate);
+    const today = new Date();
+    const days = Math.ceil((close - today) / (1000 * 60 * 60 * 24));
+    return days;
+  };
+
+  const handleSort = (field) => {
+    setSortBy(field);
+    onSaveUserSettings({ ...savedUserSettings, sortBy: field });
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading deals...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '20px', backgroundColor: '#FEE2E2', borderRadius: '8px', margin: '20px' }}>
+        <div style={{ color: '#991B1B', fontWeight: 'bold' }}>Error loading deals</div>
+        <div style={{ color: '#DC2626', marginTop: '8px' }}>{error}</div>
+        <button 
+          onClick={loadDeals}
+          style={{
+            marginTop: '12px',
+            padding: '8px 16px',
+            backgroundColor: '#EF4444',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '20px' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Recent Deals</h2>
+        <button
+          onClick={loadDeals}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#3B82F6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+              <th 
+                onClick={() => handleSort('DealName')}
+                style={{ 
+                  padding: '12px', 
+                  textAlign: 'left', 
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: sortBy === 'DealName' ? '#3B82F6' : '#374151'
+                }}
+              >
+                Deal Name
+              </th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Stage</th>
+              <th 
+                onClick={() => handleSort('Amount')}
+                style={{ 
+                  padding: '12px', 
+                  textAlign: 'right', 
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: sortBy === 'Amount' ? '#3B82F6' : '#374151'
+                }}
+              >
+                Amount
+              </th>
+              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Probability</th>
+              <th 
+                onClick={() => handleSort('CloseDate')}
+                style={{ 
+                  padding: '12px', 
+                  textAlign: 'left', 
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: sortBy === 'CloseDate' ? '#3B82F6' : '#374151'
+                }}
+              >
+                Close Date
+              </th>
+              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Days to Close</th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deals.map((deal, index) => {
+              const daysToClose = getDaysToClose(deal.CloseDate);
+              const stageStyle = stageColors[deal.Stage] || stageColors['Prospecting'];
+              
+              return (
+                <tr 
+                  key={deal.ID}
+                  style={{ 
+                    borderBottom: '1px solid #E5E7EB',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s',
+                    backgroundColor: index % 2 === 0 ? 'white' : '#F9FAFB'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#F9FAFB'}
+                >
+                  <td style={{ padding: '12px' }}>
+                    <div style={{ fontWeight: '500', color: '#111827' }}>{deal.DealName}</div>
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      backgroundColor: stageStyle.bg,
+                      color: stageStyle.text,
+                      border: `1px solid ${stageStyle.border}`
+                    }}>
+                      {deal.Stage}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#059669' }}>
+                    {formatCurrency(deal.Amount)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ 
+                        width: '100px', 
+                        height: '8px', 
+                        backgroundColor: '#E5E7EB', 
+                        borderRadius: '4px',
+                        margin: '0 auto'
+                      }}>
+                        <div style={{ 
+                          width: `${deal.Probability}%`, 
+                          height: '100%', 
+                          backgroundColor: deal.Probability > 75 ? '#10B981' : deal.Probability > 50 ? '#F59E0B' : '#6B7280',
+                          borderRadius: '4px',
+                          transition: 'width 0.3s'
+                        }} />
+                      </div>
+                      <div style={{ fontSize: '12px', marginTop: '2px', color: '#6B7280' }}>
+                        {deal.Probability}%
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    {formatDate(deal.CloseDate)}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {daysToClose !== null && (
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        backgroundColor: daysToClose < 0 ? '#FEE2E2' : daysToClose < 7 ? '#FEF3C7' : daysToClose < 30 ? '#DBEAFE' : '#F3F4F6',
+                        color: daysToClose < 0 ? '#991B1B' : daysToClose < 7 ? '#92400E' : daysToClose < 30 ? '#1E40AF' : '#6B7280'
+                      }}>
+                        {daysToClose < 0 ? `${Math.abs(daysToClose)} overdue` : `${daysToClose} days`}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', fontSize: '14px', color: '#6B7280' }}>
+                    {deal.DealSource || '-'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {deals.length === 0 && (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>
+          No deals found
+        </div>
+      )}
+
+      <div style={{ marginTop: '20px', fontSize: '14px', color: '#6B7280', textAlign: 'right' }}>
+        Showing {deals.length} of {maxRows} max deals
+      </div>
+    </div>
+  );
+}" }

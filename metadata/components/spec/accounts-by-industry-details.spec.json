@@ -1,7 +1,7 @@
 {
   "name": "AccountsByIndustryDetails",
   "title": "Accounts by Industry Details",
-  "description": "Sliding detail panel that displays comprehensive account information with an open record action button.",
+  "description": "Sliding detail panel that displays comprehensive account information with an open record action button",
   "type": "component",
   "location": "embedded",
   "namespace": "CRM/Analytics",

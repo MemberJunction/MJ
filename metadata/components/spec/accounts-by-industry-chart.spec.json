@@ -1,7 +1,7 @@
 {
   "name": "AccountsByIndustryChart",
   "title": "Accounts by Industry Chart",
-  "description": "Interactive pie chart component that visualizes account distribution by industry with click-to-filter functionality.",
+  "description": "Interactive pie chart component that visualizes account distribution by industry with click-to-filter functionality",
   "type": "component",
   "location": "embedded",
   "namespace": "CRM/Analytics",
@@ -14,7 +14,7 @@
       "required": true,
       "description": "Object containing labels, data, percentages, and total count"
     },
-    { 
+    {
       "name": "selectedIndustry",
       "type": "string",
       "required": false,

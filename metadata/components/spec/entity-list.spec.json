@@ -1,96 +1,96 @@
 {
-    "name": "EntityList",
-    "title": "Entity List",
-    "description": "Displays entities in a grid or card layout with sorting capabilities.",
-    "type": "table",
-    "functionalRequirements": "## Entity List Requirements\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
-    "dataRequirements": null,
-    "technicalDesign": "## Technical Design\n\n### Props\n- entities: Array of entity objects\n- viewMode: 'grid' | 'card'\n- selectedEntityId: Currently selected entity\n- onSelectEntity: Callback when entity selected\n- sortBy: Current sort field\n- sortDirection: 'asc' | 'desc'\n- onSortChange: Callback for sort changes\n\n### Rendering\n- Grid mode: Compact table with columns\n- Card mode: Cards with entity info\n- Sort indicators in headers\n- Selection highlighting",
-    "properties": [
+  "name": "EntityList",
+  "title": "Entity List",
+  "description": "Displays entities in a grid or card layout with sorting capabilities",
+  "type": "table",
+  "functionalRequirements": "## Entity List Requirements\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
+  "dataRequirements": null,
+  "technicalDesign": "## Technical Design\n\n### Props\n- entities: Array of entity objects\n- viewMode: 'grid' | 'card'\n- selectedEntityId: Currently selected entity\n- onSelectEntity: Callback when entity selected\n- sortBy: Current sort field\n- sortDirection: 'asc' | 'desc'\n- onSortChange: Callback for sort changes\n\n### Rendering\n- Grid mode: Compact table with columns\n- Card mode: Cards with entity info\n- Sort indicators in headers\n- Selection highlighting",
+  "properties": [
     {
-        "name": "entities",
-        "description": "Array of entity objects to display",
-        "type": "array",
-        "required": true
+      "name": "entities",
+      "description": "Array of entity objects to display",
+      "type": "array",
+      "required": true
     },
     {
-        "name": "viewMode",
-        "description": "Display mode - grid or card view",
-        "type": "string",
-        "required": true,
-        "possibleValues": [
+      "name": "viewMode",
+      "description": "Display mode - grid or card view",
+      "type": "string",
+      "required": true,
+      "possibleValues": [
         "grid",
         "card"
-        ]
+      ]
     },
     {
-        "name": "selectedEntityId",
-        "description": "ID of the currently selected entity",
-        "type": "string",
-        "required": false
+      "name": "selectedEntityId",
+      "description": "ID of the currently selected entity",
+      "type": "string",
+      "required": false
     },
     {
-        "name": "onSelectEntity",
-        "description": "Callback when an entity is selected",
-        "type": "function",
-        "required": true
+      "name": "onSelectEntity",
+      "description": "Callback when an entity is selected",
+      "type": "function",
+      "required": true
     },
     {
-        "name": "sortBy",
-        "description": "Field to sort by",
-        "type": "string",
-        "required": false,
-        "defaultValue": "Name"
+      "name": "sortBy",
+      "description": "Field to sort by",
+      "type": "string",
+      "required": false,
+      "defaultValue": "Name"
     },
     {
-        "name": "sortDirection",
-        "description": "Sort direction",
-        "type": "string",
-        "required": false,
-        "defaultValue": "asc",
-        "possibleValues": [
+      "name": "sortDirection",
+      "description": "Sort direction",
+      "type": "string",
+      "required": false,
+      "defaultValue": "asc",
+      "possibleValues": [
         "asc",
         "desc"
-        ]
+      ]
     },
     {
-        "name": "onSortChange",
-        "description": "Callback when sort changes",
-        "type": "function",
-        "required": true
+      "name": "onSortChange",
+      "description": "Callback when sort changes",
+      "type": "function",
+      "required": true
     }
-    ],
-    "events": [
+  ],
+  "events": [
     {
-        "name": "onSelectEntity",
-        "description": "Fired when an entity is selected",
-        "parameters": [
+      "name": "onSelectEntity",
+      "description": "Fired when an entity is selected",
+      "parameters": [
         {
-            "name": "entityId",
-            "description": "ID of the selected entity",
-            "type": "string"
+          "name": "entityId",
+          "description": "ID of the selected entity",
+          "type": "string"
         }
-        ]
+      ]
     },
     {
-        "name": "onSortChange",
-        "description": "Fired when sort configuration changes",
-        "parameters": [
+      "name": "onSortChange",
+      "description": "Fired when sort configuration changes",
+      "parameters": [
         {
-            "name": "sortBy",
-            "description": "Field to sort by",
-            "type": "string"
+          "name": "sortBy",
+          "description": "Field to sort by",
+          "type": "string"
         },
         {
-            "name": "sortDirection",
-            "description": "Sort direction",
-            "type": "string"
+          "name": "sortDirection",
+          "description": "Sort direction",
+          "type": "string"
         }
-        ]
+      ]
     }
-    ],
-    "exampleUsage": "<EntityList\n  entities={entities}\n  viewMode={viewMode}\n  selectedEntityId={selectedEntityId}\n  onSelectEntity={handleSelectEntity}\n  sortBy={sortBy}\n  sortDirection={sortDirection}\n  onSortChange={handleSortChange}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
-    "code": "function EntityList({ \n  entities, \n  viewMode, \n  selectedEntityId, \n  onSelectEntity, \n  sortBy, \n  sortDirection, \n  onSortChange,\n  utilities, \n  styles, \n  components, \n  callbacks, \n  savedUserSettings, \n  onSaveUserSettings \n}) {\n  // Helper function to get border radius value\n  const getBorderRadius = (size) => {\n    return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;\n  };\n  \n  // Handle sort column click\n  const handleSortClick = useCallback((field) => {\n    if (sortBy === field) {\n      // Toggle direction if same field\n      const newDirection = sortDirection === 'asc' ? 'desc' : 'asc';\n      onSortChange?.(field, newDirection);\n    } else {\n      // New field, default to ascending\n      onSortChange?.(field, 'asc');\n    }\n  }, [sortBy, sortDirection, onSortChange]);\n  \n  // Handle entity selection\n  const handleEntityClick = useCallback((entityId) => {\n    onSelectEntity?.(entityId);\n  }, [onSelectEntity]);\n  \n  // Render sort indicator\n  const renderSortIndicator = (field) => {\n    if (sortBy !== field) return null;\n    \n    return (\n      <span style={{ marginLeft: styles.spacing.xs }}>\n        {sortDirection === 'asc' ? '\u2191' : '\u2193'}\n      </span>\n    );\n  };\n  \n  // Grid View\n  if (viewMode === 'grid') {\n    return (\n      <div style={{\n        width: '100%',\n        overflowX: 'auto'\n      }}>\n        <table style={{\n          width: '100%',\n          borderCollapse: 'collapse',\n          backgroundColor: styles.colors.surface\n        }}>\n          <thead>\n            <tr style={{\n              borderBottom: `2px solid ${styles.colors.border}`\n            }}>\n              <th\n                onClick={() => handleSortClick('Name')}\n                style={{\n                  padding: styles.spacing.md,\n                  textAlign: 'left',\n                  fontWeight: styles.typography.fontWeight?.semibold || '600',\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.text,\n                  cursor: 'pointer',\n                  userSelect: 'none',\n                  whiteSpace: 'nowrap'\n                }}\n              >\n                Name {renderSortIndicator('Name')}\n              </th>\n              <th\n                onClick={() => handleSortClick('DisplayName')}\n                style={{\n                  padding: styles.spacing.md,\n                  textAlign: 'left',\n                  fontWeight: styles.typography.fontWeight?.semibold || '600',\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.text,\n                  cursor: 'pointer',\n                  userSelect: 'none',\n                  whiteSpace: 'nowrap'\n                }}\n              >\n                Display Name {renderSortIndicator('DisplayName')}\n              </th>\n              <th style={{\n                padding: styles.spacing.md,\n                textAlign: 'left',\n                fontWeight: styles.typography.fontWeight?.semibold || '600',\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.text\n              }}>\n                Description\n              </th>\n              <th style={{\n                padding: styles.spacing.md,\n                textAlign: 'left',\n                fontWeight: styles.typography.fontWeight?.semibold || '600',\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.text\n              }}>\n                Schema\n              </th>\n              <th style={{\n                padding: styles.spacing.md,\n                textAlign: 'left',\n                fontWeight: styles.typography.fontWeight?.semibold || '600',\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.text\n              }}>\n                Table\n              </th>\n              <th style={{\n                padding: styles.spacing.md,\n                textAlign: 'left',\n                fontWeight: styles.typography.fontWeight?.semibold || '600',\n                fontSize: styles.typography.fontSize.md,\n                color: styles.colors.text\n              }}>\n                Base View\n              </th>\n            </tr>\n          </thead>\n          <tbody>\n            {entities.map((entity) => (\n              <tr\n                key={entity.ID}\n                onClick={() => handleEntityClick(entity.ID)}\n                style={{\n                  backgroundColor: selectedEntityId === entity.ID \n                    ? styles.colors.primary + '20' \n                    : 'transparent',\n                  borderBottom: `1px solid ${styles.colors.borderLight || styles.colors.border}`,\n                  cursor: 'pointer',\n                  transition: 'background-color 0.2s'\n                }}\n                onMouseEnter={(e) => {\n                  if (selectedEntityId !== entity.ID) {\n                    e.currentTarget.style.backgroundColor = styles.colors.surfaceHover || styles.colors.surface;\n                  }\n                }}\n                onMouseLeave={(e) => {\n                  if (selectedEntityId !== entity.ID) {\n                    e.currentTarget.style.backgroundColor = 'transparent';\n                  }\n                }}\n              >\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.text,\n                  fontWeight: selectedEntityId === entity.ID \n                    ? (styles.typography.fontWeight?.semibold || '600')\n                    : (styles.typography.fontWeight?.regular || '400')\n                }}>\n                  {entity.Name}\n                </td>\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.text\n                }}>\n                  {entity.DisplayName || entity.Name}\n                </td>\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.sm,\n                  color: styles.colors.textSecondary,\n                  maxWidth: '300px',\n                  overflow: 'hidden',\n                  textOverflow: 'ellipsis',\n                  whiteSpace: 'nowrap'\n                }}>\n                  {entity.Description || '-'}\n                </td>\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.textSecondary\n                }}>\n                  {entity.SchemaName || '-'}\n                </td>\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.textSecondary\n                }}>\n                  {entity.BaseTable || '-'}\n                </td>\n                <td style={{\n                  padding: styles.spacing.md,\n                  fontSize: styles.typography.fontSize.md,\n                  color: styles.colors.textSecondary\n                }}>\n                  {entity.BaseView || '-'}\n                </td>\n              </tr>\n            ))}\n          </tbody>\n        </table>\n      </div>\n    );\n  }\n  \n  // Card View\n  return (\n    <div style={{\n      display: 'grid',\n      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',\n      gap: styles.spacing.lg\n    }}>\n      {entities.map((entity) => (\n        <div\n          key={entity.ID}\n          onClick={() => handleEntityClick(entity.ID)}\n          style={{\n            padding: styles.spacing.lg,\n            backgroundColor: selectedEntityId === entity.ID \n              ? styles.colors.primary + '20'\n              : styles.colors.surface,\n            border: selectedEntityId === entity.ID\n              ? `2px solid ${styles.colors.primary}`\n              : `1px solid ${styles.colors.border}`,\n            borderRadius: getBorderRadius('md'),\n            cursor: 'pointer',\n            transition: 'all 0.2s',\n            position: 'relative'\n          }}\n          onMouseEnter={(e) => {\n            if (selectedEntityId !== entity.ID) {\n              e.currentTarget.style.transform = 'translateY(-2px)';\n              e.currentTarget.style.boxShadow = `0 4px 12px ${styles.colors.shadow || 'rgba(0, 0, 0, 0.1)'}`;\n            }\n          }}\n          onMouseLeave={(e) => {\n            if (selectedEntityId !== entity.ID) {\n              e.currentTarget.style.transform = 'translateY(0)';\n              e.currentTarget.style.boxShadow = 'none';\n            }\n          }}\n        >\n          {/* Card Header */}\n          <div style={{\n            marginBottom: styles.spacing.md,\n            paddingBottom: styles.spacing.md,\n            borderBottom: `1px solid ${styles.colors.borderLight || styles.colors.border}`\n          }}>\n            <h3 style={{\n              margin: 0,\n              fontSize: styles.typography.fontSize.lg,\n              fontWeight: styles.typography.fontWeight?.semibold || '600',\n              color: styles.colors.text,\n              marginBottom: styles.spacing.xs\n            }}>\n              {entity.DisplayName || entity.Name}\n            </h3>\n            {entity.DisplayName && entity.DisplayName !== entity.Name && (\n              <div style={{\n                fontSize: styles.typography.fontSize.sm,\n                color: styles.colors.textSecondary\n              }}>\n                {entity.Name}\n              </div>\n            )}\n          </div>\n          \n          {/* Card Body */}\n          {entity.Description && (\n            <p style={{\n              margin: 0,\n              marginBottom: styles.spacing.md,\n              fontSize: styles.typography.fontSize.md,\n              color: styles.colors.textSecondary,\n              lineHeight: 1.5,\n              display: '-webkit-box',\n              WebkitLineClamp: 2,\n              WebkitBoxOrient: 'vertical',\n              overflow: 'hidden'\n            }}>\n              {entity.Description}\n            </p>\n          )}\n          \n          {/* Card Footer */}\n          <div style={{\n            display: 'flex',\n            justifyContent: 'space-between',\n            alignItems: 'center',\n            fontSize: styles.typography.fontSize.sm,\n            color: styles.colors.textSecondary\n          }}>\n            <div>\n              {entity.SchemaName && (\n                <span style={{ marginRight: styles.spacing.md }}>\n                  Schema: <strong>{entity.SchemaName}</strong>\n                </span>\n              )}\n              {entity.BaseTable && (\n                <span>\n                  Table: <strong>{entity.BaseTable}</strong>\n                </span>\n              )}\n            </div>\n            {entity.BaseView && (\n              <div style={{\n                fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm,\n                color: styles.colors.textSecondary\n              }}>\n                View: {entity.BaseView}\n              </div>\n            )}\n          </div>\n          \n          {/* Selection Indicator */}\n          {selectedEntityId === entity.ID && (\n            <div style={{\n              position: 'absolute',\n              top: styles.spacing.sm,\n              right: styles.spacing.sm,\n              width: '8px',\n              height: '8px',\n              backgroundColor: styles.colors.primary,\n              borderRadius: '50%'\n            }} />\n          )}\n        </div>\n      ))}\n    </div>\n  );\n}",
-    "dependencies": [],
-    "libraries": []
+  ],
+  "exampleUsage": "<EntityList\n  entities={entities}\n  viewMode={viewMode}\n  selectedEntityId={selectedEntityId}\n  onSelectEntity={handleSelectEntity}\n  sortBy={sortBy}\n  sortDirection={sortDirection}\n  onSortChange={handleSortChange}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
+  "code": "@file:../code/entity-list.js",
+  "dependencies": [],
+  "libraries": []
 }
