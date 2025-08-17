@@ -124,6 +124,16 @@ export class SyncEngine {
       return value;
     }
     
+    // If string starts with @ but isn't one of our known reference types, return as-is
+    // This handles cases like npm package names (@mui/material, @angular/core, etc.)
+    if (value.startsWith('@')) {
+      const knownPrefixes = ['@parent:', '@root:', '@file:', '@lookup:', '@env:', '@template:', '@include'];
+      const isKnownReference = knownPrefixes.some(prefix => value.startsWith(prefix));
+      if (!isKnownReference) {
+        return value; // Not a MetadataSync reference, just a string that happens to start with @
+      }
+    }
+    
     // Check for @parent: reference
     if (value.startsWith('@parent:')) {
       if (!parentRecord) {
@@ -875,8 +885,11 @@ export class SyncEngine {
         // Process string values that might contain references
         if (typeof value === 'string') {
           // Check if this looks like a reference that needs processing
+          // Only process known reference types, ignore other @ strings (like npm packages)
           if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
-              value.startsWith('@parent:') || value.startsWith('@root:')) {
+              value.startsWith('@parent:') || value.startsWith('@root:') ||
+              value.startsWith('@env:') || value.startsWith('@template:') ||
+              value.startsWith('@include')) {
             result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
           } else {
             result[key] = value;

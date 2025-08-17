@@ -390,7 +390,7 @@ export class ValidationService {
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
-    if (typeof value === 'string' && value.startsWith('@')) {
+    if (typeof value === 'string' && this.isValidReference(value)) {
       await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext);
       // Skip further validation for references as they will be resolved later
       return;
@@ -497,6 +497,28 @@ export class ValidationService {
         });
       }
     }
+  }
+
+  /**
+   * Check if a string is actually a MetadataSync reference (not just any @ string)
+   */
+  private isValidReference(value: string): boolean {
+    if (typeof value !== 'string' || !value.startsWith('@')) {
+      return false;
+    }
+    
+    // List of valid reference prefixes
+    const validPrefixes = [
+      '@file:',
+      '@lookup:',
+      '@template:',
+      '@parent:',
+      '@root:',
+      '@env:',
+      '@include',  // Can be @include or @include.
+    ];
+    
+    return validPrefixes.some(prefix => value.startsWith(prefix));
   }
 
   /**
