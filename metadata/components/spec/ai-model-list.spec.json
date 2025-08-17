@@ -28,19 +28,19 @@
     {
       "name": "selectedModelId",
       "type": "string",
-      "required": false,
+      "required": true,
       "description": "ID of the currently selected model"
     },
     {
       "name": "sortBy",
       "type": "string",
-      "required": false,
+      "required": true,
       "description": "Field to sort by"
     },
     {
       "name": "sortDirection",
       "type": "string",
-      "required": false,
+      "required": true,
       "description": "Sort direction - 'asc' or 'desc'"
     }
   ],

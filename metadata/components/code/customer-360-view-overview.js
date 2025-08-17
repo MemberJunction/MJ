@@ -1,4 +1,9 @@
 function Customer360Overview({ account, contacts, deals, engagementScore }) {
+  // Ensure arrays are defined
+  const safeDeals = deals || [];
+  const safeContacts = contacts || [];
+  const safeEngagementScore = engagementScore || 0;
+  
   const formatCurrency = (value) => {
     if (!value) return '$0';
     if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
@@ -12,11 +17,11 @@ function Customer360Overview({ account, contacts, deals, engagementScore }) {
     return '#EF4444';
   };
 
-  const totalRevenue = deals
+  const totalRevenue = safeDeals
     .filter(d => d.Stage === 'Closed Won')
     .reduce((sum, d) => sum + (d.Amount || 0), 0);
   
-  const activeDeals = deals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage));
+  const activeDeals = safeDeals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage));
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
@@ -27,11 +32,11 @@ function Customer360Overview({ account, contacts, deals, engagementScore }) {
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6B7280' }}>Engagement Score</h3>
-        <div style={{ fontSize: '32px', fontWeight: 'bold', color: getEngagementColor(engagementScore) }}>
-          {engagementScore}%
+        <div style={{ fontSize: '32px', fontWeight: 'bold', color: getEngagementColor(safeEngagementScore) }}>
+          {safeEngagementScore}%
         </div>
         <div style={{ marginTop: '8px', fontSize: '12px', color: '#9CA3AF' }}>
-          {engagementScore >= 70 ? 'Highly Engaged' : engagementScore >= 40 ? 'Moderately Engaged' : 'Low Engagement'}
+          {safeEngagementScore >= 70 ? 'Highly Engaged' : safeEngagementScore >= 40 ? 'Moderately Engaged' : 'Low Engagement'}
         </div>
       </div>
 
@@ -46,7 +51,7 @@ function Customer360Overview({ account, contacts, deals, engagementScore }) {
           {formatCurrency(totalRevenue)}
         </div>
         <div style={{ marginTop: '8px', fontSize: '12px', color: '#9CA3AF' }}>
-          {deals.filter(d => d.Stage === 'Closed Won').length} closed deals
+          {safeDeals.filter(d => d.Stage === 'Closed Won').length} closed deals
         </div>
       </div>
 
@@ -73,7 +78,7 @@ function Customer360Overview({ account, contacts, deals, engagementScore }) {
       }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6B7280' }}>Contacts</h3>
         <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#111827' }}>
-          {contacts.length}
+          {safeContacts.length}
         </div>
         <div style={{ marginTop: '8px', fontSize: '12px', color: '#9CA3AF' }}>
           Key relationships

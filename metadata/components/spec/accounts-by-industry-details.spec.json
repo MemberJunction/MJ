@@ -11,7 +11,7 @@
     {
       "name": "account",
       "type": "object",
-      "required": false,
+      "required": true,
       "description": "Selected account object with all details"
     },
     {

@@ -9,22 +9,26 @@
     {
       "name": "deals",
       "type": "array",
-      "description": "Array of deal objects to display"
+      "description": "Array of deal objects to display",
+      "required": true
     },
     {
       "name": "stageColors",
       "type": "object",
-      "description": "Optional object mapping stage names to colors"
+      "description": "Optional object mapping stage names to colors",
+      "required": true
     },
     {
       "name": "onDealClick",
       "type": "function",
-      "description": "Callback when a deal card is clicked"
+      "description": "Callback when a deal card is clicked",
+      "required": true
     },
     {
       "name": "onOpenClick",
       "type": "function",
-      "description": "Callback when the open icon is clicked, receives entityName and primaryKey array"
+      "description": "Callback when the open icon is clicked, receives entityName and primaryKey array",
+      "required": true
     }
   ],
   "events": [

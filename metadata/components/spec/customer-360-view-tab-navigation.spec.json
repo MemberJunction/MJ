@@ -9,11 +9,13 @@
     {
       "name": "activeTab",
       "type": "string",
+      "required": true,
       "description": "Currently active tab ID"
     },
     {
       "name": "onTabChange",
       "type": "function",
+      "required": true,
       "description": "Callback when tab is changed"
     }
   ],

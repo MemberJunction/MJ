@@ -9,17 +9,20 @@
     {
       "name": "metrics",
       "type": "object",
-      "description": "Object containing totalValue, activeCount, winRate, avgDealSize, avgCycleTime"
+      "description": "Object containing totalValue, activeCount, winRate, avgDealSize, avgCycleTime",
+      "required": true
     },
     {
       "name": "deals",
       "type": "array",
-      "description": "Array of deal objects"
+      "description": "Array of deal objects",
+      "required": true
     },
     {
       "name": "onCardClick",
       "type": "function",
-      "description": "Callback when a metric card is clicked"
+      "description": "Callback when a metric card is clicked",
+      "required": true
     }
   ],
   "events": [

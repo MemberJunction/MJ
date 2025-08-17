@@ -34,7 +34,7 @@
     {
       "name": "selectedPoint",
       "type": "object",
-      "required": false,
+      "required": true,
       "description": "Currently selected data point"
     },
     {

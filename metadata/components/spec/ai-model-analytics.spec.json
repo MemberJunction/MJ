@@ -10,7 +10,7 @@
     {
       "name": "model",
       "type": "object",
-      "required": false,
+      "required": true,
       "description": "The selected AI model for analytics"
     },
     {

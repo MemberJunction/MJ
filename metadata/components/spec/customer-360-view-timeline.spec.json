@@ -9,11 +9,13 @@
     {
       "name": "activities",
       "type": "array",
+      "required": true,
       "description": "Array of activity objects sorted by date"
     },
     {
       "name": "onActivityClick",
       "type": "function",
+      "required": true,
       "description": "Callback when an activity is clicked"
     }
   ],

@@ -27,7 +27,7 @@
       "name": "selectedEntityId",
       "description": "ID of the currently selected entity",
       "type": "string",
-      "required": false
+      "required": true
     },
     {
       "name": "onSelectEntity",
@@ -39,14 +39,14 @@
       "name": "sortBy",
       "description": "Field to sort by",
       "type": "string",
-      "required": false,
+      "required": true,
       "defaultValue": "Name"
     },
     {
       "name": "sortDirection",
       "description": "Sort direction",
       "type": "string",
-      "required": false,
+      "required": true,
       "defaultValue": "asc",
       "possibleValues": [
         "asc",

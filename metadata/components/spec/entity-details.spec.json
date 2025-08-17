@@ -11,20 +11,20 @@
       "name": "entity",
       "description": "The selected entity object",
       "type": "object",
-      "required": false
+      "required": true
     },
     {
       "name": "fields",
       "description": "Array of fields for the entity",
       "type": "array",
-      "required": false,
+      "required": true,
       "defaultValue": []
     },
     {
       "name": "relationships",
       "description": "Array of relationships for the entity",
       "type": "array",
-      "required": false,
+      "required": true,
       "defaultValue": []
     },
     {

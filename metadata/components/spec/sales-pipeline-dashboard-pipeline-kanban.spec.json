@@ -9,22 +9,26 @@
     {
       "name": "deals",
       "type": "array",
-      "description": "Array of deal objects to display"
+      "description": "Array of deal objects to display",
+      "required": true
     },
     {
       "name": "stages",
       "type": "array",
-      "description": "Array of pipeline stage names"
+      "description": "Array of pipeline stage names",
+      "required": true
     },
     {
       "name": "stageColors",
       "type": "object",
-      "description": "Object mapping stage names to colors"
+      "description": "Object mapping stage names to colors",
+      "required": true
     },
     {
       "name": "onStageClick",
       "type": "function",
-      "description": "Callback when a stage card is clicked"
+      "description": "Callback when a stage card is clicked",
+      "required": true
     }
   ],
   "events": [

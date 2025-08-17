@@ -9,27 +9,32 @@
     {
       "name": "isOpen",
       "type": "boolean",
-      "description": "Whether the panel is open"
+      "description": "Whether the panel is open",
+      "required": true
     },
     {
       "name": "drillDownData",
       "type": "object",
-      "description": "Object containing title, deals array, type, and metadata"
+      "description": "Object containing title, deals array, type, and metadata",
+      "required": true
     },
     {
       "name": "stageColors",
       "type": "object",
-      "description": "Object mapping stage names to colors"
+      "description": "Object mapping stage names to colors",
+      "required": true
     },
     {
       "name": "onClose",
       "type": "function",
-      "description": "Callback when panel is closed"
+      "description": "Callback when panel is closed",
+      "required": true
     },
     {
       "name": "onOpenDeal",
       "type": "function",
-      "description": "Callback to open a deal in external app"
+      "description": "Callback to open a deal in external app",
+      "required": true
     }
   ],
   "events": [

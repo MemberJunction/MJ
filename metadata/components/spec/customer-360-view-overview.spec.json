@@ -9,21 +9,25 @@
     {
       "name": "account",
       "type": "object",
+      "required": true,
       "description": "Account entity object"
     },
     {
       "name": "contacts",
       "type": "array",
+      "required": true,
       "description": "Array of contact objects"
     },
     {
       "name": "deals",
       "type": "array",
+      "required": true,
       "description": "Array of deal objects"
     },
     {
       "name": "engagementScore",
       "type": "number",
+      "required": true,
       "description": "Calculated engagement score (0-100)"
     }
   ],
