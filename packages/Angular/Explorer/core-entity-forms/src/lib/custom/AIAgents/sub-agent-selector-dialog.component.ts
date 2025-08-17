@@ -3,10 +3,10 @@ import { FormControl } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 
 export interface SubAgentSelectorResult {
-  selectedAgents: AIAgentEntity[];
+  selectedAgents: AIAgentEntityExtended[];
   createNew: boolean;
 }
 
@@ -18,7 +18,7 @@ export interface SubAgentSelectorConfig {
   parentAgentId: string; // To exclude from selection
 }
 
-export interface AgentDisplayItem extends AIAgentEntity {
+export interface AgentDisplayItem extends AIAgentEntityExtended {
   selected: boolean;
   typeName?: string;
 }
@@ -270,8 +270,8 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const selectedDisplayItems = allAgents
       .filter(agent => selectedIds.has(agent.ID));
     
-    // Convert AgentDisplayItem to AIAgentEntity by casting (they have the same structure)
-    const selectedAgents: AIAgentEntity[] = selectedDisplayItems.map(item => item as AIAgentEntity);
+    // Convert AgentDisplayItem to AIAgentEntityExtended by casting (they have the same structure)
+    const selectedAgents: AIAgentEntityExtended[] = selectedDisplayItems.map(item => item as AIAgentEntityExtended);
     
     this.result.next({
       selectedAgents,

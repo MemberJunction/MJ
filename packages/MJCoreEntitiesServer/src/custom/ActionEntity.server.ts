@@ -129,7 +129,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         // get a list of existing ActionLibrary records that match this Action
         const existingLibraries: ActionLibraryEntity[] = [];
         if (!wasNewRecord) {
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const libResult = await rv.RunView(
                 {
                     EntityName: 'Action Libraries',
@@ -361,7 +361,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
 
         try {
             // First, get existing parameters
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const existingParams = await rv.RunView<ActionParamEntity>({
                 EntityName: 'Action Params',
                 ExtraFilter: `ActionID='${this.ID}'`,
@@ -465,7 +465,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
 
         try {
             // First, get existing result codes
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const existingCodes = await rv.RunView<ActionResultCodeEntity>({
                 EntityName: 'Action Result Codes',
                 ExtraFilter: `ActionID='${this.ID}'`,

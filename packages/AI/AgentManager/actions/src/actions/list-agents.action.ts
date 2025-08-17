@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
-import { AIAgentEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { BaseAction } from "@memberjunction/actions";
 
@@ -56,7 +56,7 @@ export class ListAgentsAction extends BaseAgentManagementAction {
 
             // Run the view to get agents
             const rv = new RunView();
-            const result = await rv.RunView<AIAgentEntity>({
+            const result = await rv.RunView<AIAgentEntityExtended>({
                 EntityName: 'AI Agents',
                 ExtraFilter: filters.length > 0 ? filters.join(' AND ') : '',
                 OrderBy: 'Name',

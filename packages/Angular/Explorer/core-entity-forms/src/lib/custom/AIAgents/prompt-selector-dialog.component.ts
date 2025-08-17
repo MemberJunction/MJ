@@ -3,7 +3,7 @@ import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
-import { AIPromptEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface PromptSelectorConfig {
@@ -23,7 +23,7 @@ export interface PromptSelectorConfig {
 
 export interface PromptSelectorResult {
   /** Selected prompts */
-  selectedPrompts: AIPromptEntity[];
+  selectedPrompts: AIPromptEntityExtended[];
   /** Whether user chose to create new */
   createNew?: boolean;
 }
@@ -50,8 +50,8 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   
   // Data and UI state
   isLoading$ = new BehaviorSubject<boolean>(false);
-  prompts$ = new BehaviorSubject<AIPromptEntity[]>([]);
-  filteredPrompts$ = new BehaviorSubject<AIPromptEntity[]>([]);
+  prompts$ = new BehaviorSubject<AIPromptEntityExtended[]>([]);
+  filteredPrompts$ = new BehaviorSubject<AIPromptEntityExtended[]>([]);
   
   // Search and selection
   searchControl = new FormControl('');
@@ -110,7 +110,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
         filter += ` AND ${this.config.extraFilter}`;
       }
       
-      const result = await rv.RunView<AIPromptEntity>({
+      const result = await rv.RunView<AIPromptEntityExtended>({
         EntityName: 'AI Prompts',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
@@ -157,7 +157,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
 
   // === Selection Management ===
 
-  togglePromptSelection(prompt: AIPromptEntity) {
+  togglePromptSelection(prompt: AIPromptEntityExtended) {
     // Prevent selection of already linked prompts
     if (this.isPromptLinked(prompt)) {
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -181,15 +181,15 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  isPromptSelected(prompt: AIPromptEntity): boolean {
+  isPromptSelected(prompt: AIPromptEntityExtended): boolean {
     return this.selectedPrompts.has(prompt.ID);
   }
 
-  isPromptLinked(prompt: AIPromptEntity): boolean {
+  isPromptLinked(prompt: AIPromptEntityExtended): boolean {
     return this.linkedPrompts.has(prompt.ID);
   }
 
-  getSelectedPromptObjects(): AIPromptEntity[] {
+  getSelectedPromptObjects(): AIPromptEntityExtended[] {
     const allPrompts = this.prompts$.value;
     return allPrompts.filter(prompt => this.selectedPrompts.has(prompt.ID));
   }
@@ -200,7 +200,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
   }
 
-  getPromptStatusColor(prompt: AIPromptEntity): string {
+  getPromptStatusColor(prompt: AIPromptEntityExtended): string {
     switch (prompt.Status) {
       case 'Active': return '#28a745';
       case 'Pending': return '#ffc107';
@@ -209,7 +209,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  getPromptStatusText(prompt: AIPromptEntity): string {
+  getPromptStatusText(prompt: AIPromptEntityExtended): string {
     return prompt.Status || 'Unknown';
   }
 

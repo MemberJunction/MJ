@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef 
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -21,7 +21,7 @@ import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
   styleUrls: ['./ai-agent-run.component.css']
 })
 export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent implements OnInit, OnDestroy {
-  public record!: AIAgentRunEntity;
+  public record!: AIAgentRunEntityExtended;
   
   private destroy$ = new Subject<void>();
   
@@ -34,7 +34,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   analyticsLoaded = false;
   visualizationLoaded = false;
   
-  agent: AIAgentEntity | null = null;
+  agent: AIAgentEntityExtended | null = null;
   
   // Cost metrics using shared service
   costMetrics: AgentRunCostMetrics | null = null;
@@ -94,7 +94,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     
     try {
       const md = new Metadata();
-      const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents');
+      const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.agent = agent;
       }

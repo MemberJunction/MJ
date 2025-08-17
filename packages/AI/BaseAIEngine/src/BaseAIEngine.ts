@@ -1,6 +1,6 @@
 import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, 
-         AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, 
+         AIModelActionEntity, AIModelEntityExtended,
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
          AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
@@ -158,9 +158,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
         for(const PromptCategory of this._promptCategories){
-            this._prompts.filter((prompt: AIPromptEntity) => {
+            this._prompts.filter((prompt: AIPromptEntityExtended) => {
                 return prompt.CategoryID === PromptCategory.ID;
-            }).forEach((prompt: AIPromptEntity) => {
+            }).forEach((prompt: AIPromptEntityExtended) => {
                 PromptCategory.Prompts.push(prompt);
             });
         }
@@ -492,7 +492,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Utility method that will cache the result of a prompt in the AI Result Cache entity
      */
-    public async CacheResult(model: AIModelEntity, prompt: AIPromptEntity, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         const md = new Metadata();
         const cacheItem = await md.GetEntityObject<AIResultCacheEntity>('AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;

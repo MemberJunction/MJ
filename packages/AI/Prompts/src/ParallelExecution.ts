@@ -1,4 +1,4 @@
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
@@ -12,7 +12,7 @@ export interface ExecutionTask {
   taskId: string;
 
   /** The AI prompt being executed */
-  prompt: AIPromptEntity;
+  prompt: AIPromptEntityExtended;
 
   /** The specific model to use for this execution */
   model: AIModelEntityExtended;
@@ -87,7 +87,7 @@ export interface ExecutionTaskResult {
   errorMessage?: string;
 
   /** The AIPromptRun entity created for tracking */
-  promptRun?: AIPromptRunEntity;
+  promptRun?: AIPromptRunEntityExtended;
 
   /** Execution time for this specific task in milliseconds */
   executionTimeMS: number;
@@ -258,7 +258,7 @@ export interface ParallelExecutionResult {
 
 /**
  * Strategy for determining the number of parallel executions.
- * Maps to the ParallelizationMode field in AIPromptEntity.
+ * Maps to the ParallelizationMode field in AIPromptEntityExtended.
  */
 export type ParallelizationStrategy = 'None' | 'StaticCount' | 'ConfigParam' | 'ModelSpecific';
 

@@ -10,7 +10,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
         newResult.StartedAt = new Date();
 
         try{
-            const rv: RunView = new RunView();
+            const rv = this.RunViewProviderToUse;
 
             if(!this.ListID){
                 throw new Error('ListID cannot be null');

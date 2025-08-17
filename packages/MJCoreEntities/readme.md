@@ -80,7 +80,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 const md = new Metadata();
 
 // Load user views for an entity
-const rv = new RunView();
+const rv = this.RunViewProviderToUse;
 const views = await rv.RunView<UserViewEntityExtended>({
     EntityName: 'User Views',
     ExtraFilter: `EntityID='${entityId}' AND UserID='${userId}'`,
@@ -143,7 +143,7 @@ await dashboard.Save();
 import { AIModelEntityExtended } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 
-const rv = new RunView();
+const rv = this.RunViewProviderToUse;
 
 // Load all active AI models
 const models = await rv.RunView<AIModelEntityExtended>({

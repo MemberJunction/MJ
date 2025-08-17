@@ -1,5 +1,5 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
 import { TemplateMessageRole } from '@memberjunction/ai-core-plus';
@@ -32,7 +32,7 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks to be processed
    */
   public createExecutionPlan(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
@@ -123,7 +123,7 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array containing single execution task
    */
   private createSingleExecutionPlan(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
@@ -178,7 +178,7 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks for parallel processing
    */
   private createStaticCountPlan(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
@@ -249,7 +249,7 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks for parallel processing
    */
   private createConfigParamPlan(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
@@ -330,7 +330,7 @@ export class ExecutionPlanner {
    * @returns ExecutionTask[] - Array of execution tasks organized by execution groups
    */
   private createModelSpecificPlan(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     renderedPrompt: string,
@@ -398,7 +398,7 @@ export class ExecutionPlanner {
    * @returns AIModelEntityExtended | null - The selected model or null if none suitable
    */
   private selectBestModel(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     configurationId?: string,
@@ -455,7 +455,7 @@ export class ExecutionPlanner {
    * @returns AIModelEntityExtended[] - Array of suitable models
    */
   private getAvailableModels(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
     configurationId?: string,

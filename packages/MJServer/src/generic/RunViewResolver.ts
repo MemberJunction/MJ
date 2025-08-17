@@ -4,7 +4,7 @@ import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { UserViewEntity } from '@memberjunction/core-entities';
+import { UserViewEntityExtended } from '@memberjunction/core-entities';
 
 /********************************************************************************
  * The PURPOSE of this resolver is to provide a generic way to run a view and return the results.
@@ -468,7 +468,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { Name: input.ViewName }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { Name: input.ViewName }, userPayload.userRecord));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,
@@ -495,7 +495,7 @@ export class RunViewResolver extends ResolverBase {
       if (rawData === null) 
         return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,
@@ -613,7 +613,7 @@ export class RunViewResolver extends ResolverBase {
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntity>(await super.findBy<UserViewEntity>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
       return {
         Results: returnData,

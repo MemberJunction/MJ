@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIModelEntity, AIVendorEntity, AIModelTypeEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 
-interface ModelDisplayData extends AIModelEntity {
+interface ModelDisplayData extends AIModelEntityExtended {
   VendorName?: string;
   VendorID?: string; // Add this since we're using it for filtering
   ModelTypeName?: string;
@@ -30,9 +30,9 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data - Keep as AIModelEntity to preserve getters
-  public models: AIModelEntity[] = [];
-  public filteredModels: AIModelEntity[] = [];
+  // Data - Keep as AIModelEntityExtended to preserve getters
+  public models: AIModelEntityExtended[] = [];
+  public filteredModels: AIModelEntityExtended[] = [];
   public vendors: AIVendorEntity[] = [];
   public modelTypes: AIModelTypeEntity[] = [];
 
@@ -122,7 +122,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       const rv = new RunView();
 
       // Load models with proper generic typing
-      const modelResults = await rv.RunView<AIModelEntity>({
+      const modelResults = await rv.RunView<AIModelEntityExtended>({
         EntityName: 'AI Models',
         OrderBy: 'Name',
         MaxRows: 1000 
@@ -152,7 +152,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
       const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
 
-      // Transform models to display format - Results already typed as AIModelEntity[]
+      // Transform models to display format - Results already typed as AIModelEntityExtended[]
       this.models = modelResults.Results.map((model, index) => {
         
         // Find vendor ID by matching vendor name
@@ -380,7 +380,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntity>('AI Models');
+      const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';

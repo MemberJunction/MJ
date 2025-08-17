@@ -62,7 +62,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         const e = this.EntityInfo;
         const catName = e.Settings.find(s => s.Name.trim().toLowerCase() === 
                                              "Root Template Category Name")?.Value || "AI Prompts";
-        const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+        const rv = this.RunViewProviderToUse
         const result = await rv.RunView<TemplateCategoryEntity>({
             EntityName: "Template Categories",
             ExtraFilter: `Name='${catName}' AND ParentID IS NULL`,
@@ -172,7 +172,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             if (!this.TemplateID) {
                 throw new Error("Cannot update linked Template Contents because TemplateID is null.");
             }
-            const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+            const rv = this.RunViewProviderToUse
             const result = await rv.RunView<TemplateContentEntity>({
                 EntityName: "Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,

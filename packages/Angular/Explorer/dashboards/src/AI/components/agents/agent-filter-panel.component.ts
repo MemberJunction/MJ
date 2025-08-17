@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 interface AgentFilter {
@@ -17,8 +17,8 @@ interface AgentFilter {
   styleUrls: ['./agent-filter-panel.component.scss']
 })
 export class AgentFilterPanelComponent implements OnInit {
-  @Input() agents: AIAgentEntity[] = [];
-  @Input() filteredAgents: AIAgentEntity[] = [];
+  @Input() agents: AIAgentEntityExtended[] = [];
+  @Input() filteredAgents: AIAgentEntityExtended[] = [];
   @Input() filters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',

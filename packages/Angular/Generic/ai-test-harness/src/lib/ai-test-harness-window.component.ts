@@ -1,12 +1,12 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit } from '@angular/core';
-import { AIAgentEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 
 export interface AITestHarnessWindowData {
     agentId?: string;
-    agent?: AIAgentEntity;
+    agent?: AIAgentEntityExtended;
     promptId?: string;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     promptRunId?: string;
     title?: string;
     width?: string | number;
@@ -91,8 +91,8 @@ export class AITestHarnessWindowComponent implements OnInit {
     loading = true;
     error = '';
     
-    agent?: AIAgentEntity;
-    prompt?: AIPromptEntity;
+    agent?: AIAgentEntityExtended;
+    prompt?: AIPromptEntityExtended;
     mode: 'agent' | 'prompt' = 'agent';
     
     private metadata = new Metadata();
@@ -119,7 +119,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.agent = this.data.agent;
                     this.windowTitle = this.data.title || `Test Agent: ${this.agent.Name}`;
                 } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+                    const agentEntity = await this.metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
                     await agentEntity.Load(this.data.agentId);
                     if (agentEntity.IsSaved) {
                         this.agent = agentEntity;
@@ -135,7 +135,7 @@ export class AITestHarnessWindowComponent implements OnInit {
                     this.prompt = this.data.prompt;
                     this.windowTitle = this.data.title || `Test Prompt: ${this.prompt.Name}`;
                 } else if (this.data.promptId) {
-                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntity>('AI Prompts');
+                    const promptEntity = await this.metadata.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
                     await promptEntity.Load(this.data.promptId);
                     if (promptEntity.IsSaved) {
                         this.prompt = promptEntity;

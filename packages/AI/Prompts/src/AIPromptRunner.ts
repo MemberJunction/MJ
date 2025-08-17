@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -169,7 +169,7 @@ export class AIPromptRunner {
   protected logError(error: Error | string, options?: {
     category?: string;
     metadata?: Record<string, any>;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     model?: AIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
   }): void {
@@ -251,7 +251,7 @@ export class AIPromptRunner {
    */
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
-    const promptRun: AIPromptRunEntity | null = null;
+    const promptRun: AIPromptRunEntityExtended | null = null;
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {
@@ -283,7 +283,7 @@ export class AIPromptRunner {
       let renderedPromptText: string = '';
 
       // For hierarchical prompts, we need to create the parent prompt run first to get its ID
-      let parentPromptRun: AIPromptRunEntity | undefined;
+      let parentPromptRun: AIPromptRunEntityExtended | undefined;
       let selectedModel: AIModelEntityExtended | undefined;
       let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
       let modelSelectionInfo: AIModelSelectionInfo | undefined;
@@ -451,11 +451,11 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
   private async executeSinglePrompt<T = unknown>(
-    prompt: AIPromptEntity, 
+    prompt: AIPromptEntityExtended, 
     renderedPromptText: string, 
     params: AIPromptParams, 
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntity,
+    existingPromptRun?: AIPromptRunEntityExtended,
     existingModel?: AIModelEntityExtended,
     existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
@@ -563,11 +563,11 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The aggregated execution result
    */
   private async executePromptInParallel<T = unknown>(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntity,
+    existingPromptRun?: AIPromptRunEntityExtended,
     existingModel?: AIModelEntityExtended,
     existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
@@ -1006,7 +1006,7 @@ export class AIPromptRunner {
    * @returns Promise<string> - The rendered prompt text with child templates embedded
    */
   private async renderPromptWithChildTemplates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     childTemplates: Record<string, string>
   ): Promise<string> {
@@ -1077,7 +1077,7 @@ export class AIPromptRunner {
    * then selects the first one with an available API key.
    */
   private async selectModel(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -1256,7 +1256,7 @@ export class AIPromptRunner {
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
   private buildModelVendorCandidates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
     preferredVendorId?: string
@@ -1700,15 +1700,15 @@ export class AIPromptRunner {
    * Creates an AIPromptRun entity for execution tracking
    */
   private async createPromptRun(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     model: AIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string, 
     startTime: Date,
     vendorId?: string,
     modelSelectionInfo?: any
-  ): Promise<AIPromptRunEntity> {
-    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
+  ): Promise<AIPromptRunEntityExtended> {
+    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();
 
@@ -1755,7 +1755,7 @@ export class AIPromptRunner {
       
       // Set original model tracking for failover
       // TODO: Remove type assertions after CodeGen updates entities with new fields
-      const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
         OriginalModelID?: string;
         OriginalRequestStartTime?: Date;
         FailoverAttempts?: number;
@@ -1998,14 +1998,14 @@ export class AIPromptRunner {
   protected async executeModelWithFailover(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
     allCandidates?: ModelVendorCandidate[],
-    promptRun?: AIPromptRunEntity,
+    promptRun?: AIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string
   ): Promise<ChatResult> {
@@ -2144,7 +2144,7 @@ export class AIPromptRunner {
   /**
    * Builds failover candidates for a prompt based on available models and type restrictions
    */
-  protected async buildFailoverCandidates(prompt: AIPromptEntity): Promise<ModelVendorCandidate[]> {
+  protected async buildFailoverCandidates(prompt: AIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
     const aiEngine = AIEngine.Instance;
     
     // Get all models, filtered by type if specified
@@ -2212,13 +2212,13 @@ export class AIPromptRunner {
    * Updates prompt run with successful failover tracking data
    */
   protected updatePromptRunWithFailoverSuccess(
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[],
     currentModel: AIModelEntityExtended,
     currentVendorId: string | null
   ): void {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
       OriginalModelID?: string;
       OriginalRequestStartTime?: Date;
       FailoverAttempts?: number;
@@ -2250,11 +2250,11 @@ export class AIPromptRunner {
    * Updates prompt run with failover failure tracking data
    */
   private updatePromptRunWithFailoverFailure(
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
       OriginalModelID?: string;
       OriginalRequestStartTime?: Date;
       FailoverAttempts?: number;
@@ -2299,7 +2299,7 @@ export class AIPromptRunner {
   private async executeModel(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
@@ -2526,9 +2526,9 @@ export class AIPromptRunner {
   private async executeWithValidationRetries(
     selectedModel: AIModelEntityExtended,
     renderedPromptText: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string,
   ): Promise<{
@@ -2679,7 +2679,7 @@ export class AIPromptRunner {
   /**
    * Applies retry delay based on the prompt's retry strategy
    */
-  private async applyRetryDelay(prompt: AIPromptEntity, attemptNumber: number): Promise<void> {
+  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number): Promise<void> {
     const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
     let delay = baseDelay;
 
@@ -2864,10 +2864,10 @@ export class AIPromptRunner {
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
-    currentPromptRun: AIPromptRunEntity,
+    currentPromptRun: AIPromptRunEntityExtended,
     params?: AIPromptParams,
   ): Promise<{
     result: unknown;
@@ -3091,11 +3091,11 @@ export class AIPromptRunner {
    */
   private async parseObjectOutput(
     rawOutput: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean,
     cleanValidationSyntax: boolean,
     validationErrors: ValidationErrorInfo[],
-    currentPromptRun: AIPromptRunEntity,
+    currentPromptRun: AIPromptRunEntityExtended,
     params?: AIPromptParams
   ): Promise<unknown> {
     let parsedResult: unknown;
@@ -3140,7 +3140,7 @@ export class AIPromptRunner {
     rawOutput: string,
     originalError: Error,
     params: AIPromptParams,
-    currentPromptRun: AIPromptRunEntity
+    currentPromptRun: AIPromptRunEntityExtended
   ): Promise<unknown> {
     // Step 0: First, see if the raw output has any { } [ ] characters at all
     // if not, we KNOW it is not JSON and we should not attempt to repair it
@@ -3337,8 +3337,8 @@ export class AIPromptRunner {
    * Updates the AIPromptRun entity with execution results
    */
   private async updatePromptRun(
-    promptRun: AIPromptRunEntity,
-    prompt: AIPromptEntity,
+    promptRun: AIPromptRunEntityExtended,
+    prompt: AIPromptEntityExtended,
     modelResult: ChatResult,
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
@@ -3578,9 +3578,9 @@ export class AIPromptRunner {
    * default values when configuration is not specified. Override this method to
    * implement custom failover configuration logic.
    */
-  protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+  protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptWithFailover = prompt as AIPromptEntity & {
+    const promptWithFailover = prompt as AIPromptEntityExtended & {
       FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
       FailoverMaxAttempts?: number;
       FailoverDelaySeconds?: number;
