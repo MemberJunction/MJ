@@ -265,7 +265,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             EntityName: 'AI Prompt Types',
             ExtraFilter: `Name = '${typeName}'`,
             MaxRows: 1,
-            ResultType: 'entity_object'
+            ResultType: 'simple'
         }, contextUser);
         
         if (result.Success && result.Results && result.Results.length > 0) {

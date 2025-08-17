@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { AIAgentActionEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { BaseAction } from "@memberjunction/actions";
+import { RunView } from "@memberjunction/core";
 
 /**
  * Associates an action with an agent.
@@ -45,6 +46,29 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
 
             // TODO: Validate action exists
             // This would require loading the Action entity to ensure it's valid
+
+            // Check if association already exists
+            const rv = new RunView();
+            const existingAssociation = await rv.RunView({
+                EntityName: 'AI Agent Actions',
+                ExtraFilter: `AgentID='${agentIDResult.value!}' AND ActionID='${actionIDResult.value!}'`,
+            }, params.ContextUser);
+
+            if (!existingAssociation.Success) {
+                return {
+                    Success: false,
+                    ResultCode: 'QUERY_FAILED',
+                    Message: `Failed to check for existing association: ${existingAssociation.ErrorMessage}`
+                };
+            }
+
+            if (existingAssociation.Results && existingAssociation.Results.length > 0) {
+                return {
+                    Success: false,
+                    ResultCode: 'ASSOCIATION_EXISTS',
+                    Message: `Action is already associated with this agent`
+                };
+            }
 
             // Create the association
             const md = this.getMetadata();

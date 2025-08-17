@@ -60,14 +60,14 @@ export class GetActionDetailsAction extends BaseAgentManagementAction {
                 {
                     EntityName: 'Action Params',
                     ExtraFilter: `ActionID = '${action.ID}'`,
-                    OrderBy: 'Sequence, Name',
-                    ResultType: 'entity_object' as const
+                    OrderBy: 'Name',
+                    ResultType: 'simple' as const
                 },
                 {
                     EntityName: 'Action Result Codes',
                     ExtraFilter: `ActionID = '${action.ID}'`,
                     OrderBy: 'ResultCode',
-                    ResultType: 'entity_object' as const
+                    ResultType: 'simple' as const
                 }
             ];
 

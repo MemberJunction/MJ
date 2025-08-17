@@ -35,6 +35,9 @@ export class ListAgentsAction extends BaseAgentManagementAction {
             const parentIDResult = this.getStringParam(params, 'ParentID', false);
             const typeIDResult = this.getStringParam(params, 'TypeID', false);
 
+            const parentID = parentIDResult.value === "null" ? null : parentIDResult.value;
+            const typeID = typeIDResult.value === "null" ? null : typeIDResult
+
             // Build filter
             let filters: string[] = [];
             
@@ -45,22 +48,22 @@ export class ListAgentsAction extends BaseAgentManagementAction {
             }
 
             // Add parent filter if provided
-            if (parentIDResult.value) {
-                filters.push(`ParentID = '${parentIDResult.value}'`);
+            if (parentID) {
+                filters.push(`ParentID = '${parentID}'`);
             }
 
             // Add type filter if provided
-            if (typeIDResult.value) {
-                filters.push(`TypeID = '${typeIDResult.value}'`);
+            if (typeID) {
+                filters.push(`TypeID = '${typeID}'`);
             }
 
             // Run the view to get agents
             const rv = new RunView();
-            const result = await rv.RunView<AIAgentEntityExtended>({
+            const result = await rv.RunView({
                 EntityName: 'AI Agents',
                 ExtraFilter: filters.length > 0 ? filters.join(' AND ') : '',
                 OrderBy: 'Name',
-                ResultType: 'entity_object'
+                ResultType: 'simple'
             }, params.ContextUser);
 
             if (result.Success) {

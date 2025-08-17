@@ -8,6 +8,7 @@ export * from './actions/get-agent-details.action';
 export * from './actions/associate-action-with-agent.action';
 export * from './actions/list-actions.action';
 export * from './actions/get-action-details.action';
+export * from './actions/validate-agent-configuration.action'
 
 // Core types should be imported from the core package directly
 
@@ -20,6 +21,7 @@ import { LoadGetAgentDetailsAction } from './actions/get-agent-details.action';
 import { LoadAssociateActionWithAgentAction } from './actions/associate-action-with-agent.action';
 import { LoadListActionsAction } from './actions/list-actions.action';
 import { LoadGetActionDetailsAction } from './actions/get-action-details.action';
+import { LoadValidateAgentConfigurationAction } from './actions/validate-agent-configuration.action';
 
 // Execute all loaders to register actions
 export function LoadAgentManagementActions() {
@@ -31,6 +33,7 @@ export function LoadAgentManagementActions() {
     LoadAssociateActionWithAgentAction();
     LoadListActionsAction();
     LoadGetActionDetailsAction();
+    LoadValidateAgentConfigurationAction();
     
     // Additional actions to be implemented:
     // - DeactivateAgentAction

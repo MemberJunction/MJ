@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { AIAgentEntityExtended } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
-import { AIEngineBase } from "@memberjunction/ai-engine-base";
+import { AIEngine } from "@memberjunction/aiengine";
 import { BaseAction } from "@memberjunction/actions";
 
 /**
@@ -60,7 +60,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
                 resolvedTypeID = typeIDResult.value;
             } else {
                 // Look up TypeID from Type name
-                const aiEngine = AIEngineBase.Instance;
+                const aiEngine = AIEngine.Instance;
                 const agentType = aiEngine.AgentTypes.find((t: any) => 
                     t.Name.toLowerCase() === typeResult.value!.toLowerCase()
                 );

@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
-import { RunView } from "@memberjunction/core";
+import { Metadata, RunView } from "@memberjunction/core";
 import { ActionEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { BaseAction } from "@memberjunction/actions";
@@ -37,28 +37,32 @@ export class ListActionsAction extends BaseAgentManagementAction {
             let filters: string[] = ["Status = 'Active'"];
             
             // Add category filter if provided
-            if (categoryIDResult.value) {
+            if (categoryIDResult.value && categoryIDResult.value !== 'null') {
                 filters.push(`CategoryID = '${categoryIDResult.value}'`);
             }
 
             // Exclude agent management actions by default (to prevent recursion)
             if (excludeAgentMgmt) {
+                // Get Entity Info for ActionCategory to ensure we have the correct schema and base view
+                const md = new Metadata();
+                const actionCategoryInfo = md.EntityByName('Action Categories');
+                const baseViewStr = `${actionCategoryInfo.SchemaName}.${actionCategoryInfo.BaseView}`;
                 // This assumes Agent Management category has been created
-                filters.push(`CategoryID NOT IN (SELECT ID FROM ActionCategory WHERE Name = 'Agent Management')`);
+                filters.push(`CategoryID NOT IN (SELECT ID FROM ${baseViewStr} WHERE Name = 'Agent Management')`);
             }
 
             // Run the view to get actions
             const rv = new RunView();
-            const result = await rv.RunView<ActionEntity>({
+            const result = await rv.RunView({
                 EntityName: 'Actions',
                 ExtraFilter: filters.join(' AND '),
                 OrderBy: 'Category, Name',
-                ResultType: 'entity_object'
+                ResultType: 'simple'
             }, params.ContextUser);
 
             if (result.Success) {
                 // Transform the results to return only necessary fields
-                const actions = (result.Results || []).map(action => ({
+                const actions = await Promise.all((result.Results || []).map(async action => ({
                     ID: action.ID,
                     Name: action.Name,
                     Description: action.Description,
@@ -67,8 +71,8 @@ export class ListActionsAction extends BaseAgentManagementAction {
                     CategoryID: action.CategoryID,
                     Status: action.Status,
                     // Include parameter information for planning
-                    Parameters: this.extractActionParameters(action)
-                }));
+                    Parameters: await this.extractActionParameters(action, params.ContextUser)
+                })));
 
                 // Add output parameter
                 params.Params.push({
@@ -98,12 +102,37 @@ export class ListActionsAction extends BaseAgentManagementAction {
 
     /**
      * Extract parameter information from an action entity
-     * This would typically load the Action Params related entities
+     * This loads the Action Params related entities
      */
-    private extractActionParameters(action: ActionEntity): any[] {
-        // TODO: In a complete implementation, this would load the Action Params
-        // For now, returning a placeholder
-        return [];
+    private async extractActionParameters(action: ActionEntity, contextUser: any): Promise<any[]> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'Action Params',
+                ExtraFilter: `ActionID = '${action.ID}'`,
+                OrderBy: 'Name',
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (result.Success) {
+                return (result.Results || []).map(param => ({
+                    ID: param.ID,
+                    Name: param.Name,
+                    Type: param.Type,
+                    ValueType: param.ValueType,
+                    IsArray: param.IsArray,
+                    IsRequired: param.IsRequired,
+                    DefaultValue: param.DefaultValue,
+                    Description: param.Description
+                }));
+            } else {
+                console.error(`Failed to load parameters for action ${action.Name}:`, result.ErrorMessage);
+                return [];
+            }
+        } catch (error) {
+            console.error(`Error loading parameters for action ${action.Name}:`, error);
+            return [];
+        }
     }
 }
 
