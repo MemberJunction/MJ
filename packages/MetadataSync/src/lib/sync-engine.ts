@@ -158,17 +158,21 @@ export class SyncEngine {
             const jsonString = JSON.stringify(jsonContent);
             const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
             
+            let processedJson: any;
             if (hasIncludes) {
               // Process @include directives with a fresh preprocessor instance
               const preprocessor = new JsonPreprocessor();
-              const processedJson = await preprocessor.processFile(fullPath);
-              
-              // Return as JSON string since @file references typically expect string content
-              return JSON.stringify(processedJson, null, 2);
+              processedJson = await preprocessor.processFile(fullPath);
             } else {
-              // No @include directives, just return the JSON as a formatted string
-              return JSON.stringify(jsonContent, null, 2);
+              processedJson = jsonContent;
             }
+            
+            // Now recursively process any @file references within the JSON
+            const fileDir = path.dirname(fullPath);
+            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
+            
+            // Return as JSON string since @file references typically expect string content
+            return JSON.stringify(processedJson, null, 2);
           } catch (jsonError) {
             // Not valid JSON or error processing, fall back to text file handling
             const fileContent = await fs.readFile(fullPath, 'utf-8');
@@ -824,6 +828,72 @@ export class SyncEngine {
     }
     
     return processedContent;
+  }
+
+  /**
+   * Recursively process field values in a JSON object
+   * 
+   * Processes all string values in a JSON object through processFieldValue,
+   * which handles @file, @lookup, @parent, @root references. This ensures
+   * that nested @file references within JSON files are properly resolved.
+   * 
+   * @param obj - JSON object to process
+   * @param baseDir - Base directory for resolving relative file paths
+   * @param parentRecord - Parent entity record for @parent references
+   * @param rootRecord - Root entity record for @root references
+   * @param depth - Current recursion depth
+   * @param batchContext - Batch processing context
+   * @returns Promise resolving to processed JSON object
+   * @private
+   */
+  private async processJsonFieldValues(
+    obj: any,
+    baseDir: string,
+    parentRecord?: BaseEntity | null,
+    rootRecord?: BaseEntity | null,
+    depth: number = 0,
+    batchContext?: Map<string, BaseEntity>
+  ): Promise<any> {
+    // Handle null and undefined
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      return Promise.all(
+        obj.map(item => 
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)
+        )
+      );
+    }
+
+    // Handle objects
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        // Process string values that might contain references
+        if (typeof value === 'string') {
+          // Check if this looks like a reference that needs processing
+          if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
+              value.startsWith('@parent:') || value.startsWith('@root:')) {
+            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+          } else {
+            result[key] = value;
+          }
+        } else if (typeof value === 'object') {
+          // Recursively process nested objects
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+        } else {
+          // Keep primitive values as-is
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+
+    // Return primitive values as-is
+    return obj;
   }
   
 }

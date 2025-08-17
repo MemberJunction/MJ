@@ -1082,9 +1082,35 @@ The system now automatically resolves `@file` references found within JSON files
 
 The `component-spec.json` file's `@include` directives are processed before the content is returned to the `Specification` field, ensuring all includes are resolved.
 
+#### Nested @file References in JSON Files
+The system now recursively processes `@file` references within JSON files loaded via `@file`. This enables powerful composition patterns:
+
+```json
+// components.json
+{
+  "fields": {
+    "Name": "RecentDealsList",
+    "Specification": "@file:spec/recent-deals-list.spec.json"
+  }
+}
+
+// spec/recent-deals-list.spec.json
+{
+  "name": "RecentDealsList",
+  "description": "List of recent deals",
+  "code": "@file:../code/recent-deals-list.js",  // This nested @file is now resolved!
+  "style": "@file:../styles/deals.css",
+  "config": {
+    "template": "@file:../templates/deal-row.html"  // Even deeply nested @file references work
+  }
+}
+```
+
+All `@file` references are recursively resolved, regardless of nesting depth. The final result will have all file contents properly loaded and embedded.
+
 #### Processing Order
 1. @include directives are processed first (recursively)
-2. @file references within @included JSON files are also resolved
+2. @file references are recursively resolved (including nested ones in JSON)
 3. Then @template references
 4. Finally, other @ references (@lookup, etc.)
 
