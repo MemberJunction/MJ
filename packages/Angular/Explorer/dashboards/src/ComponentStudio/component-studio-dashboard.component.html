@@ -42,9 +42,9 @@
   </div>
 
   <!-- Main Content with Splitter -->
-  <kendo-splitter orientation="horizontal" style="flex: 1; height: auto;">
+  <kendo-splitter orientation="horizontal">
     <!-- Left Panel - Component List -->
-    <kendo-splitter-pane [min]="'350px'" [max]="'600px'" [size]="'400px'">
+    <kendo-splitter-pane [min]="'350px'" [max]="'650px'" [size]="'400px'">
       <div class="components-panel">
         <div class="panel-header">
           <div class="panel-header-top">
@@ -272,10 +272,8 @@
     <kendo-splitter-pane [min]="'400px'">
       <div class="component-display">
         @if (selectedComponent) {
-          <!-- Splitter for component and editors -->
-          <kendo-splitter orientation="horizontal" class="component-editor-splitter">
-            <!-- Left side - Running Component -->
-            <kendo-splitter-pane [min]="'300px'" [collapsible]="false" [size]="isDetailsPaneCollapsed ? '100%' : '50%'">
+          <kendo-splitter orientation="horizontal">
+            <kendo-splitter-pane [size]="isDetailsPaneCollapsed ? '100%' : '50%'">
               <div class="component-runtime">
                 @if (isRunning && componentSpec) {
                     @if (currentError) {
@@ -345,93 +343,98 @@
                   </div>
                 }
               </div>
+
             </kendo-splitter-pane>
-            
-            <!-- Right side - Spec and Code Editors -->
-            <kendo-splitter-pane [min]="'400px'" [collapsible]="true" [collapsed]="isDetailsPaneCollapsed">
-              <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
-                <!-- Spec Tab -->
-                <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
-                  <ng-template kendoTabContent>
-                    <div class="tab-content spec-tab">
-                      <div class="editor-header">
-                        <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
-                        <div class="editor-actions">
-                          @if (isEditingSpec) {
-                            <button kendoButton [themeColor]="'primary'" (click)="applySpecChanges()">
-                              <span class="fa-solid fa-check"></span> Apply Changes
-                            </button>
-                            <button kendoButton (click)="initializeEditors()">
-                              <span class="fa-solid fa-times"></span> Cancel
-                            </button>
-                          }
-                          @if (isRunning) {
-                            <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
-                              <span class="fa-solid fa-sync"></span> Refresh Component
-                            </button>
-                          }
+            <kendo-splitter-pane [size]="isDetailsPaneCollapsed ? '0px' : '50%'">
+              <div>
+                <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
+                  <!-- Spec Tab -->
+                  <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
+                    <ng-template kendoTabContent>
+                      <div class="tab-content spec-tab">
+                        <div class="editor-header">
+                          <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
+                          <div class="editor-actions">
+                            @if (isEditingSpec) {
+                              <button kendoButton [themeColor]="'primary'" (click)="applySpecChanges()">
+                                <span class="fa-solid fa-check"></span> Apply Changes
+                              </button>
+                              <button kendoButton (click)="initializeEditors()">
+                                <span class="fa-solid fa-times"></span> Cancel
+                              </button>
+                            }
+                            @if (isRunning) {
+                              <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                                <span class="fa-solid fa-sync"></span> Refresh Component
+                              </button>
+                            }
+                          </div>
+                        </div>
+                        <div class="editor-wrapper">
+                          <mj-code-editor
+                            [(ngModel)]="editableSpec"
+                            (ngModelChange)="onSpecChange($event)"
+                            [language]="'json'"
+                            [readonly]="false"
+                            style="height: 100%; width: 100%;">
+                          </mj-code-editor>
                         </div>
                       </div>
-                      <div class="editor-wrapper">
-                        <mj-code-editor
-                          [(ngModel)]="editableSpec"
-                          (ngModelChange)="onSpecChange($event)"
-                          [language]="'json'"
-                          [readonly]="false"
-                          style="height: 100%; width: 100%;">
-                        </mj-code-editor>
-                      </div>
-                    </div>
-                  </ng-template>
-                </kendo-tabstrip-tab>
-              
-                <!-- Code Tab -->
-                <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 1">
-                  <ng-template kendoTabContent>
-                    <div class="tab-content code-tab">
-                      <div class="editor-header">
-                        <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
-                        <div class="editor-actions">
-                          @if (isEditingCode) {
-                            <button kendoButton [themeColor]="'primary'" (click)="applyCodeChanges()">
-                              <span class="fa-solid fa-check"></span> Apply Changes
-                            </button>
-                            <button kendoButton (click)="initializeEditors()">
-                              <span class="fa-solid fa-times"></span> Cancel
-                            </button>
-                          }
-                          @if (isRunning) {
-                            <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
-                              <span class="fa-solid fa-sync"></span> Refresh Component
-                            </button>
-                          }
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                
+                  <!-- Code Tab -->
+                  <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 1">
+                    <ng-template kendoTabContent>
+                      <div class="tab-content code-tab">
+                        <div class="editor-header">
+                          <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
+                          <div class="editor-actions">
+                            @if (isEditingCode) {
+                              <button kendoButton [themeColor]="'primary'" (click)="applyCodeChanges()">
+                                <span class="fa-solid fa-check"></span> Apply Changes
+                              </button>
+                              <button kendoButton (click)="initializeEditors()">
+                                <span class="fa-solid fa-times"></span> Cancel
+                              </button>
+                            }
+                            @if (isRunning) {
+                              <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                                <span class="fa-solid fa-sync"></span> Refresh Component
+                              </button>
+                            }
+                          </div>
+                        </div>
+                        
+                        <!-- Always use panel bar for consistency and to show all components -->
+                        <div class="editor-wrapper">
+                          <kendo-panelbar class="code-sections">
+                            @for (section of getComponentCodeSections(); track section.title; let i = $index) {
+                              <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
+                                <ng-template kendoPanelBarContent>
+                                  <mj-code-editor
+                                    [ngModel]="section.code"
+                                    (ngModelChange)="onCodeSectionChange($event, i)"
+                                    [language]="'javascript'"
+                                    [readonly]="false"
+                                    style="height: 400px; width: 100%;">
+                                  </mj-code-editor>
+                                </ng-template>
+                              </kendo-panelbar-item>
+                            }
+                          </kendo-panelbar>
                         </div>
                       </div>
-                      
-                      <!-- Always use panel bar for consistency and to show all components -->
-                      <div class="editor-wrapper">
-                        <kendo-panelbar class="code-sections">
-                          @for (section of getComponentCodeSections(); track section.title; let i = $index) {
-                            <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
-                              <ng-template kendoPanelBarContent>
-                                <mj-code-editor
-                                  [ngModel]="section.code"
-                                  (ngModelChange)="onCodeSectionChange($event, i)"
-                                  [language]="'javascript'"
-                                  [readonly]="false"
-                                  style="height: 400px; width: 100%;">
-                                </mj-code-editor>
-                              </ng-template>
-                            </kendo-panelbar-item>
-                          }
-                        </kendo-panelbar>
-                      </div>
-                    </div>
-                  </ng-template>
-                </kendo-tabstrip-tab>
-              </kendo-tabstrip>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                </kendo-tabstrip>
+              </div>
             </kendo-splitter-pane>
           </kendo-splitter>
+
+          @if (!isDetailsPaneCollapsed) {
+           
+          }
         } @else {
           <!-- Empty State when no component selected -->
           <div class="empty-state">
