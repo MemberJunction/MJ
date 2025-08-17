@@ -234,7 +234,9 @@ export class PushService {
       } catch (error) {
         // Rollback transaction on error
         if (!options.dryRun) {
+          callbacks?.onError?.('\n⚠️  Rolling back database transaction due to error...');
           await transactionManager.rollbackTransaction();
+          callbacks?.onError?.('✓ Database transaction rolled back successfully');
         }
         throw error;
       }
@@ -400,10 +402,20 @@ export class PushService {
               // Process results and check for errors
               for (const batchResult of batchResults) {
                 if (!batchResult.success) {
-                  // Fail fast on first error
+                  // Fail fast on first error with detailed logging
                   const err = batchResult.error as Error;
                   const rec = batchResult.record as FlattenedRecord;
-                  throw new Error(`Failed to process ${rec.entityName} record at ${rec.path}: ${err.message}`);
+                  
+                  callbacks?.onError?.(`\n❌ BATCH PROCESSING FAILED`);
+                  callbacks?.onError?.(`   Processing halted at dependency level ${levelIndex}`);
+                  callbacks?.onError?.(`   Failed record: ${rec.entityName} at ${rec.path}`);
+                  callbacks?.onError?.(`   Error: ${err.message}`);
+                  callbacks?.onError?.(`   Records in this batch: ${batch.length}`);
+                  callbacks?.onError?.(`   Records successfully processed before failure: ${batchResults.filter(r => r.success).length}`);
+                  
+                  // The error has already been logged in detail by processFlattenedRecord
+                  // Now throw to trigger rollback
+                  throw new Error(`Batch processing failed: ${err.message}`);
                 }
                 
                 // Update stats for successful results
@@ -619,10 +631,61 @@ export class PushService {
       }
     }
     
-    // Save the record
+    // Save the record with detailed error logging
     const saveResult = await entity.Save();
     if (!saveResult) {
-      throw new Error(`Failed to save ${entityName} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
+      // Build detailed error information
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      const primaryKeyInfo: string[] = [];
+      const fieldInfo: string[] = [];
+      
+      // Collect primary key information
+      if (entityInfo) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          const pkValue = entity.Get(pk.Name);
+          primaryKeyInfo.push(`${pk.Name}=${this.formatFieldValue(pkValue)}`);
+        }
+      }
+      
+      // Collect field values that were being saved
+      for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
+        const processedValue = entity.Get(fieldName);
+        fieldInfo.push(`${fieldName}=${this.formatFieldValue(processedValue)}`);
+      }
+      
+      // Get the actual error details from the entity
+      const errorMessage = entity.LatestResult?.Message || 'Unknown error';
+      const errorDetails = entity.LatestResult?.Errors?.map(err => 
+        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+      )?.join(', ') || '';
+      
+      // Log detailed error information
+      callbacks?.onError?.(`\n❌ FATAL ERROR: Failed to save ${entityName} record`);
+      callbacks?.onError?.(`   Entity: ${entityName}`);
+      if (primaryKeyInfo.length > 0) {
+        callbacks?.onError?.(`   Primary Key: {${primaryKeyInfo.join(', ')}}`);
+      }
+      callbacks?.onError?.(`   Record Path: ${flattenedRecord.path}`);
+      callbacks?.onError?.(`   Is New Record: ${isNew}`);
+      callbacks?.onError?.(`   Field Values Being Saved:`);
+      for (const field of fieldInfo) {
+        callbacks?.onError?.(`     - ${field}`);
+      }
+      callbacks?.onError?.(`   SQL Error: ${errorMessage}`);
+      if (errorDetails) {
+        callbacks?.onError?.(`   Additional Details: ${errorDetails}`);
+      }
+      
+      // Check for common issues
+      if (errorMessage.includes('conversion failed') || errorMessage.includes('GUID')) {
+        callbacks?.onError?.(`   ⚠️  This appears to be a GUID/UUID format error. Check that all ID fields contain valid GUIDs.`);
+      }
+      if (errorMessage.includes('transaction')) {
+        callbacks?.onError?.(`   ⚠️  Transaction error detected. The database transaction may be corrupted.`);
+      }
+      
+      // Throw error to trigger rollback and stop processing
+      throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
     }
     
     // Add to batch context AFTER save so it has an ID for child @parent:ID references
