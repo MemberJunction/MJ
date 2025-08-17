@@ -1,0 +1,48 @@
+{
+  "name": "InvoiceStatusDashboard",
+  "namespace": "CRM/Finance",
+  "type": "Dashboard",
+  "location": "embedded",
+  "code": "@file:../code/invoice-status-dashboard.js",
+  "functionalRequirements": "## Invoice Status Dashboard\n\n### Purpose\nTrack invoice statuses, payment timelines, and accounts receivable aging with actionable insights.\n\n### Core Features\n- **Status Overview**: Pie chart of invoice statuses\n- **Aging Analysis**: Outstanding invoice aging buckets\n- **Payment Timeline**: Calendar view of due dates\n- **Customer Balance**: Top debtors and credit risks\n- **Collection Metrics**: DSO and collection efficiency\n- **Interactive Charts**: Using Plotly for rich visuals\n- **Slide-out Actions**: Quick actions for overdue invoices\n- **Card/List Views**: Multiple display options\n\n### Visualizations\n- Donut chart for status distribution\n- Waterfall chart for cash flow\n- Heatmap calendar for due dates\n- Bar charts for aging analysis",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Invoices",
+        "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "DueDate", "TotalAmount", "Status", "PaidAmount"],
+        "filterFields": ["Status", "DueDate", "AccountID"],
+        "sortFields": ["DueDate", "TotalAmount"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Payments",
+        "displayFields": ["InvoiceID", "PaymentDate", "Amount", "PaymentMethod"],
+        "filterFields": ["PaymentDate", "InvoiceID"],
+        "sortFields": ["PaymentDate"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: InvoiceStatusDashboard\n- Sub-components:\n  - StatusOverview: Pie chart summary\n  - AgingChart: Aging buckets visualization\n  - PaymentCalendar: Due date heatmap\n  - CustomerBalances: Top debtor list\n  - ActionPanel: Quick actions slide-out\n\n### Calculations\n- Days Sales Outstanding (DSO)\n- Aging buckets (0-30, 31-60, 61-90, 90+)\n- Collection rate trends\n- Average payment time",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Navigate to invoice details"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "Plotly",
+      "version": "^2.27.1",
+      "globalVariable": "Plotly"
+    },
+    {
+      "name": "accounting",
+      "version": "^0.4.1",
+      "globalVariable": "accounting"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "ReasonBreakdown",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/reason-breakdown.js",
+  "functionalRequirements": "## Reason Breakdown\n\n### Purpose\nAnalyze reasons for wins and losses.\n\n### Features\n- Categorized reasons\n- Frequency analysis\n- Impact scoring\n- Actionable insights",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives reason analysis data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- reasons: Array of win/loss reasons\n- type: 'wins' or 'losses'",
+  "properties": [
+    {
+      "name": "reasons",
+      "type": "array",
+      "required": true,
+      "description": "Win/loss reason data"
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "required": true,
+      "description": "Analysis type (wins/losses)"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

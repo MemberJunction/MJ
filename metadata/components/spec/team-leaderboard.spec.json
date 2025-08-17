@@ -1,0 +1,30 @@
+{
+  "name": "TeamLeaderboard",
+  "namespace": "CRM/Dashboards",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/team-leaderboard.js",
+  "functionalRequirements": "## Team Leaderboard\n\n### Purpose\nDisplay top performing sales representatives with key metrics.\n\n### Features\n- Ranked list of sales reps\n- Key metrics: deals closed, revenue, win rate\n- Visual ranking indicators\n- Click to view rep details\n- Top 3 highlighting",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives aggregated rep performance data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- repData: Array of rep performance objects\n- onRepClick: Callback for rep selection\n\n### Display\n- Ranked table with medals for top 3\n- Formatted metrics\n- Hover effects",
+  "properties": [
+    {
+      "name": "repData",
+      "type": "array",
+      "required": true,
+      "description": "Array of rep performance data"
+    },
+    {
+      "name": "onRepClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback for rep selection"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

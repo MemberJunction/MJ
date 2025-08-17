@@ -1,0 +1,59 @@
+{
+  "Name": "DrillDownPanel",
+  "Description": "Slide-out panel for drilling down into deal details with filtering and sorting",
+  "Category": "Panel",
+  "Type": "panel",
+  "Properties": [
+    {
+      "Name": "isOpen",
+      "Type": "boolean",
+      "Description": "Whether the panel is open"
+    },
+    {
+      "Name": "drillDownData",
+      "Type": "object",
+      "Description": "Object containing title, deals array, type, and metadata"
+    },
+    {
+      "Name": "stageColors",
+      "Type": "object",
+      "Description": "Object mapping stage names to colors"
+    },
+    {
+      "Name": "onClose",
+      "Type": "function",
+      "Description": "Callback when panel is closed"
+    },
+    {
+      "Name": "onOpenDeal",
+      "Type": "function",
+      "Description": "Callback to open a deal in external app"
+    }
+  ],
+  "Events": [
+    {
+      "Name": "onPanelClose",
+      "Description": "Fired when the panel is closed",
+      "Parameters": []
+    },
+    {
+      "Name": "onDealOpen",
+      "Description": "Fired when a deal open action is triggered",
+      "Parameters": [
+        {
+          "Name": "entityName",
+          "Type": "string",
+          "Description": "Name of the entity"
+        },
+        {
+          "Name": "primaryKey",
+          "Type": "array",
+          "Description": "Primary key array"
+        }
+      ]
+    }
+  ],
+  "UsageExample": "```javascript\n<DrillDownPanel\n  isOpen={isPanelOpen}\n  drillDownData={drillDownData}\n  stageColors={stageColors}\n  onClose={() => setIsPanelOpen(false)}\n  onOpenDeal={(entityName, pk) => callbacks.OpenEntityRecord(entityName, pk)}\n/>\n```",
+  "FunctionalRequirements": "- Slide in from right side at top: 75px\n- Display title and deal count/value summary\n- Allow filtering deals by text search\n- Support sorting by Amount, CloseDate, Probability\n- Toggle between card and list views\n- Include close button in header\n- Use appropriate background color based on drill-down type",
+  "TechnicalDesign": "Fixed position panel with CSS transitions. Contains local state for filter text, sort order, and display mode. Reuses DealCards and DealList components for display. Header color determined by drillDownData type/metadata."
+}

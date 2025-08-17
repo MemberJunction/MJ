@@ -1,0 +1,24 @@
+{
+  "name": "KPIGauges",
+  "namespace": "CRM/Finance",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/kpi-gauges.js",
+  "functionalRequirements": "## KPI Gauges\n\n### Purpose\nDisplay key financial metrics as gauge charts.\n\n### Features\n- Multiple gauge displays\n- Target vs actual\n- Color coding by performance\n- Percentage indicators",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives KPI metrics from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- kpis: Array of KPI data\n\n### Display\n- ApexCharts radial gauges\n- Dynamic colors",
+  "properties": [
+    {
+      "name": "kpis",
+      "type": "array",
+      "required": true,
+      "description": "KPI metrics data"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

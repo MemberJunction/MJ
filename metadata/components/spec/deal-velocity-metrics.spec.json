@@ -1,0 +1,48 @@
+{
+  "name": "DealVelocityMetrics",
+  "namespace": "CRM/Analytics",
+  "type": "Metrics",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-metrics.js",
+  "functionalRequirements": "## Deal Velocity Metrics\n\n### Purpose\nAnalyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics.\n\n### Core Features\n- **Stage Duration Analysis**: Time spent in each stage\n- **Bottleneck Detection**: Identify slow-moving stages\n- **Trend Analysis**: Historical velocity changes\n- **Rep Comparison**: Compare velocity across team\n- **Cohort Analysis**: Group deals by characteristics\n- **Interactive Heatmap**: Using ECharts for visualization\n- **Slide-out Details**: Deep dive into specific metrics\n- **Export Capabilities**: Download metrics as CSV\n\n### Visualizations\n- Heatmap showing stage durations\n- Line charts for trend analysis\n- Box plots for distribution\n- Comparison matrices",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "Owner", "CreatedAt", "ModifiedAt"],
+        "filterFields": ["Stage", "Owner", "CreatedAt"],
+        "sortFields": ["CreatedAt", "Amount"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Deal Stage History",
+        "displayFields": ["DealID", "Stage", "EnteredAt", "ExitedAt", "Duration"],
+        "filterFields": ["DealID", "Stage"],
+        "sortFields": ["EnteredAt"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: DealVelocityMetrics\n- Sub-components:\n  - VelocityHeatmap: Stage duration visualization\n  - TrendChart: Historical trends\n  - RepComparison: Team performance\n  - MetricsExport: CSV export functionality\n\n### Data Processing\n- Calculate stage durations\n- Identify outliers and bottlenecks\n- Generate cohort groupings\n- Statistical analysis",
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "ECharts",
+      "version": "^5.4.3",
+      "globalVariable": "echarts"
+    },
+    {
+      "name": "papaparse",
+      "version": "^5.4.1",
+      "globalVariable": "Papa"
+    },
+    {
+      "name": "simple-statistics",
+      "version": "^7.8.3",
+      "globalVariable": "ss"
+    }
+  ]
+}

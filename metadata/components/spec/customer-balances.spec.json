@@ -1,0 +1,30 @@
+{
+  "name": "CustomerBalances",
+  "namespace": "CRM/Finance",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/customer-balances.js",
+  "functionalRequirements": "## Customer Balances\n\n### Purpose\nDisplay customer outstanding balances table.\n\n### Features\n- Sortable table\n- Customer name, balance, age\n- Click for details\n- Pagination",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives customer balance data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- balances: Array of customer balances\n- onCustomerClick: Selection callback",
+  "properties": [
+    {
+      "name": "balances",
+      "type": "array",
+      "required": true,
+      "description": "Customer balance data"
+    },
+    {
+      "name": "onCustomerClick",
+      "type": "function",
+      "required": false,
+      "description": "Customer selection callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

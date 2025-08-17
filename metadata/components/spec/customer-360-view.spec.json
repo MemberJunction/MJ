@@ -1,0 +1,58 @@
+{
+  "name": "Customer360View",
+  "namespace": "CRM/Customer",
+  "type": "Profile",
+  "location": "embedded",
+  "code": "@file:../code/customer-360-view.js",
+  "functionalRequirements": "## Customer 360 View\n\n### Purpose\nComprehensive customer profile showing all interactions, transactions, and insights in a unified view.\n\n### Core Features\n- **Customer Summary**: Key metrics and scores\n- **Interaction Timeline**: All touchpoints chronologically\n- **Purchase History**: Products and revenue analysis\n- **Support Tickets**: Issue tracking and resolution\n- **Engagement Score**: Customer health indicators\n- **Interactive Tabs**: Using Semantic UI components\n- **Slide-out Details**: Deep dive panels\n- **Activity Feed**: Real-time updates\n\n### Sections\n- Profile header with key stats\n- Tabbed interface for different data views\n- Timeline visualization\n- Relationship mapping\n- Predictive insights",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
+        "filterFields": ["ID"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Contacts",
+        "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
+        "filterFields": ["AccountID"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
+        "filterFields": ["AccountID"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: Customer360View\n- Sub-components:\n  - CustomerHeader: Profile summary\n  - InteractionTimeline: Activity history\n  - PurchaseAnalysis: Transaction insights\n  - EngagementMetrics: Health scores\n  - RelationshipMap: Contact network\n\n### Features\n- Tab-based navigation\n- Lazy loading for performance\n- Real-time data updates\n- Predictive analytics",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Navigate to related entities"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "semantic-ui",
+      "version": "^2.5.0",
+      "globalVariable": "semanticUI"
+    },
+    {
+      "name": "Victory",
+      "version": "^36.9.1",
+      "globalVariable": "Victory"
+    }
+  ]
+}

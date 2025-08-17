@@ -1,0 +1,30 @@
+{
+  "name": "ImprovementInsights",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/improvement-insights.js",
+  "functionalRequirements": "## Improvement Insights\n\n### Purpose\nProvide actionable recommendations based on analysis.\n\n### Features\n- AI-generated insights\n- Priority recommendations\n- Action items\n- Success metrics",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives analysis results and insights"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- insights: Array of insight recommendations\n- metrics: Success metrics data",
+  "properties": [
+    {
+      "name": "insights",
+      "type": "array",
+      "required": true,
+      "description": "Improvement recommendations"
+    },
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": false,
+      "description": "Success metrics"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,55 @@
+{
+  "name": "ProductRevenueMatrix",
+  "namespace": "CRM/Analytics",
+  "type": "Matrix",
+  "location": "embedded",
+  "code": "@file:../code/product-revenue-matrix.js",
+  "functionalRequirements": "## Product Revenue Matrix\n\n### Purpose\nVisualize product performance across customers and time periods in an interactive matrix format.\n\n### Core Features\n- **Product/Customer Matrix**: Cross-reference sales data\n- **Time Period Analysis**: Monthly, quarterly, yearly views\n- **Growth Indicators**: Show trends with sparklines\n- **Profitability Metrics**: Margin analysis per product\n- **Interactive Treemap**: Using Highcharts visualization\n- **Product Categories**: Group products hierarchically\n- **Slide-out Details**: Product performance deep-dive\n- **Filtering & Sorting**: Multiple sort options\n\n### Visualizations\n- Treemap for product hierarchy\n- Matrix grid with color coding\n- Sparklines for trends\n- Bubble chart for volume/value analysis",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Products",
+        "displayFields": ["ProductName", "Category", "Price", "Cost", "SKU"],
+        "filterFields": ["Category"],
+        "sortFields": ["ProductName", "Price"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Invoice Line Items",
+        "displayFields": ["InvoiceID", "ProductID", "Quantity", "Amount", "Discount"],
+        "filterFields": ["ProductID", "InvoiceID"],
+        "sortFields": ["Amount"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Invoices",
+        "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "TotalAmount"],
+        "filterFields": ["InvoiceDate", "AccountID"],
+        "sortFields": ["InvoiceDate"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: ProductRevenueMatrix\n- Sub-components:\n  - RevenueTreemap: Hierarchical product visualization\n  - ProductMatrix: Grid view of products\n  - TrendSparkline: Mini trend charts\n  - ProductDetails: Detailed analysis panel\n\n### Data Processing\n- Aggregate sales by product and period\n- Calculate margins and profitability\n- Generate trend data\n- Build hierarchical structures",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Navigate to product details"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "Highcharts",
+      "version": "^11.2.0",
+      "globalVariable": "Highcharts"
+    },
+    {
+      "name": "chroma-js",
+      "version": "^2.4.2",
+      "globalVariable": "chroma"
+    }
+  ]
+}

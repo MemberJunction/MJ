@@ -1,0 +1,24 @@
+{
+  "name": "CashFlowChart",
+  "namespace": "CRM/Finance",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/cash-flow-chart.js",
+  "functionalRequirements": "## Cash Flow Chart\n\n### Purpose\nVisualize cash flow patterns.\n\n### Features\n- Waterfall chart\n- Inflows vs outflows\n- Running balance\n- Category breakdown",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives cash flow data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- cashFlowData: Array of cash flow entries\n\n### Chart\n- ApexCharts waterfall\n- Color coding",
+  "properties": [
+    {
+      "name": "cashFlowData",
+      "type": "array",
+      "required": true,
+      "description": "Cash flow data entries"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

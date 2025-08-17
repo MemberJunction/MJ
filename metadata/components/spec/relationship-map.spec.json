@@ -1,0 +1,30 @@
+{
+  "name": "RelationshipMap",
+  "namespace": "CRM/Customer",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/relationship-map.js",
+  "functionalRequirements": "## Relationship Map\n\n### Purpose\nVisualize customer relationships and connections.\n\n### Features\n- Network graph visualization\n- Relationship types\n- Connection strength\n- Interactive nodes",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives relationship data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- relationships: Array of relationship data\n- selectedNode: Currently selected node",
+  "properties": [
+    {
+      "name": "relationships",
+      "type": "array",
+      "required": true,
+      "description": "Customer relationship connections"
+    },
+    {
+      "name": "selectedNode",
+      "type": "string",
+      "required": false,
+      "description": "Selected node ID"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

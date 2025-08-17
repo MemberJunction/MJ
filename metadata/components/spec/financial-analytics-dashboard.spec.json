@@ -1,0 +1,53 @@
+{
+  "name": "FinancialAnalyticsDashboard",
+  "namespace": "CRM/Finance",
+  "type": "Dashboard",
+  "location": "embedded",
+  "code": "@file:../code/financial-analytics-dashboard.js",
+  "functionalRequirements": "## Financial Analytics Dashboard\n\n### Purpose\nComprehensive financial overview with revenue trends, forecasting, and profitability analysis.\n\n### Core Features\n- **Revenue Trends**: Historical and projected revenue\n- **Cash Flow Analysis**: Income vs expenses tracking\n- **Profitability Metrics**: Margin analysis by product/customer\n- **Forecast Modeling**: AI-powered predictions\n- **Budget vs Actual**: Variance analysis\n- **Interactive Gauges**: Using Recharts for KPIs\n- **Slide-out Reports**: Detailed financial reports\n- **Export Options**: PDF and Excel export\n\n### Visualizations\n- Area charts for revenue trends\n- Gauge charts for KPIs\n- Waterfall charts for P&L\n- Scatter plots for correlation analysis",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Invoices",
+        "displayFields": ["InvoiceDate", "TotalAmount", "Status"],
+        "filterFields": ["InvoiceDate", "Status"],
+        "sortFields": ["InvoiceDate"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["CloseDate", "Amount", "Stage", "Probability"],
+        "filterFields": ["CloseDate", "Stage"],
+        "sortFields": ["CloseDate"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Products",
+        "displayFields": ["ProductName", "Price", "Cost"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: FinancialAnalyticsDashboard\n- Sub-components:\n  - RevenueTrend: Time series analysis\n  - CashFlowChart: Income/expense flow\n  - ProfitabilityMatrix: Margin analysis\n  - ForecastModel: Predictive analytics\n  - KPIGauges: Performance indicators\n\n### Features\n- Real-time calculations\n- Statistical forecasting\n- Responsive charts\n- Export functionality",
+  "properties": [],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    },
+    {
+      "name": "jspdf",
+      "version": "^2.5.1",
+      "globalVariable": "jsPDF"
+    },
+    {
+      "name": "xlsx",
+      "version": "^0.20.1",
+      "globalVariable": "XLSX"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "Name": "PipelineKanban",
+  "Description": "Visual representation of deals across pipeline stages in a kanban board layout",
+  "Category": "Pipeline",
+  "Type": "kanban",
+  "Properties": [
+    {
+      "Name": "deals",
+      "Type": "array",
+      "Description": "Array of deal objects to display"
+    },
+    {
+      "Name": "stages",
+      "Type": "array",
+      "Description": "Array of pipeline stage names"
+    },
+    {
+      "Name": "stageColors",
+      "Type": "object",
+      "Description": "Object mapping stage names to colors"
+    },
+    {
+      "Name": "onStageClick",
+      "Type": "function",
+      "Description": "Callback when a stage card is clicked"
+    }
+  ],
+  "Events": [
+    {
+      "Name": "onStageSelect",
+      "Description": "Fired when a pipeline stage is clicked",
+      "Parameters": [
+        {
+          "Name": "stage",
+          "Type": "string",
+          "Description": "Name of the stage clicked"
+        },
+        {
+          "Name": "stageDeals",
+          "Type": "array",
+          "Description": "Deals in the selected stage"
+        }
+      ]
+    }
+  ],
+  "UsageExample": "```javascript\n<PipelineKanban\n  deals={deals}\n  stages={stages}\n  stageColors={stageColors}\n  onStageClick={(title, deals, type, stage) => handleDrillDown(title, deals, type, stage)}\n/>\n```",
+  "FunctionalRequirements": "- Display all pipeline stages in a horizontal grid\n- Show deal count and total value for each stage\n- Use stage-specific colors for visual distinction\n- Make each stage card clickable for drill-down\n- Show hover effects on stage cards",
+  "TechnicalDesign": "Renders a responsive grid of stage cards. Filters deals by stage and calculates metrics. Uses color-coded borders and hover animations. Formats currency values using helper function."
+}

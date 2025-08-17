@@ -1,0 +1,36 @@
+{
+  "name": "FactorAnalysis",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/factor-analysis.js",
+  "functionalRequirements": "## Factor Analysis\n\n### Purpose\nAnalyze factors contributing to wins and losses.\n\n### Features\n- Multi-factor comparison\n- Correlation analysis\n- Heat map visualization\n- Statistical insights",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives factor analysis data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- factors: Array of factor data\n- correlations: Correlation matrix\n- onFactorSelect: Factor selection handler",
+  "properties": [
+    {
+      "name": "factors",
+      "type": "array",
+      "required": true,
+      "description": "Factor analysis data"
+    },
+    {
+      "name": "correlations",
+      "type": "object",
+      "required": false,
+      "description": "Factor correlation matrix"
+    },
+    {
+      "name": "onFactorSelect",
+      "type": "function",
+      "required": false,
+      "description": "Factor selection callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

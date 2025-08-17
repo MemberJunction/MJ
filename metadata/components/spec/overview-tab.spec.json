@@ -1,0 +1,36 @@
+{
+  "name": "OverviewTab",
+  "namespace": "CRM/UI",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/overview-tab.js",
+  "functionalRequirements": "## Overview Tab\n\n### Purpose\nDisplays summary information and key metrics in the overview tab.\n\n### Features\n- Summary cards\n- Key metrics display\n- Recent activity\n- Quick actions",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives overview data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- data: Overview data object\n- metrics: Key metrics to display\n- onAction: Action handler",
+  "properties": [
+    {
+      "name": "data",
+      "type": "object",
+      "required": true,
+      "description": "Overview data"
+    },
+    {
+      "name": "metrics",
+      "type": "array",
+      "required": false,
+      "description": "Key metrics array"
+    },
+    {
+      "name": "onAction",
+      "type": "function",
+      "required": false,
+      "description": "Action handler callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

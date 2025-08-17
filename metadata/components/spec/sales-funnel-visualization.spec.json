@@ -1,0 +1,68 @@
+{
+  "name": "SalesFunnelVisualization",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/sales-funnel-visualization.js",
+  "functionalRequirements": "## Sales Funnel Visualization\n\n### Purpose\nVisualize the sales pipeline as an interactive funnel showing conversion rates and deal values at each stage.\n\n### Core Features\n- **Interactive Funnel Chart**: Visual representation of deal flow through stages\n- **Dual View Modes**: \n  - Count view: Number of deals at each stage\n  - Value view: Total deal value at each stage\n- **Conversion Metrics**: Show conversion rates between stages\n- **Time Period Filtering**: Filter by date ranges (month, quarter, year)\n- **Slide-out Details Panel**: Click stage to see deals list\n- **Card/List View Toggle**: For deals display\n- **Sorting & Filtering**: Sort by value, date, probability\n\n### Visual Design\n- Animated funnel segments using Framer Motion\n- Color-coded stages with gradients\n- Percentage labels and value annotations\n- Smooth transitions between views\n- Side panel slides in from right",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Probability", "AccountID"],
+        "filterFields": ["Stage", "CloseDate"],
+        "sortFields": ["Amount", "CloseDate", "Probability"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "string",
+            "description": "Unique identifier"
+          },
+          {
+            "name": "DealName",
+            "type": "string",
+            "description": "Name of the deal"
+          },
+          {
+            "name": "Stage",
+            "type": "string",
+            "description": "Current stage in pipeline"
+          },
+          {
+            "name": "Amount",
+            "type": "number",
+            "description": "Deal value"
+          },
+          {
+            "name": "CloseDate",
+            "type": "date",
+            "description": "Expected close date"
+          },
+          {
+            "name": "Probability",
+            "type": "number",
+            "description": "Win probability percentage"
+          }
+        ],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation Details\n\n### Component Architecture\n- Main component: SalesFunnelVisualization\n- Sub-components:\n  - FunnelChart: Renders the funnel visualization\n  - StageDetailsPanel: Slide-out panel for stage details\n  - DealCard: Card view for individual deals\n  - FilterBar: Time period and view mode controls\n\n### Animation Strategy\n- Framer Motion for smooth transitions\n- Stagger animations for funnel segments\n- Spring physics for panel slide\n- Opacity transitions for view changes\n\n### State Management\n- deals: Array of all deals\n- selectedStage: Currently selected stage\n- viewMode: 'count' or 'value'\n- displayMode: 'cards' or 'list'\n- timeFilter: Selected time period\n- sortBy: Current sort field\n- filterBy: Active filters",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Open deal record in explorer"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "dayjs",
+      "version": "^1.11.10",
+      "globalVariable": "dayjs"
+    }
+  ]
+}

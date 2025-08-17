@@ -1,0 +1,48 @@
+{
+  "name": "SalesPipelineDashboard",
+  "namespace": "CRM/Dashboards",
+  "type": "Dashboard",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard.js",
+  "functionalRequirements": "## Sales Pipeline Dashboard\n\n### Purpose\nComprehensive dashboard showing pipeline health, velocity metrics, and team performance using interactive charts.\n\n### Core Features\n- **Pipeline Overview**: Kanban-style board with drag indicators\n- **Velocity Metrics**: Average deal cycle, stage duration\n- **Team Performance**: Rep leaderboard with activity metrics\n- **Forecast Analysis**: Pipeline coverage and projections\n- **Activity Timeline**: Recent wins, losses, and activities\n- **Interactive Charts**: Using ApexCharts for rich visualizations\n- **Slide-out Details**: Team member performance details\n- **Card/List Toggle**: For multiple data views\n\n### Visual Components\n- Stacked bar chart for pipeline stages\n- Line chart for trend analysis\n- Donut chart for win/loss distribution\n- Activity feed with real-time updates\n- Performance cards with sparklines",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "Probability"],
+        "filterFields": ["Stage", "Owner", "CloseDate"],
+        "sortFields": ["Amount", "CloseDate"],
+        "requiredPermissions": ["read"]
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "DealID", "CreatedAt", "Owner"],
+        "filterFields": ["Type", "CreatedAt"],
+        "sortFields": ["CreatedAt"],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: SalesPipelineDashboard\n- Sub-components:\n  - PipelineKanban: Stage columns with metrics\n  - VelocityChart: Deal velocity visualization\n  - TeamLeaderboard: Performance rankings\n  - ActivityFeed: Recent activities\n  - ForecastWidget: Revenue projections\n\n### Chart Configuration\n- ApexCharts for interactive visualizations\n- Real-time data updates\n- Responsive design\n- Custom tooltips and legends",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Navigate to entity details"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "ApexCharts",
+      "version": "^3.45.1",
+      "globalVariable": "ApexCharts"
+    },
+    {
+      "name": "dayjs",
+      "version": "^1.11.10",
+      "globalVariable": "dayjs"
+    }
+  ]
+}

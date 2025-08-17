@@ -631,8 +631,8 @@
       "ID": "A48CE9CD-9C8C-42E1-9045-0BFB1DF15A53"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:15:21.419Z",
-      "checksum": "95ff4c035d214326852a06a789a87dc14bff3f44647a666689cdf0e0d2536add"
+      "lastModified": "2025-08-17T15:24:39.161Z",
+      "checksum": "c347f8755d23ed38bcaf2423a983b8527277c92e490770b867ac9a2b393d00e4"
     }
   },
   {
@@ -645,14 +645,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard.spec.json"
     },
     "primaryKey": {
       "ID": "91A09357-0580-45C1-BB54-24B688D3CAD1"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:25:16.497Z",
-      "checksum": "fcbde0daff4929a298f669987be4c90ff0ebe689a0c39f4cda10d4eca1b390e5"
+      "lastModified": "2025-08-17T15:24:39.143Z",
+      "checksum": "b0493e2c9938112d243bb8002c1f7e527a5b7a51c569ceb9631ae5c5ec6fba23"
     }
   },
   {
@@ -751,8 +751,8 @@
       "ID": "D06D4A6B-F272-445D-8839-E5D1A4253381"
     },
     "sync": {
-      "lastModified": "2025-08-17T17:37:42.382Z",
-      "checksum": "77b5f9475a871f395fa4a38039ef4604cc708ef2b8147554dc8a9299af52a8a8"
+      "lastModified": "2025-08-17T15:24:39.309Z",
+      "checksum": "2c11c0ff913bf3e80c5523ed2e69b4f58a7af8c8569d5f475cb43c0c048ee6e1"
     }
   },
   {
@@ -786,13 +786,6 @@
       "VersionSequence": 1,
       "Status": "Published",
       "Specification": "@file:spec/funnel-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "1ED87375-C64F-490B-A2F4-9AD267E9429B"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.292Z",
-      "checksum": "5682b47ca2560ca408dffd42fb630bf99e7e34a9cfbf2ca9f5fd4cc8819d353d"
     }
   },
   {
@@ -805,14 +798,6 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/stage-details-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "5DD52B0E-BBBA-41C7-8D1E-CDCEA4A64BAC"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.336Z",
-      "checksum": "d3a2b655addeec0231347ec7a093bde5bed67dc5c4bdb0a5f1f9077eab7bfb70"
     }
   },
   {
@@ -825,14 +810,6 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/deal-card.spec.json"
-    },
-    "primaryKey": {
-      "ID": "4E58FCE0-E5DA-4930-8E84-987355D5F429"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.323Z",
-      "checksum": "cd1b7aaa0408ca7dcc4778877ae1719aaa0ab56afe2be17e6f4ec78dbbfb90c9"
     }
   },
   {
@@ -845,14 +822,6 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/deal-list.spec.json"
-    },
-    "primaryKey": {
-      "ID": "3A79D7B7-5DCF-43A2-9233-41F44B710109"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.308Z",
-      "checksum": "bdcaf8ea89406ce99243d5c45a273d15fb6e79e33a42ae8bfad820d33793f0c0"
     }
   },
   {
@@ -865,14 +834,6 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/pipeline-kanban.spec.json"
-    },
-    "primaryKey": {
-      "ID": "BDAF0B52-4947-42C9-BB7E-500850A5D546"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.501Z",
-      "checksum": "e969465460d27dbde9a6cab38e7f1cb53b8bd54d5eee4afd0adf76e498c753b4"
     }
   },
   {
@@ -885,14 +846,6 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/team-leaderboard.spec.json"
-    },
-    "primaryKey": {
-      "ID": "AF678208-F9A6-49F6-B07F-ECB656E3AF4D"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.459Z",
-      "checksum": "717ed7cf2956157833ff52a5c94e56f82c4b9e816cee9c029d9a20b411d41eb8"
     }
   },
   {
@@ -905,14 +858,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/activity-feed.spec.json"
-    },
-    "primaryKey": {
-      "ID": "85657926-0D16-4456-BAE1-65D0074883AE"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.473Z",
-      "checksum": "0f380df309653b5e51ac65a7ac490855f7e553104f8a34fd33e3ea669092483d"
+      "ParentComponent": "SalesPipelineDashboard"
     }
   },
   {
@@ -925,14 +871,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/rep-details-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "BA6116B3-38DE-4B29-969B-813303205237"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.414Z",
-      "checksum": "ac3cb6539ce27b369ce7a6955fc19f474dae9735472f34663db82d9375461083"
+      "ParentComponent": "SalesPipelineDashboard"
     }
   },
   {
@@ -945,14 +884,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/velocity-heatmap.spec.json"
-    },
-    "primaryKey": {
-      "ID": "2DE87833-422D-4998-AE62-0A542AFDDECD"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.444Z",
-      "checksum": "7ed6dfc64663602fe62df6b372658cc5cb765af8887707918d8a24da780c2177"
+      "ParentComponent": "DealVelocityMetrics"
     }
   },
   {
@@ -965,14 +897,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/trend-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "9B23D940-5CBB-46E7-AEAF-43E508DC5AB9"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.429Z",
-      "checksum": "9588c92ddea3fc7296eb6f63b966db16d876cd7b0b529d33802f7e6c823606a9"
+      "ParentComponent": "DealVelocityMetrics"
     }
   },
   {
@@ -985,14 +910,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/distribution-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "ACC670C6-8F9D-4CF6-97BF-E199F08A8F46"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.536Z",
-      "checksum": "0c09a9ea937f62d1caf50fef34a8620c640bc2c7ea2449204a56a98067cb1333"
+      "ParentComponent": "DealVelocityMetrics"
     }
   },
   {
@@ -1005,14 +923,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/metrics-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "7BB956EB-66CB-48A0-AEA3-AF0418552DAB"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.513Z",
-      "checksum": "376bb076a8d8d57118e4e26bbe1377c1737ebb60f731af013ab150898765045c"
+      "ParentComponent": "DealVelocityMetrics"
     }
   },
   {
@@ -1025,14 +936,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/revenue-treemap.spec.json"
-    },
-    "primaryKey": {
-      "ID": "0875BF12-5D94-4AE1-BDF0-DA12FF010B0B"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.487Z",
-      "checksum": "506d3ea74a674dce33797ec21caed5c07d0a579f80fa3c521f1c6472eb684e4e"
+      "ParentComponent": "ProductRevenueMatrix"
     }
   },
   {
@@ -1045,14 +949,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/product-matrix.spec.json"
-    },
-    "primaryKey": {
-      "ID": "F790E008-8D7B-463F-8782-DB2F54940632"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.526Z",
-      "checksum": "47b0d861a1d6bdfe4aca41c4491c7f64aef1c9726bd75c871fc5947431bd5998"
+      "ParentComponent": "ProductRevenueMatrix"
     }
   },
   {
@@ -1065,14 +962,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/product-details-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "2411CDC8-E8C7-43AE-8A88-47BB36610CF7"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.679Z",
-      "checksum": "ffcef1e84bc5451d794495fdecdb8b29b9e1be07af830ed7cc72efbdc1aaf5a3"
+      "ParentComponent": "ProductRevenueMatrix"
     }
   },
   {
@@ -1085,14 +975,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/status-overview.spec.json"
-    },
-    "primaryKey": {
-      "ID": "0E82885F-8585-47D7-BEA6-45FF0A24A87C"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.657Z",
-      "checksum": "44af7b9b35b01503f7af9d350b76eeb568a5ac2e578e05b820d0104f78a1dda9"
+      "ParentComponent": "InvoiceStatusDashboard"
     }
   },
   {
@@ -1105,14 +988,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/aging-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "35DEDFC4-3AFE-44E2-8B7A-A33C744C727B"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.669Z",
-      "checksum": "44bb63927078578ccbdf2ecb6b2dd6c8307204847daa86632c81b232c0f70162"
+      "ParentComponent": "InvoiceStatusDashboard"
     }
   },
   {
@@ -1125,14 +1001,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/customer-balances.spec.json"
-    },
-    "primaryKey": {
-      "ID": "006F919E-BFE6-4A4D-9B05-000FA1EA4B5E"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.595Z",
-      "checksum": "3b3facd255c121edb4ca7831c04e0048c9bffd5aabf8914a51ed3d970c28c17a"
+      "ParentComponent": "InvoiceStatusDashboard"
     }
   },
   {
@@ -1145,14 +1014,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/action-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "CB69FAE3-E6FE-4A68-95DF-D695440191F2"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.568Z",
-      "checksum": "33d861d3808f4b4c9fcf8d923076aefbaaa9b35a671c80ce25c4ee4766ce2774"
+      "ParentComponent": "InvoiceStatusDashboard"
     }
   },
   {
@@ -1165,14 +1027,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/customer-header.spec.json"
-    },
-    "primaryKey": {
-      "ID": "94A07EAB-6AA6-4E71-8AE5-744EAE855FB0"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.645Z",
-      "checksum": "15a26bf2b4e382dd0157953dd618407d4de82411572b61984de7792519191526"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1185,14 +1040,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/tab-navigation.spec.json"
-    },
-    "primaryKey": {
-      "ID": "A4FD56DF-352D-4EA9-9619-F0318D932449"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.581Z",
-      "checksum": "61d3eac964e6cecead9787ad4694605e9c5cf1fadaaee6657f77d2ed2e38cd71"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1205,14 +1053,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/overview-tab.spec.json"
-    },
-    "primaryKey": {
-      "ID": "6D3868E3-E374-42F5-88E3-315183ED141D"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.608Z",
-      "checksum": "5b3ebf9f49928e3ce7b029699ee51b7cb68452d9f345a69f5b9803f6f7929801"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1225,14 +1066,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/timeline-tab.spec.json"
-    },
-    "primaryKey": {
-      "ID": "36FF4254-CA53-48F8-8B5A-D56124A9890A"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.620Z",
-      "checksum": "d930dd4752cbb1704ac31bc698c38896300ab20240fd179c3d114caa77e34344"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1245,14 +1079,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/contacts-tab.spec.json"
-    },
-    "primaryKey": {
-      "ID": "9F9D8195-FFAB-4373-A081-4DB11AD4B313"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.632Z",
-      "checksum": "4144605f5d647f83ca438bb37eae4ca6fc6fce6a59a74f6da00c85993119cf75"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1265,14 +1092,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/deals-tab.spec.json"
-    },
-    "primaryKey": {
-      "ID": "F07042F2-82E7-4B5F-B308-CE32A0B55D65"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.710Z",
-      "checksum": "b6f6af96b39e10fce08847ec01da704240abfa73b0113e1d43c1825d947e6d73"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1285,14 +1105,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/insights-tab.spec.json"
-    },
-    "primaryKey": {
-      "ID": "FF789802-937E-432F-8640-566B9765C7D3"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.723Z",
-      "checksum": "47295ad5bdd13cd436dc14828912ce217be9b592bcebb0af674687dfba85b1a1"
+      "ParentComponent": "Customer360View"
     }
   },
   {
@@ -1305,14 +1118,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/kpi-gauges.spec.json"
-    },
-    "primaryKey": {
-      "ID": "5B3FEB25-06D4-4D3E-A291-60B2DD7A1A80"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.800Z",
-      "checksum": "b65645e24d70db127b13e0ee3cb4a883352bc231dac2f4e932ce56bbe652ff3c"
+      "ParentComponent": "FinancialAnalyticsDashboard"
     }
   },
   {
@@ -1325,14 +1131,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/revenue-trend-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "27FED2FD-0548-4A40-A7A3-4B8AF2F52BCA"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.822Z",
-      "checksum": "4add2a306f83879ee3e4b072a735ce6e23c282a4fb71e659a20948e0bda51bb2"
+      "ParentComponent": "FinancialAnalyticsDashboard"
     }
   },
   {
@@ -1345,14 +1144,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/cash-flow-chart.spec.json"
-    },
-    "primaryKey": {
-      "ID": "5C052DDB-87E7-4ED3-B7E7-76EA41EFD979"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.774Z",
-      "checksum": "38b3dfed3a489a8fbacfe5c652784c8f63bfb7c5c314c6385ce236d7ceaca8c6"
+      "ParentComponent": "FinancialAnalyticsDashboard"
     }
   },
   {
@@ -1365,14 +1157,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/forecast-model.spec.json"
-    },
-    "primaryKey": {
-      "ID": "EA2F92F8-7AE9-4DCF-BBB0-9FB8FBE9CB9A"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.787Z",
-      "checksum": "077b079bc99a2e20e88ef625808f5084a7c7c5414a8f04ccc5595cd0ca51a53e"
+      "ParentComponent": "FinancialAnalyticsDashboard"
     }
   },
   {
@@ -1385,14 +1170,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/details-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "2A325BAF-B1B7-4494-B73C-0C158B58B3B6"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.735Z",
-      "checksum": "a242e16f40637ae3f79c74748eef0c451da76f1fe520f40a5c6dc3eb2b55d87a"
+      "ParentComponent": "FinancialAnalyticsDashboard"
     }
   },
   {
@@ -1405,14 +1183,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/overview-cards.spec.json"
-    },
-    "primaryKey": {
-      "ID": "2D19BF47-4E7A-4AA1-B2B9-60501E059A52"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.761Z",
-      "checksum": "9d52009251b26c697691b53dd19b173830cc234d099df8a14fc7ae7214ec61ac"
+      "ParentComponent": "WinLossAnalysis"
     }
   },
   {
@@ -1425,14 +1196,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/win-rate-by-owner.spec.json"
-    },
-    "primaryKey": {
-      "ID": "3B4C4BAF-DECE-4CBB-B8C0-7D1855B74248"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.748Z",
-      "checksum": "8ba8fa1b559a3d16ac434ebed8951d85c672fdf0df934ade48befc94a2320049"
+      "ParentComponent": "WinLossAnalysis"
     }
   },
   {
@@ -1445,14 +1209,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/loss-reasons.spec.json"
-    },
-    "primaryKey": {
-      "ID": "DB21D074-FF07-45FE-A4E4-A49FF3E834B6"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.813Z",
-      "checksum": "84fecb5125e1afaaf3cc3d0c60b6b5c7ce610c6cd25b51f23184ed33e1b1a008"
+      "ParentComponent": "WinLossAnalysis"
     }
   },
   {
@@ -1465,14 +1222,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/factor-analysis.spec.json"
-    },
-    "primaryKey": {
-      "ID": "BA8D5132-64E5-412B-A1B1-F5BC1D64F938"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.856Z",
-      "checksum": "a7d4c662073a2b5776d7ce5b6173993332e42d6cafbee7efb00b6e41684ed917"
+      "ParentComponent": "WinLossAnalysis"
     }
   },
   {
@@ -1485,14 +1235,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/competitive-analysis.spec.json"
-    },
-    "primaryKey": {
-      "ID": "FDB1174B-38C3-42DB-BF4C-EAA441C3C60A"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.869Z",
-      "checksum": "1c94d9eeb2d088c64a213210d9cc694346cd21c738ab4173352f178127fa804a"
+      "ParentComponent": "WinLossAnalysis"
     }
   },
   {
@@ -1505,114 +1248,7 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/insights-panel.spec.json"
-    },
-    "primaryKey": {
-      "ID": "9790872E-55C5-4ED9-9F4A-55078EC02359"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T17:37:42.842Z",
-      "checksum": "a9361b2d434f48f4148e8c7c747b9ce190a88db0914942a12f68176b1359254f"
-    }
-  },
-  {
-    "fields": {
-      "Name": "PipelineMetricsCards",
-      "Namespace": "CRM/Dashboard",
-      "Description": "Displays key pipeline metrics in a grid of interactive cards",
-      "Title": "Pipeline Metrics Cards",
-      "Type": "Other",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-metrics-cards.json"
-    },
-    "primaryKey": {
-      "ID": "58241649-8AA4-493D-AFC1-1E33B1B68847"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T18:22:01.656Z",
-      "checksum": "2f968dce08878671643227729a14e4e872ee92611a8a77d1ed58ca490a812de4"
-    }
-  },
-  {
-    "fields": {
-      "Name": "PipelineKanban",
-      "Namespace": "CRM/Dashboard",
-      "Description": "Visual representation of deals across pipeline stages in a kanban board layout",
-      "Title": "Pipeline Kanban",
-      "Type": "Other",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-kanban.json"
-    },
-    "primaryKey": {
-      "ID": "04D4E691-B894-453A-A026-F30DE4A8E252"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T18:22:01.670Z",
-      "checksum": "b700701d4c6ec4962d124af141bb141e6772d9f2874d677751ee7903f7632bc0"
-    }
-  },
-  {
-    "fields": {
-      "Name": "DealCards",
-      "Namespace": "CRM/Dashboard",
-      "Description": "Displays deals in an interactive card layout with open action",
-      "Title": "Deal Cards",
-      "Type": "Other",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-deal-cards.json"
-    },
-    "primaryKey": {
-      "ID": "7DF575B5-271A-44D2-B580-20E15C5561D1"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T18:22:01.684Z",
-      "checksum": "c4d5ca2b03e5b151b25603bc855dd63bff7bb52c7569fb313535bcf5f0040912"
-    }
-  },
-  {
-    "fields": {
-      "Name": "DealList",
-      "Namespace": "CRM/Dashboard",
-      "Description": "Displays deals in a sortable table format with open action",
-      "Title": "Deal List",
-      "Type": "Other",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-deal-list.json"
-    },
-    "primaryKey": {
-      "ID": "7FDE3B05-BE26-4E6C-881D-A352690DCC31"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T18:22:01.710Z",
-      "checksum": "c777d8bc4a2b332426fd2bfe40c526907eebcd54cb0dc5acd1707bba5bbc9772"
-    }
-  },
-  {
-    "fields": {
-      "Name": "DrillDownPanel",
-      "Namespace": "CRM/Dashboard",
-      "Description": "Slide-out panel for drilling down into deal details with filtering and sorting",
-      "Title": "Drill Down Panel",
-      "Type": "Other",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-drill-down-panel.json"
-    },
-    "primaryKey": {
-      "ID": "42690037-7F0B-49F4-9617-182D7567BB64"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T18:22:01.698Z",
-      "checksum": "e80b007362cba04ce0d1558a1eb2d865f021f28177b1def348c8b01f62a0f63f"
+      "ParentComponent": "WinLossAnalysis"
     }
   }
 ]

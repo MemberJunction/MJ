@@ -1,0 +1,44 @@
+{
+  "Name": "PipelineMetricsCards",
+  "Description": "Displays key pipeline metrics in a grid of interactive cards",
+  "Category": "Metrics",
+  "Type": "metrics",
+  "Properties": [
+    {
+      "Name": "metrics",
+      "Type": "object",
+      "Description": "Object containing totalValue, activeCount, winRate, avgDealSize, avgCycleTime"
+    },
+    {
+      "Name": "deals",
+      "Type": "array",
+      "Description": "Array of deal objects"
+    },
+    {
+      "Name": "onCardClick",
+      "Type": "function",
+      "Description": "Callback when a metric card is clicked"
+    }
+  ],
+  "Events": [
+    {
+      "Name": "onMetricClick",
+      "Description": "Fired when a metric card is clicked",
+      "Parameters": [
+        {
+          "Name": "metricType",
+          "Type": "string",
+          "Description": "Type of metric clicked (pipeline, active, won)"
+        },
+        {
+          "Name": "deals",
+          "Type": "array",
+          "Description": "Filtered deals for the metric"
+        }
+      ]
+    }
+  ],
+  "UsageExample": "```javascript\n<PipelineMetricsCards \n  metrics={calculatedMetrics}\n  deals={allDeals}\n  onCardClick={(title, deals, type) => handleDrillDown(title, deals, type)}\n/>\n```",
+  "FunctionalRequirements": "- Display 5 key metrics: Pipeline Value, Active Deals, Win Rate, Avg Deal Size, Avg Cycle Time\n- Make Pipeline Value, Active Deals, and Win Rate cards clickable\n- Format currency values appropriately (K/M notation)\n- Show hover effects on clickable cards\n- Pass filtered deals to callback on click",
+  "TechnicalDesign": "Component renders a responsive grid of metric cards. Uses formatCurrency helper for value formatting. Implements hover states with transform and shadow effects. Filters deals based on metric type before passing to callback."
+}
