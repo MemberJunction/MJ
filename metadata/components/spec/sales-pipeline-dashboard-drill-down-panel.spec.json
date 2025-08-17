@@ -1,0 +1,61 @@
+{
+  "name": "DrillDownPanel",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard-drill-down-panel.js",
+  "description": "Slide-out panel for drilling down into deal details with filtering and sorting",
+  "category": "Panel",
+  "type": "panel",
+  "properties": [
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "description": "Whether the panel is open"
+    },
+    {
+      "name": "drillDownData",
+      "type": "object",
+      "description": "Object containing title, deals array, type, and metadata"
+    },
+    {
+      "name": "stageColors",
+      "type": "object",
+      "description": "Object mapping stage names to colors"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "description": "Callback when panel is closed"
+    },
+    {
+      "name": "onOpenDeal",
+      "type": "function",
+      "description": "Callback to open a deal in external app"
+    }
+  ],
+  "events": [
+    {
+      "name": "onPanelClose",
+      "description": "Fired when the panel is closed",
+      "parameters": []
+    },
+    {
+      "name": "onDealOpen",
+      "description": "Fired when a deal open action is triggered",
+      "parameters": [
+        {
+          "name": "entityName",
+          "type": "string",
+          "description": "Name of the entity"
+        },
+        {
+          "name": "primaryKey",
+          "type": "array",
+          "description": "Primary key array"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<DrillDownPanel\n  isOpen={isPanelOpen}\n  drillDownData={drillDownData}\n  stageColors={stageColors}\n  onClose={() => setIsPanelOpen(false)}\n  onOpenDeal={(entityName, pk) => callbacks.OpenEntityRecord(entityName, pk)}\n/>\n```",
+  "functionalRequirements": "- Slide in from right side at top: 75px\n- Display title and deal count/value summary\n- Allow filtering deals by text search\n- Support sorting by Amount, CloseDate, Probability\n- Toggle between card and list views\n- Include close button in header\n- Use appropriate background color based on drill-down type",
+  "technicalDesign": "Fixed position panel with CSS transitions. Contains local state for filter text, sort order, and display mode. Reuses DealCards and DealList components for display. Header color determined by drillDownData type/metadata."
+}

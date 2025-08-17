@@ -1,0 +1,62 @@
+{
+  "name": "DealCards",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard-deal-cards.js",
+  "description": "Displays deals in an interactive card layout with open action",
+  "category": "Deals",
+  "type": "cards",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal objects to display"
+    },
+    {
+      "name": "stageColors",
+      "type": "object",
+      "description": "Optional object mapping stage names to colors"
+    },
+    {
+      "name": "onDealClick",
+      "type": "function",
+      "description": "Callback when a deal card is clicked"
+    },
+    {
+      "name": "onOpenClick",
+      "type": "function",
+      "description": "Callback when the open icon is clicked, receives entityName and primaryKey array"
+    }
+  ],
+  "events": [
+    {
+      "name": "onDealSelect",
+      "description": "Fired when a deal card is clicked",
+      "parameters": [
+        {
+          "name": "deal",
+          "type": "object",
+          "description": "The deal object that was clicked"
+        }
+      ]
+    },
+    {
+      "name": "onDealOpen",
+      "description": "Fired when the open icon is clicked",
+      "parameters": [
+        {
+          "name": "entityName",
+          "type": "string",
+          "description": "Name of the entity (Deals)"
+        },
+        {
+          "name": "primaryKey",
+          "type": "array",
+          "description": "Array of key-value pairs for composite primary key"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<DealCards\n  deals={filteredDeals}\n  stageColors={stageColors}\n  onDealClick={(deal) => console.log('Deal clicked:', deal)}\n  onOpenClick={(entityName, primaryKey) => callbacks.OpenEntityRecord(entityName, primaryKey)}\n/>\n```",
+  "functionalRequirements": "- Display deal cards in a responsive grid\n- Show deal name, amount, account, close date, probability, and stage\n- Format currency values appropriately\n- Include open icon button for external navigation\n- Show hover effects on cards\n- Color-code stage badges",
+  "technicalDesign": "Renders deal information in card format with hover states. Uses formatCurrency for amounts. Includes Font Awesome icon for opening deals externally. Stage badges use dynamic colors from stageColors prop."
+}

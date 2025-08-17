@@ -1,48 +1,81 @@
 {
   "name": "SalesPipelineDashboard",
-  "namespace": "CRM/Dashboards",
-  "type": "Dashboard",
+  "description": "Comprehensive sales pipeline dashboard with metrics, visualizations, and drill-down capabilities",
+  "category": "Dashboard",
+  "type": "dashboard",
   "location": "embedded",
   "code": "@file:../code/sales-pipeline-dashboard.js",
-  "functionalRequirements": "## Sales Pipeline Dashboard\n\n### Purpose\nComprehensive dashboard showing pipeline health, velocity metrics, and team performance using interactive charts.\n\n### Core Features\n- **Pipeline Overview**: Kanban-style board with drag indicators\n- **Velocity Metrics**: Average deal cycle, stage duration\n- **Team Performance**: Rep leaderboard with activity metrics\n- **Forecast Analysis**: Pipeline coverage and projections\n- **Activity Timeline**: Recent wins, losses, and activities\n- **Interactive Charts**: Using ApexCharts for rich visualizations\n- **Slide-out Details**: Team member performance details\n- **Card/List Toggle**: For multiple data views\n\n### Visual Components\n- Stacked bar chart for pipeline stages\n- Line chart for trend analysis\n- Donut chart for win/loss distribution\n- Activity feed with real-time updates\n- Performance cards with sparklines",
+  "properties": [
+    {
+      "name": "utilities",
+      "type": "object",
+      "description": "MemberJunction utilities for data access"
+    },
+    {
+      "name": "styles",
+      "type": "object",
+      "description": "Style utilities and theme configuration"
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "description": "Registry of available child components"
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Event callbacks including OpenEntityRecord"
+    },
+    {
+      "name": "savedUserSettings",
+      "type": "object",
+      "description": "Persisted user preferences"
+    },
+    {
+      "name": "onSaveUserSettings",
+      "type": "function",
+      "description": "Callback to persist user settings"
+    }
+  ],
+  "dependencies": [
+    "@include:sales-pipeline-dashboard-pipeline-metrics-cards.spec.json",
+    "@include:sales-pipeline-dashboard-pipeline-kanban.spec.json",
+    "@include:sales-pipeline-dashboard-deal-cards.spec.json",
+    "@include:sales-pipeline-dashboard-deal-list.spec.json",
+    "@include:sales-pipeline-dashboard-drill-down-panel.spec.json"
+  ],
+  "libraries": [
+    {
+      "name": "dayjs",
+      "version": "1.11.10",
+      "globalVariable": "dayjs"
+    },
+    {
+      "name": "ApexCharts",
+      "version": "3.45.1",
+      "globalVariable": "ApexCharts"
+    }
+  ],
   "dataRequirements": {
     "mode": "views",
     "entities": [
       {
         "name": "Deals",
-        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "Probability"],
-        "filterFields": ["Stage", "Owner", "CloseDate"],
-        "sortFields": ["Amount", "CloseDate"],
-        "requiredPermissions": ["read"]
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "filterFields": ["CloseDate", "Stage", "Owner"],
+        "sortFields": ["CloseDate", "Amount", "Probability"],
+        "permissions": ["read"]
       },
       {
         "name": "Activities",
-        "displayFields": ["Subject", "Type", "DealID", "CreatedAt", "Owner"],
-        "filterFields": ["Type", "CreatedAt"],
+        "displayFields": ["ID", "type", "Subject", "Owner", "CreatedAt"],
+        "filterFields": ["CreatedAt", "Owner"],
         "sortFields": ["CreatedAt"],
-        "requiredPermissions": ["read"]
+        "permissions": ["read"]
       }
     ]
   },
-  "technicalDesign": "## Implementation\n\n### Components\n- Main: SalesPipelineDashboard\n- Sub-components:\n  - PipelineKanban: Stage columns with metrics\n  - VelocityChart: Deal velocity visualization\n  - TeamLeaderboard: Performance rankings\n  - ActivityFeed: Recent activities\n  - ForecastWidget: Revenue projections\n\n### Chart Configuration\n- ApexCharts for interactive visualizations\n- Real-time data updates\n- Responsive design\n- Custom tooltips and legends",
-  "properties": [],
-  "events": [
-    {
-      "name": "OpenEntityRecord",
-      "description": "Navigate to entity details"
-    }
-  ],
-  "dependencies": [],
-  "libraries": [
-    {
-      "name": "ApexCharts",
-      "version": "^3.45.1",
-      "globalVariable": "ApexCharts"
-    },
-    {
-      "name": "dayjs",
-      "version": "^1.11.10",
-      "globalVariable": "dayjs"
-    }
-  ]
+  "usageExample": "```javascript\n<SalesPipelineDashboard\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n```",
+  "functionalRequirements": "- Display key pipeline metrics in cards\n- Show pipeline stages in kanban view\n- Provide date filtering with presets and custom ranges\n- Visualize pipeline data with interactive charts\n- Show team performance leaderboard\n- Display recent activity feed\n- Enable drill-down into any metric or stage\n- Support card and list views for deals\n- Allow opening deals in external application",
+  "technicalDesign": "Main dashboard component that orchestrates multiple sub-components. Manages global state for deals and activities data. Implements date filtering logic. Renders ApexCharts for visualizations. Uses composition pattern with sub-components for modularity."
 }

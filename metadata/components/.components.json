@@ -645,14 +645,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard.spec.json"
     },
     "primaryKey": {
       "ID": "91A09357-0580-45C1-BB54-24B688D3CAD1"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:25:16.497Z",
-      "checksum": "fcbde0daff4929a298f669987be4c90ff0ebe689a0c39f4cda10d4eca1b390e5"
+      "lastModified": "2025-08-17T18:54:03.224Z",
+      "checksum": "e149b6eee933605dbb8c18a9a4941e391efb96af1055510bfeedc3297ce5176a"
     }
   },
   {
@@ -1525,14 +1525,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-metrics-cards.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-metrics-cards.spec.json"
     },
     "primaryKey": {
       "ID": "58241649-8AA4-493D-AFC1-1E33B1B68847"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:22:01.656Z",
-      "checksum": "2f968dce08878671643227729a14e4e872ee92611a8a77d1ed58ca490a812de4"
+      "lastModified": "2025-08-17T18:54:03.402Z",
+      "checksum": "2fb37addabccc2df66b1cfe98a8fed8cc6a89ccbd71a3aa9c62ae905680669e9"
     }
   },
   {
@@ -1545,14 +1545,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-kanban.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard-pipeline-kanban.spec.json"
     },
     "primaryKey": {
       "ID": "04D4E691-B894-453A-A026-F30DE4A8E252"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:22:01.670Z",
-      "checksum": "b700701d4c6ec4962d124af141bb141e6772d9f2874d677751ee7903f7632bc0"
+      "lastModified": "2025-08-17T18:54:03.418Z",
+      "checksum": "d9ddbabfaa7bbd0c70b3507b0b643af32cd43521b0dc01a4c649149dad3cb97d"
     }
   },
   {
@@ -1565,14 +1565,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-deal-cards.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard-deal-cards.spec.json"
     },
     "primaryKey": {
       "ID": "7DF575B5-271A-44D2-B580-20E15C5561D1"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:22:01.684Z",
-      "checksum": "c4d5ca2b03e5b151b25603bc855dd63bff7bb52c7569fb313535bcf5f0040912"
+      "lastModified": "2025-08-17T18:54:03.434Z",
+      "checksum": "7c08747638125f638372aa2efb7006de2ce39c1365fcb8a7c4303e737b2f06b8"
     }
   },
   {
@@ -1585,14 +1585,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-deal-list.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard-deal-list.spec.json"
     },
     "primaryKey": {
       "ID": "7FDE3B05-BE26-4E6C-881D-A352690DCC31"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:22:01.710Z",
-      "checksum": "c777d8bc4a2b332426fd2bfe40c526907eebcd54cb0dc5acd1707bba5bbc9772"
+      "lastModified": "2025-08-17T18:54:03.448Z",
+      "checksum": "d152bae06d9c70f61a2aebaa71c3f0a256cda964b78f3044342f6a38b76cb1b2"
     }
   },
   {
@@ -1605,14 +1605,14 @@
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
-      "Specification": "@file:spec/sales-pipeline-dashboard-drill-down-panel.json"
+      "Specification": "@file:spec/sales-pipeline-dashboard-drill-down-panel.spec.json"
     },
     "primaryKey": {
       "ID": "42690037-7F0B-49F4-9617-182D7567BB64"
     },
     "sync": {
-      "lastModified": "2025-08-17T18:22:01.698Z",
-      "checksum": "e80b007362cba04ce0d1558a1eb2d865f021f28177b1def348c8b01f62a0f63f"
+      "lastModified": "2025-08-17T18:54:03.461Z",
+      "checksum": "04093d5601540d225a2f042f2b020f8c430872d5a48362cb218be5c033fdde92"
     }
   }
 ]

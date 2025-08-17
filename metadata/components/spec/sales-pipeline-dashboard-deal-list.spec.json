@@ -1,0 +1,62 @@
+{
+  "name": "DealList",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard-deal-list.js",
+  "description": "Displays deals in a sortable table format with open action",
+  "category": "Deals",
+  "type": "list",
+  "properties": [
+    {
+      "name": "deals",
+      "Type": "array",
+      "description": "Array of deal objects to display"
+    },
+    {
+      "name": "stageColors",
+      "Type": "object",
+      "description": "Optional object mapping stage names to colors"
+    },
+    {
+      "name": "onDealClick",
+      "Type": "function",
+      "description": "Callback when a deal row is clicked"
+    },
+    {
+      "name": "onOpenClick",
+      "Type": "function",
+      "description": "Callback when the open icon is clicked, receives entityName and primaryKey array"
+    }
+  ],
+  "events": [
+    {
+      "name": "onDealSelect",
+      "description": "Fired when a deal row is clicked",
+      "parameters": [
+        {
+          "name": "deal",
+          "type": "object",
+          "description": "The deal object that was clicked"
+        }
+      ]
+    },
+    {
+      "name": "onDealOpen",
+      "description": "Fired when the open icon is clicked",
+      "parameters": [
+        {
+          "name": "entityName",
+          "type": "string",
+          "description": "Name of the entity (Deals)"
+        },
+        {
+          "name": "primaryKey",
+          "type": "array",
+          "description": "Array of key-value pairs for composite primary key"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<DealList\n  deals={filteredDeals}\n  stageColors={stageColors}\n  onDealClick={(deal) => console.log('Deal clicked:', deal)}\n  onOpenClick={(entityName, primaryKey) => callbacks.OpenEntityRecord(entityName, primaryKey)}\n/>\n```",
+  "functionalRequirements": "- Display deals in a clean table format\n- Show deal name, account, stage, and amount\n- Include open icon button for external navigation\n- Show hover effects on rows\n- Color-code stage badges\n- Support row click for selection",
+  "technicalDesign": "Renders deals in table format with hover states. Formats currency values. Includes Font Awesome icon for opening deals externally. Stage badges use dynamic colors from stageColors prop."
+}
