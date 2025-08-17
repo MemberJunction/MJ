@@ -30,11 +30,11 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
             const permissionError = await this.validateAgentManagerPermission(params);
             if (permissionError) return permissionError;
 
-            // Extract parameters
-            const agentIDResult = this.getStringParam(params, 'AgentID');
+            // Extract and validate UUID parameters
+            const agentIDResult = this.getUuidParam(params, 'AgentID');
             if (agentIDResult.error) return agentIDResult.error;
 
-            const actionIDResult = this.getStringParam(params, 'ActionID');
+            const actionIDResult = this.getUuidParam(params, 'ActionID');
             if (actionIDResult.error) return actionIDResult.error;
 
             const statusResult = this.getStringParam(params, 'Status', false);
@@ -51,7 +51,7 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
             const rv = new RunView();
             const existingAssociation = await rv.RunView({
                 EntityName: 'AI Agent Actions',
-                ExtraFilter: `AgentID='${agentIDResult.value!}' AND ActionID='${actionIDResult.value!}'`,
+                ExtraFilter: `AgentID='${agentIDResult.value}' AND ActionID='${actionIDResult.value}'`,
             }, params.ContextUser);
 
             if (!existingAssociation.Success) {
@@ -86,7 +86,7 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
             agentAction.NewRecord();
             agentAction.AgentID = agentIDResult.value!;
             agentAction.ActionID = actionIDResult.value!;
-            switch (status.toLowerCase()) {
+            switch (status?.toLowerCase()) {
                 case 'active':
                     agentAction.Status = 'Active';
                     break;          

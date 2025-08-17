@@ -28,8 +28,8 @@ export class ValidateAgentConfigurationAction extends BaseAgentManagementAction 
             const permissionError = await this.validateAgentManagerPermission(params);
             if (permissionError) return permissionError;
 
-            // Extract required parameter
-            const agentIDResult = this.getStringParam(params, 'AgentID');
+            // Extract and validate required UUID parameter
+            const agentIDResult = this.getUuidParam(params, 'AgentID');
             if (agentIDResult.error) return agentIDResult.error;
 
             // Load the agent

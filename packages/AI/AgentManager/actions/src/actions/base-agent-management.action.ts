@@ -1,7 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
-import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { BaseEntity, Metadata, LogError, UserInfo, RunView } from "@memberjunction/core";
+import { DatabaseProviderBase } from "@memberjunction/core";
+import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended, AIAgentPromptEntity, ActionEntity } from "@memberjunction/core-entities";
 
 /**
  * Abstract base class for agent management actions.
@@ -85,6 +86,120 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      */
     protected getMetadata(): Metadata {
         return new Metadata();
+    }
+
+    /**
+     * Validates if a string is a valid UUID format
+     */
+    protected isValidUUID(uuid: string): boolean {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(uuid);
+    }
+
+    /**
+     * Extract and validate a UUID parameter
+     */
+    protected getUuidParam(params: RunActionParams, paramName: string, required: boolean = true): { 
+        value?: string; 
+        error?: ActionResultSimple 
+    } {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.trim().toLowerCase());
+        
+        if (!param || !param.Value) {
+            if (required) {
+                return {
+                    error: {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: `${paramName} parameter is required`
+                    }
+                };
+            }
+            return { value: undefined };
+        }
+
+        const value = param.Value as string;
+        
+        // Validate UUID format (including NULL check)
+        if (!value || 
+            value.trim().toUpperCase() === 'NULL' || 
+            value.trim() === '' ||
+            !this.isValidUUID(value.trim())) {
+            return {
+                error: {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: `Invalid ${paramName} format: '${value}'. Must be a valid UUID.`
+                }
+            };
+        }
+        
+        return { value: value.trim() };
+    }
+
+    /**
+     * Get database provider with transaction support validation
+     * 
+     * @example
+     * ```typescript
+     * // Example usage for implementing transactions in actions:
+     * const providerResult = this.getTransactionProvider();
+     * if (providerResult.error) return providerResult.error;
+     * const provider = providerResult.provider!;
+     * 
+     * // Begin transaction for multi-record operations
+     * await provider.BeginTransaction();
+     * 
+     * try {
+     *     // Perform multiple database operations
+     *     const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents', contextUser);
+     *     await agent.Save();
+     *     
+     *     const prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', contextUser);
+     *     await prompt.Save();
+     *     
+     *     // Commit transaction - all operations succeeded
+     *     await provider.CommitTransaction();
+     *     
+     *     return { Success: true, ResultCode: 'SUCCESS', Message: 'All operations completed successfully' };
+     * 
+     * } catch (transactionError) {
+     *     // Rollback transaction on any error
+     *     await provider.RollbackTransaction();
+     *     throw transactionError; // Re-throw to be caught by outer try-catch
+     * }
+     * ```
+     */
+    protected getTransactionProvider(): { 
+        provider?: DatabaseProviderBase; 
+        error?: ActionResultSimple 
+    } {
+        // Get the database provider for transaction management
+        const provider = BaseEntity.Provider as unknown as DatabaseProviderBase;
+        if (!provider) {
+            return {
+                error: {
+                    Success: false,
+                    ResultCode: 'NO_PROVIDER',
+                    Message: 'No database provider available for transaction management'
+                }
+            };
+        }
+
+        // Verify the provider supports transaction management
+        if (typeof provider.BeginTransaction !== 'function' || 
+            typeof provider.CommitTransaction !== 'function' || 
+            typeof provider.RollbackTransaction !== 'function') {
+            return {
+                error: {
+                    Success: false,
+                    ResultCode: 'NO_TRANSACTION_SUPPORT',
+                    Message: 'Database provider does not support transaction management'
+                }
+            };
+        }
+
+        return { provider };
     }
 
     /**

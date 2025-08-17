@@ -42,7 +42,9 @@ export class ListAgentsAction extends BaseAgentManagementAction {
             let filters: string[] = [];
             
             // By default, only show active agents unless specified
-            const includeInactive = includeInactiveResult.value?.toLowerCase() === 'true';
+            const includeInactive = includeInactiveResult.value && typeof includeInactiveResult.value === 'string' 
+                ? includeInactiveResult.value.toLowerCase() === 'true' 
+                : false;
             if (!includeInactive) {
                 filters.push("Status = 'Active'");
             }

@@ -34,13 +34,13 @@ export class SetAgentPromptAction extends BaseAgentManagementAction {
                 return permissionError;
             }
 
-            // 2. Extract and validate parameters
-            const agentIdResult = this.getStringParam(params, 'AgentID');
+            // 2. Extract and validate UUID parameters
+            const agentIdResult = this.getUuidParam(params, 'AgentID');
             if (agentIdResult.error) {
                 return agentIdResult.error;
             }
 
-            const promptIdResult = this.getStringParam(params, 'PromptID');
+            const promptIdResult = this.getUuidParam(params, 'PromptID');
             if (promptIdResult.error) {
                 return promptIdResult.error;
             }
@@ -68,6 +68,11 @@ export class SetAgentPromptAction extends BaseAgentManagementAction {
             if (promptResult.error) {
                 return promptResult.error;
             }
+
+            // TODO: Add transaction management for multi-record operations
+            // Use this.getTransactionProvider() to get database provider with transaction support
+            // Wrap association creation/update in a transaction to ensure atomicity
+            // See base class getTransactionProvider() method for example usage
 
             // 5. Check if association already exists
             const existingAssociation = await this.findExistingAssociation(

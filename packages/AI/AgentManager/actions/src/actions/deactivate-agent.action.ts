@@ -32,8 +32,8 @@ export class DeactivateAgentAction extends BaseAgentManagementAction {
                 return permissionError;
             }
 
-            // 2. Extract and validate parameters
-            const agentIdResult = this.getStringParam(params, 'AgentID');
+            // 2. Extract and validate UUID parameter
+            const agentIdResult = this.getUuidParam(params, 'AgentID');
             if (agentIdResult.error) {
                 return agentIdResult.error;
             }
@@ -53,6 +53,11 @@ export class DeactivateAgentAction extends BaseAgentManagementAction {
             if (agent.Status === 'Disabled') {
                 return this.createSuccessResult(params, false, 'Agent is already disabled');
             }
+
+            // TODO: Add transaction management for multi-record operations
+            // Use this.getTransactionProvider() to get database provider with transaction support
+            // Wrap agent deactivation and prompt deactivation in a transaction to ensure atomicity
+            // See base class getTransactionProvider() method for example usage
 
             // 5. Update agent status to disabled
             agent.Status = 'Disabled';

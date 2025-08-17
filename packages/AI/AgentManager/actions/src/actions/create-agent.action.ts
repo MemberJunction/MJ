@@ -62,7 +62,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
                 // Look up TypeID from Type name
                 const aiEngine = AIEngine.Instance;
                 const agentType = aiEngine.AgentTypes.find((t: any) => 
-                    t.Name.toLowerCase() === typeResult.value!.toLowerCase()
+                    t.Name?.toLowerCase() === typeResult.value?.toLowerCase()
                 );
                 
                 if (!agentType) {
@@ -92,6 +92,11 @@ export class CreateAgentAction extends BaseAgentManagementAction {
                 if (parentValidation.error) return parentValidation.error;
             }
 
+            // TODO: Add transaction management for multi-record creation
+            // Use this.getTransactionProvider() to get database provider with transaction support
+            // Wrap agent creation and prompt creation in a transaction to ensure atomicity
+            // See base class getTransactionProvider() method for example usage
+
             // Create new agent
             const md = this.getMetadata();
             const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', params.ContextUser);
@@ -120,47 +125,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
             // Save the agent
             const saveResult = await agent.Save();
             
-            if (saveResult) {
-                // Add output parameter with the new agent ID
-                params.Params.push({
-                    Name: 'AgentID',
-                    Value: agent.ID,
-                    Type: 'Output'
-                });
-
-                // If prompt text was provided, create and associate the prompt
-                if (promptTextResult.value) {
-                    const promptResult = await this.createAndAssociatePrompt(
-                        agent,
-                        promptTextResult.value,
-                        params.ContextUser
-                    );
-                    
-                    if (!promptResult.success) {
-                        // Agent was created but prompt failed - return partial success
-                        return {
-                            Success: true,
-                            ResultCode: 'PARTIAL_SUCCESS',
-                            Message: `Agent '${agent.Name}' created successfully, but prompt creation failed: ${promptResult.error}`,
-                            Params: params.Params
-                        };
-                    }
-                    
-                    // Add prompt ID to output
-                    params.Params.push({
-                        Name: 'PromptID',
-                        Value: promptResult.promptId,
-                        Type: 'Output'
-                    });
-                }
-
-                return {
-                    Success: true,
-                    ResultCode: 'SUCCESS',
-                    Message: `Successfully created agent '${agent.Name}' with ID ${agent.ID}`,
-                    Params: params.Params
-                };
-            } else {
+            if (!saveResult) {
                 const latestResult = agent.LatestResult;
                 return {
                     Success: false,
@@ -168,6 +133,46 @@ export class CreateAgentAction extends BaseAgentManagementAction {
                     Message: latestResult?.Message || 'Failed to save agent'
                 };
             }
+
+            // Add output parameter with the new agent ID
+            params.Params.push({
+                Name: 'AgentID',
+                Value: agent.ID,
+                Type: 'Output'
+            });
+
+            // If prompt text was provided, create and associate the prompt
+            if (promptTextResult.value) {
+                const promptResult = await this.createAndAssociatePrompt(
+                    agent,
+                    promptTextResult.value,
+                    params.ContextUser
+                );
+                
+                if (!promptResult.success) {
+                    // TODO: With transactions, this would rollback the agent creation
+                    return {
+                        Success: true,
+                        ResultCode: 'PARTIAL_SUCCESS',
+                        Message: `Agent '${agent.Name}' created successfully, but prompt creation failed: ${promptResult.error}`,
+                        Params: params.Params
+                    };
+                }
+                
+                // Add prompt ID to output
+                params.Params.push({
+                    Name: 'PromptID',
+                    Value: promptResult.promptId,
+                    Type: 'Output'
+                });
+            }
+
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: `Successfully created agent '${agent.Name}' with ID ${agent.ID}`,
+                Params: params.Params
+            };
 
         } catch (e) {
             return this.handleError(e, 'create agent');

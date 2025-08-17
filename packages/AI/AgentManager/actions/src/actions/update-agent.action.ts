@@ -32,8 +32,8 @@ export class UpdateAgentAction extends BaseAgentManagementAction {
             const permissionError = await this.validateAgentManagerPermission(params);
             if (permissionError) return permissionError;
 
-            // Extract required parameter
-            const agentIDResult = this.getStringParam(params, 'AgentID');
+            // Extract and validate required UUID parameter
+            const agentIDResult = this.getUuidParam(params, 'AgentID');
             if (agentIDResult.error) return agentIDResult.error;
 
             // Extract optional parameters
@@ -65,6 +65,11 @@ export class UpdateAgentAction extends BaseAgentManagementAction {
                 hasChanges = true;
             }
 
+            // TODO: Add transaction management for multi-record operations
+            // Use this.getTransactionProvider() to get database provider with transaction support
+            // Wrap agent update and prompt update in a transaction to ensure atomicity
+            // See base class getTransactionProvider() method for example usage
+
             // Save if there are changes
             if (hasChanges) {
                 const saveResult = await agent.Save();
@@ -88,6 +93,7 @@ export class UpdateAgentAction extends BaseAgentManagementAction {
                 );
                 
                 if (!promptUpdateResult.success) {
+                    // TODO: With transactions, this would rollback the agent update
                     return {
                         Success: hasChanges,
                         ResultCode: hasChanges ? 'PARTIAL_SUCCESS' : 'PROMPT_UPDATE_FAILED',

@@ -41,13 +41,19 @@ export class ExportAgentBundleAction extends BaseAgentManagementAction {
             }
 
             const includeSubAgentsResult = this.getStringParam(params, 'IncludeSubAgents', false);
-            const includeSubAgents = includeSubAgentsResult.value?.toLowerCase() === 'true';
+            const includeSubAgents = includeSubAgentsResult.value && typeof includeSubAgentsResult.value === 'string' 
+                ? includeSubAgentsResult.value.toLowerCase() === 'true' 
+                : false;
 
             const includePromptsResult = this.getStringParam(params, 'IncludePrompts', false);
-            const includePrompts = includePromptsResult.value?.toLowerCase() === 'true';
+            const includePrompts = includePromptsResult.value && typeof includePromptsResult.value === 'string' 
+                ? includePromptsResult.value.toLowerCase() === 'true' 
+                : false;
 
             const includeActionsResult = this.getStringParam(params, 'IncludeActions', false);
-            const includeActions = includeActionsResult.value?.toLowerCase() === 'true';
+            const includeActions = includeActionsResult.value && typeof includeActionsResult.value === 'string' 
+                ? includeActionsResult.value.toLowerCase() === 'true' 
+                : false;
 
             // 3. Load the main agent
             const agentResult = await this.loadAgent(agentIdResult.value!, params.ContextUser);

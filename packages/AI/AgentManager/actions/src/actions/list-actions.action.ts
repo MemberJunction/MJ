@@ -31,13 +31,18 @@ export class ListActionsAction extends BaseAgentManagementAction {
             // Extract parameters
             const categoryIDResult = this.getStringParam(params, 'CategoryID', false);
             const excludeAgentMgmtResult = this.getStringParam(params, 'ExcludeAgentManagement', false);
-            const excludeAgentMgmt = excludeAgentMgmtResult.value?.toLowerCase() !== 'false'; // Default true
+            const excludeAgentMgmt = excludeAgentMgmtResult.value && typeof excludeAgentMgmtResult.value === 'string' 
+                ? excludeAgentMgmtResult.value.toLowerCase() !== 'false' 
+                : true; // Default true
 
             // Build filter
             let filters: string[] = ["Status = 'Active'"];
             
             // Add category filter if provided
-            if (categoryIDResult.value && categoryIDResult.value !== 'null') {
+            if (categoryIDResult.value && 
+                typeof categoryIDResult.value === 'string' && 
+                categoryIDResult.value !== 'null' &&
+                categoryIDResult.value.trim() !== '') {
                 filters.push(`CategoryID = '${categoryIDResult.value}'`);
             }
 
