@@ -152,7 +152,7 @@ export class UpdateAgentAction extends BaseAgentManagementAction {
             
             // First, check if agent already has a prompt
             const agentPromptResult = await rv.RunView<AIAgentPromptEntity>({
-                EntityName: 'AI Agent Prompts',
+                EntityName: 'MJ: AI Agent Prompts',
                 ExtraFilter: `AgentID = '${agent.ID}' AND Status = 'Active'`,
                 OrderBy: 'ExecutionOrder',
                 MaxRows: 1,

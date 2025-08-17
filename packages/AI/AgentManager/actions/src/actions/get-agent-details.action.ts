@@ -96,7 +96,7 @@ export class GetAgentDetailsAction extends BaseAgentManagementAction {
         // Add prompts view if requested
         if (includePrompts) {
             viewsToRun.push({
-                EntityName: 'AI Agent Prompts',
+                EntityName: 'MJ: AI Agent Prompts',
                 ExtraFilter: `AgentID = '${agent.ID}' AND Status = 'Active'`,
                 OrderBy: 'ExecutionOrder',
                 ResultType: 'entity_object' as const

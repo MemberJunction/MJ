@@ -225,7 +225,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             }
             
             // Create the agent-prompt association
-            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
             if (!agentPrompt) {
                 return { success: false, error: 'Failed to create AI Agent Prompt entity object' };
             }
