@@ -93,6 +93,4 @@ const MetricsPanel = ({ data, isOpen, onClose, utilities, styles, components, ca
       </div>
     </div>
   );
-};
-
-return MetricsPanel;
+}

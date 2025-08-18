@@ -82,6 +82,4 @@ const CompetitiveAnalysis = ({ data, columns, onRowClick, sortConfig, onSort, ut
       )}
     </div>
   );
-};
-
-return CompetitiveAnalysis;
+}

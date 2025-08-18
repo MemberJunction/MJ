@@ -94,5 +94,3 @@ const ForecastModel = ({ data, isOpen, onClose, utilities, styles, components, c
     </div>
   );
 };
-
-return ForecastModel;

@@ -82,5 +82,3 @@ const DealCard = ({ deal, onOpen, utilities, styles, components, callbacks, save
     </div>
   );
 };
-
-return DealCard;
