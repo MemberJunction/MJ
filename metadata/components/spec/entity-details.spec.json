@@ -1,0 +1,71 @@
+{
+  "name": "EntityDetails",
+  "title": "Entity Details Panel",
+  "description": "Sliding panel that displays detailed information about a selected entity including fields and relationships",
+  "type": "form",
+  "functionalRequirements": "## Entity Details Requirements\n\n- Slide in from the right when an entity is selected\n- Display entity metadata at the top\n- Show fields in a formatted table\n- Display relationships with icons\n- Include 'Open Record' button\n- Support closing via X button or Escape key\n- Smooth slide animation\n- Scrollable content area",
+  "dataRequirements": null,
+  "technicalDesign": "## Technical Design\n\n### Props\n- entity: Selected entity object\n- fields: Array of entity fields\n- relationships: Array of entity relationships\n- isOpen: Whether panel is visible\n- onClose: Callback to close panel\n- onOpenRecord: Callback to open entity record\n\n### Layout\n- Fixed position overlay\n- Slide animation using transform\n- Header with entity name and close button\n- Sections for metadata, fields, relationships\n- Sticky 'Open Record' button at bottom",
+  "properties": [
+    {
+      "name": "entity",
+      "description": "The selected entity object",
+      "type": "object",
+      "required": true
+    },
+    {
+      "name": "fields",
+      "description": "Array of fields for the entity",
+      "type": "array",
+      "required": true,
+      "defaultValue": []
+    },
+    {
+      "name": "relationships",
+      "description": "Array of relationships for the entity",
+      "type": "array",
+      "required": true,
+      "defaultValue": []
+    },
+    {
+      "name": "isOpen",
+      "description": "Whether the panel is open",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "name": "onClose",
+      "description": "Callback to close the panel",
+      "type": "function",
+      "required": true
+    },
+    {
+      "name": "onOpenRecord",
+      "description": "Callback to open the entity record",
+      "type": "function",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onClose",
+      "description": "Fired when the panel should close",
+      "parameters": []
+    },
+    {
+      "name": "onOpenRecord",
+      "description": "Fired when the open record button is clicked",
+      "parameters": [
+        {
+          "name": "entityName",
+          "description": "Name of the entity to open",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<EntityDetails\n  entity={selectedEntity}\n  fields={entityFields}\n  relationships={entityRelationships}\n  isOpen={detailsPanelOpen}\n  onClose={handleCloseDetails}\n  onOpenRecord={handleOpenRecord}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
+  "code": "@file:../code/entity-details.js",
+  "dependencies": [],
+  "libraries": []
+}

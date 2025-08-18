@@ -1,0 +1,9 @@
+{
+  "libraries": [
+    {
+      "name": "Chart.js",
+      "version": "4.4.0",
+      "globalVariable": "Chart"
+    }
+  ]
+}

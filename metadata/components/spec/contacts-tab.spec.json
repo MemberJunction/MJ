@@ -1,0 +1,36 @@
+{
+  "name": "ContactsTab",
+  "namespace": "CRM/UI",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/contacts-tab.js",
+  "functionalRequirements": "## Contacts Tab\n\n### Purpose\nDisplays and manages contact information in a tabular format.\n\n### Features\n- Contact list display\n- Search and filter\n- Sort by columns\n- Contact details view",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives contacts data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- contacts: Array of contact records\n- onContactSelect: Contact selection handler\n- filters: Active filters",
+  "properties": [
+    {
+      "name": "contacts",
+      "type": "array",
+      "required": true,
+      "description": "Contact records array"
+    },
+    {
+      "name": "onContactSelect",
+      "type": "function",
+      "required": false,
+      "description": "Contact selection callback"
+    },
+    {
+      "name": "filters",
+      "type": "object",
+      "required": false,
+      "description": "Active filter configuration"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

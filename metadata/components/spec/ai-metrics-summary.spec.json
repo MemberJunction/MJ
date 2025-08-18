@@ -1,0 +1,28 @@
+{
+  "name": "AIMetricsSummary",
+  "location": "embedded",
+  "title": "AI Metrics Summary",
+  "description": "Summary cards displaying key performance metrics for the selected time period",
+  "type": "other",
+  "functionalRequirements": "## Metrics Summary Requirements\n\n### Core Functionality\n- Display key metrics in card format\n- Show total runs, tokens, and costs\n- Calculate averages per run\n- Display success rate percentage\n- Show trend indicators (up/down from previous period)\n- Responsive card layout\n\n### Visual Features\n- Color-coded metric cards\n- Icon indicators for each metric\n- Animated number transitions\n- Hover effects for additional info",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives calculated metrics from parent component",
+    "entities": [],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- metrics: Object with calculated metric values\n\n### Card Layout\n- Responsive grid of metric cards\n- Each card shows metric name, value, and trend\n- Consistent styling with theme",
+  "properties": [
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": true,
+      "description": "Calculated metrics object with totalRuns, totalTokens, totalCost, etc."
+    }
+  ],
+  "events": [],
+  "exampleUsage": "<AIMetricsSummary metrics={metrics} />",
+  "code": "@file:../code/ai-metrics-summary.js",
+  "dependencies": [],
+  "libraries": []
+}

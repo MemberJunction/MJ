@@ -1,0 +1,36 @@
+{
+  "name": "ProductMatrix",
+  "namespace": "CRM/Analytics",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/product-matrix.js",
+  "functionalRequirements": "## Product Matrix\n\n### Purpose\nDisplay products vs customers revenue matrix.\n\n### Features\n- Grid matrix layout\n- Products as rows\n- Customers as columns\n- Revenue values in cells\n- Heat coloring\n- Totals row/column",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives matrix data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- matrixData: 2D revenue array\n- products: Product names\n- customers: Customer names\n\n### Display\n- Table with fixed headers\n- Scrollable content\n- Color coding",
+  "properties": [
+    {
+      "name": "matrixData",
+      "type": "array",
+      "required": true,
+      "description": "2D array of revenue values"
+    },
+    {
+      "name": "products",
+      "type": "array",
+      "required": true,
+      "description": "Product names"
+    },
+    {
+      "name": "customers",
+      "type": "array",
+      "required": true,
+      "description": "Customer names"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

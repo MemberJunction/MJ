@@ -1,0 +1,34 @@
+{
+  "name": "AIDetailTable",
+  "location": "embedded",
+  "title": "AI Detail Table",
+  "description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering",
+  "type": "table",
+  "functionalRequirements": "## Detail Table Requirements\n\n### Core Functionality\n- Display individual run records in a sortable table\n- Show key fields: timestamp, name, success status, tokens, cost, execution time\n- Color-coded success/failure indicators\n- Sortable columns with visual indicators\n- Paginated results for large datasets\n- Export to CSV functionality\n- Expandable rows for additional details\n\n### Table Features\n- Responsive column widths\n- Hover row highlighting\n- Sticky header during scroll\n- Loading state for data updates\n- Empty state message",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives detailed run data from parent component",
+    "entities": [],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- data: Array of run records\n- activeTab: Current view context (agents/prompts)\n\n### Table Management\n- Client-side sorting\n- Pagination with 25 rows per page\n- Column sorting state management\n- Row expansion for details",
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "required": true,
+      "description": "Array of run records to display"
+    },
+    {
+      "name": "activeTab",
+      "type": "string",
+      "required": true,
+      "description": "Current tab: agents or prompts"
+    }
+  ],
+  "events": [],
+  "exampleUsage": "<AIDetailTable data={selectedPoint.items} activeTab=\"agents\" />",
+  "code": "@file:../code/ai-detail-table.js",
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,5 +1,8 @@
 import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRole, 
-         ParallelChatCompletionsCallbacks, GetAIAPIKey } from "@memberjunction/ai";
+         ParallelChatCompletionsCallbacks, GetAIAPIKey, 
+         EmbedTextResult,
+         EmbedTextParams,
+         BaseEmbeddings} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
@@ -34,6 +37,9 @@ export class EntityAIActionParams extends AIActionParams {
  * @description ONLY USE ON SERVER-SIDE. For metadata only, use the AIEngineBase class which can be used anywhere.
  */
 export class AIEngine extends AIEngineBase {
+    public readonly EmbeddingModelTypeName: string = 'Embeddings';  
+    public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
+
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
     }
@@ -193,7 +199,86 @@ export class AIEngine extends AIEngineBase {
             throw e;
         }
     }
+
+    /**
+     * Returns an array of the local embedding models, sorted with the highest power models first
+     */
+    public get LocalEmbeddingModels(): AIModelEntityExtended[] {
+        // Find an embedding model - prioritize models with AIModelType = 'Embedding'
+        const embeddingModels = AIEngine.Instance.Models.filter(m =>
+            m.AIModelType?.trim().toLowerCase() === AIEngine.Instance.EmbeddingModelTypeName.toLowerCase() &&
+            m.Vendor && m.Vendor.trim().toLowerCase() === AIEngine.Instance.LocalEmbeddingModelVendorName.toLowerCase() // Only use local embedding models
+        );
+        // Sort by PowerRank (higher is better) and select the most powerful embedding model
+        const sortedModels = embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
+
+        return sortedModels;
+    }
+
+    /**
+     * Returns the highest power local embedding model
+     */
+    public get HighestPowerLocalEmbeddingModel(): AIModelEntityExtended {
+        const models = this.LocalEmbeddingModels;
+        return models && models.length > 0 ? models[0] : null;
+    }
+
+    /**
+     * Helper method that generates an embedding for the given text using the highest power local embedding model.
+     * @param text 
+     * @returns 
+     */
+    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: AIModelEntityExtended}> {
+        const model = this.HighestPowerLocalEmbeddingModel;
+        if (!model) {
+            console.warn('No local embedding model found. Cannot generate embedding.');
+            return null;
+        }
+        const result = await this.EmbedText(model, text);
+        return { result, model };
+    }
+
+    /**
+     * Helper method to instantiate a class instance for the given model and calculate an embedding
+     * vector from the provided text.
+     * @param model 
+     * @param text 
+     * @param apiKey Optional parameter, used only for remote models, local models generally don't require an API key
+     * @returns 
+     */
+    public async EmbedText(model: AIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult> {
+        // Implementation for embedding text using the specified model
+            // Generate the embedding for the description
+        const params: EmbedTextParams = {
+            text: text,
+            model: model.APIName
+        };
+
+        // Create the embedding class instance
+        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+            BaseEmbeddings, 
+            model.DriverClass, 
+            apiKey 
+        );
+        
+        if (!embedding) {
+            console.warn(`Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+            return null;
+        }
+
+        const result = await embedding.EmbedText(params);
+        return result;
+    }
  
+
+    /**
+     * Returns the lowest power local embedding model
+     */
+    public get LowestPowerLocalEmbeddingModel(): AIModelEntityExtended {
+        const models = this.LocalEmbeddingModels;
+        return models && models.length > 0 ? models[models.length - 1] : null;
+    }
+
     /**
      * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
      * This method will be removed in a future version.

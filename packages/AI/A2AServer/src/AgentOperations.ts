@@ -1,6 +1,6 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
-import { AIAgentEntity, AIAgentRunEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/core-entities";
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { ChatMessage } from "@memberjunction/ai";
 
@@ -38,7 +38,7 @@ export class AgentOperations {
             await aiEngine.Config(false, this.contextUser);
             
             const allAgents = aiEngine.Agents;
-            let agents: AIAgentEntity[] = [];
+            let agents: AIAgentEntityExtended[] = [];
             
             if (pattern === '*') {
                 agents = allAgents;
@@ -87,7 +87,7 @@ export class AgentOperations {
             const aiEngine = AIEngine.Instance;
             await aiEngine.Config(false, this.contextUser);
             
-            let agent: AIAgentEntity | null = null;
+            let agent: AIAgentEntityExtended | null = null;
             
             if (parameters.agentId) {
                 agent = aiEngine.Agents.find(a => a.ID === parameters.agentId) || null;
@@ -154,7 +154,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {
@@ -202,7 +202,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {

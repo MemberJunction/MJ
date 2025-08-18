@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntityExtended } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -850,7 +850,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     for(const index of this.selectedKeys){
       const viewData = this.viewData[index];
       const idField: number = viewData.ID;
-      const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+      const listDetail: ListDetailEntityExtended = await md.GetEntityObject<ListDetailEntityExtended>('List Details');
       listDetail.NewRecord();
       listDetail.ListID = list.ID;
       listDetail.RecordID = idField.toString();

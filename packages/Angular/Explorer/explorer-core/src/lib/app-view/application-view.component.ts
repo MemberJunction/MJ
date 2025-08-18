@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, Input, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity, UserInfo } from '@memberjunction/core';
-import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewCategoryEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { EntityEntityExtended, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewCategoryEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
@@ -22,13 +22,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
     @Input() public categoryEntityID!: string;
 
-    public currentlySelectedAppEntity: EntityEntity | undefined;
+    public currentlySelectedAppEntity: EntityEntityExtended | undefined;
     public ResourceItemFilter: string = "";
 
     public AppEntitySelectionDialogVisible: boolean = false;
-    public AllAppEntities: EntityEntity[] = [];
-    public SelectedAppEntities: EntityEntity[] = []; 
-    public UnselectedAppEntities: EntityEntity[] = [];
+    public AllAppEntities: EntityEntityExtended[] = [];
+    public SelectedAppEntities: EntityEntityExtended[] = []; 
+    public UnselectedAppEntities: EntityEntityExtended[] = [];
     public app: ApplicationInfo | undefined;
     public userApp: UserApplicationEntity | undefined;
     public currentUser!: UserInfo;
@@ -110,7 +110,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                                      }); // sort by name
 
                 // store the entire list of POSSIBLE app entities in this list
-                this.AllAppEntities = <EntityEntity[]><unknown[]>matches; // we filter out null above so this cast is safe;
+                this.AllAppEntities = <EntityEntityExtended[]><unknown[]>matches; // we filter out null above so this cast is safe;
             
                 const userAppEntities = await rv.RunView<UserApplicationEntityEntity>({
                   EntityName: 'User Application Entities',
@@ -119,7 +119,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                   OrderBy: 'Sequence, Entity'
                 })
                 if (userAppEntities && userAppEntities.Success) {
-                    this.SelectedAppEntities = <EntityEntity[]>userAppEntities.Results.map(uae => this.AllAppEntities.find(ae => uae.EntityID === ae.ID)).filter(val => val); // now we have our selected app entities and they're sorted properly
+                    this.SelectedAppEntities = <EntityEntityExtended[]>userAppEntities.Results.map(uae => this.AllAppEntities.find(ae => uae.EntityID === ae.ID)).filter(val => val); // now we have our selected app entities and they're sorted properly
                     this.UnselectedAppEntities = this.AllAppEntities.filter(e => !this.SelectedAppEntities.some(sa => sa.ID === e.ID));
 
                     // special case - if we have NO user app entities and the application has entities that are marked as DefaultForNewUser=1 we will add them now
@@ -127,7 +127,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                     if (this.SelectedAppEntities.length === 0 && defaultEntities.length > 0) {
                         // there are some entities that should default for a new user, so let's add them to the selected entities and remove from the Unselected
                         // app entities and then call the Save method that we use when the user dialog ends
-                        this.SelectedAppEntities = <EntityEntity[]>defaultEntities.map(de => this.AllAppEntities.find(aae => de.EntityID === aae.ID)).filter(val => val);
+                        this.SelectedAppEntities = <EntityEntityExtended[]>defaultEntities.map(de => this.AllAppEntities.find(aae => de.EntityID === aae.ID)).filter(val => val);
                         // now we have the default entities in place for the app, remove them from the Unselected array
                         this.UnselectedAppEntities = this.UnselectedAppEntities.filter(e => !this.SelectedAppEntities.some(se => se.ID === e.ID));
                         // now save
@@ -158,7 +158,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
 
-    public IsEntitySelected(entity: EntityEntity) {
+    public IsEntitySelected(entity: EntityEntityExtended) {
         if (this.currentlySelectedAppEntity?.ID === entity.ID)
             return true;
         else
@@ -233,7 +233,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         }
     }
 
-    public onAppEntityButtonClicked(e: EntityEntity): void {
+    public onAppEntityButtonClicked(e: EntityEntityExtended): void {
         if (e.ID === this.currentlySelectedAppEntity?.ID) 
             return;
 
@@ -242,7 +242,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.navigateToCurrentPage();
     }
 
-    protected async loadEntityAndFolders(entity: EntityEntity | undefined): Promise<void> {
+    protected async loadEntityAndFolders(entity: EntityEntityExtended | undefined): Promise<void> {
         if(!entity) {
             this.currentlySelectedAppEntity = undefined; // make sure our current selection is wiped out here
             return;
@@ -394,7 +394,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public async editView(event: BeforeUpdateItemEvent): Promise<void> {
         event.Cancel = true;
         if(this.viewPropertiesDialog){
-            let data: UserViewEntity = event.Item.Data;
+            let data: UserViewEntityExtended = event.Item.Data;
             this.viewPropertiesDialog.Open(data.ID);
         }
         else{

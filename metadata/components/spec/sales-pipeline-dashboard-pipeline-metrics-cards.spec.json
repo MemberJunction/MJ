@@ -1,0 +1,49 @@
+{
+  "name": "PipelineMetricsCards",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard-pipeline-metrics-cards.js",
+  "description": "Displays key pipeline metrics in a grid of interactive cards",
+  "category": "Metrics",
+  "type": "metrics",
+  "properties": [
+    {
+      "name": "metrics",
+      "type": "object",
+      "description": "Object containing totalValue, activeCount, winRate, avgDealSize, avgCycleTime",
+      "required": true
+    },
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal objects",
+      "required": true
+    },
+    {
+      "name": "onCardClick",
+      "type": "function",
+      "description": "Callback when a metric card is clicked",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onMetricClick",
+      "description": "Fired when a metric card is clicked",
+      "parameters": [
+        {
+          "name": "metricType",
+          "type": "string",
+          "description": "Type of metric clicked (pipeline, active, won)"
+        },
+        {
+          "name": "deals",
+          "type": "array",
+          "description": "Filtered deals for the metric"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<PipelineMetricsCards \n  metrics={calculatedMetrics}\n  deals={allDeals}\n  onCardClick={(title, deals, type) => handleDrillDown(title, deals, type)}\n/>\n```",
+  "functionalRequirements": "- Display 5 key metrics: Pipeline Value, Active Deals, Win Rate, Avg Deal Size, Avg Cycle Time\n- Make Pipeline Value, Active Deals, and Win Rate cards clickable\n- Format currency values appropriately (K/M notation)\n- Show hover effects on clickable cards\n- Pass filtered deals to callback on click",
+  "technicalDesign": "Component renders a responsive grid of metric cards. Uses formatCurrency helper for value formatting. Implements hover states with transform and shadow effects. Filters deals based on metric type before passing to callback."
+}

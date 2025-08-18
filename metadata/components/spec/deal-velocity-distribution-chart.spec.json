@@ -1,0 +1,46 @@
+{
+  "name": "DealVelocityDistributionChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-distribution-chart.js",
+  "functionalRequirements": "## Distribution Chart Sub-component\n\n### Purpose\nDisplays statistical distribution of deal velocities using box plots.\n\n### Core Features\n- Box plot visualization for each stage\n- Shows quartiles, median, min/max values\n- Interactive tooltips with statistics\n- Clickable elements for drill-down\n- Statistical calculations using simple-statistics\n- Visual emphasis on hover",
+  "dataRequirements": {
+    "description": "Receives deal data and calculates distribution statistics"
+  },
+  "technicalDesign": "## Implementation\n\n### Chart Library\n- Uses ECharts box plot series\n- Calculates quartiles and outliers\n- Manages chart lifecycle\n\n### Statistical Processing\n- Uses simple-statistics library\n- Calculates min, Q1, median, Q3, max\n- Handles edge cases with insufficient data",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "required": true,
+      "description": "Array of deal entities"
+    },
+    {
+      "name": "stages",
+      "type": "array",
+      "required": true,
+      "description": "Array of stage names"
+    },
+    {
+      "name": "onDrillDown",
+      "type": "function",
+      "required": true,
+      "description": "Callback when clicking on chart elements"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "ECharts",
+      "version": "^5.4.3",
+      "globalVariable": "echarts"
+    },
+    {
+      "name": "simple-statistics",
+      "version": "^7.8.3",
+      "globalVariable": "ss"
+    }
+  ]
+}

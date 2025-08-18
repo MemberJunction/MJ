@@ -9,7 +9,7 @@
  * @since 2.50.0
  */
 
-import { AIPromptEntity, AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
 
@@ -276,7 +276,7 @@ export class AIPromptParams {
    * The AI prompt to execute.
    * Note: Get prompts from AIEngine.Instance.Prompts after calling AIEngine.Config()
    */
-  prompt: AIPromptEntity;
+  prompt: AIPromptEntityExtended;
 
   /**
    * Data context for template rendering and prompt execution
@@ -410,7 +410,7 @@ export class AIPromptParams {
    * selection configuration instead of the parent prompt's configuration.
    * If not specified, the main prompt's model selection will be used.
    */
-  modelSelectionPrompt?: AIPromptEntity;
+  modelSelectionPrompt?: AIPromptEntityExtended;
 
   /**
    * Optional runtime override for prompt execution.

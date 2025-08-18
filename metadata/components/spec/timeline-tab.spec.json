@@ -1,0 +1,36 @@
+{
+  "name": "TimelineTab",
+  "namespace": "CRM/UI",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/timeline-tab.js",
+  "functionalRequirements": "## Timeline Tab\n\n### Purpose\nDisplays chronological timeline of events and activities.\n\n### Features\n- Chronological event display\n- Event filtering\n- Date range selection\n- Event type icons",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives timeline events from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- events: Array of timeline events\n- dateRange: Date filter range\n- filters: Event type filters",
+  "properties": [
+    {
+      "name": "events",
+      "type": "array",
+      "required": true,
+      "description": "Timeline events array"
+    },
+    {
+      "name": "dateRange",
+      "type": "object",
+      "required": false,
+      "description": "Date range filter"
+    },
+    {
+      "name": "filters",
+      "type": "object",
+      "required": false,
+      "description": "Event type filters"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

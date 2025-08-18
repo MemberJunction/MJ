@@ -1,0 +1,46 @@
+{
+  "name": "AIModelAnalytics",
+  "title": "AI Model Analytics",
+  "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
+  "type": "chart",
+  "functionalRequirements": "Display pie chart for prompt usage, bar chart for performance, time series for usage trends",
+  "dataRequirements": null,
+  "technicalDesign": "",
+  "properties": [
+    {
+      "name": "model",
+      "type": "object",
+      "required": true,
+      "description": "The selected AI model for analytics"
+    },
+    {
+      "name": "promptRuns",
+      "type": "array",
+      "required": true,
+      "description": "Array of prompt runs to analyze"
+    },
+    {
+      "name": "view",
+      "type": "string",
+      "required": true,
+      "description": "Current analytics view - 'prompts', 'performance', or 'timeline'"
+    }
+  ],
+  "events": [
+    {
+      "name": "onViewChange",
+      "description": "Fired when the analytics view changes",
+      "parameters": [
+        {
+          "name": "view",
+          "type": "string",
+          "description": "New view name"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<AIModelAnalytics ... />",
+  "code": "@file:../code/ai-model-analytics.js",
+  "dependencies": [],
+  "libraries": []
+}

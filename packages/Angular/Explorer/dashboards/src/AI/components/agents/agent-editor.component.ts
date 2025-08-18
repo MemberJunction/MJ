@@ -1,12 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 
 interface AgentHierarchyNode {
   id: string;
   name: string;
-  agent: AIAgentEntity;
+  agent: AIAgentEntityExtended;
   children?: AgentHierarchyNode[];
   parent?: AgentHierarchyNode;
   x?: number;
@@ -35,8 +35,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public isLoading = false;
   public error: string | null = null;
-  public currentAgent: AIAgentEntity | null = null;
-  public allAgents: AIAgentEntity[] = [];
+  public currentAgent: AIAgentEntityExtended | null = null;
+  public allAgents: AIAgentEntityExtended[] = [];
   public hierarchyData: AgentHierarchyNode | null = null;
   public selectedNode: AgentHierarchyNode | null = null;
   public agentPrompts: AgentPrompt[] = [];
@@ -92,7 +92,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         MaxRows: 1000
       });
 
-      this.allAgents = result.Results as AIAgentEntity[];
+      this.allAgents = result.Results as AIAgentEntityExtended[];
       this.currentAgent = this.allAgents.find(a => a.ID === this.agentId) || null;
 
       if (this.currentAgent) {
@@ -124,7 +124,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedNode = this.findNodeInHierarchy(this.hierarchyData, this.currentAgent.ID);
   }
 
-  private findRootAgent(agent: AIAgentEntity): AIAgentEntity {
+  private findRootAgent(agent: AIAgentEntityExtended): AIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
       const parent = this.allAgents.find(a => a.ID === current.ParentID);
@@ -134,7 +134,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     return current;
   }
 
-  private buildHierarchyTree(agent: AIAgentEntity): AgentHierarchyNode {
+  private buildHierarchyTree(agent: AIAgentEntityExtended): AgentHierarchyNode {
     const children = this.allAgents
       .filter(a => a.ParentID === agent.ID)
       .map(child => this.buildHierarchyTree(child));
@@ -468,7 +468,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       // Create new AI Agent entity
-      const newAgent = await md.GetEntityObject<AIAgentEntity>('AI Agents', md.CurrentUser);
+      const newAgent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', md.CurrentUser);
       
       // Set agent properties
       newAgent.Name = this.newSubAgentName.trim();

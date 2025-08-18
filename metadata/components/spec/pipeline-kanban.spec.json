@@ -1,0 +1,36 @@
+{
+  "name": "PipelineKanban",
+  "namespace": "CRM/Dashboards",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/pipeline-kanban.js",
+  "functionalRequirements": "## Pipeline Kanban Board\n\n### Purpose\nDisplay deals in a Kanban board layout organized by pipeline stages.\n\n### Features\n- Column-based layout for stages\n- Deal cards in each column\n- Stage totals and counts\n- Scrollable columns\n- Color-coded stage headers\n- Deal value formatting",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives deals grouped by stage from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- dealsByStage: Object with stages as keys, deals arrays as values\n- stages: Array of stage definitions\n- onDealClick: Callback for deal selection\n\n### Layout\n- Flexbox horizontal columns\n- Fixed height with scroll\n- Stage headers with colors",
+  "properties": [
+    {
+      "name": "dealsByStage",
+      "type": "object",
+      "required": true,
+      "description": "Deals grouped by stage"
+    },
+    {
+      "name": "stages",
+      "type": "array",
+      "required": true,
+      "description": "Stage definitions with names and colors"
+    },
+    {
+      "name": "onDealClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback for deal selection"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

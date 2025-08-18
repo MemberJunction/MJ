@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
-import { AIAgentEntity, AIAgentActionEntity, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { BaseAction } from "@memberjunction/actions";
 
@@ -71,7 +71,7 @@ export class GetAgentDetailsAction extends BaseAgentManagementAction {
      * Recursively builds the agent hierarchy with all sub-agents and their actions
      */
     private async getAgentDetailsWithHierarchy(
-        agent: AIAgentEntity,
+        agent: AIAgentEntityExtended,
         includePrompts: boolean,
         contextUser: any
     ): Promise<any> {

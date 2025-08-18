@@ -1,14 +1,16 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView, CompositeKey } from '@memberjunction/core';
-import { ComponentEntity } from '@memberjunction/core-entities';
+import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
+import { ComponentEntityExtended } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ReactComponentEvent } from '@memberjunction/ng-react';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
+import { TextImportDialogComponent } from './components/text-import-dialog.component';
 
 // Interface for components loaded from files (not from database)
 interface FileLoadedComponent {
@@ -24,7 +26,15 @@ interface FileLoadedComponent {
 }
 
 // Union type for both database and file-loaded components
-type DisplayComponent = (ComponentEntity & { isFileLoaded?: false }) | FileLoadedComponent;
+type DisplayComponent = (ComponentEntityExtended & { isFileLoaded?: false }) | FileLoadedComponent;
+
+// Modern category interface
+interface Category {
+  name: string;
+  count: number;
+  color: string;
+  isActive?: boolean;
+}
 
 @Component({
   selector: 'mj-component-studio-dashboard',
@@ -35,7 +45,7 @@ type DisplayComponent = (ComponentEntity & { isFileLoaded?: false }) | FileLoade
 export class ComponentStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   
   // Component data
-  public components: ComponentEntity[] = [];
+  public components: ComponentEntityExtended[] = [];
   public fileLoadedComponents: FileLoadedComponent[] = []; // Components loaded from files
   public allComponents: DisplayComponent[] = []; // Combined list
   public filteredComponents: DisplayComponent[] = [];
@@ -45,6 +55,16 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public isLoading = false;
   public searchQuery = '';
   public isRunning = false; // Track if component is currently running
+  
+  // View and filtering
+  public selectedCategories: Set<string> = new Set();
+  public availableCategories: { name: string; count: number; color: string }[] = [];
+  public showAllCategories = false; // Show only top categories by default
+  
+  // Favorites
+  public favoriteComponents: Set<string> = new Set(); // Set of component IDs
+  public showOnlyFavorites = false; // Filter to show only favorites
+  private metadata: Metadata = new Metadata();
   
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
@@ -66,9 +86,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
   
+  // Import dropdown state
+  public importDropdownOpen = false;
+  
+  // Text import dialog reference
+  private textImportDialog?: DialogRef;
+  
   private destroy$ = new Subject<void>();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService,
+    private viewContainerRef: ViewContainerRef
+  ) {
     super();
   }
 
@@ -91,9 +121,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntity>({
+      const result = await rv.RunView<ComponentEntityExtended>({
         EntityName: 'MJ: Components',
-        ExtraFilter: 'HasCustomProps = 0', // Only load components without custom props
+        ExtraFilter: 'HasRequiredCustomProps = 0', // Only load components without required custom props
         OrderBy: 'Name',
         MaxRows: 1000,
         ResultType: 'entity_object'
@@ -101,6 +131,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
       if (result.Success) {
         this.components = result.Results || [];
+        // Load favorites for all components
+        await this.loadFavorites();
         this.combineAndFilterComponents();
       } else {
         console.error('Failed to load components:', result.ErrorMessage);
@@ -110,6 +142,93 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Load favorite status for all components
+   */
+  private async loadFavorites(): Promise<void> {
+    const md = new Metadata();
+    const currentUserId = md.CurrentUser?.ID;
+    if (!currentUserId) return;
+
+    this.favoriteComponents.clear();
+    
+    // Check favorite status for each component
+    for (const component of this.components) {
+      try {
+        const isFavorite = await this.metadata.GetRecordFavoriteStatus(
+          currentUserId,
+          'MJ: Components',
+          CompositeKey.FromID(component.ID)
+        );
+        
+        if (isFavorite) {
+          this.favoriteComponents.add(component.ID);
+        }
+      } catch (error) {
+        console.error(`Error loading favorite status for component ${component.ID}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Toggle favorite status for a component
+   */
+  public async toggleFavorite(component: DisplayComponent, event?: Event): Promise<void> {
+    if (event) {
+      event.stopPropagation(); // Prevent card expansion
+    }
+    const md = new Metadata();
+    const currentUserId = md.CurrentUser?.ID;
+    if (!currentUserId) return;
+    
+    // File-loaded components can't be favorited
+    if (this.isFileLoadedComponent(component)) {
+      return;
+    }
+    
+    const componentId = this.getComponentId(component);
+    const isFavorite = this.favoriteComponents.has(componentId);
+    
+    try {
+      await this.metadata.SetRecordFavoriteStatus(
+        currentUserId,
+        'MJ: Components',
+        CompositeKey.FromID(componentId),
+        !isFavorite
+      );
+      
+      // Update local state
+      if (isFavorite) {
+        this.favoriteComponents.delete(componentId);
+      } else {
+        this.favoriteComponents.add(componentId);
+      }
+      
+      // Trigger change detection
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error toggling favorite status:', error);
+    }
+  }
+
+  /**
+   * Check if component is favorited
+   */
+  public isFavorite(component: DisplayComponent): boolean {
+    if (this.isFileLoadedComponent(component)) {
+      return false;
+    }
+    return this.favoriteComponents.has(this.getComponentId(component));
+  }
+
+  /**
+   * Toggle showing only favorites
+   */
+  public toggleShowOnlyFavorites(): void {
+    this.showOnlyFavorites = !this.showOnlyFavorites;
+    this.combineAndFilterComponents();
   }
 
   public onSearchChange(query: string): void {
@@ -124,17 +243,188 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       ...this.components
     ] as DisplayComponent[];
 
+    // Build available categories from all components
+    this.buildCategories();
+
+    // Apply filters
+    let filtered = [...this.allComponents];
+
+    // Apply favorites filter first if enabled
+    if (this.showOnlyFavorites) {
+      filtered = filtered.filter(c => this.isFavorite(c));
+    }
+
+    // Apply category filter
+    if (this.selectedCategories.size > 0) {
+      filtered = filtered.filter(c => {
+        const namespace = this.getComponentNamespace(c) || 'Uncategorized';
+        const category = this.extractCategoryFromNamespace(namespace);
+        return this.selectedCategories.has(category);
+      });
+    }
+
     // Apply search filter
-    if (!this.searchQuery) {
-      this.filteredComponents = [...this.allComponents];
-    } else {
+    if (this.searchQuery) {
       const query = this.searchQuery.toLowerCase();
-      this.filteredComponents = this.allComponents.filter(c => {
+      filtered = filtered.filter(c => {
         const name = this.getComponentName(c)?.toLowerCase() || '';
         const description = this.getComponentDescription(c)?.toLowerCase() || '';
         const type = this.getComponentType(c)?.toLowerCase() || '';
-        return name.includes(query) || description.includes(query) || type.includes(query);
+        const namespace = this.getComponentNamespace(c)?.toLowerCase() || '';
+        return name.includes(query) || description.includes(query) || type.includes(query) || namespace.includes(query);
       });
+    }
+
+    this.filteredComponents = filtered;
+  }
+
+  /**
+   * Build categories from components
+   */
+  private buildCategories(): void {
+    const categoryMap = new Map<string, number>();
+    const allNamespaces = new Set<string>();
+    
+    // Count components per top-level category and track all namespaces
+    for (const component of this.allComponents) {
+      const namespace = this.getComponentNamespace(component) || 'Uncategorized';
+      const category = this.extractCategoryFromNamespace(namespace);
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+      
+      // Track full namespace paths for better display
+      if (namespace && namespace !== 'Uncategorized') {
+        allNamespaces.add(namespace);
+      }
+    }
+
+    // Convert to array and sort by count
+    this.availableCategories = Array.from(categoryMap.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        color: this.getCategoryColor(name)
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  /**
+   * Extract main category from namespace
+   */
+  private extractCategoryFromNamespace(namespace: string): string {
+    if (!namespace || namespace === 'Uncategorized') return 'Uncategorized';
+    
+    // Get the first part of the namespace path
+    const parts = namespace.split('/').filter(p => p.length > 0);
+    return parts[0] || 'Uncategorized';
+  }
+
+  /**
+   * Get color for category
+   */
+  private getCategoryColor(category: string): string {
+    const colors = [
+      '#3B82F6', // blue
+      '#8B5CF6', // purple
+      '#10B981', // green
+      '#F97316', // orange
+      '#06B6D4', // cyan
+      '#EC4899', // pink
+      '#6366F1', // indigo
+      '#14B8A6', // teal
+      '#EAB308', // yellow
+      '#EF4444', // red
+    ];
+    
+    // Use hash of category name to get consistent color
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = category.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  /**
+   * Get color for a full namespace path
+   */
+  public getNamespaceColor(namespace: string | undefined): string {
+    if (!namespace || namespace === 'Uncategorized') {
+      return '#6C757D'; // Gray for uncategorized
+    }
+    
+    // Extract the main category (first part) for consistent coloring
+    const category = this.extractCategoryFromNamespace(namespace);
+    return this.getCategoryColor(category);
+  }
+
+  /**
+   * Format namespace for display (handle long paths)
+   */
+  public formatNamespace(namespace: string | undefined): string {
+    if (!namespace || namespace === 'Uncategorized') {
+      return 'Uncategorized';
+    }
+    
+    const parts = namespace.split('/').filter(p => p.length > 0);
+    
+    // If it's really long, show abbreviated version
+    if (parts.length > 3) {
+      return `${parts[0]} / ... / ${parts[parts.length - 1]}`;
+    }
+    
+    // Otherwise show full path with spacing
+    return parts.join(' / ');
+  }
+
+  /**
+   * Toggle category filter
+   */
+  public toggleCategory(category: string): void {
+    if (this.selectedCategories.has(category)) {
+      this.selectedCategories.delete(category);
+    } else {
+      this.selectedCategories.add(category);
+    }
+    this.combineAndFilterComponents();
+  }
+
+  /**
+   * Clear all category filters
+   */
+  public clearCategoryFilters(): void {
+    this.selectedCategories.clear();
+    this.combineAndFilterComponents();
+  }
+
+  /**
+   * Check if category is selected
+   */
+  public isCategorySelected(category: string): boolean {
+    return this.selectedCategories.has(category);
+  }
+
+  /**
+   * Get visible categories (top 5 or all)
+   */
+  public getVisibleCategories(): Category[] {
+    return this.showAllCategories ? this.availableCategories : this.availableCategories.slice(0, 5);
+  }
+
+  /**
+   * Toggle showing all categories
+   */
+  public toggleShowAllCategories(): void {
+    this.showAllCategories = !this.showAllCategories;
+  }
+
+  /**
+   * Get component namespace
+   */
+  public getComponentNamespace(component: DisplayComponent): string | undefined {
+    if (component.isFileLoaded) {
+      // File-loaded components might not have namespace
+      return (component as FileLoadedComponent).specification.namespace;
+    } else {
+      return (component as ComponentEntityExtended).Namespace || undefined;
     }
   }
 
@@ -312,9 +602,84 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     await this.loadData();
   }
 
-  // File upload handling methods
-  public triggerFileInput(): void {
+  // Import handling methods
+  public toggleImportDropdown(): void {
+    this.importDropdownOpen = !this.importDropdownOpen;
+  }
+  
+  public closeImportDropdown(): void {
+    this.importDropdownOpen = false;
+  }
+  
+  @HostListener('document:click', ['$event'])
+  public onDocumentClick(event: MouseEvent): void {
+    // Close dropdown if clicking outside
+    const target = event.target as HTMLElement;
+    const dropdown = target.closest('.import-dropdown');
+    if (!dropdown && this.importDropdownOpen) {
+      this.importDropdownOpen = false;
+    }
+  }
+  
+  public importFromFile(): void {
+    this.closeImportDropdown();
     this.fileInput?.nativeElement.click();
+  }
+  
+  public importFromText(): void {
+    this.closeImportDropdown();
+    this.openTextImportDialog();
+  }
+  
+  private openTextImportDialog(): void {
+    this.textImportDialog = this.dialogService.open({
+      content: TextImportDialogComponent,
+      width: 700,
+      height: 600,
+      minWidth: 500,
+      title: '',  // Title is in the component
+      actions: [],  // Actions are in the component
+      appendTo: this.viewContainerRef
+    });
+    
+    // Handle the import event from the dialog component
+    const dialogComponentRef = this.textImportDialog.content.instance as TextImportDialogComponent;
+    
+    // Subscribe to import event
+    dialogComponentRef.importSpec.subscribe((spec: ComponentSpec) => {
+      this.handleTextImport(spec);
+      this.textImportDialog?.close();
+    });
+    
+    // Subscribe to cancel event
+    dialogComponentRef.cancelDialog.subscribe(() => {
+      this.textImportDialog?.close();
+    });
+  }
+  
+  private async handleTextImport(spec: ComponentSpec): Promise<void> {
+    // Create a file-loaded component (reusing the same structure)
+    const textComponent: FileLoadedComponent = {
+      id: this.generateId(),
+      name: spec.name,
+      description: spec.description,
+      specification: spec,
+      filename: 'text-import.json',
+      loadedAt: new Date(),
+      isFileLoaded: true,
+      type: spec.type || 'Component',
+      status: 'Text'
+    };
+    
+    // Add to the list and refresh
+    this.fileLoadedComponents.push(textComponent);
+    this.combineAndFilterComponents();
+    
+    console.log(`Loaded component "${spec.name}" from text input`);
+    
+    // Automatically select and run the newly loaded component
+    this.expandedComponent = textComponent;
+    this.runComponent(textComponent);
   }
 
   public async handleFileSelect(event: Event): Promise<void> {
@@ -494,7 +859,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           (this.selectedComponent as FileLoadedComponent).specification = parsed;
         } else {
           // Update database component's Specification field in memory only
-          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(parsed);
+          (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(parsed);
         }
         
         // Update the runtime spec
@@ -558,7 +923,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           (this.selectedComponent as FileLoadedComponent).specification = spec;
         } else {
           // Update database component's Specification field in memory only
-          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(spec);
+          (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(spec);
         }
         
         // Update the runtime spec

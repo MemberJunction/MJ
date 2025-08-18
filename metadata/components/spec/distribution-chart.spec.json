@@ -1,0 +1,30 @@
+{
+  "name": "DistributionChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/distribution-chart.js",
+  "functionalRequirements": "## Distribution Chart\n\n### Purpose\nShow distribution of deal velocity values.\n\n### Features\n- Histogram or box plot\n- Statistical indicators\n- Outlier detection\n- Hover details",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives distribution data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- distributionData: Array of velocity values\n- bins: Number of histogram bins\n\n### Visualization\n- ECharts histogram",
+  "properties": [
+    {
+      "name": "distributionData",
+      "type": "array",
+      "required": true,
+      "description": "Array of velocity values"
+    },
+    {
+      "name": "bins",
+      "type": "number",
+      "required": false,
+      "description": "Number of histogram bins"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

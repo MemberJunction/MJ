@@ -2,14 +2,14 @@ import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angu
 import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptEntity, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-interface PromptWithTemplate extends Omit<AIPromptEntity, 'Template'> {
-  Template: string; // From AIPromptEntity (view field)
+interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
+  Template: string; // From AIPromptEntityExtended (view field)
   TemplateEntity?: TemplateEntity; // Our added field for the actual template entity
   TemplateContents?: TemplateContentEntity[];
   CategoryName?: string;
@@ -57,7 +57,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
-  public selectedPromptForTest: AIPromptEntity | null = null;
+  public selectedPromptForTest: AIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -231,7 +231,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
       // Combine the data - keep the actual entity objects
-      this.prompts = (promptResults.Results as AIPromptEntity[]).map(prompt => {
+      this.prompts = (promptResults.Results as AIPromptEntityExtended[]).map(prompt => {
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
@@ -416,9 +416,9 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
            this.selectedStatus !== 'all';
   }
 
-  public get filteredPromptsAsEntities(): AIPromptEntity[] {
-    // The prompts are already AIPromptEntity instances with extra properties
-    return this.filteredPrompts as AIPromptEntity[];
+  public get filteredPromptsAsEntities(): AIPromptEntityExtended[] {
+    // The prompts are already AIPromptEntityExtended instances with extra properties
+    return this.filteredPrompts as AIPromptEntityExtended[];
   }
 
   public clearFilters(): void {

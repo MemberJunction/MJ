@@ -1,0 +1,36 @@
+{
+  "name": "SalesFunnelDealList",
+  "namespace": "CRM/Analytics",
+  "type": "List",
+  "location": "embedded",
+  "code": "@file:../code/sales-funnel-deal-list.js",
+  "functionalRequirements": "## Deal List Sub-Component\n\n### Purpose\nDisplay deals in a compact table format.\n\n### Core Features\n- **Tabular Display**: Compact list view\n- **Key Metrics**: Amount, probability, dates\n- **Interactive Rows**: Click to open deals\n- **Responsive Design**: Fits container width",
+  "dataRequirements": {
+    "mode": "props",
+    "props": ["deals", "callbacks", "formatCurrency"]
+  },
+  "technicalDesign": "## Implementation\n\n### Table Structure\n- Responsive table layout\n- Hover effects on rows\n- Optimized for scanning",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal entities",
+      "required": true
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Callback functions including OpenEntityRecord",
+      "required": true
+    },
+    {
+      "name": "formatCurrency",
+      "type": "function",
+      "description": "Currency formatting function",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

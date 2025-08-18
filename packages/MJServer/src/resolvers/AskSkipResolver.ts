@@ -1441,6 +1441,9 @@ cycle.`);
         createdAt: q.__mj_CreatedAt,
         updatedAt: q.__mj_UpdatedAt,
         categoryID: q.CategoryID,
+        embeddingVector: q.EmbeddingVector,
+        embeddingModelID: q.EmbeddingModelID,
+        embeddingModelName: q.EmbeddingModel,
         fields: q.Fields.map((f) => {
           return {
             id: f.ID,

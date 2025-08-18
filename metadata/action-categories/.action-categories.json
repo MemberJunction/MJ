@@ -105,15 +105,14 @@
       "Name": "Data Enrichment",
       "Description": "Data enrichment and enhancement actions",
       "ParentID": null,
-      "Status": "Pending",
-      "Parent": null
+      "Status": "Pending"
     },
     "primaryKey": {
       "ID": "0B85DD97-4A22-4E27-9878-E620E99889DF"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:28.066Z",
-      "checksum": "d87e8fa84fef1d6dd57caea081b1c9ded63f50003b8a1dce8c55d9c72feb9e26"
+      "lastModified": "2025-08-17T17:37:35.972Z",
+      "checksum": "3eec517e9335297d66a7a4cfe75cf322b22edbe4a212ac7f7b3304eb85767fec"
     }
   }
 ]

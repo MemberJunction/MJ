@@ -1,0 +1,342 @@
+function SalesFunnelVisualization({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  const [deals, setDeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedStage, setSelectedStage] = useState(null);
+  const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'count');
+  const [timeFilter, setTimeFilter] = useState(savedUserSettings?.timeFilter || 'quarter');
+  const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
+  const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+
+  // Load sub-components from registry
+  const FunnelChart = components['SalesFunnelChart'];
+  const StagePanel = components['SalesFunnelStagePanel'];
+
+  // Define pipeline stages in order
+  const pipelineStages = [
+    { name: 'Lead', color: '#3B82F6' },
+    { name: 'Qualified', color: '#6366F1' },
+    { name: 'Proposal', color: '#8B5CF6' },
+    { name: 'Negotiation', color: '#A855F7' },
+    { name: 'Closed Won', color: '#10B981' },
+    { name: 'Closed Lost', color: '#EF4444' }
+  ];
+
+  useEffect(() => {
+    loadDeals();
+  }, [timeFilter, startDate, endDate]);
+
+  const loadDeals = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const dateFilter = getDateFilter();
+      const result = await utilities.rv.RunView({
+        EntityName: 'Deals',
+        ExtraFilter: dateFilter,
+        OrderBy: 'CloseDate DESC',
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success) {
+        setDeals(result.Results || []);
+      } else {
+        setError(result.ErrorMessage || 'Failed to load deals');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDateFilter = () => {
+    // If custom dates are set, use them
+    if (startDate && endDate) {
+      return `CloseDate >= '${startDate}' AND CloseDate <= '${endDate}'`;
+    }
+    
+    // Otherwise use preset filter
+    const now = new Date();
+    let filterStart;
+    
+    switch (timeFilter) {
+      case 'month':
+        filterStart = new Date(now);
+        filterStart.setMonth(now.getMonth() - 1);
+        break;
+      case 'quarter':
+        filterStart = new Date(now);
+        filterStart.setMonth(now.getMonth() - 3);
+        break;
+      case 'year':
+        filterStart = new Date(now);
+        filterStart.setFullYear(now.getFullYear() - 1);
+        break;
+      case 'all':
+        return '';
+      default:
+        return '';
+    }
+    
+    return filterStart ? `CloseDate >= '${filterStart.toISOString().split('T')[0]}'` : '';
+  };
+  
+  const handleDateRangeChange = (start, end) => {
+    setStartDate(start);
+    setEndDate(end);
+    setTimeFilter('custom');
+    if (onSaveUserSettings) {
+      onSaveUserSettings({ 
+        ...savedUserSettings, 
+        startDate: start, 
+        endDate: end,
+        timeFilter: 'custom'
+      });
+    }
+  };
+  
+  const handlePresetChange = (preset) => {
+    setTimeFilter(preset);
+    setStartDate(null);
+    setEndDate(null);
+    if (onSaveUserSettings) {
+      onSaveUserSettings({ 
+        ...savedUserSettings, 
+        timeFilter: preset,
+        startDate: null,
+        endDate: null
+      });
+    }
+  };
+
+  const calculateFunnelData = () => {
+    const funnelData = [];
+    const closedLost = { count: 0, value: 0 };
+    
+    // Calculate metrics for each stage
+    pipelineStages.forEach((stage, index) => {
+      let stageDeals;
+      
+      if (stage.name === 'Closed Lost') {
+        stageDeals = deals.filter(d => d.Stage === 'Closed Lost');
+        closedLost.count = stageDeals.length;
+        closedLost.value = stageDeals.reduce((sum, d) => sum + (d.Amount || 0), 0);
+      } else if (stage.name === 'Closed Won') {
+        stageDeals = deals.filter(d => d.Stage === 'Closed Won');
+      } else {
+        // For other stages, include all deals at or after this stage (except closed lost)
+        stageDeals = deals.filter(d => {
+          if (d.Stage === 'Closed Lost') return false;
+          const dealStageIndex = pipelineStages.findIndex(s => s.name === d.Stage);
+          return dealStageIndex >= index;
+        });
+      }
+      
+      if (stage.name !== 'Closed Lost') {
+        const totalValue = stageDeals.reduce((sum, d) => sum + (d.Amount || 0), 0);
+        const prevStageCount = index > 0 ? funnelData[index - 1].count : 0;
+        const conversionRate = prevStageCount > 0 ? (stageDeals.length / prevStageCount) * 100 : 100;
+        
+        funnelData.push({
+          stage: stage.name,
+          count: stageDeals.length,
+          value: totalValue,
+          color: stage.color,
+          width: Math.max(30, 100 - (index * 15)), // Visual width for funnel effect
+          conversionRate,
+          deals: stageDeals
+        });
+      }
+    });
+    
+    return { funnelData, closedLost };
+  };
+
+  const handleStageClick = (stageData) => {
+    setSelectedStage({
+      ...stageData,
+      title: `${stageData.stage} Stage`
+    });
+    setIsPanelOpen(true);
+  };
+
+  const formatCurrency = (amount) => {
+    if (amount >= 1000000) {
+      return `$${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `$${(amount / 1000).toFixed(0)}K`;
+    }
+    return `$${amount.toFixed(0)}`;
+  };
+
+  const formatNumber = (num) => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
+    return num.toString();
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading sales funnel data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#EF4444' }}>Error: {error}</div>
+      </div>
+    );
+  }
+
+  const { funnelData, closedLost } = calculateFunnelData();
+  const totalDeals = deals.length;
+  const totalValue = deals.reduce((sum, d) => sum + (d.Amount || 0), 0);
+  const avgDealSize = totalDeals > 0 ? totalValue / totalDeals : 0;
+  const winRate = totalDeals > 0 ? 
+    (deals.filter(d => d.Stage === 'Closed Won').length / totalDeals * 100) : 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#F3F4F6' }}>
+      <style>{`
+        @keyframes fadeInUp {
+          from { 
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
+      
+      <div style={{ padding: '20px', borderBottom: '1px solid #E5E7EB', backgroundColor: 'white' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Sales Funnel</h2>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <select
+            value={timeFilter}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D1D5DB',
+              borderRadius: '6px'
+            }}
+          >
+            <option value="month">Last Month</option>
+            <option value="quarter">Last Quarter</option>
+            <option value="year">Last Year</option>
+            <option value="all">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          
+          {timeFilter === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={startDate || ''}
+                onChange={(e) => handleDateRangeChange(e.target.value, endDate)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '6px'
+                }}
+              />
+              <span>to</span>
+              <input
+                type="date"
+                value={endDate || ''}
+                onChange={(e) => handleDateRangeChange(startDate, e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '6px'
+                }}
+              />
+            </>
+          )}
+          
+          <button
+            onClick={() => {
+              setViewMode(viewMode === 'count' ? 'value' : 'count');
+              onSaveUserSettings({ ...savedUserSettings, viewMode: viewMode === 'count' ? 'value' : 'count' });
+            }}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            Show {viewMode === 'count' ? 'Values' : 'Counts'}
+          </button>
+        </div>
+        
+        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          <div style={{ padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>Total Deals</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+              {totalDeals}
+            </div>
+          </div>
+          <div style={{ padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>Total Value</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+              {formatCurrency(totalValue)}
+            </div>
+          </div>
+          <div style={{ padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>Win Rate</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+              {winRate.toFixed(1)}%
+            </div>
+          </div>
+          <div style={{ padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>Avg Deal Size</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+              {formatCurrency(avgDealSize)}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {FunnelChart && (
+        <FunnelChart 
+          funnelData={funnelData}
+          viewMode={viewMode}
+          onStageClick={handleStageClick}
+          closedLost={closedLost}
+          formatCurrency={formatCurrency}
+        />
+      )}
+      
+      {StagePanel && (
+        <StagePanel
+          isOpen={isPanelOpen}
+          stageData={selectedStage}
+          onClose={() => {
+            setIsPanelOpen(false);
+            setSelectedStage(null);
+          }}
+          components={components}
+          callbacks={callbacks}
+          formatCurrency={formatCurrency}
+        />
+      )}
+    </div>
+  );
+}

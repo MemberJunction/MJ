@@ -1,0 +1,60 @@
+{
+  "name": "ProductRevenueMatrixTable",
+  "namespace": "Sales/Analytics",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/product-revenue-matrix-table.js",
+  "functionalRequirements": "## Product Revenue Matrix Table Sub-Component\n\n### Purpose\nDisplay product revenue metrics in a sortable table format with sparkline trends.\n\n### Core Features\n- **Sortable Columns**: Sort by revenue, quantity, margin, or customers\n- **Revenue Heat Map**: Color-coded revenue cells\n- **Margin Indicators**: Color-coded margin percentages\n- **Sparkline Trends**: Mini charts showing revenue trends\n- **Click for Details**: Select rows to view product details",
+  "dataRequirements": {
+    "mode": "props",
+    "props": ["products", "lineItems", "invoices", "sortBy", "onSortChange", "onProductClick"]
+  },
+  "technicalDesign": "## Implementation\n\n### Table Generation\n- Dynamic HTML table creation\n- Color scales for revenue and margin\n- Chart.js sparklines for trends\n- Hover effects and click handlers",
+  "properties": [
+    {
+      "name": "products",
+      "type": "array",
+      "description": "Array of product entities",
+      "required": true
+    },
+    {
+      "name": "lineItems",
+      "type": "array",
+      "description": "Array of invoice line item entities",
+      "required": true
+    },
+    {
+      "name": "invoices",
+      "type": "array",
+      "description": "Array of invoice entities",
+      "required": true
+    },
+    {
+      "name": "sortBy",
+      "type": "string",
+      "description": "Current sort field",
+      "required": true
+    },
+    {
+      "name": "onSortChange",
+      "type": "function",
+      "description": "Callback when sort changes",
+      "required": false
+    },
+    {
+      "name": "onProductClick",
+      "type": "function",
+      "description": "Callback when product is clicked",
+      "required": false
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "Chart.js",
+      "version": "^4.4.1",
+      "globalVariable": "Chart"
+    }
+  ]
+}

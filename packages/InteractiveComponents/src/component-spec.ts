@@ -23,6 +23,22 @@ export class ComponentSpec {
     namespace?: string;
 
     /**
+     * Only used when location == "registry", a semantic versioning string such as
+     * "1.0.0"
+     * "^1.0.0"
+     * "~1.0.0"
+     * Follows conventions documented here: https://semver.org/ and https://docs.npmjs.com/about-semantic-versioning 
+     */
+    version?: string;
+
+    /**
+     * When an architect decides to use an existing component as a base for a new version,
+     * they can set this flag to true. This indicates that the new version will be created
+     * based on the existing component based on the namespace/name/version specified above
+     */
+    createNewVersion?: boolean;
+
+    /**
      * End-user friendly description of what the component does
      */
     description: string;

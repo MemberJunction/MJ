@@ -4,7 +4,7 @@
     <div class="header-content">
       <div>
         <h1><i class="fa-solid fa-puzzle-piece"></i> Component Studio</h1>
-        <p class="header-subtitle">Testing components without custom properties</p>
+        <p class="header-subtitle">Testing components without required custom properties</p>
       </div>
       <div class="header-buttons">
         @if (selectedComponent && isRunning) {
@@ -16,9 +16,22 @@
             }
           </button>
         }
-        <button kendoButton (click)="triggerFileInput()" [themeColor]="'info'">
-          <span class="fa-solid fa-file-import"></span> Import from File
-        </button>
+        <div class="import-dropdown" [class.open]="importDropdownOpen">
+          <button kendoButton (click)="toggleImportDropdown()" [themeColor]="'info'">
+            <span class="fa-solid fa-file-import"></span> Import
+            <span class="fa-solid fa-chevron-down" style="margin-left: 5px; font-size: 10px;"></span>
+          </button>
+          @if (importDropdownOpen) {
+            <div class="dropdown-menu">
+              <button class="dropdown-item" (click)="importFromFile()">
+                <i class="fa-solid fa-file"></i> Import from File
+              </button>
+              <button class="dropdown-item" (click)="importFromText()">
+                <i class="fa-solid fa-keyboard"></i> Import from Text
+              </button>
+            </div>
+          }
+        </div>
         <button kendoButton (click)="refreshData()" [disabled]="isLoading">
           <span class="fa-solid fa-sync"></span> Refresh
         </button>
@@ -29,12 +42,65 @@
   </div>
 
   <!-- Main Content with Splitter -->
-  <kendo-splitter orientation="horizontal" style="flex: 1; height: auto;">
+  <kendo-splitter orientation="horizontal">
     <!-- Left Panel - Component List -->
-    <kendo-splitter-pane [min]="'350px'" [max]="'600px'" [size]="'400px'">
+    <kendo-splitter-pane [min]="'350px'" [max]="'650px'" [size]="'400px'">
       <div class="components-panel">
         <div class="panel-header">
-          <h3>Components</h3>
+          <div class="panel-header-top">
+            <h3>Components</h3>
+            <div class="header-actions">
+              <button 
+                class="favorites-toggle"
+                [class.active]="showOnlyFavorites"
+                (click)="toggleShowOnlyFavorites()"
+                title="Show only favorites">
+                @if (showOnlyFavorites) {
+                  <i class="fa-solid fa-star"></i> Favorites
+                } @else {
+                  <i class="fa-regular fa-star"></i> All
+                }
+              </button>
+              <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
+            </div>
+          </div>
+          
+          <!-- Modern Category Filter Pills -->
+          <div class="category-filters">
+            @if (availableCategories.length > 0) {
+              <div class="filter-pills">
+                @for (category of getVisibleCategories(); track category.name) {
+                  <button 
+                    class="category-pill"
+                    [class.active]="isCategorySelected(category.name)"
+                    [style.--pill-color]="category.color"
+                    (click)="toggleCategory(category.name)">
+                    <span class="pill-name">{{ category.name }}</span>
+                    <span class="pill-count">{{ category.count }}</span>
+                  </button>
+                }
+                @if (availableCategories.length > 5) {
+                  <button 
+                    class="more-button"
+                    (click)="toggleShowAllCategories()">
+                    @if (showAllCategories) {
+                      <i class="fa-solid fa-chevron-up"></i> Less
+                    } @else {
+                      <i class="fa-solid fa-chevron-down"></i> +{{ availableCategories.length - 5 }} more
+                    }
+                  </button>
+                }
+                @if (selectedCategories.size > 0) {
+                  <button 
+                    class="clear-filters-button"
+                    (click)="clearCategoryFilters()">
+                    <i class="fa-solid fa-times"></i> Clear
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          
           <div class="search-box">
             <kendo-textbox 
               [value]="searchQuery"
@@ -55,11 +121,12 @@
             </div>
           } @else if (filteredComponents.length === 0) {
             <div class="empty-message">
-              <i class="fa-solid fa-info-circle"></i> No components found without custom properties.
+              <i class="fa-solid fa-info-circle"></i> No components found without required custom properties.
               <br>
-              <small>Only components that don't require custom props can be tested here.</small>
+              <small>Components with optional custom props can be tested, but not those with required props.</small>
             </div>
           } @else {
+            <!-- Component Cards -->
             @for (component of filteredComponents; track getComponentId(component)) {
               <div class="component-card" 
                 [class.expanded]="expandedComponent && getComponentId(expandedComponent) === getComponentId(component)"
@@ -71,12 +138,29 @@
                   <div class="card-icon" [style.color]="getComponentTypeColor(getComponentType(component))">
                     <i class="fa-solid" [ngClass]="getComponentTypeIcon(getComponentType(component))"></i>
                   </div>
+                  @if (!isFileLoadedComponent(component)) {
+                    <button 
+                      class="favorite-btn"
+                      [class.is-favorite]="isFavorite(component)"
+                      (click)="toggleFavorite(component, $event)"
+                      [title]="isFavorite(component) ? 'Remove from favorites' : 'Add to favorites'">
+                      @if (isFavorite(component)) {
+                        <i class="fa-solid fa-star"></i>
+                      } @else {
+                        <i class="fa-regular fa-star"></i>
+                      }
+                    </button>
+                  }
                   <div class="card-info">
                     <div class="card-name">
                       {{ getComponentName(component) }}
                       @if (isFileLoadedComponent(component)) {
-                        <span class="file-badge" title="Loaded from {{ getComponentFilename(component) }}">
-                          <i class="fa-solid fa-file"></i> {{ getComponentFilename(component) }}
+                        <span class="file-badge" [title]="getComponentStatus(component) === 'Text' ? 'Imported from text input' : 'Loaded from ' + getComponentFilename(component)">
+                          @if (getComponentStatus(component) === 'Text') {
+                            <i class="fa-solid fa-keyboard"></i> Text Import
+                          } @else {
+                            <i class="fa-solid fa-file"></i> {{ getComponentFilename(component) }}
+                          }
                         </span>
                       }
                     </div>
@@ -84,12 +168,25 @@
                       <span class="card-type">{{ getComponentType(component) || 'Component' }}</span>
                       <span class="card-version">v{{ getComponentVersion(component) }}</span>
                       @if (isFileLoadedComponent(component)) {
-                        <span class="status-badge file">File</span>
+                        @if (getComponentStatus(component) === 'Text') {
+                          <span class="status-badge text">Text</span>
+                        } @else {
+                          <span class="status-badge file">File</span>
+                        }
                       } @else if (getComponentStatus(component) === 'Published') {
                         <span class="status-badge published">Published</span>
                       } @else {
                         <span class="status-badge draft">Draft</span>
                       }
+                    </div>
+                    <!-- Namespace chip with color coding -->
+                    <div class="card-namespace">
+                      <span class="namespace-chip" 
+                        [style.background-color]="getNamespaceColor(getComponentNamespace(component))"
+                        [title]="getComponentNamespace(component) || 'Uncategorized'">
+                        <i class="fa-solid fa-folder-tree"></i>
+                        {{ formatNamespace(getComponentNamespace(component)) }}
+                      </span>
                     </div>
                   </div>
                   <div class="card-chevron">
@@ -175,10 +272,8 @@
     <kendo-splitter-pane [min]="'400px'">
       <div class="component-display">
         @if (selectedComponent) {
-          <!-- Splitter for component and editors -->
-          <kendo-splitter orientation="horizontal" class="component-editor-splitter">
-            <!-- Left side - Running Component -->
-            <kendo-splitter-pane [min]="'300px'" [collapsible]="false" [size]="isDetailsPaneCollapsed ? '100%' : '50%'">
+          <kendo-splitter orientation="horizontal">
+            <kendo-splitter-pane [size]="isDetailsPaneCollapsed ? '100%' : '50%'">
               <div class="component-runtime">
                 @if (isRunning && componentSpec) {
                     @if (currentError) {
@@ -248,93 +343,98 @@
                   </div>
                 }
               </div>
+
             </kendo-splitter-pane>
-            
-            <!-- Right side - Spec and Code Editors -->
-            <kendo-splitter-pane [min]="'400px'" [collapsible]="true" [collapsed]="isDetailsPaneCollapsed">
-              <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
-                <!-- Spec Tab -->
-                <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
-                  <ng-template kendoTabContent>
-                    <div class="tab-content spec-tab">
-                      <div class="editor-header">
-                        <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
-                        <div class="editor-actions">
-                          @if (isEditingSpec) {
-                            <button kendoButton [themeColor]="'primary'" (click)="applySpecChanges()">
-                              <span class="fa-solid fa-check"></span> Apply Changes
-                            </button>
-                            <button kendoButton (click)="initializeEditors()">
-                              <span class="fa-solid fa-times"></span> Cancel
-                            </button>
-                          }
-                          @if (isRunning) {
-                            <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
-                              <span class="fa-solid fa-sync"></span> Refresh Component
-                            </button>
-                          }
+            <kendo-splitter-pane [size]="isDetailsPaneCollapsed ? '0px' : '50%'">
+              <div>
+                <kendo-tabstrip (tabSelect)="onTabSelect($event)" class="editor-tabs">
+                  <!-- Spec Tab -->
+                  <kendo-tabstrip-tab [title]="'Spec'" [selected]="activeTab === 0">
+                    <ng-template kendoTabContent>
+                      <div class="tab-content spec-tab">
+                        <div class="editor-header">
+                          <h4><i class="fa-solid fa-code"></i> Component Specification (JSON)</h4>
+                          <div class="editor-actions">
+                            @if (isEditingSpec) {
+                              <button kendoButton [themeColor]="'primary'" (click)="applySpecChanges()">
+                                <span class="fa-solid fa-check"></span> Apply Changes
+                              </button>
+                              <button kendoButton (click)="initializeEditors()">
+                                <span class="fa-solid fa-times"></span> Cancel
+                              </button>
+                            }
+                            @if (isRunning) {
+                              <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                                <span class="fa-solid fa-sync"></span> Refresh Component
+                              </button>
+                            }
+                          </div>
+                        </div>
+                        <div class="editor-wrapper">
+                          <mj-code-editor
+                            [(ngModel)]="editableSpec"
+                            (ngModelChange)="onSpecChange($event)"
+                            [language]="'json'"
+                            [readonly]="false"
+                            style="height: 100%; width: 100%;">
+                          </mj-code-editor>
                         </div>
                       </div>
-                      <div class="editor-wrapper">
-                        <mj-code-editor
-                          [(ngModel)]="editableSpec"
-                          (ngModelChange)="onSpecChange($event)"
-                          [language]="'json'"
-                          [readonly]="false"
-                          style="height: 100%; width: 100%;">
-                        </mj-code-editor>
-                      </div>
-                    </div>
-                  </ng-template>
-                </kendo-tabstrip-tab>
-              
-                <!-- Code Tab -->
-                <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 1">
-                  <ng-template kendoTabContent>
-                    <div class="tab-content code-tab">
-                      <div class="editor-header">
-                        <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
-                        <div class="editor-actions">
-                          @if (isEditingCode) {
-                            <button kendoButton [themeColor]="'primary'" (click)="applyCodeChanges()">
-                              <span class="fa-solid fa-check"></span> Apply Changes
-                            </button>
-                            <button kendoButton (click)="initializeEditors()">
-                              <span class="fa-solid fa-times"></span> Cancel
-                            </button>
-                          }
-                          @if (isRunning) {
-                            <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
-                              <span class="fa-solid fa-sync"></span> Refresh Component
-                            </button>
-                          }
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                
+                  <!-- Code Tab -->
+                  <kendo-tabstrip-tab [title]="'Code'" [selected]="activeTab === 1">
+                    <ng-template kendoTabContent>
+                      <div class="tab-content code-tab">
+                        <div class="editor-header">
+                          <h4><i class="fa-solid fa-file-code"></i> Component Code (JavaScript/React)</h4>
+                          <div class="editor-actions">
+                            @if (isEditingCode) {
+                              <button kendoButton [themeColor]="'primary'" (click)="applyCodeChanges()">
+                                <span class="fa-solid fa-check"></span> Apply Changes
+                              </button>
+                              <button kendoButton (click)="initializeEditors()">
+                                <span class="fa-solid fa-times"></span> Cancel
+                              </button>
+                            }
+                            @if (isRunning) {
+                              <button kendoButton (click)="refreshComponent()" [themeColor]="'info'">
+                                <span class="fa-solid fa-sync"></span> Refresh Component
+                              </button>
+                            }
+                          </div>
+                        </div>
+                        
+                        <!-- Always use panel bar for consistency and to show all components -->
+                        <div class="editor-wrapper">
+                          <kendo-panelbar class="code-sections">
+                            @for (section of getComponentCodeSections(); track section.title; let i = $index) {
+                              <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
+                                <ng-template kendoPanelBarContent>
+                                  <mj-code-editor
+                                    [ngModel]="section.code"
+                                    (ngModelChange)="onCodeSectionChange($event, i)"
+                                    [language]="'javascript'"
+                                    [readonly]="false"
+                                    style="height: 400px; width: 100%;">
+                                  </mj-code-editor>
+                                </ng-template>
+                              </kendo-panelbar-item>
+                            }
+                          </kendo-panelbar>
                         </div>
                       </div>
-                      
-                      <!-- Always use panel bar for consistency and to show all components -->
-                      <div class="editor-wrapper">
-                        <kendo-panelbar class="code-sections">
-                          @for (section of getComponentCodeSections(); track section.title; let i = $index) {
-                            <kendo-panelbar-item [title]="section.title" [expanded]="section.expanded">
-                              <ng-template kendoPanelBarContent>
-                                <mj-code-editor
-                                  [ngModel]="section.code"
-                                  (ngModelChange)="onCodeSectionChange($event, i)"
-                                  [language]="'javascript'"
-                                  [readonly]="false"
-                                  style="height: 400px; width: 100%;">
-                                </mj-code-editor>
-                              </ng-template>
-                            </kendo-panelbar-item>
-                          }
-                        </kendo-panelbar>
-                      </div>
-                    </div>
-                  </ng-template>
-                </kendo-tabstrip-tab>
-              </kendo-tabstrip>
+                    </ng-template>
+                  </kendo-tabstrip-tab>
+                </kendo-tabstrip>
+              </div>
             </kendo-splitter-pane>
           </kendo-splitter>
+
+          @if (!isDetailsPaneCollapsed) {
+           
+          }
         } @else {
           <!-- Empty State when no component selected -->
           <div class="empty-state">

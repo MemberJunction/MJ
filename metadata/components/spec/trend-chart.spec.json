@@ -1,0 +1,30 @@
+{
+  "name": "TrendChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/trend-chart.js",
+  "functionalRequirements": "## Trend Chart\n\n### Purpose\nDisplay velocity trends over time.\n\n### Features\n- Line chart with multiple series\n- Time axis\n- Velocity metrics\n- Smooth curves\n- Interactive tooltips\n- Legend",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives trend data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- trendData: Array of time series data\n- metrics: Array of metric names\n\n### Chart\n- ECharts line chart\n- Multiple series\n- Responsive sizing",
+  "properties": [
+    {
+      "name": "trendData",
+      "type": "array",
+      "required": true,
+      "description": "Time series data"
+    },
+    {
+      "name": "metrics",
+      "type": "array",
+      "required": true,
+      "description": "Metric names to display"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

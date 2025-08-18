@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
+import { JsonPreprocessor } from './json-preprocessor';
 
 /**
  * Represents the structure of a metadata record with optional sync tracking
@@ -123,6 +124,16 @@ export class SyncEngine {
       return value;
     }
     
+    // If string starts with @ but isn't one of our known reference types, return as-is
+    // This handles cases like npm package names (@mui/material, @angular/core, etc.)
+    if (value.startsWith('@')) {
+      const knownPrefixes = ['@parent:', '@root:', '@file:', '@lookup:', '@env:', '@template:', '@include'];
+      const isKnownReference = knownPrefixes.some(prefix => value.startsWith(prefix));
+      if (!isKnownReference) {
+        return value; // Not a MetadataSync reference, just a string that happens to start with @
+      }
+    }
+    
     // Check for @parent: reference
     if (value.startsWith('@parent:')) {
       if (!parentRecord) {
@@ -147,10 +158,43 @@ export class SyncEngine {
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
-        const fileContent = await fs.readFile(fullPath, 'utf-8');
-        
-        // Process the file content for {@include} references
-        return await this.processFileContentWithIncludes(fileContent, fullPath);
+        // Check if this is a JSON file that might contain @include directives
+        if (fullPath.endsWith('.json')) {
+          try {
+            // Parse as JSON and check for @include directives
+            const jsonContent = await fs.readJson(fullPath);
+            
+            // Check if the JSON contains any @include directives
+            const jsonString = JSON.stringify(jsonContent);
+            const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+            
+            let processedJson: any;
+            if (hasIncludes) {
+              // Process @include directives with a fresh preprocessor instance
+              const preprocessor = new JsonPreprocessor();
+              processedJson = await preprocessor.processFile(fullPath);
+            } else {
+              processedJson = jsonContent;
+            }
+            
+            // Now recursively process any @file references within the JSON
+            const fileDir = path.dirname(fullPath);
+            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
+            
+            // Return as JSON string since @file references typically expect string content
+            return JSON.stringify(processedJson, null, 2);
+          } catch (jsonError) {
+            // Not valid JSON or error processing, fall back to text file handling
+            const fileContent = await fs.readFile(fullPath, 'utf-8');
+            // Process the file content for {@include} references in text files
+            return await this.processFileContentWithIncludes(fileContent, fullPath);
+          }
+        } else {
+          // Not a JSON file, process as text with {@include} support
+          const fileContent = await fs.readFile(fullPath, 'utf-8');
+          // Process the file content for {@include} references
+          return await this.processFileContentWithIncludes(fileContent, fullPath);
+        }
       } else {
         throw new Error(`File not found: ${fullPath}`);
       }
@@ -549,9 +593,34 @@ export class SyncEngine {
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
           
           if (await fs.pathExists(fullPath)) {
-            const content = await fs.readFile(fullPath, 'utf-8');
-            // Process any @include directives within the file
-            const processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            let processedContent: string;
+            
+            // Check if this is a JSON file that might contain @include directives
+            if (fullPath.endsWith('.json')) {
+              try {
+                const jsonContent = await fs.readJson(fullPath);
+                const jsonString = JSON.stringify(jsonContent);
+                const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+                
+                if (hasIncludes) {
+                  // Process @include directives
+                  const preprocessor = new JsonPreprocessor();
+                  const processedJson = await preprocessor.processFile(fullPath);
+                  processedContent = JSON.stringify(processedJson, null, 2);
+                } else {
+                  processedContent = JSON.stringify(jsonContent, null, 2);
+                }
+              } catch {
+                // Not valid JSON, process as text
+                const content = await fs.readFile(fullPath, 'utf-8');
+                processedContent = await this.processFileContentWithIncludes(content, fullPath);
+              }
+            } else {
+              // Text file - process {@include} references
+              const content = await fs.readFile(fullPath, 'utf-8');
+              processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            }
+            
             result[key] = {
               _checksumType: 'file',
               _reference: value,
@@ -769,6 +838,75 @@ export class SyncEngine {
     }
     
     return processedContent;
+  }
+
+  /**
+   * Recursively process field values in a JSON object
+   * 
+   * Processes all string values in a JSON object through processFieldValue,
+   * which handles @file, @lookup, @parent, @root references. This ensures
+   * that nested @file references within JSON files are properly resolved.
+   * 
+   * @param obj - JSON object to process
+   * @param baseDir - Base directory for resolving relative file paths
+   * @param parentRecord - Parent entity record for @parent references
+   * @param rootRecord - Root entity record for @root references
+   * @param depth - Current recursion depth
+   * @param batchContext - Batch processing context
+   * @returns Promise resolving to processed JSON object
+   * @private
+   */
+  private async processJsonFieldValues(
+    obj: any,
+    baseDir: string,
+    parentRecord?: BaseEntity | null,
+    rootRecord?: BaseEntity | null,
+    depth: number = 0,
+    batchContext?: Map<string, BaseEntity>
+  ): Promise<any> {
+    // Handle null and undefined
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      return Promise.all(
+        obj.map(item => 
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)
+        )
+      );
+    }
+
+    // Handle objects
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        // Process string values that might contain references
+        if (typeof value === 'string') {
+          // Check if this looks like a reference that needs processing
+          // Only process known reference types, ignore other @ strings (like npm packages)
+          if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
+              value.startsWith('@parent:') || value.startsWith('@root:') ||
+              value.startsWith('@env:') || value.startsWith('@template:') ||
+              value.startsWith('@include')) {
+            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+          } else {
+            result[key] = value;
+          }
+        } else if (typeof value === 'object') {
+          // Recursively process nested objects
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+        } else {
+          // Keep primitive values as-is
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+
+    // Return primitive values as-is
+    return obj;
   }
   
 }

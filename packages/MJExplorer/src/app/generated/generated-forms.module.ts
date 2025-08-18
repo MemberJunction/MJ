@@ -26,17 +26,75 @@ import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
-
-
+import { AccountStatusFormComponent, LoadAccountStatusFormComponent } from "./Entities/AccountStatus/accountstatus.form.component";
+import { AccountTypeFormComponent, LoadAccountTypeFormComponent } from "./Entities/AccountType/accounttype.form.component";
+import { AccountFormComponent, LoadAccountFormComponent } from "./Entities/Account/account.form.component";
+import { ActivityFormComponent, LoadActivityFormComponent } from "./Entities/Activity/activity.form.component";
+import { ActivityTypeFormComponent, LoadActivityTypeFormComponent } from "./Entities/ActivityType/activitytype.form.component";
+import { ContactRelationshipFormComponent, LoadContactRelationshipFormComponent } from "./Entities/ContactRelationship/contactrelationship.form.component";
+import { ContactFormComponent, LoadContactFormComponent } from "./Entities/Contact/contact.form.component";
+import { IndustryFormComponent, LoadIndustryFormComponent } from "./Entities/Industry/industry.form.component";
+import { RelationshipTypeFormComponent, LoadRelationshipTypeFormComponent } from "./Entities/RelationshipType/relationshiptype.form.component";
+import { AccountStatusDetailsComponent, LoadAccountStatusDetailsComponent } from "./Entities/AccountStatus/sections/details.component"
+import { AccountTypeDetailsComponent, LoadAccountTypeDetailsComponent } from "./Entities/AccountType/sections/details.component"
+import { AccountDetailsComponent, LoadAccountDetailsComponent } from "./Entities/Account/sections/details.component"
+import { ActivityDetailsComponent, LoadActivityDetailsComponent } from "./Entities/Activity/sections/details.component"
+import { ActivityTypeDetailsComponent, LoadActivityTypeDetailsComponent } from "./Entities/ActivityType/sections/details.component"
+import { ContactRelationshipDetailsComponent, LoadContactRelationshipDetailsComponent } from "./Entities/ContactRelationship/sections/details.component"
+import { ContactDetailsComponent, LoadContactDetailsComponent } from "./Entities/Contact/sections/details.component"
+import { IndustryDetailsComponent, LoadIndustryDetailsComponent } from "./Entities/Industry/sections/details.component"
+import { RelationshipTypeDetailsComponent, LoadRelationshipTypeDetailsComponent } from "./Entities/RelationshipType/sections/details.component"
    
 
+@NgModule({
+declarations: [
+    AccountStatusFormComponent,
+    AccountTypeFormComponent,
+    AccountFormComponent,
+    ActivityFormComponent,
+    ActivityTypeFormComponent,
+    ContactRelationshipFormComponent,
+    ContactFormComponent,
+    IndustryFormComponent,
+    RelationshipTypeFormComponent,
+    AccountStatusDetailsComponent,
+    AccountTypeDetailsComponent,
+    AccountDetailsComponent,
+    ActivityDetailsComponent,
+    ActivityTypeDetailsComponent,
+    ContactRelationshipDetailsComponent,
+    ContactDetailsComponent,
+    IndustryDetailsComponent,
+    RelationshipTypeDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    UserViewGridModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule,
+    UserViewGridModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
+    
 
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
@@ -47,7 +105,23 @@ export function LoadGeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    
-    
+    LoadAccountStatusFormComponent();
+    LoadAccountTypeFormComponent();
+    LoadAccountFormComponent();
+    LoadActivityFormComponent();
+    LoadActivityTypeFormComponent();
+    LoadContactRelationshipFormComponent();
+    LoadContactFormComponent();
+    LoadIndustryFormComponent();
+    LoadRelationshipTypeFormComponent();
+    LoadAccountStatusDetailsComponent();
+    LoadAccountTypeDetailsComponent();
+    LoadAccountDetailsComponent();
+    LoadActivityDetailsComponent();
+    LoadActivityTypeDetailsComponent();
+    LoadContactRelationshipDetailsComponent();
+    LoadContactDetailsComponent();
+    LoadIndustryDetailsComponent();
+    LoadRelationshipTypeDetailsComponent();
 }
     

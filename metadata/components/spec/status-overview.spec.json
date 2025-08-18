@@ -1,0 +1,24 @@
+{
+  "name": "StatusOverview",
+  "namespace": "CRM/Finance",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/status-overview.js",
+  "functionalRequirements": "## Status Overview\n\n### Purpose\nDisplay invoice status summary cards.\n\n### Features\n- Status counts\n- Total amounts\n- Color coding\n- Percentage breakdown",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives status summary data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- statusData: Object with status counts and amounts\n\n### Display\n- Grid of status cards\n- Semantic colors",
+  "properties": [
+    {
+      "name": "statusData",
+      "type": "object",
+      "required": true,
+      "description": "Status summary data"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

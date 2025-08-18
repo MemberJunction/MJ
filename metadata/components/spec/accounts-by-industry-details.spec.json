@@ -1,0 +1,38 @@
+{
+  "name": "AccountsByIndustryDetails",
+  "title": "Accounts by Industry Details",
+  "description": "Sliding detail panel that displays comprehensive account information with an open record action button",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "CRM/Analytics",
+  "functionalRequirements": "## Account Details Panel\n\n- Slide in from right with smooth animation\n- Display account name and industry prominently\n- Show key metrics (revenue, status, type)\n- Include contact information section\n- Display location details if available\n- Provide 'Open Record' action button\n- Support close via X button or overlay click\n- Format all data appropriately",
+  "technicalDesign": "## Technical Design\n\n### Props\n- account: Selected account object\n- isOpen: Panel visibility state\n- onClose: Close handler callback\n- onOpenRecord: Open record callback\n\n### Layout\n- Fixed positioning overlay\n- Transform-based slide animation\n- Sections for different data types\n- Sticky header with close button\n- Scrollable content area",
+  "properties": [
+    {
+      "name": "account",
+      "type": "object",
+      "required": true,
+      "description": "Selected account object with all details"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the panel is visible"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "required": true,
+      "description": "Callback to close the panel"
+    },
+    {
+      "name": "onOpenRecord",
+      "type": "function",
+      "required": true,
+      "description": "Callback to open the full record"
+    }
+  ],
+  "exampleUsage": "<AccountsByIndustryDetails\n  account={selectedAccount}\n  isOpen={showDetails}\n  onClose={() => setShowDetails(false)}\n  onOpenRecord={handleOpenRecord}\n/>",
+  "code": "@file:../code/accounts-by-industry-details.js"
+}

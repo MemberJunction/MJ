@@ -17,12 +17,14 @@ export interface ComponentExecutionOptions {
   props?: Record<string, any>;
   setupCode?: string;
   timeout?: number;
-  renderWaitTime?: number; // New option - default 1000ms
+  renderWaitTime?: number; // Default 500ms for render completion
+  asyncErrorWaitTime?: number; // Optional wait for async operations - no default
   waitForSelector?: string;
   waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
   contextUser: UserInfo;
   libraryConfiguration?: LibraryConfiguration;
   isRootComponent?: boolean; // Whether this is a root component (for prop validation)
+  debug?: boolean; // Enable debug output - default true
 }
  
 
@@ -100,17 +102,29 @@ export class ComponentRunner {
     const criticalWarnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     let renderCount = 0;
+    
+    // Default debug to true
+    const debug = options.debug !== false;
+    
+    if (debug) {
+      console.log('\n🔍 === Component Execution Debug Mode ===');
+      console.log('Component:', options.componentSpec.name);
+      console.log('Props:', JSON.stringify(options.props || {}, null, 2));
+    }
 
     try {
       const page = await this.browserManager.getPage();
-
-      // Set up monitoring
-      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
-      this.setupErrorHandling(page, errors);
-      await this.injectRenderTracking(page);
+      
+      // Clear the page before each test for isolation
+      await page.goto('about:blank');
       
       // Expose MJ utilities to the page
       await this.exposeMJUtilities(page, options.contextUser);
+      
+      // Then set up monitoring
+      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
+      this.setupErrorHandling(page, errors);
+      await this.injectRenderTracking(page);
 
       // Create and load the component
       const htmlContent = this.createHTMLTemplate(options);
@@ -126,15 +140,21 @@ export class ComponentRunner {
       const runtimeErrors = await this.collectRuntimeErrors(page);
       errors.push(...runtimeErrors);
       
+      // Capture async errors only if wait time is specified
+      if (options.asyncErrorWaitTime && options.asyncErrorWaitTime > 0) {
+        const asyncErrors = await this.captureAsyncErrors(page, options.asyncErrorWaitTime);
+        errors.push(...asyncErrors);
+      }
+      
       // Perform deep render validation
       const deepRenderErrors = await this.validateDeepRender(page);
       errors.push(...deepRenderErrors);
 
       // Get the rendered HTML
-      const html = await this.browserManager.getContent();
+      const html = await page.content();
 
       // Take screenshot if needed
-      const screenshot = await this.browserManager.screenshot();
+      const screenshot = await page.screenshot();
 
       // Determine success and collect any additional errors
       const { success, additionalErrors } = this.determineSuccess(
@@ -146,8 +166,8 @@ export class ComponentRunner {
       
       // Add any additional errors
       errors.push(...additionalErrors);
-
-      return {
+      
+      const result = {
         success,
         html,
         errors: errors.map(e => {
@@ -168,9 +188,15 @@ export class ComponentRunner {
         executionTime: Date.now() - startTime,
         renderCount
       };
+      
+      if (debug) {
+        this.dumpDebugInfo(result);
+      }
+
+      return result;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
-      return {
+      const result = {
         success: false,
         html: '',
         errors: errors.map(e => {
@@ -190,7 +216,64 @@ export class ComponentRunner {
         executionTime: Date.now() - startTime,
         renderCount
       };
+      
+      if (debug) {
+        console.log('\n❌ Component execution failed with error:', error);
+        this.dumpDebugInfo(result);
+      }
+      
+      return result;
     }
+  }
+  
+  /**
+   * Dumps debug information to console for easier troubleshooting
+   */
+  private dumpDebugInfo(result: ComponentExecutionResult): void {
+    console.log('\n📊 === Component Execution Results ===');
+    console.log('Success:', result.success ? '✅' : '❌');
+    console.log('Execution time:', result.executionTime + 'ms');
+    console.log('Render count:', result.renderCount);
+    
+    if (result.console && result.console.length > 0) {
+      console.log('\n📝 Console Output:');
+      result.console.forEach(log => {
+        const icon = log.type === 'error' ? '❌' : 
+                     log.type === 'warning' ? '⚠️' : 
+                     log.type === 'log' ? '📝' : '💬';
+        console.log(`  ${icon} [${log.type}] ${log.text}`);
+      });
+    }
+    
+    if (result.errors && result.errors.length > 0) {
+      console.log('\n❌ Errors:', result.errors.length);
+      result.errors.forEach((err, i) => {
+        const message = typeof err === 'string' ? err : err.message;
+        console.log(`  ${i + 1}. ${message}`);
+      });
+    }
+    
+    if (result.warnings && result.warnings.length > 0) {
+      console.log('\n⚠️ Warnings:', result.warnings.length);
+      result.warnings.forEach((warn, i) => {
+        const message = typeof warn === 'string' ? warn : warn.message;
+        console.log(`  ${i + 1}. ${message}`);
+      });
+    }
+    
+    if (result.criticalWarnings && result.criticalWarnings.length > 0) {
+      console.log('\n🔴 Critical Warnings:', result.criticalWarnings.length);
+      result.criticalWarnings.forEach((warn, i) => {
+        console.log(`  ${i + 1}. ${warn}`);
+      });
+    }
+    
+    if (result.html) {
+      const htmlPreview = result.html.substring(0, 200);
+      console.log('\n📄 HTML Preview:', htmlPreview + (result.html.length > 200 ? '...' : ''));
+    }
+    
+    console.log('\n========================================\n');
   }
 
   private createHTMLTemplate(options: ComponentExecutionOptions): string {
@@ -238,12 +321,43 @@ ${runtimeScripts}
 ${componentScripts}
 ${cssLinks}
   <style>
-    body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    #root { min-height: 100vh; }
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f0f0f0; /* Light gray background to see contrast */
+    }
+    #root { 
+      min-height: 100vh;
+      background-color: white;
+      border: 2px solid #007bff;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .test-harness-header {
+      background-color: #28a745;
+      color: white;
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      font-weight: bold;
+      text-align: center;
+    }
   </style>
   <script>
-    // Initialize error tracking
+    // Initialize error and console tracking
     window.__testHarnessRuntimeErrors = [];
+    window.__testHarnessConsoleLogs = [];
+    
+    // Track console output for async error detection
+    const originalConsoleError = console.error;
+    console.error = function(...args) {
+      window.__testHarnessConsoleLogs.push({
+        type: 'error',
+        text: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
+      });
+      originalConsoleError.apply(console, args);
+    };
     
     // Global error handler
     window.addEventListener('error', (event) => {
@@ -253,6 +367,18 @@ ${cssLinks}
         stack: event.error.stack,
         type: 'runtime'
       });
+    });
+    
+    // Unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      window.__testHarnessRuntimeErrors.push({
+        message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason || 'Unknown reason'),
+        stack: event.reason?.stack || 'No stack trace available',
+        type: 'promise-rejection'
+      });
+      // Prevent the default handling (which would log to console)
+      event.preventDefault();
     });
     
     // Render tracking injection
@@ -287,8 +413,17 @@ ${cssLinks}
   </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div class="test-harness-header">
+    🧪 React Test Harness - Component Loaded Successfully
+  </div>
+  <div id="root" data-testid="react-root">
+    <!-- Component will render here -->
+  </div>
   <script type="text/babel">
+    // Immediate debug message
+    console.log('🚀 Test harness script started executing');
+    document.getElementById('root').innerHTML = '<div style="background: lime; padding: 20px; color: black; font-size: 18px;">📝 Script is running...</div>';
+    
     ${options.setupCode || ''}
     
     // Create runtime context with dynamic libraries
@@ -563,11 +698,40 @@ ${cssLinks}
     const props = ${propsJson};
     
     (async () => {
+      console.log('📦 Starting component initialization...');
+      console.log('React available:', typeof React !== 'undefined');
+      console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
+      console.log('Babel available:', typeof Babel !== 'undefined');
+      
+      // Update the root to show progress
+      document.getElementById('root').innerHTML = '<div style="background: cyan; padding: 20px; color: black;">🔄 Initializing components...</div>';
+      
+      // First, test that React is working with a simple component
+      const TestComponent = () => React.createElement('div', {
+        style: { 
+          background: 'yellow', 
+          padding: '10px', 
+          margin: '10px 0',
+          border: '2px solid orange',
+          color: 'black',
+          fontSize: '16px',
+          fontWeight: 'bold'
+        }
+      }, '🔧 React is working! Now loading your component...');
+      
+      const testRoot = ReactDOM.createRoot(document.getElementById('root'));
+      testRoot.render(React.createElement(TestComponent));
+      
+      // Wait a moment to show the test component
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now proceed with the actual component
       // Register the component hierarchy
       const result = await hierarchyRegistrar.registerHierarchy(componentSpec);
       
       if (!result.success) {
         console.error('Failed to register components:', result.errors);
+        document.getElementById('root').innerHTML = '<div style="color: red; padding: 20px;">Failed to register components: ' + JSON.stringify(result.errors) + '</div>';
         return;
       }
       
@@ -590,6 +754,10 @@ ${cssLinks}
       
       // Function to render with current settings
       const renderWithSettings = () => {
+        console.log('🎯 Starting component render...');
+        console.log('Props:', props);
+        console.log('Root component found:', !!RootComponent);
+        
         const enhancedProps = {
           ...props,
           components: components,
@@ -605,15 +773,60 @@ ${cssLinks}
           }
         };
         
-        root.render(
-          React.createElement(ErrorBoundary, null,
-            React.createElement(RootComponent, enhancedProps)
-          )
-        );
+        console.log('Enhanced props created:', Object.keys(enhancedProps));
+        
+        try {
+          root.render(
+            React.createElement(ErrorBoundary, null,
+              React.createElement(RootComponent, enhancedProps)
+            )
+          );
+          console.log('✅ Component rendered successfully');
+        } catch (error) {
+          console.error('❌ Render error:', error);
+          document.getElementById('root').innerHTML = '<div style="color: red; padding: 20px;">Render Error: ' + error.message + '</div>';
+        }
       };
       
       // Initial render
       renderWithSettings();
+      
+      // Add a fallback message if nothing renders after a delay
+      setTimeout(() => {
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+          const hasContent = rootElement.innerHTML.trim().length > 0;
+          const hasVisibleChildren = rootElement.querySelector('*');
+          
+          console.log('Root element check:', {
+            hasContent,
+            innerHTML: rootElement.innerHTML.substring(0, 100),
+            hasVisibleChildren: !!hasVisibleChildren,
+            childCount: rootElement.childNodes.length
+          });
+          
+          if (!hasContent || !hasVisibleChildren) {
+            rootElement.innerHTML = '<div style="color: red; font-size: 18px; padding: 20px; border: 2px dashed red; background: #ffe6e6;">⚠️ Component did not render any visible content</div>';
+          } else {
+            // Force visibility on all children as a test
+            const allElements = rootElement.querySelectorAll('*');
+            allElements.forEach(el => {
+              if (el instanceof HTMLElement) {
+                // Make sure elements are visible
+                if (window.getComputedStyle(el).display === 'none') {
+                  el.style.display = 'block !important';
+                }
+                if (window.getComputedStyle(el).visibility === 'hidden') {
+                  el.style.visibility = 'visible !important';
+                }
+                // Add a test border to see if elements exist
+                el.style.border = '1px dotted red';
+              }
+            });
+            console.log('Applied debug borders to', allElements.length, 'elements');
+          }
+        }
+      }, 2000);
     })();
   </script>
 </body>
@@ -686,15 +899,15 @@ ${cssLinks}
     errors: string[]
   ): Promise<boolean> {
     const timeout = options.timeout || 10000; // 10 seconds default
-    const renderWaitTime = options.renderWaitTime || 1000; // Default 1000ms
+    const renderWaitTime = options.renderWaitTime || 500; // Default 500ms for render completion
     
     try {
       if (options.waitForSelector) {
-        await this.browserManager.waitForSelector(options.waitForSelector, { timeout });
+        await page.waitForSelector(options.waitForSelector, { timeout });
       }
 
       if (options.waitForLoadState) {
-        await this.browserManager.waitForLoadState(options.waitForLoadState);
+        await page.waitForLoadState(options.waitForLoadState);
       } else {
         // Wait for React to finish rendering with configurable time
         await page.waitForTimeout(renderWaitTime);
@@ -743,6 +956,57 @@ ${cssLinks}
         errors.push(`Component stack: ${error.componentStack}`);
       }
     });
+    
+    return errors;
+  }
+  
+  /**
+   * Captures async errors by waiting for asynchronous operations to complete
+   * This catches errors from setTimeout, setInterval, Promises, and async effects
+   */
+  private async captureAsyncErrors(page: any, waitTime: number): Promise<string[]> {
+    const errors: string[] = [];
+    
+    try {
+      // Clear any existing errors to track only new ones
+      const initialErrorCount = await page.evaluate(() => {
+        return (window as any).__testHarnessRuntimeErrors?.length || 0;
+      });
+      
+      // Wait for async operations to potentially fail
+      await page.waitForTimeout(waitTime);
+      
+      // Collect any new errors that occurred during the wait
+      const allErrors = await page.evaluate(() => {
+        return (window as any).__testHarnessRuntimeErrors || [];
+      });
+      
+      // Process only new errors
+      const newErrors = allErrors.slice(initialErrorCount);
+      newErrors.forEach((error: any) => {
+        if (error.type === 'promise-rejection') {
+          errors.push(`Async operation failed: ${error.message}`);
+        } else if (error.message && !errors.includes(`${error.type} error: ${error.message}`)) {
+          errors.push(`Delayed ${error.type} error: ${error.message}`);
+        }
+      });
+      
+      // Also check if any console errors appeared
+      const consoleErrors = await page.evaluate(() => {
+        const logs = (window as any).__testHarnessConsoleLogs || [];
+        return logs.filter((log: any) => log.type === 'error').map((log: any) => log.text);
+      });
+      
+      // Add unique console errors
+      consoleErrors.forEach((error: string) => {
+        if (!errors.some(e => e.includes(error))) {
+          errors.push(`Console error during async wait: ${error}`);
+        }
+      });
+      
+    } catch (e) {
+      errors.push(`Failed to capture async errors: ${e}`);
+    }
     
     return errors;
   }
@@ -828,7 +1092,7 @@ ${cssLinks}
    * Expose MemberJunction utilities to the browser context
    */
   private async exposeMJUtilities(page: any, contextUser: UserInfo): Promise<void> {
-    // Check if utilities are already exposed
+    // Check if utilities are already exposed (they persist across navigations)
     const alreadyExposed = await page.evaluate(() => {
       return typeof (window as any).__mjGetEntityObject === 'function';
     });
@@ -836,13 +1100,15 @@ ${cssLinks}
     if (alreadyExposed) {
       return; // Already exposed, skip
     }
-    // Create instances in Node.js context
-    const metadata = new Metadata();
-    const runView = new RunView();
-    const runQuery = new RunQuery();
     
-    // Expose individual functions since we can't pass complex objects
-    await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
+    try {
+      // Create instances in Node.js context
+      const metadata = new Metadata();
+      const runView = new RunView();
+      const runQuery = new RunQuery();
+      
+      // Expose individual functions since we can't pass complex objects
+      await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
       try {
         const entity = await metadata.GetEntityObject(entityName, contextUser);
         return entity;
@@ -876,19 +1142,27 @@ ${cssLinks}
       } catch (error) {
         console.error('Error in __mjRunViews:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
+          return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
       }
     });
     
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
-      try {
-        return await runQuery.RunQuery(params, contextUser);
-      } catch (error) {
-        console.error('Error in __mjRunQuery:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+        try {
+          return await runQuery.RunQuery(params, contextUser);
+        } catch (error) {
+          console.error('Error in __mjRunQuery:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { Success: false, ErrorMessage: errorMessage, Results: [] };
+        }
+      });
+    } catch (error) {
+      console.error('Failed to expose MJ utilities to page:', error);
+      // Log more details about the error
+      if (error instanceof Error && error.message.includes('addBinding')) {
+        console.error('addBinding error - this usually means the page context is invalid');
       }
-    });
+      throw error; // Re-throw to be caught by the main error handler
+    }
   }
 
   /**

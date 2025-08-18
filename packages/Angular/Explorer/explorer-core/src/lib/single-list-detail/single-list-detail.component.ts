@@ -1,7 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { ListDetailEntity, ListEntity, UserViewEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { ListDetailEntityExtended, ListEntity, UserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { PageChangeEvent } from '@progress/kendo-angular-grid';
 import { Subject, debounceTime } from 'rxjs';
@@ -24,13 +24,13 @@ export class SingleListDetailComponent implements OnInit {
     public showAddDialog: boolean = false;
     public showAddLoader: boolean = false;
     public showDialogLoader: boolean = false;
-    public userViews: UserViewEntity[] | null = null;
+    public userViews: UserViewEntityExtended[] | null = null;
 
     private filterDebounceTime: number = 250;
     private filterItemsSubject: Subject<any> = new Subject();
     private filter: string = '';
 
-    public userViewsToAdd: UserViewEntity[] = [];
+    public userViewsToAdd: UserViewEntityExtended[] = [];
 
     public page: number = 0;
     public pageSize: number = 50;
@@ -222,7 +222,7 @@ export class SingleListDetailComponent implements OnInit {
         const rv: RunView = new RunView();
         const md: Metadata = new Metadata();
 
-        const runViewResult: RunViewResult = await rv.RunView<UserViewEntity>({
+        const runViewResult: RunViewResult = await rv.RunView<UserViewEntityExtended>({
             EntityName: "User Views",
             ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.listRecord.EntityID}'`,
             ResultType: 'entity_object'
@@ -254,7 +254,7 @@ export class SingleListDetailComponent implements OnInit {
         const md: Metadata = new Metadata();
 
         const hashMap: Map<string, {ID: string}> = new Map();
-        await Promise.all(this.userViewsToAdd.map(async (userView: UserViewEntity) => {
+        await Promise.all(this.userViewsToAdd.map(async (userView: UserViewEntityExtended) => {
             const runViewResult: RunViewResult = await rv.RunView({
                 EntityName: "User Views",
                 ViewEntity: userView,
@@ -284,7 +284,7 @@ export class SingleListDetailComponent implements OnInit {
         for(let i = 0; i < recordIDs.length; i += chunkSize){
             const chunk: string[] = recordIDs.slice(i, i + chunkSize);
             await Promise.all(chunk.map(async (recordID: string) => {
-                const listDetail: ListDetailEntity = await md.GetEntityObject("List Details");
+                const listDetail: ListDetailEntityExtended = await md.GetEntityObject("List Details");
                 listDetail.ListID = this.listRecord!.ID;
                 listDetail.RecordID = recordID.toString();
                 listDetail.ContextCurrentUser = md.CurrentUser;
@@ -341,12 +341,12 @@ export class SingleListDetailComponent implements OnInit {
         });
     }
 
-    public addViewToSelectedList(view: UserViewEntity): void {
+    public addViewToSelectedList(view: UserViewEntityExtended): void {
         this.userViewsToAdd.push(view);
     }
 
-    public removeViewFromSelectedList(view: UserViewEntity): void {
-        this.userViewsToAdd.filter((userView: UserViewEntity) => userView.ID !== view.ID);
+    public removeViewFromSelectedList(view: UserViewEntityExtended): void {
+        this.userViewsToAdd.filter((userView: UserViewEntityExtended) => userView.ID !== view.ID);
     }
 
     public onDropdownItemClick(item: NewItemOption): void {
@@ -420,7 +420,7 @@ export class SingleListDetailComponent implements OnInit {
         }
 
         const md: Metadata = new Metadata();
-        const listEntity: ListDetailEntity = await md.GetEntityObject("List Details", md.CurrentUser);
+        const listEntity: ListDetailEntityExtended = await md.GetEntityObject("List Details", md.CurrentUser);
         listEntity.ListID = this.listRecord.ID;
         listEntity.RecordID = listRecord.ID;
 

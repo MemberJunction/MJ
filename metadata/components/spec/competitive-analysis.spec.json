@@ -1,0 +1,30 @@
+{
+  "name": "CompetitiveAnalysis",
+  "namespace": "CRM/Analytics",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/competitive-analysis.js",
+  "functionalRequirements": "## Competitive Analysis\n\n### Purpose\nAnalyze competitive win/loss performance.\n\n### Features\n- Competitor comparison\n- Win rates by competitor\n- Strengths/weaknesses\n- Market positioning",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives competitive data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- competitorData: Array of competitor metrics\n- selectedCompetitor: Currently selected",
+  "properties": [
+    {
+      "name": "competitorData",
+      "type": "array",
+      "required": true,
+      "description": "Competitor performance data"
+    },
+    {
+      "name": "selectedCompetitor",
+      "type": "string",
+      "required": false,
+      "description": "Selected competitor ID"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

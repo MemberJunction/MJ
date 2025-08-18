@@ -526,6 +526,104 @@ interface FluentMatcher {
 }
 ```
 
+## Parallel Testing
+
+### Important: Test Harness Instance Limitations
+
+The ReactTestHarness uses a single browser page instance and is **NOT safe for parallel test execution** on the same instance. This is due to Playwright's internal limitations with `exposeFunction` and potential race conditions when multiple tests try to modify the same page context simultaneously.
+
+### Sequential Testing (Single Instance)
+
+For sequential test execution, you can safely reuse a single harness instance:
+
+```typescript
+const harness = new ReactTestHarness({ headless: true });
+await harness.initialize();
+
+// ✅ CORRECT - Sequential testing on same instance
+for (const test of tests) {
+  const result = await harness.testComponent(test.code, test.props);
+  // Each test runs one after another, no conflicts
+}
+
+await harness.close();
+```
+
+### Parallel Testing (Multiple Instances)
+
+For parallel test execution, you **MUST** create separate ReactTestHarness instances:
+
+```typescript
+// ✅ CORRECT - Parallel testing with separate instances
+const results = await Promise.all(tests.map(async (test) => {
+  const harness = new ReactTestHarness({ headless: true });
+  await harness.initialize();
+  
+  try {
+    return await harness.testComponent(test.code, test.props);
+  } finally {
+    await harness.close(); // Clean up each instance
+  }
+}));
+```
+
+### Common Mistake to Avoid
+
+```typescript
+// ❌ WRONG - DO NOT DO THIS
+const harness = new ReactTestHarness({ headless: true });
+await harness.initialize();
+
+// This will cause conflicts and errors!
+const results = await Promise.all(
+  tests.map(test => harness.testComponent(test.code, test.props))
+);
+```
+
+This approach will fail with errors like:
+- "Function '__mjGetEntityObject' has been already registered"
+- "Cannot read properties of undefined (reading 'addBinding')"
+
+### Performance Considerations
+
+While creating multiple harness instances has some overhead (each launches its own browser context), the benefits of parallel execution typically outweigh this cost:
+
+- **Sequential (1 instance)**: Lower memory usage, but tests run one by one
+- **Parallel (N instances)**: Higher memory usage, but tests complete much faster
+
+### Example: Test Runner with Configurable Parallelism
+
+```typescript
+class TestRunner {
+  async runTests(tests: TestCase[], parallel = false) {
+    if (parallel) {
+      // Create new instance for each test
+      return Promise.all(tests.map(async (test) => {
+        const harness = new ReactTestHarness({ headless: true });
+        await harness.initialize();
+        try {
+          return await harness.testComponent(test.code, test.props);
+        } finally {
+          await harness.close();
+        }
+      }));
+    } else {
+      // Reuse single instance for all tests
+      const harness = new ReactTestHarness({ headless: true });
+      await harness.initialize();
+      
+      const results = [];
+      for (const test of tests) {
+        results.push(await harness.testComponent(test.code, test.props));
+      }
+      
+      await harness.close();
+      return results;
+    }
+  }
+}
+```
+
 ## Usage Examples for TypeScript Projects
 
 ### Creating a Reusable Test Utility

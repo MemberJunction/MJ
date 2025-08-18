@@ -1,0 +1,48 @@
+{
+  "name": "ProductRevenueTreemap",
+  "namespace": "Sales/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/product-revenue-treemap.js",
+  "functionalRequirements": "## Product Revenue Treemap Sub-Component\n\n### Purpose\nVisualize product revenue distribution using an interactive treemap chart.\n\n### Core Features\n- **Hierarchical View**: Products grouped by category\n- **Size by Revenue**: Box size represents revenue amount\n- **Color by Margin**: Color intensity shows profit margin\n- **Interactive Tooltips**: Hover for detailed metrics\n- **Click to Drill-down**: Select products for details",
+  "dataRequirements": {
+    "mode": "props",
+    "props": ["products", "lineItems", "invoices", "onProductClick"]
+  },
+  "technicalDesign": "## Implementation\n\n### D3.js Treemap\n- Dynamic treemap layout with category grouping\n- Color scale based on margin percentages\n- Responsive sizing and text truncation\n- Tooltip on hover with key metrics",
+  "properties": [
+    {
+      "name": "products",
+      "type": "array",
+      "description": "Array of product entities",
+      "required": true
+    },
+    {
+      "name": "lineItems",
+      "type": "array",
+      "description": "Array of invoice line item entities",
+      "required": true
+    },
+    {
+      "name": "invoices",
+      "type": "array",
+      "description": "Array of invoice entities",
+      "required": true
+    },
+    {
+      "name": "onProductClick",
+      "type": "function",
+      "description": "Callback when product is clicked",
+      "required": false
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "d3",
+      "version": "^7.8.5",
+      "globalVariable": "d3"
+    }
+  ]
+}

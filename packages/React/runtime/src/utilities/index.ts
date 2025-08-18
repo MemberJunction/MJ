@@ -7,6 +7,7 @@ export * from './runtime-utilities';
 export * from './component-styles';
 export * from './standard-libraries';
 export * from './library-loader';
+export * from './library-registry';
 export * from './component-error-analyzer';
 export * from './resource-manager';
 export * from './cache-manager';

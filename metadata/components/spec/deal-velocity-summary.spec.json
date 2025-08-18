@@ -1,0 +1,45 @@
+{
+  "name": "DealVelocitySummary",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-summary.js",
+  "functionalRequirements": "## Deal Velocity Summary\n\n### Purpose\nDisplay key deal metrics in a grid of summary cards to provide at-a-glance insights into deal performance.\n\n### Metrics Displayed\n- **Total Deals**: Count of all deals in the dataset\n- **Won Deals**: Count of deals with 'Closed Won' status\n- **Win Rate**: Percentage of closed deals that were won\n- **Total Value**: Sum of all deal amounts in the pipeline\n- **Won Value**: Sum of amounts for won deals only\n\n### Visual Design\n- Grid layout that adapts to available width\n- Each metric in its own card with colored accent border\n- Large, bold numbers for easy scanning\n- Descriptive labels above each metric\n- Currency formatting for monetary values\n- Percentage formatting for rates\n\n### User Experience\n- Cards automatically reflow based on container width\n- Consistent color coding across the application\n- Clear visual hierarchy with labels and values",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "fields": [
+          {
+            "name": "ID",
+            "type": "string",
+            "description": "Unique identifier for the deal"
+          },
+          {
+            "name": "Stage",
+            "type": "string",
+            "description": "Current stage of the deal"
+          },
+          {
+            "name": "Amount",
+            "type": "number",
+            "description": "Deal value in currency"
+          }
+        ],
+        "requiredPermissions": ["read"]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation Details\n\n### Component Function\n`DealVelocitySummary({ deals, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings })`\n\n### Props\n- **deals**: Array of deal records to calculate metrics from\n- **Standard props**: utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings\n\n### Calculations\n1. **Total Deals**: `deals.length`\n2. **Closed Deals**: Filter for 'Closed Won' or 'Closed Lost' stages\n3. **Won Deals**: Filter for 'Closed Won' stage only\n4. **Win Rate**: `(wonDeals / closedDeals) * 100`\n5. **Total Value**: Sum all deal amounts\n6. **Won Value**: Sum amounts for won deals\n\n### Metrics Configuration\nEach metric defined with:\n- label: Display name\n- value: Calculated value\n- color: Accent color for visual distinction\n- format: 'number', 'currency', or 'percent'\n\n### Layout\n- CSS Grid with `repeat(auto-fit, minmax(150px, 1fr))`\n- Cards with consistent padding and border radius\n- Left border accent using metric color\n- Responsive font sizing based on format type",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "required": true,
+      "description": "Array of deal records to calculate metrics from"
+    }
+  ],
+  "dependencies": [],
+  "libraries": []
+}

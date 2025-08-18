@@ -1,0 +1,24 @@
+{
+  "name": "MetricsPanel",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/metrics-panel.js",
+  "functionalRequirements": "## Metrics Panel\n\n### Purpose\nDisplay key velocity metrics and statistics.\n\n### Features\n- Metric cards grid\n- Average velocity\n- Conversion rates\n- Stage bottlenecks\n- Trend indicators",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives calculated metrics from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- metrics: Object with calculated metrics\n\n### Layout\n- Grid of metric cards\n- Icons and labels\n- Formatted values",
+  "properties": [
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": true,
+      "description": "Calculated velocity metrics"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,36 @@
+{
+  "name": "WinRateByOwner",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/win-rate-by-owner.js",
+  "functionalRequirements": "## Win Rate By Owner\n\n### Purpose\nVisualize win rates by deal owner/sales rep.\n\n### Features\n- Bar chart visualization\n- Owner performance comparison\n- Win/loss ratios\n- Sortable by metrics",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives owner performance data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- ownerData: Array of owner performance metrics\n- sortBy: Sort field\n- onOwnerClick: Owner selection handler",
+  "properties": [
+    {
+      "name": "ownerData",
+      "type": "array",
+      "required": true,
+      "description": "Owner performance data"
+    },
+    {
+      "name": "sortBy",
+      "type": "string",
+      "required": false,
+      "description": "Sort field"
+    },
+    {
+      "name": "onOwnerClick",
+      "type": "function",
+      "required": false,
+      "description": "Owner selection callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

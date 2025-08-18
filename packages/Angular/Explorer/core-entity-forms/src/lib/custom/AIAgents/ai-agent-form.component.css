@@ -422,6 +422,26 @@
 }
 
 /* Empty States */
+/* Loading State */
+.loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+}
+
+.loading-state i {
+    font-size: 36px;
+    color: #2196f3;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.loading-state p {
+    margin: 0;
+    font-size: 14px;
+    color: #94a3b8;
+}
+
 .empty-state {
     text-align: center;
     padding: 60px 20px;

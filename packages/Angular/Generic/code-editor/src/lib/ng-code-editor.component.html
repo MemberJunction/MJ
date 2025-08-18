@@ -1,0 +1,41 @@
+<div class="mj-code-editor-wrapper">
+  @if (toolbar?.enabled) {
+    <div 
+      class="mj-code-editor-toolbar" 
+      [class]="toolbar.customClass"
+      [class.toolbar-bottom]="toolbar.position === 'bottom'">
+      
+      @for (group of toolbarGroups; track group.id) {
+        <div class="toolbar-group">
+          @for (button of group.buttons; track button.id) {
+            @if (button.visible !== false) {
+              <button 
+                type="button"
+                class="toolbar-button"
+                [attr.data-button-id]="button.id"
+                [disabled]="button.disabled"
+                [title]="button.tooltip || ''"
+                (click)="handleButtonClick(button)">
+                <i [class]="button.icon"></i>
+                @if (button.label) {
+                  <span class="button-label">{{ button.label }}</span>
+                }
+              </button>
+            }
+          }
+        </div>
+        
+        @if (group.separator && !isLastGroup(group)) {
+          <div class="toolbar-separator"></div>
+        }
+      }
+    </div>
+  }
+  
+  <div 
+    class="mj-code-editor-content" 
+    #editorContent
+    [class.has-toolbar-top]="toolbar?.enabled && toolbar?.position !== 'bottom'"
+    [class.has-toolbar-bottom]="toolbar?.enabled && toolbar?.position === 'bottom'">
+  </div>
+</div>

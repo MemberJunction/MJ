@@ -37957,6 +37957,15 @@ export class Component_ {
     @Field(() => Int, {description: `Number of component dependencies defined in the specification. Used to assess component complexity.`}) 
     DependencyCount: number;
         
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the technical design`}) 
+    TechnicalDesignVectorEmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the functional requirements`}) 
+    FunctionalRequirementsVectorEmbeddingModelID?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`}) 
+    HasRequiredCustomProps: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceRegistry?: string;
@@ -38048,6 +38057,15 @@ export class CreateComponentInput {
 
     @Field(() => Int, { nullable: true })
     DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasRequiredCustomProps?: boolean;
 }
     
 
@@ -38127,6 +38145,15 @@ export class UpdateComponentInput {
 
     @Field(() => Int, { nullable: true })
     DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasRequiredCustomProps?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
