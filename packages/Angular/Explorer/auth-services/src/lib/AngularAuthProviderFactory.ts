@@ -1,0 +1,184 @@
+import { Injectable, Injector } from '@angular/core';
+import { MJGlobal } from '@memberjunction/global';
+import { MJAuthBase } from './mjexplorer-auth-base.service';
+import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider';
+
+/**
+ * Factory for creating Angular authentication providers
+ * Uses MJGlobal ClassFactory pattern for extensibility
+ */
+@Injectable({
+  providedIn: 'root'
+})
+export class AngularAuthProviderFactory {
+  private static instance: AngularAuthProviderFactory;
+  private providers: Map<string, IAngularAuthProvider> = new Map();
+  private providerConfigs: Map<string, any> = new Map();
+
+  constructor(private injector: Injector) {
+    AngularAuthProviderFactory.instance = this;
+  }
+
+  /**
+   * Get singleton instance
+   */
+  static getInstance(): AngularAuthProviderFactory {
+    if (!AngularAuthProviderFactory.instance) {
+      throw new Error('AngularAuthProviderFactory not initialized. Ensure it is provided in your module.');
+    }
+    return AngularAuthProviderFactory.instance;
+  }
+
+  /**
+   * Create a provider based on configuration
+   */
+  createProvider(config: AngularAuthProviderConfig): IAngularAuthProvider {
+    const existingProvider = this.providers.get(config.type);
+    if (existingProvider) {
+      return existingProvider;
+    }
+
+    try {
+      // Use MJGlobal ClassFactory to create the provider instance
+      // Pass config as the first constructor argument
+      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<MJAuthBase>(
+        MJAuthBase, 
+        config.type,
+        config  // Pass config as constructor argument, not injector
+      );
+
+      if (!provider) {
+        throw new Error(`No provider registered for type: ${config.type}. Available types: ${this.getRegisteredTypes().join(', ')}`);
+      }
+
+      // Validate the configuration
+      if (!provider.validateConfig(config)) {
+        throw new Error(`Invalid configuration for provider type: ${config.type}`);
+      }
+
+      // Store the provider instance
+      this.providers.set(config.type, provider);
+      this.providerConfigs.set(config.type, config);
+
+      return provider;
+    } catch (error) {
+      console.error(`Failed to create auth provider for type ${config.type}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a provider by type
+   */
+  getProvider(type: string): IAngularAuthProvider | undefined {
+    return this.providers.get(type);
+  }
+
+  /**
+   * Get all registered provider types
+   */
+  getRegisteredTypes(): string[] {
+    const registrations = MJGlobal.Instance.ClassFactory.GetRegistrationsByRootClass(MJAuthBase);
+    const types = registrations.map(reg => reg.Key);
+    // Return unique types only, as multiple classes can be registered with the same key
+    return [...new Set(types)];
+  }
+
+  /**
+   * Check if a provider type is registered
+   */
+  isTypeRegistered(type: string): boolean {
+    return this.getRegisteredTypes().includes(type);
+  }
+
+  /**
+   * Clear all providers (useful for testing)
+   */
+  clearProviders(): void {
+    this.providers.clear();
+    this.providerConfigs.clear();
+  }
+
+  /**
+   * Get provider-specific Angular services that need to be injected
+   * This uses the static method on each provider class for true extensibility
+   */
+  static getProviderAngularServices(type: string, environment: any): any[] {
+    const normalizedType = type?.toLowerCase();
+    
+    // Get the provider class from the ClassFactory
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(
+      MJAuthBase, 
+      normalizedType
+    );
+    const providerClass = registration?.SubClass as any;
+    
+    if (!providerClass) {
+      console.warn(`No provider class registered for type: ${type}`);
+      return [];
+    }
+    
+    // Check if the provider class has the static method
+    if (typeof providerClass.getRequiredAngularProviders === 'function') {
+      // Call the static method to get the required providers
+      return providerClass.getRequiredAngularProviders(environment);
+    } else {
+      // Provider doesn't define required Angular services (might not need any)
+      console.log(`Provider ${type} does not define getRequiredAngularProviders static method`);
+      return [];
+    }
+  }
+
+  /**
+   * Create configuration from environment
+   * Supports both legacy AUTH_TYPE and new authProvider configurations
+   */
+  static createConfigFromEnvironment(environment: any): AngularAuthProviderConfig {
+    // Handle new authProvider configuration
+    if (environment.authProvider) {
+      return environment.authProvider;
+    }
+
+    // Handle legacy AUTH_TYPE configuration for backward compatibility
+    if (environment.AUTH_TYPE) {
+      const authType = environment.AUTH_TYPE.toLowerCase();
+      
+      switch (authType) {
+        case 'auth0':
+          return {
+            type: 'auth0',
+            clientId: environment.AUTH0_CLIENTID,
+            domain: environment.AUTH0_DOMAIN,
+            redirectUri: environment.AUTH0_REDIRECT_URI || environment.REDIRECT_URI || window.location.origin,
+            scopes: environment.AUTH0_SCOPES || ['openid', 'profile', 'email'],
+            audience: environment.AUTH0_AUDIENCE
+          };
+          
+        case 'msal':
+          return {
+            type: 'msal',
+            clientId: environment.CLIENT_ID,
+            tenantId: environment.TENANT_ID || environment.CLIENT_AUTHORITY?.split('/').pop(),
+            authority: environment.CLIENT_AUTHORITY,
+            redirectUri: environment.REDIRECT_URI || window.location.origin,
+            scopes: environment.SCOPES || ['User.Read', 'email', 'profile']
+          };
+          
+        case 'okta':
+          return {
+            type: 'okta',
+            clientId: environment.OKTA_CLIENTID,
+            domain: environment.OKTA_DOMAIN,
+            issuer: environment.OKTA_ISSUER || `https://${environment.OKTA_DOMAIN}/oauth2/default`,
+            redirectUri: environment.OKTA_REDIRECT_URI || environment.REDIRECT_URI || window.location.origin,
+            scopes: environment.OKTA_SCOPES || ['openid', 'profile', 'email']
+          };
+          
+        default:
+          throw new Error(`Unsupported AUTH_TYPE: ${environment.AUTH_TYPE}`);
+      }
+    }
+
+    throw new Error('No authentication configuration found in environment');
+  }
+}

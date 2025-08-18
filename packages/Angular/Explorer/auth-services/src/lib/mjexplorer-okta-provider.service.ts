@@ -1,7 +1,15 @@
 import { Injectable, Inject } from '@angular/core';
+import { RegisterClass } from '@memberjunction/global';
 import { Observable, BehaviorSubject, from } from 'rxjs';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
+import { AngularAuthProviderConfig } from './IAuthProvider';
 import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth-js';
+
+// Prevent tree-shaking by explicitly referencing the class
+export function LoadMJOktaProvider() {
+  // This function ensures the class is included in the bundle
+  return MJOktaProvider;
+}
 
 /**
  * Okta authentication provider for MemberJunction Explorer
@@ -9,29 +17,52 @@ import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth
 @Injectable({
   providedIn: 'root'
 })
+@RegisterClass(MJAuthBase, 'okta')
 export class MJOktaProvider extends MJAuthBase {
+  type = 'okta';
   private oktaAuth: OktaAuth;
   private userClaims$ = new BehaviorSubject<IDToken | null>(null);
   
-  constructor(@Inject('oktaConfig') private config: OktaAuthOptions & { domain?: string }) {
-    super();
+  /**
+   * Static method to get required Angular providers for Okta
+   * This is called by the factory without instantiating the class
+   */
+  static getRequiredAngularProviders(environment: any): any[] {
+    return [
+      {
+        provide: 'oktaConfig',
+        useValue: {
+          clientId: environment.OKTA_CLIENTID,
+          domain: environment.OKTA_DOMAIN,
+          issuer: environment.OKTA_ISSUER || `https://${environment.OKTA_DOMAIN}/oauth2/default`,
+          redirectUri: environment.OKTA_REDIRECT_URI || window.location.origin,
+          scopes: environment.OKTA_SCOPES || ['openid', 'profile', 'email']
+        }
+      }
+    ];
+  }
+  
+  constructor(@Inject('oktaConfig') private oktaConfig: OktaAuthOptions & { domain?: string }) {
+    // Create config for parent constructor
+    const config: AngularAuthProviderConfig = { type: 'okta' };
+    super(config);
     
-    // Build configuration with defaults first, then spread config to override
-    const oktaConfig: OktaAuthOptions = {
-      clientId: config.clientId,
-      redirectUri: config.redirectUri || window.location.origin + '/callback',
-      scopes: config.scopes || ['openid', 'profile', 'email'],
+    // Build configuration with defaults first, then spread oktaConfig to override
+    const oktaAuthConfig: OktaAuthOptions = {
+      clientId: this.oktaConfig.clientId,
+      redirectUri: this.oktaConfig.redirectUri || window.location.origin + '/callback',
+      scopes: this.oktaConfig.scopes || ['openid', 'profile', 'email'],
       pkce: true, // Use PKCE for security
-      ...config,
+      ...this.oktaConfig,
       // Set issuer after spread to ensure it's not overwritten if not present in config
-      issuer: config.issuer || (config.domain ? `https://${config.domain}/oauth2/default` : '')
+      issuer: this.oktaConfig.issuer || (this.oktaConfig.domain ? `https://${this.oktaConfig.domain}/oauth2/default` : '')
     };
     
-    this.oktaAuth = new OktaAuth(oktaConfig);
+    this.oktaAuth = new OktaAuth(oktaAuthConfig);
 
     // Listen for token events
     this.oktaAuth.authStateManager.subscribe((authState: any) => {
-      this.setAuthenticated(authState.isAuthenticated || false);
+      this.updateAuthState(authState.isAuthenticated || false);
       
       if (authState.isAuthenticated && authState.idToken) {
         this.userClaims$.next(authState.idToken as IDToken);
@@ -41,7 +72,12 @@ export class MJOktaProvider extends MJAuthBase {
     });
   }
 
-  async login(options?: any): Promise<any> {
+  override login(options?: any): Observable<void> {
+    // Convert Promise to Observable
+    return from(this.loginAsync(options));
+  }
+
+  private async loginAsync(options?: any): Promise<void> {
     try {
       // Check if we're in a redirect callback
       if (this.oktaAuth.isLoginRedirect()) {
@@ -67,7 +103,7 @@ export class MJOktaProvider extends MJAuthBase {
         postLogoutRedirectUri: window.location.origin
       });
       
-      this.setAuthenticated(false);
+      this.updateAuthState(false);
       this.userClaims$.next(null);
     } catch (error) {
       console.error('Okta logout error:', error);
@@ -93,10 +129,15 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
-  async isAuthenticated(): Promise<boolean> {
+  override isAuthenticated(): Observable<boolean> {
+    // Convert Promise to Observable
+    return from(this.isAuthenticatedAsync());
+  }
+
+  private async isAuthenticatedAsync(): Promise<boolean> {
     try {
       const authState = await this.oktaAuth.authStateManager.getAuthState();
-      this.setAuthenticated(authState?.isAuthenticated || false);
+      this.updateAuthState(authState?.isAuthenticated || false);
       return authState?.isAuthenticated || false;
     } catch (error) {
       console.error('Okta authentication check error:', error);
@@ -181,5 +222,34 @@ export class MJOktaProvider extends MJAuthBase {
       console.error('Error getting ID token:', error);
       return undefined;
     }
+  }
+
+  // Add required methods for the new interface
+  async initialize(): Promise<void> {
+    // Check if we're returning from a redirect
+    if (this.oktaAuth.isLoginRedirect()) {
+      await this.handleCallback();
+    }
+    // Check authentication status
+    const isAuthenticated = await this.oktaAuth.isAuthenticated();
+    this.updateAuthState(isAuthenticated);
+  }
+
+  protected async loginInternal(options?: any): Promise<void> {
+    await this.loginAsync(options);
+  }
+
+  async getToken(): Promise<string | null> {
+    const token = await this.getAccessToken();
+    return token || null;
+  }
+
+  getRequiredConfig(): string[] {
+    return ['clientId', 'domain'];
+  }
+
+  validateConfig(_config: any): boolean {
+    // Prefix with underscore to indicate intentionally unused
+    return _config.clientId && (_config.domain || _config.issuer);
   }
 }

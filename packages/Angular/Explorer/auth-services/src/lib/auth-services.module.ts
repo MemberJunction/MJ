@@ -1,111 +1,78 @@
 import { NgModule, ModuleWithProviders } from '@angular/core';
-
-// Local Components
+import { CommonModule } from '@angular/common';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
-import { MJAuth0Provider } from './mjexplorer-auth0-provider.service';
-import { MJMSALProvider } from './mjexplorer-msal-provider.service';
+import { AngularAuthProviderFactory } from './AngularAuthProviderFactory';
+import { MJGlobal } from '@memberjunction/global';
 
-//***********************************************************
-// Auth0
-//***********************************************************
-import {
-  Auth0ClientFactory,
-  Auth0ClientService,
-  AuthClientConfig,
-  AuthConfigService,
-  AuthGuard,
-  AuthModule,
-  AuthService,
-} from '@auth0/auth0-angular';
+// Import our generic redirect component
+import { RedirectComponent } from './redirect.component';
 
-//***********************************************************
-//MSAL
-//***********************************************************
-import {
-  MSAL_GUARD_CONFIG,
-  MSAL_INSTANCE,
-  MSAL_INTERCEPTOR_CONFIG,
-  MsalBroadcastService,
-  MsalGuard,
-  MsalRedirectComponent,
-  MsalService,
-} from '@azure/msal-angular';
-import { InteractionType, PublicClientApplication } from '@azure/msal-browser';
+// Export the generic redirect component for backward compatibility
+export { RedirectComponent };
 
-type AuthEnvironment = {
-  AUTH_TYPE: string;
-  CLIENT_ID: string;
-  CLIENT_AUTHORITY: string;
-  AUTH0_CLIENTID: string;
-  AUTH0_DOMAIN: string;
-};
+// Import restored providers and load them to prevent tree-shaking
+import { LoadMJMSALProvider } from './mjexplorer-msal-provider.service';
+import { LoadMJAuth0Provider } from './mjexplorer-auth0-provider.service';
+import { LoadMJOktaProvider } from './mjexplorer-okta-provider.service';
 
-export const RedirectComponent = MsalRedirectComponent;
+// Load all providers to prevent tree-shaking
+// These functions ensure the classes are included in the bundle
+LoadMJMSALProvider();
+LoadMJAuth0Provider();
+LoadMJOktaProvider();
 
-@NgModule()
+/**
+ * Extensible authentication module that supports N providers
+ * Uses MJGlobal ClassFactory pattern for dynamic provider creation
+ */
+@NgModule({
+  imports: [CommonModule],
+  declarations: [RedirectComponent],
+  exports: [RedirectComponent]
+})
 export class AuthServicesModule {
-  static forRoot(environment: AuthEnvironment): ModuleWithProviders<AuthServicesModule> {
+  static forRoot(environment: any): ModuleWithProviders<AuthServicesModule> {
+
+    const providers: any[] = [];
+    const authType = environment.AUTH_TYPE?.toLowerCase();
+
+    if (!authType) {
+      console.error('No AUTH_TYPE specified in environment');
+      return {
+        ngModule: AuthServicesModule,
+        providers: []
+      };
+    }
+
+    // Use the factory to get provider-specific Angular services
+    // This uses the static method on each provider class for extensibility
+    const angularServices = AngularAuthProviderFactory.getProviderAngularServices(authType, environment);
+    providers.push(...angularServices);
+
+    // Get the provider class from ClassFactory for extensibility
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(
+      MJAuthBase,
+      authType
+    );
+    const providerClass = registration?.SubClass;
+
+    if (providerClass) {
+      // Add the provider itself
+      providers.push({
+        provide: MJAuthBase,
+        useClass: providerClass
+      });
+    } else {
+      console.error(`No provider class registered for auth type: ${authType}`);
+    }
+
+    // Add the factory itself
+    providers.push(AngularAuthProviderFactory);
+
     return {
       ngModule: AuthServicesModule,
-      providers: [
-        environment.AUTH_TYPE === 'auth0'
-          ? [
-              AuthService,
-              AuthGuard,
-              {
-                provide: AuthConfigService,
-                useValue: {
-                  domain: environment.AUTH0_DOMAIN,
-                  clientId: environment.AUTH0_CLIENTID,
-                  authorizationParams: {
-                    redirect_uri: window.location.origin,
-                  },
-                  cacheLocation: 'localstorage',
-                },
-              },
-              {
-                provide: Auth0ClientService,
-                useFactory: Auth0ClientFactory.createClient,
-                deps: [AuthClientConfig],
-              },
-            ]
-          : [
-              {
-                provide: MSAL_INSTANCE,
-                useValue: new PublicClientApplication({
-                  auth: {
-                    clientId: environment.CLIENT_ID,
-                    authority: environment.CLIENT_AUTHORITY,
-                    redirectUri: window.location.origin,
-                  },
-                  cache: {
-                    cacheLocation: 'localStorage',
-                    storeAuthStateInCookie: false, // Could move this to environment config - set to true for Internet Explorer 11
-                  },
-                }),
-              },
-              {
-                provide: MSAL_GUARD_CONFIG,
-                useValue: {
-                  interactionType: InteractionType.Redirect, // MSAL Guard Configuration
-                  authRequest: {
-                    scopes: ['User.Read'],
-                  },
-                },
-              },
-              {
-                provide: MSAL_INTERCEPTOR_CONFIG,
-                useValue: {
-                  interactionType: InteractionType.Redirect, // MSAL Interceptor Configuration
-                  protectedResourceMap: new Map([['https://graph.microsoft.com/v1.0/me', ['user.read']]]),
-                },
-              },
-              MsalService,
-              MsalGuard,
-              MsalBroadcastService,
-            ],
-        { provide: MJAuthBase, useClass: environment.AUTH_TYPE === 'auth0' ? MJAuth0Provider : MJMSALProvider },
-      ],
+      providers
     };
   }
 }
+
