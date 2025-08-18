@@ -1,4 +1,10 @@
 import { Observable } from 'rxjs';
+import { AuthProviderConfig } from '@memberjunction/core';
+
+// Create an alias for Angular-specific config that extends the base
+export interface AngularAuthProviderConfig extends AuthProviderConfig {
+  // Angular-specific extensions can be added here if needed
+}
 
 /**
  * Interface for Angular authentication providers
@@ -59,19 +65,4 @@ export interface IAngularAuthProvider {
    * Validate provider configuration
    */
   validateConfig(config: any): boolean;
-}
-
-/**
- * Configuration for Angular auth providers
- */
-export interface AngularAuthProviderConfig {
-  type: string;
-  clientId?: string;
-  domain?: string;
-  tenantId?: string;
-  authority?: string;
-  redirectUri?: string;
-  scopes?: string[];
-  audience?: string;
-  [key: string]: any; // Allow provider-specific config
 }

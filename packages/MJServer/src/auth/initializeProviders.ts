@@ -1,7 +1,6 @@
 import { configInfo } from '../config.js';
-import { AuthProviderConfig } from './IAuthProvider.js';
+import { AuthProviderConfig, LogError, LogStatus } from '@memberjunction/core';
 import { AuthProviderFactory } from './AuthProviderFactory.js';
-import { LogError, LogStatus } from '@memberjunction/core';
 
 /**
  * Initialize authentication providers from configuration

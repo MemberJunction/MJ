@@ -16,7 +16,8 @@ export function LoadMJAuth0Provider() {
 })
 @RegisterClass(MJAuthBase, 'auth0')
 export class MJAuth0Provider extends MJAuthBase {
-  type = 'auth0';
+  static readonly PROVIDER_TYPE = 'auth0';
+  type = MJAuth0Provider.PROVIDER_TYPE;
 
   /**
    * Factory function to provide Angular dependencies required by Auth0
@@ -44,8 +45,10 @@ export class MJAuth0Provider extends MJAuthBase {
   ];
 
   constructor(public auth: AuthService) {
-    // Create a dummy config to satisfy the parent constructor if it needs it
-    const config: AngularAuthProviderConfig = { type: 'auth0' };
+    const config: AngularAuthProviderConfig = { 
+      name: MJAuth0Provider.PROVIDER_TYPE, 
+      type: MJAuth0Provider.PROVIDER_TYPE 
+    };
     super(config);
     this.auth.isAuthenticated$.subscribe((loggedIn) => {
       this.updateAuthState(loggedIn);

@@ -1,7 +1,7 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Microsoft Authentication Library (MSAL) provider implementation
@@ -15,13 +15,7 @@ export class MSALProvider extends BaseAuthProvider {
   /**
    * Extracts user information from MSAL/Azure AD JWT payload
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  } {
+  extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // MSAL/Azure AD uses some custom claims
     const email = payload.email as string | undefined || payload.preferred_username as string | undefined;
     const fullName = payload.name as string | undefined;

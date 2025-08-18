@@ -19,7 +19,8 @@ export function LoadMJOktaProvider() {
 })
 @RegisterClass(MJAuthBase, 'okta')
 export class MJOktaProvider extends MJAuthBase {
-  type = 'okta';
+  static readonly PROVIDER_TYPE = 'okta';
+  type = MJOktaProvider.PROVIDER_TYPE;
   private oktaAuth: OktaAuth;
   private userClaims$ = new BehaviorSubject<IDToken | null>(null);
   
@@ -41,8 +42,10 @@ export class MJOktaProvider extends MJAuthBase {
   ];
   
   constructor(@Inject('oktaConfig') private oktaConfig: OktaAuthOptions & { domain?: string }) {
-    // Create config for parent constructor
-    const config: AngularAuthProviderConfig = { type: 'okta' };
+    const config: AngularAuthProviderConfig = { 
+      name: MJOktaProvider.PROVIDER_TYPE, 
+      type: MJOktaProvider.PROVIDER_TYPE 
+    };
     super(config);
     
     // Build configuration with defaults first, then spread oktaConfig to override

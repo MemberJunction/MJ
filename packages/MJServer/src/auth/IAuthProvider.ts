@@ -1,4 +1,5 @@
 import { JwtHeader, JwtPayload, SigningKeyCallback } from 'jsonwebtoken';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 
 /**
  * Interface for authentication providers in MemberJunction
@@ -39,32 +40,10 @@ export interface IAuthProvider {
    * Extracts user information from the JWT payload
    * Different providers use different claim names
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  };
+  extractUserInfo(payload: JwtPayload): AuthUserInfo;
 
   /**
    * Checks if a given issuer URL belongs to this provider
    */
   matchesIssuer(issuer: string): boolean;
-}
-
-/**
- * Configuration for an authentication provider
- */
-export interface AuthProviderConfig {
-  name: string;
-  type: string;
-  issuer: string;
-  audience: string;
-  jwksUri: string;
-  clientId?: string;
-  clientSecret?: string;
-  tenantId?: string;
-  domain?: string;
-  [key: string]: string | undefined; // Allow provider-specific config
 }

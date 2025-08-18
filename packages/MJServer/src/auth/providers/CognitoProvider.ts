@@ -1,7 +1,8 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-import { AuthProviderConfig } from '../IAuthProvider.js';
+
 
 /**
  * AWS Cognito authentication provider implementation
@@ -15,13 +16,7 @@ export class CognitoProvider extends BaseAuthProvider {
   /**
    * Extracts user information from Cognito JWT payload
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  } {
+  extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // Cognito uses custom claims with 'cognito:' prefix for some fields
     const email = payload.email as string | undefined || 
                   payload['cognito:username'] as string | undefined;

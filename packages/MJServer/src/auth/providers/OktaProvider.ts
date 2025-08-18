@@ -1,7 +1,8 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-import { AuthProviderConfig } from '../IAuthProvider.js';
+
 
 /**
  * Okta authentication provider implementation
@@ -15,13 +16,7 @@ export class OktaProvider extends BaseAuthProvider {
   /**
    * Extracts user information from Okta JWT payload
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  } {
+  extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // Okta uses standard OIDC claims plus some custom ones
     const email = payload.email as string | undefined || payload.preferred_username as string | undefined;
     const fullName = payload.name as string | undefined;

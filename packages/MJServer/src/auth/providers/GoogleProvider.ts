@@ -1,7 +1,8 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-import { AuthProviderConfig } from '../IAuthProvider.js';
+
 
 /**
  * Google Identity Platform authentication provider implementation
@@ -15,13 +16,7 @@ export class GoogleProvider extends BaseAuthProvider {
   /**
    * Extracts user information from Google JWT payload
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  } {
+  extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // Google uses standard OIDC claims
     const email = payload.email as string | undefined;
     const fullName = payload.name as string | undefined;

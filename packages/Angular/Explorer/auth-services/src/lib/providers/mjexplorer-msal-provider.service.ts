@@ -19,7 +19,8 @@ export function LoadMJMSALProvider() {
 })
 @RegisterClass(MJAuthBase, 'msal')
 export class MJMSALProvider extends MJAuthBase {
-  type = 'msal';
+  static readonly PROVIDER_TYPE = 'msal';
+  type = MJMSALProvider.PROVIDER_TYPE;
 
   private readonly _destroying$ = new Subject<void>();
   private readonly _initializationCompleted$ = new BehaviorSubject<boolean>(false);
@@ -65,8 +66,10 @@ export class MJMSALProvider extends MJAuthBase {
   ];
 
   constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
-    // Create a dummy config to satisfy the parent constructor if it needs it
-    const config: AngularAuthProviderConfig = { type: 'msal' };
+    const config: AngularAuthProviderConfig = { 
+      name: MJMSALProvider.PROVIDER_TYPE, 
+      type: MJMSALProvider.PROVIDER_TYPE 
+    };
     super(config);
     this.initializeMSAL();
   }

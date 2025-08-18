@@ -1,6 +1,7 @@
 import { JwtHeader, JwtPayload, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
+import { IAuthProvider } from './IAuthProvider.js';
 
 /**
  * Base implementation of IAuthProvider with common functionality
@@ -66,11 +67,5 @@ export abstract class BaseAuthProvider implements IAuthProvider {
   /**
    * Abstract method for extracting user info - must be implemented by each provider
    */
-  abstract extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  };
+  abstract extractUserInfo(payload: JwtPayload): AuthUserInfo;
 }

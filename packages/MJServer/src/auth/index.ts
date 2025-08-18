@@ -10,7 +10,7 @@ import { AuthProviderFactory } from './AuthProviderFactory.js';
 import { initializeAuthProviders } from './initializeProviders.js';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
-export { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
+export { IAuthProvider } from './IAuthProvider.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
 
 // This is a hard-coded forever constant due to internal migrations

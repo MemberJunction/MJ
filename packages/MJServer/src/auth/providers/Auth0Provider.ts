@@ -1,7 +1,7 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-import { AuthProviderConfig } from '../IAuthProvider.js';
 
 /**
  * Auth0 authentication provider implementation
@@ -15,13 +15,7 @@ export class Auth0Provider extends BaseAuthProvider {
   /**
    * Extracts user information from Auth0 JWT payload
    */
-  extractUserInfo(payload: JwtPayload): {
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
-    preferredUsername?: string;
-  } {
+  extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // Auth0 uses standard OIDC claims
     const email = payload.email as string | undefined;
     const fullName = payload.name as string | undefined;

@@ -1,4 +1,5 @@
-import { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
+import { AuthProviderConfig } from '@memberjunction/core';
+import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
 import { MJGlobal } from '@memberjunction/global';
 
