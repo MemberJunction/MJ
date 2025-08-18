@@ -73,6 +73,7 @@ export class LibraryRegistry {
       }
 
       // at this point, our library registry is fully populated
+      this._configured = true;
     }
   }
 
