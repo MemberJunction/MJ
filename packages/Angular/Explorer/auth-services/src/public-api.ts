@@ -12,6 +12,6 @@ export * from './lib/IAuthProvider';
 export * from './lib/AngularAuthProviderFactory';
 
 // Provider implementations
-export * from './lib/mjexplorer-msal-provider.service';
-export * from './lib/mjexplorer-auth0-provider.service';
-export * from './lib/mjexplorer-okta-provider.service';
+export * from './lib/providers/mjexplorer-msal-provider.service';
+export * from './lib/providers/mjexplorer-auth0-provider.service';
+export * from './lib/providers/mjexplorer-okta-provider.service';

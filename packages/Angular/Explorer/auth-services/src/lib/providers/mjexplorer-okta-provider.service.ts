@@ -1,8 +1,8 @@
 import { Injectable, Inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { Observable, BehaviorSubject, from } from 'rxjs';
-import { MJAuthBase } from './mjexplorer-auth-base.service';
-import { AngularAuthProviderConfig } from './IAuthProvider';
+import { MJAuthBase } from '../mjexplorer-auth-base.service';
+import { AngularAuthProviderConfig } from '../IAuthProvider';
 import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth-js';
 
 // Prevent tree-shaking by explicitly referencing the class

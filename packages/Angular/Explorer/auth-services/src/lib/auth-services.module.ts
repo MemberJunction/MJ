@@ -11,9 +11,9 @@ import { RedirectComponent } from './redirect.component';
 export { RedirectComponent };
 
 // Import restored providers and load them to prevent tree-shaking
-import { LoadMJMSALProvider } from './mjexplorer-msal-provider.service';
-import { LoadMJAuth0Provider } from './mjexplorer-auth0-provider.service';
-import { LoadMJOktaProvider } from './mjexplorer-okta-provider.service';
+import { LoadMJMSALProvider } from './providers/mjexplorer-msal-provider.service';
+import { LoadMJAuth0Provider } from './providers/mjexplorer-auth0-provider.service';
+import { LoadMJOktaProvider } from './providers/mjexplorer-okta-provider.service';
 
 // Load all providers to prevent tree-shaking
 // These functions ensure the classes are included in the bundle

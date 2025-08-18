@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJAuthBase } from './mjexplorer-auth-base.service';
+import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AuthService, IdToken, User, AuthGuard, AuthConfigService, Auth0ClientService, Auth0ClientFactory, AuthClientConfig } from '@auth0/auth0-angular';
 import { Observable, of } from 'rxjs';
-import { AngularAuthProviderConfig } from './IAuthProvider';
+import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJAuth0Provider() {

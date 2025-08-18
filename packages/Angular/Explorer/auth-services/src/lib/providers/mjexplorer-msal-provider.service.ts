@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJAuthBase } from './mjexplorer-auth-base.service';
+import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take, firstValueFrom } from 'rxjs';
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
 import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType } from '@azure/msal-browser';
 import { LogError } from '@memberjunction/core';
-import { AngularAuthProviderConfig } from './IAuthProvider';
+import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJMSALProvider() {
