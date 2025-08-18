@@ -1,5 +1,4 @@
-import { JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
-import jwksClient from 'jwks-rsa';
+import { JwtHeader, SigningKeyCallback, JwtPayload } from 'jsonwebtoken';
 import { configInfo } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
@@ -7,33 +6,22 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
+import { AuthProviderFactory } from './AuthProviderFactory.js';
+import { initializeAuthProviders } from './initializeProviders.js';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
-
-// Legacy config checks - these fields are no longer in config
-// Using dummy values to maintain compatibility
-const tenantID = '';
-const webClientID = '';
-const auth0Domain = '';
-const auth0WebClientID = '';
-
-const missingAzureConfig = true; // Legacy configs no longer supported
-const missingAuth0Config = true; // Legacy configs no longer supported
+export { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
+export { AuthProviderFactory } from './AuthProviderFactory.js';
 
 // This is a hard-coded forever constant due to internal migrations
 const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
 
 class MissingAuthError extends Error {
   constructor() {
-    super('Could not find authentication configuration for either MSAL or Auth0 in the server environment variables.');
+    super('No authentication providers configured. Please configure at least one auth provider in mj.config.cjs');
     this.name = 'MissingAuthError';
   }
 }
-
-const issuers = {
-  azure: `https://login.microsoftonline.com/${tenantID}/v2.0`,
-  auth0: `https://${auth0Domain}/`,
-};
 
 const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
   const startTime: number = Date.now();
@@ -58,16 +46,40 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
   );
 };
 
-export const validationOptions = {
-  [issuers.auth0]: {
-    audience: auth0WebClientID,
-    jwksUri: `https://${auth0Domain}/.well-known/jwks.json`,
-  },
-  [issuers.azure]: {
-    audience: webClientID,
-    jwksUri: `https://login.microsoftonline.com/${tenantID}/discovery/v2.0/keys`,
-  },
+/**
+ * Gets validation options for a specific issuer
+ * This maintains backward compatibility with the old structure
+ */
+export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
+  const factory = AuthProviderFactory.getInstance();
+  const provider = factory.getByIssuer(issuer);
+  
+  if (!provider) {
+    return undefined;
+  }
+
+  return {
+    audience: provider.audience,
+    jwksUri: provider.jwksUri
+  };
 };
+
+/**
+ * Backward compatible validationOptions object
+ * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
+ */
+export const validationOptions: Record<string, { audience: string; jwksUri: string }> = new Proxy({}, {
+  get: (target, prop: string) => {
+    return getValidationOptions(prop);
+  },
+  has: (target, prop: string) => {
+    return getValidationOptions(prop) !== undefined;
+  },
+  ownKeys: () => {
+    const factory = AuthProviderFactory.getInstance();
+    return factory.getAllProviders().map(p => p.issuer);
+  }
+});
 
 export class UserPayload {
   aio?: string;
@@ -85,31 +97,77 @@ export class UserPayload {
   tid?: string;
   uti?: string;
   ver?: string;
-  // what about an array of roles???
+  email?: string;
+  given_name?: string;
+  family_name?: string;
+  [key: string]: unknown; // Allow additional claims
 }
 
+/**
+ * Gets signing keys for JWT validation
+ */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  if (!validationOptions[issuer]) {
-    throw new Error(`No validation options found for issuer ${issuer}`);
+  const factory = AuthProviderFactory.getInstance();
+  
+  // Initialize providers if not already done
+  if (!factory.hasProviders()) {
+    initializeAuthProviders();
   }
 
-  const jwksUri = validationOptions[issuer].jwksUri;
-  if (missingAuth0Config && missingAzureConfig) {
-    throw new MissingAuthError();
-  }
-  if (missingAuth0Config) {
-    console.warn('Auth0 configuration not found in environment variables');
-  }
-  if (missingAzureConfig) {
-    console.warn('MSAL configuration not found in environment variables');
+  const provider = factory.getByIssuer(issuer);
+  
+  if (!provider) {
+    // Check if we have any providers at all
+    if (!factory.hasProviders()) {
+      throw new MissingAuthError();
+    }
+    throw new Error(`No authentication provider found for issuer: ${issuer}`);
   }
 
-  jwksClient({ jwksUri })
-    .getSigningKey(header.kid)
-    .then((key) => {
-      cb(null, 'publicKey' in key ? key.publicKey : key.rsaPublicKey);
-    })
-    .catch((err) => console.error(err));
+  provider.getSigningKey(header, cb);
+};
+
+/**
+ * Extracts user information from JWT payload using the appropriate provider
+ */
+export const extractUserInfoFromPayload = (payload: JwtPayload): {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  preferredUsername?: string;
+} => {
+  const factory = AuthProviderFactory.getInstance();
+  const issuer = payload.iss;
+  
+  if (!issuer) {
+    // Fallback to default extraction
+    const preferredUsername = payload.preferred_username as string | undefined;
+    return {
+      email: payload.email as string | undefined || preferredUsername,
+      firstName: payload.given_name as string | undefined,
+      lastName: payload.family_name as string | undefined,
+      fullName: payload.name as string | undefined,
+      preferredUsername
+    };
+  }
+
+  const provider = factory.getByIssuer(issuer);
+  
+  if (!provider) {
+    // Fallback to default extraction
+    const fullName = payload.name as string | undefined;
+    const preferredUsername = payload.preferred_username as string | undefined;
+    return {
+      email: payload.email as string | undefined || preferredUsername,
+      firstName: payload.given_name as string | undefined || fullName?.split(' ')[0],
+      lastName: payload.family_name as string | undefined || fullName?.split(' ')[1] || fullName?.split(' ')[0],
+      fullName,
+      preferredUsername
+    };
+  }
+
+  return provider.extractUserInfo(payload);
 };
 
 export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
@@ -207,3 +265,6 @@ export const verifyUserRecord = async (
 
   return user;
 };
+
+// Initialize providers on module load
+initializeAuthProviders();
