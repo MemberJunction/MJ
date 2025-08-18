@@ -1,5 +1,6 @@
-function AccountsByIndustry ({ utilities, styles, callbacks, savedUserSettings, onSaveUserSettings, components }) {
+function AccountsByIndustry (props) {
   // Get child components from registry
+  const { utilities, styles, callbacks, savedUserSettings, onSaveUserSettings, components } = props;
   const AccountsByIndustryChart = components?.AccountsByIndustryChart;
   const AccountsByIndustryList = components?.AccountsByIndustryList;
   const AccountsByIndustryDetails = components?.AccountsByIndustryDetails;
