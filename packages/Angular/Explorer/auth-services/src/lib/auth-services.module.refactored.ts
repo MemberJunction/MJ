@@ -6,7 +6,6 @@ import { AuthProviderFactory, AuthProviderConfig } from './auth-provider-factory
 import { MJAuth0Provider } from './mjexplorer-auth0-provider.service';
 import { MJMSALProvider } from './mjexplorer-msal-provider.service';
 import { MJOktaProvider } from './mjexplorer-okta-provider.service';
-import { environment } from '@env';
 
 /**
  * Refactored authentication module that supports N providers
@@ -20,7 +19,7 @@ import { environment } from '@env';
   exports: []
 })
 export class AuthServicesModule {
-  static forRoot(): ModuleWithProviders<AuthServicesModule> {
+  static forRoot(environment: any): ModuleWithProviders<AuthServicesModule> {
     // Get provider configuration from environment
     const providerConfig = AuthProviderFactory.createConfigFromEnvironment(environment);
     

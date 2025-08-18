@@ -144,17 +144,12 @@ const configInfoSchema = z.object({
   ___codeGenAPIPort: z.coerce.number().optional().default(3999),
   ___codeGenAPISubmissionDelay: z.coerce.number().optional().default(5000),
   graphqlRootPath: z.string().optional().default('/'),
-  webClientID: z.string().optional(),
-  tenantID: z.string().optional(),
   enableIntrospection: z.coerce.boolean().optional().default(false),
   websiteRunFromPackage: z.coerce.number().optional(),
   userEmailMap: z
     .string()
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
-  auth0Domain: z.string().optional(),
-  auth0WebClientID: z.string().optional(),
-  auth0ClientSecret: z.string().optional(),
   mjCoreSchema: z.string(),
 });
 
@@ -183,14 +178,9 @@ export const {
   ___codeGenAPIPort,
   ___codeGenAPISubmissionDelay,
   graphqlRootPath,
-  webClientID,
-  tenantID,
   enableIntrospection,
   websiteRunFromPackage,
   userEmailMap,
-  auth0Domain,
-  auth0WebClientID,
-  auth0ClientSecret,
   apiKey,
   baseUrl,
   mjCoreSchema: mj_core_schema,

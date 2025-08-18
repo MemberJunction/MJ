@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { Observable, BehaviorSubject, from } from 'rxjs';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
-import OktaAuth, { OktaAuthOptions, TokenManager, IDToken } from '@okta/okta-auth-js';
+import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth-js';
 
 /**
  * Okta authentication provider for MemberJunction Explorer
@@ -13,20 +13,24 @@ export class MJOktaProvider extends MJAuthBase {
   private oktaAuth: OktaAuth;
   private userClaims$ = new BehaviorSubject<IDToken | null>(null);
   
-  constructor(@Inject('oktaConfig') private config: OktaAuthOptions) {
+  constructor(@Inject('oktaConfig') private config: OktaAuthOptions & { domain?: string }) {
     super();
     
-    this.oktaAuth = new OktaAuth({
-      issuer: config.issuer || `https://${config.domain}/oauth2/default`,
+    // Build configuration with defaults first, then spread config to override
+    const oktaConfig: OktaAuthOptions = {
       clientId: config.clientId,
       redirectUri: config.redirectUri || window.location.origin + '/callback',
       scopes: config.scopes || ['openid', 'profile', 'email'],
       pkce: true, // Use PKCE for security
-      ...config
-    });
+      ...config,
+      // Set issuer after spread to ensure it's not overwritten if not present in config
+      issuer: config.issuer || (config.domain ? `https://${config.domain}/oauth2/default` : '')
+    };
+    
+    this.oktaAuth = new OktaAuth(oktaConfig);
 
     // Listen for token events
-    this.oktaAuth.authStateManager.subscribe((authState) => {
+    this.oktaAuth.authStateManager.subscribe((authState: any) => {
       this.setAuthenticated(authState.isAuthenticated || false);
       
       if (authState.isAuthenticated && authState.idToken) {
@@ -74,13 +78,12 @@ export class MJOktaProvider extends MJAuthBase {
   async refresh(): Promise<Observable<any>> {
     try {
       // Refresh tokens
-      const tokenManager: TokenManager = this.oktaAuth.tokenManager;
-      await tokenManager.renew('idToken');
-      await tokenManager.renew('accessToken');
+      await this.oktaAuth.tokenManager.renew('idToken');
+      await this.oktaAuth.tokenManager.renew('accessToken');
       
-      const idToken = await tokenManager.get('idToken');
-      if (idToken && idToken.value) {
-        this.userClaims$.next(idToken as IDToken);
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      if (idToken) {
+        this.userClaims$.next(idToken);
       }
       
       return this.userClaims$.asObservable();
@@ -159,7 +162,7 @@ export class MJOktaProvider extends MJAuthBase {
    */
   async getAccessToken(): Promise<string | undefined> {
     try {
-      const accessToken = await this.oktaAuth.tokenManager.get('accessToken');
+      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
       return accessToken?.accessToken;
     } catch (error) {
       console.error('Error getting access token:', error);
@@ -172,7 +175,7 @@ export class MJOktaProvider extends MJAuthBase {
    */
   async getIdToken(): Promise<string | undefined> {
     try {
-      const idToken = await this.oktaAuth.tokenManager.get('idToken');
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
       return idToken?.idToken;
     } catch (error) {
       console.error('Error getting ID token:', error);

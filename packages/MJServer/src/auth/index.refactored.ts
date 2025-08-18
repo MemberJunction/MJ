@@ -6,12 +6,11 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
-import { AuthProviderRegistry } from './AuthProviderRegistry.js';
+import { AuthProviderFactory } from './AuthProviderFactory.js';
 import { initializeAuthProviders } from './initializeProviders.js';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
 export { IAuthProvider, AuthProviderConfig } from './IAuthProvider.js';
-export { AuthProviderRegistry } from './AuthProviderRegistry.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
 
 // This is a hard-coded forever constant due to internal migrations
@@ -52,8 +51,8 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
  * This maintains backward compatibility with the old structure
  */
 export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
-  const registry = AuthProviderRegistry.getInstance();
-  const provider = registry.getByIssuer(issuer);
+  const factory = AuthProviderFactory.getInstance();
+  const provider = factory.getByIssuer(issuer);
   
   if (!provider) {
     return undefined;
@@ -77,8 +76,8 @@ export const validationOptions: Record<string, { audience: string; jwksUri: stri
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const registry = AuthProviderRegistry.getInstance();
-    return registry.getAllProviders().map(p => p.issuer);
+    const factory = AuthProviderFactory.getInstance();
+    return factory.getAllProviders().map(p => p.issuer);
   }
 });
 
@@ -108,18 +107,18 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const registry = AuthProviderRegistry.getInstance();
+  const factory = AuthProviderFactory.getInstance();
   
   // Initialize providers if not already done
-  if (!registry.hasProviders()) {
+  if (!factory.hasProviders()) {
     initializeAuthProviders();
   }
 
-  const provider = registry.getByIssuer(issuer);
+  const provider = factory.getByIssuer(issuer);
   
   if (!provider) {
     // Check if we have any providers at all
-    if (!registry.hasProviders()) {
+    if (!factory.hasProviders()) {
       throw new MissingAuthError();
     }
     throw new Error(`No authentication provider found for issuer: ${issuer}`);
@@ -138,7 +137,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const registry = AuthProviderRegistry.getInstance();
+  const factory = AuthProviderFactory.getInstance();
   const issuer = payload.iss;
   
   if (!issuer) {
@@ -153,7 +152,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
     };
   }
 
-  const provider = registry.getByIssuer(issuer);
+  const provider = factory.getByIssuer(issuer);
   
   if (!provider) {
     // Fallback to default extraction

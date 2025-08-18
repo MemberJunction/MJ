@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { AuthProviderRegistry } from './auth/AuthProviderRegistry.js';
+import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -92,8 +92,8 @@ export const getUserPayload = async (
       }
 
       // Verify issuer is supported
-      const registry = AuthProviderRegistry.getInstance();
-      if (!registry.getByIssuer(issuer)) {
+      const factory = AuthProviderFactory.getInstance();
+      if (!factory.getByIssuer(issuer)) {
         console.warn(`Unsupported issuer: ${issuer}`);
         throw new AuthenticationError(`Unsupported authentication provider: ${issuer}`);
       }

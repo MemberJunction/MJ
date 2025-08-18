@@ -22,10 +22,10 @@ export interface AuthProviderConfig {
   providedIn: 'root'
 })
 export class AuthProviderFactory {
-  private static providerTypes: Map<string, Type<MJAuthBase>> = new Map([
-    ['auth0', MJAuth0Provider],
-    ['msal', MJMSALProvider],
-    ['okta', MJOktaProvider]
+  private static providerTypes: Map<string, Type<MJAuthBase>> = new Map<string, Type<MJAuthBase>>([
+    ['auth0', MJAuth0Provider as Type<MJAuthBase>],
+    ['msal', MJMSALProvider as Type<MJAuthBase>],
+    ['okta', MJOktaProvider as Type<MJAuthBase>]
   ]);
 
   constructor(private injector: Injector) {}

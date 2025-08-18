@@ -1,6 +1,6 @@
 import { JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { auth0Domain, auth0WebClientID, configInfo, tenantID, webClientID } from '../config.js';
+import { configInfo } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
@@ -10,8 +10,15 @@ import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
 
-const missingAzureConfig = !tenantID || !webClientID;
-const missingAuth0Config = !auth0Domain || !auth0WebClientID;
+// Legacy config checks - these fields are no longer in config
+// Using dummy values to maintain compatibility
+const tenantID = '';
+const webClientID = '';
+const auth0Domain = '';
+const auth0WebClientID = '';
+
+const missingAzureConfig = true; // Legacy configs no longer supported
+const missingAuth0Config = true; // Legacy configs no longer supported
 
 // This is a hard-coded forever constant due to internal migrations
 const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';

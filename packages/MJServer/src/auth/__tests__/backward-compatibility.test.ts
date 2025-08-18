@@ -1,22 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { AuthProviderRegistry } from '../AuthProviderRegistry';
+import { AuthProviderFactory } from '../AuthProviderFactory';
 import { IAuthProvider } from '../IAuthProvider';
 import { initializeAuthProviders } from '../initializeProviders';
-import { getLegacyIssuers, getLegacyValidationOptions } from '../migrationHelper';
 
 /**
  * Test suite for backward compatibility of the new auth provider system
  */
 describe('Authentication Provider Backward Compatibility', () => {
-  let registry: AuthProviderRegistry;
+  let factory: AuthProviderFactory;
   
   beforeEach(() => {
-    registry = AuthProviderRegistry.getInstance();
-    registry.clear();
+    factory = AuthProviderFactory.getInstance();
+    factory.clear();
   });
   
   afterEach(() => {
-    registry.clear();
+    factory.clear();
   });
 
   describe('Legacy Configuration Support', () => {
@@ -29,7 +28,7 @@ describe('Authentication Provider Backward Compatibility', () => {
       initializeAuthProviders();
       
       // Check that MSAL provider was created
-      const msalProvider = registry.getByName('msal');
+      const msalProvider = factory.getByName('msal');
       expect(msalProvider).toBeDefined();
       expect(msalProvider?.issuer).toContain('test-tenant-id');
       expect(msalProvider?.audience).toBe('test-client-id');
@@ -45,49 +44,13 @@ describe('Authentication Provider Backward Compatibility', () => {
       initializeAuthProviders();
       
       // Check that Auth0 provider was created
-      const auth0Provider = registry.getByName('auth0');
+      const auth0Provider = factory.getByName('auth0');
       expect(auth0Provider).toBeDefined();
       expect(auth0Provider?.issuer).toBe('https://test.auth0.com/');
       expect(auth0Provider?.audience).toBe('auth0-client-id');
     });
   });
 
-  describe('Legacy Helper Functions', () => {
-    beforeEach(() => {
-      // Set up test providers
-      process.env.TENANT_ID = 'test-tenant';
-      process.env.WEB_CLIENT_ID = 'test-client';
-      process.env.AUTH0_DOMAIN = 'test.auth0.com';
-      process.env.AUTH0_CLIENT_ID = 'auth0-client';
-      
-      initializeAuthProviders();
-    });
-    
-    it('should provide legacy issuers object', () => {
-      const issuers = getLegacyIssuers();
-      
-      expect(issuers.azure).toBeDefined();
-      expect(issuers.azure).toContain('test-tenant');
-      expect(issuers.auth0).toBeDefined();
-      expect(issuers.auth0).toContain('test.auth0.com');
-    });
-    
-    it('should provide legacy validationOptions object', () => {
-      const validationOptions = getLegacyValidationOptions();
-      
-      // Check MSAL options
-      const msalIssuer = `https://login.microsoftonline.com/test-tenant/v2.0`;
-      expect(validationOptions[msalIssuer]).toBeDefined();
-      expect(validationOptions[msalIssuer].audience).toBe('test-client');
-      expect(validationOptions[msalIssuer].jwksUri).toContain('test-tenant');
-      
-      // Check Auth0 options
-      const auth0Issuer = 'https://test.auth0.com/';
-      expect(validationOptions[auth0Issuer]).toBeDefined();
-      expect(validationOptions[auth0Issuer].audience).toBe('auth0-client');
-      expect(validationOptions[auth0Issuer].jwksUri).toContain('test.auth0.com');
-    });
-  });
 
   describe('Provider Registry Functionality', () => {
     it('should find providers by issuer with different formats', () => {
@@ -106,16 +69,16 @@ describe('Authentication Provider Backward Compatibility', () => {
         }
       } as IAuthProvider;
       
-      registry.register(testProvider);
+      factory.register(testProvider);
       
       // Test with exact match
-      expect(registry.getByIssuer('https://test.provider.com/oauth2')).toBe(testProvider);
+      expect(factory.getByIssuer('https://test.provider.com/oauth2')).toBe(testProvider);
       
       // Test with trailing slash
-      expect(registry.getByIssuer('https://test.provider.com/oauth2/')).toBe(testProvider);
+      expect(factory.getByIssuer('https://test.provider.com/oauth2/')).toBe(testProvider);
       
       // Test with different case
-      expect(registry.getByIssuer('https://TEST.PROVIDER.COM/oauth2')).toBe(testProvider);
+      expect(factory.getByIssuer('https://TEST.PROVIDER.COM/oauth2')).toBe(testProvider);
     });
     
     it('should cache issuer lookups for performance', () => {
@@ -130,14 +93,14 @@ describe('Authentication Provider Backward Compatibility', () => {
         matchesIssuer: jest.fn((issuer: string): boolean => issuer === 'https://test.provider.com')
       } as IAuthProvider;
       
-      registry.register(testProvider);
+      factory.register(testProvider);
       
       // First lookup
-      registry.getByIssuer('https://test.provider.com');
+      factory.getByIssuer('https://test.provider.com');
       expect(testProvider.matchesIssuer).toHaveBeenCalledTimes(1);
       
       // Second lookup should use cache
-      registry.getByIssuer('https://test.provider.com');
+      factory.getByIssuer('https://test.provider.com');
       expect(testProvider.matchesIssuer).toHaveBeenCalledTimes(1);
     });
   });
@@ -177,7 +140,7 @@ describe('Authentication Provider Backward Compatibility', () => {
       initializeAuthProviders();
       
       // Test extraction for each provider type
-      const msalProvider = registry.getByIssuer(msalPayload.iss);
+      const msalProvider = factory.getByIssuer(msalPayload.iss);
       if (msalProvider) {
         const msalUserInfo = msalProvider.extractUserInfo(msalPayload);
         expect(msalUserInfo.email).toBe('user@example.com');
@@ -185,7 +148,7 @@ describe('Authentication Provider Backward Compatibility', () => {
         expect(msalUserInfo.lastName).toBe('Doe');
       }
       
-      const auth0Provider = registry.getByIssuer(auth0Payload.iss);
+      const auth0Provider = factory.getByIssuer(auth0Payload.iss);
       if (auth0Provider) {
         const auth0UserInfo = auth0Provider.extractUserInfo(auth0Payload);
         expect(auth0UserInfo.email).toBe('user@example.com');
@@ -198,7 +161,7 @@ describe('Authentication Provider Backward Compatibility', () => {
   describe('Error Handling', () => {
     it('should handle missing provider gracefully', () => {
       const unknownIssuer = 'https://unknown.provider.com';
-      const provider = registry.getByIssuer(unknownIssuer);
+      const provider = factory.getByIssuer(unknownIssuer);
       expect(provider).toBeUndefined();
     });
     
@@ -214,7 +177,7 @@ describe('Authentication Provider Backward Compatibility', () => {
         matchesIssuer: jest.fn()
       } as IAuthProvider;
       
-      expect(() => registry.register(invalidProvider)).toThrow();
+      expect(() => factory.register(invalidProvider)).toThrow();
     });
   });
 });
