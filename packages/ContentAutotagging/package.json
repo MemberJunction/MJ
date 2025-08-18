@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/ai": "2.82.0",
+    "@memberjunction/ai-gemini": "2.82.0",
     "@memberjunction/aiengine": "2.82.0",
     "@memberjunction/core": "2.82.0",
     "@memberjunction/core-entities": "2.82.0",

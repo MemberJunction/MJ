@@ -5546,6 +5546,9 @@ export class AIPromptCategory_ {
     @Field(() => [AIPromptCategory_])
     AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
+    @Field(() => [AIPromptCategory_])
+    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
+    
 }
 
 //****************************************************************************
@@ -5654,6 +5657,17 @@ export class AIPromptCategoryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptCategory_])
+    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', rows);
         return result;
     }
         
@@ -16876,6 +16890,9 @@ export class AIModel_ {
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
+    @Field(() => [AIResultCache_])
+    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
+    
     @Field(() => [AIAgentModel_])
     AIAgentModels_ModelIDArray: AIAgentModel_[]; // Link to AIAgentModels
     
@@ -17093,6 +17110,17 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [ContentType_])
     async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Types', userPayload);
@@ -17103,7 +17131,17 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Content Types', rows);
         return result;
     }
-    
+        
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
+        return result;
+    }
         
     @FieldResolver(() => [AIAgentModel_])
     async AIAgentModels_ModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
@@ -32869,6 +32907,9 @@ export class Template_ {
     @Field(() => [AIPrompt_])
     AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
     
+    @Field(() => [AIPrompt_])
+    AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
+    
     @Field(() => [EntityDocument_])
     EntityDocuments_TemplateIDArray: EntityDocument_[]; // Link to EntityDocuments
     
@@ -33021,6 +33062,17 @@ export class TemplateResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPrompt_])
+    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
         

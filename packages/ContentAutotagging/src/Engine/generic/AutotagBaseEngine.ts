@@ -13,13 +13,15 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseLLM, GetAIAPIKey, ChatMessage } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
+import { LoadGeminiLLM } from '@memberjunction/ai-gemini'
 import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
 
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
     constructor() {
         super();
-
+        // Load Gemini provider to ensure it's registered
+        LoadGeminiLLM();
     }
 
     public static get Instance(): AutotagBaseEngine {
@@ -1311,8 +1313,8 @@ export class AutotagBaseEngine extends AIEngine {
                             Buffer.isBuffer(result.buffer) && result.buffer.length > 0) {
                             
                             const base64String = result.buffer.toString('base64');
-                            const base64Image = `data:image/jpeg;base64,${base64String}`;
-                            images.push(base64Image);
+                            // For vision models, send just the raw base64 (no data URL prefix)
+                            images.push(base64String);
                             console.log(`✅ Page ${pageNum} converted (${result.buffer.length} bytes)`);
                             
                             // Save image to disk for debugging
@@ -1451,22 +1453,62 @@ export class AutotagBaseEngine extends AIEngine {
             console.log('📊 Response length:', visionResponse.length, 'characters');
             console.log('🔧 Parsing JSON response...');
             
-            // Parse the vision model response (same error handling as text processing)
+            // Parse the vision model response (handle both plain JSON and markdown-wrapped JSON)
             let visionResults: JsonObject;
             try {
-                // Clean the response before parsing (same as text processing)
-                const cleanedResponse = visionResponse.replace(/(\d+)_(\d+)/g, '$1$2'); // Remove numeric separators
+                // Clean the response to extract JSON from markdown code blocks
+                let cleanedResponse = visionResponse.trim();
+                
+                // Remove markdown code blocks if present
+                if (cleanedResponse.startsWith('```json')) {
+                    cleanedResponse = cleanedResponse.replace(/^```json\s*/i, '');
+                }
+                if (cleanedResponse.startsWith('```')) {
+                    cleanedResponse = cleanedResponse.replace(/^```\s*/, '');
+                }
+                if (cleanedResponse.endsWith('```')) {
+                    cleanedResponse = cleanedResponse.replace(/\s*```$/, '');
+                }
+                
+                // Remove numeric separators (same as text processing)
+                cleanedResponse = cleanedResponse.replace(/(\d+)_(\d+)/g, '$1$2');
+                
+                // Additional cleaning for common vision model formatting issues
+                cleanedResponse = cleanedResponse.trim();
+                
+                console.log('🧹 Cleaned response (first 300 chars):', cleanedResponse.substring(0, 300) + '...');
+                
                 visionResults = JSON.parse(cleanedResponse);
                 visionResults.processedWithVision = true;
                 visionResults.totalPages = images.length;
                 visionResults.contentItemID = params.contentItemID;
                 
-                console.log(`Vision processing successful - extracted data from ${images.length} pages`);
+                console.log(`✅ Vision processing successful - extracted data from ${images.length} pages`);
+                console.log('📊 Extracted fields:', Object.keys(visionResults).join(', '));
                 return visionResults;
                 
             } catch (parseError) {
-                console.error('Vision model JSON parse error:', parseError.message);
-                console.error('Raw vision response:', visionResponse.substring(0, 500));
+                console.error('❌ Vision model JSON parse error:', parseError.message);
+                console.error('🔍 Raw vision response:', visionResponse.substring(0, 500));
+                
+                // Try to find where JSON might actually start
+                const jsonStartPattern = /\{[\s\S]*\}/;
+                const jsonMatch = visionResponse.match(jsonStartPattern);
+                if (jsonMatch) {
+                    try {
+                        console.log('🔧 Attempting to parse extracted JSON...');
+                        const extractedJson = jsonMatch[0].replace(/(\d+)_(\d+)/g, '$1$2');
+                        visionResults = JSON.parse(extractedJson);
+                        visionResults.processedWithVision = true;
+                        visionResults.totalPages = images.length;
+                        visionResults.contentItemID = params.contentItemID;
+                        console.log('🎯 Successfully parsed extracted JSON!');
+                        return visionResults;
+                    } catch (secondParseError) {
+                        console.error('❌ Second parse attempt failed:', secondParseError.message);
+                    }
+                }
+                
                 throw new Error(`Vision model response is not valid JSON: ${parseError.message}`);
             }
             
