@@ -19,31 +19,29 @@ export class MJAuth0Provider extends MJAuthBase {
   type = 'auth0';
 
   /**
-   * Static method to get required Angular providers for Auth0
-   * This is called by the factory without instantiating the class
+   * Factory function to provide Angular dependencies required by Auth0
+   * Stored as a static property for the factory to access without instantiation
    */
-  static getRequiredAngularProviders(environment: any): any[] {
-    return [
-      AuthService,
-      AuthGuard,
-      {
-        provide: AuthConfigService,
-        useValue: {
-          domain: environment.AUTH0_DOMAIN,
-          clientId: environment.AUTH0_CLIENTID,
-          authorizationParams: {
-            redirect_uri: window.location.origin,
-          },
-          cacheLocation: 'localstorage',
+  static angularProviderFactory = (environment: any) => [
+    AuthService,
+    AuthGuard,
+    {
+      provide: AuthConfigService,
+      useValue: {
+        domain: environment.AUTH0_DOMAIN,
+        clientId: environment.AUTH0_CLIENTID,
+        authorizationParams: {
+          redirect_uri: window.location.origin,
         },
+        cacheLocation: 'localstorage',
       },
-      {
-        provide: Auth0ClientService,
-        useFactory: Auth0ClientFactory.createClient,
-        deps: [AuthClientConfig],
-      }
-    ];
-  }
+    },
+    {
+      provide: Auth0ClientService,
+      useFactory: Auth0ClientFactory.createClient,
+      deps: [AuthClientConfig],
+    }
+  ];
 
   constructor(public auth: AuthService) {
     // Create a dummy config to satisfy the parent constructor if it needs it

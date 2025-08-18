@@ -24,23 +24,21 @@ export class MJOktaProvider extends MJAuthBase {
   private userClaims$ = new BehaviorSubject<IDToken | null>(null);
   
   /**
-   * Static method to get required Angular providers for Okta
-   * This is called by the factory without instantiating the class
+   * Factory function to provide Angular dependencies required by Okta
+   * Stored as a static property for the factory to access without instantiation
    */
-  static getRequiredAngularProviders(environment: any): any[] {
-    return [
-      {
-        provide: 'oktaConfig',
-        useValue: {
-          clientId: environment.OKTA_CLIENTID,
-          domain: environment.OKTA_DOMAIN,
-          issuer: environment.OKTA_ISSUER || `https://${environment.OKTA_DOMAIN}/oauth2/default`,
-          redirectUri: environment.OKTA_REDIRECT_URI || window.location.origin,
-          scopes: environment.OKTA_SCOPES || ['openid', 'profile', 'email']
-        }
+  static angularProviderFactory = (environment: any) => [
+    {
+      provide: 'oktaConfig',
+      useValue: {
+        clientId: environment.OKTA_CLIENTID,
+        domain: environment.OKTA_DOMAIN,
+        issuer: environment.OKTA_ISSUER || `https://${environment.OKTA_DOMAIN}/oauth2/default`,
+        redirectUri: environment.OKTA_REDIRECT_URI || window.location.origin,
+        scopes: environment.OKTA_SCOPES || ['openid', 'profile', 'email']
       }
-    ];
-  }
+    }
+  ];
   
   constructor(@Inject('oktaConfig') private oktaConfig: OktaAuthOptions & { domain?: string }) {
     // Create config for parent constructor

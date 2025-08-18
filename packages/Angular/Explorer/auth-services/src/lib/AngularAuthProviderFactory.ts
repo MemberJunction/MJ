@@ -101,7 +101,7 @@ export class AngularAuthProviderFactory {
 
   /**
    * Get provider-specific Angular services that need to be injected
-   * This uses the static method on each provider class for true extensibility
+   * This uses the static angularProviderFactory property on each provider class for extensibility
    */
   static getProviderAngularServices(type: string, environment: any): any[] {
     const normalizedType = type?.toLowerCase();
@@ -118,13 +118,19 @@ export class AngularAuthProviderFactory {
       return [];
     }
     
-    // Check if the provider class has the static method
-    if (typeof providerClass.getRequiredAngularProviders === 'function') {
-      // Call the static method to get the required providers
+    // Check if the provider class has the factory property (new pattern)
+    if (providerClass.angularProviderFactory) {
+      // Call the factory function to get the required providers
+      return providerClass.angularProviderFactory(environment);
+    } 
+    // Fallback to old method name for backward compatibility
+    else if (typeof providerClass.getRequiredAngularProviders === 'function') {
+      console.warn(`Provider ${type} uses deprecated getRequiredAngularProviders method. Please update to use angularProviderFactory property.`);
       return providerClass.getRequiredAngularProviders(environment);
-    } else {
+    } 
+    else {
       // Provider doesn't define required Angular services (might not need any)
-      console.log(`Provider ${type} does not define getRequiredAngularProviders static method`);
+      console.log(`Provider ${type} does not define angularProviderFactory property`);
       return [];
     }
   }

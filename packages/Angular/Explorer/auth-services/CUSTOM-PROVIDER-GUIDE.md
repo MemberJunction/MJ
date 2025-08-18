@@ -125,7 +125,26 @@ npm start
    @RegisterClass(MJAuthBase, 'yourprovider')
    export class YourAuthProvider extends MJAuthBase {
      type = 'yourprovider';
-     // ... implementation
+     
+     /**
+      * Factory function to provide Angular dependencies
+      * This cleaner pattern uses a static property instead of a method
+      */
+     static angularProviderFactory = (environment: any) => [
+       // Your Angular providers here
+       {
+         provide: 'YOUR_CONFIG',
+         useValue: {
+           apiUrl: environment.YOUR_API_URL,
+           clientId: environment.YOUR_CLIENT_ID
+         }
+       },
+       // Any services your provider needs
+       YourAuthService,
+       YourAuthGuard
+     ];
+     
+     // ... rest of implementation
    }
    ```
 

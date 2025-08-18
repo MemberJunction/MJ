@@ -25,46 +25,44 @@ export class MJMSALProvider extends MJAuthBase {
   private readonly _initializationCompleted$ = new BehaviorSubject<boolean>(false);
 
   /**
-   * Static method to get required Angular providers for MSAL
-   * This is called by the factory without instantiating the class
+   * Factory function to provide Angular dependencies required by MSAL
+   * Stored as a static property for the factory to access without instantiation
    */
-  static getRequiredAngularProviders(environment: any): any[] {
-    return [
-      {
-        provide: MSAL_INSTANCE,
-        useValue: new PublicClientApplication({
-          auth: {
-            clientId: environment.CLIENT_ID,
-            authority: environment.CLIENT_AUTHORITY,
-            redirectUri: window.location.origin,
-          },
-          cache: {
-            cacheLocation: 'localStorage',
-            storeAuthStateInCookie: false,
-          },
-        }),
-      },
-      {
-        provide: MSAL_GUARD_CONFIG,
-        useValue: {
-          interactionType: InteractionType.Redirect,
-          authRequest: {
-            scopes: ['User.Read'],
-          },
+  static angularProviderFactory = (environment: any) => [
+    {
+      provide: MSAL_INSTANCE,
+      useValue: new PublicClientApplication({
+        auth: {
+          clientId: environment.CLIENT_ID,
+          authority: environment.CLIENT_AUTHORITY,
+          redirectUri: window.location.origin,
+        },
+        cache: {
+          cacheLocation: 'localStorage',
+          storeAuthStateInCookie: false,
+        },
+      }),
+    },
+    {
+      provide: MSAL_GUARD_CONFIG,
+      useValue: {
+        interactionType: InteractionType.Redirect,
+        authRequest: {
+          scopes: ['User.Read'],
         },
       },
-      {
-        provide: MSAL_INTERCEPTOR_CONFIG,
-        useValue: {
-          interactionType: InteractionType.Redirect,
-          protectedResourceMap: new Map([['https://graph.microsoft.com/v1.0/me', ['user.read']]]),
-        },
+    },
+    {
+      provide: MSAL_INTERCEPTOR_CONFIG,
+      useValue: {
+        interactionType: InteractionType.Redirect,
+        protectedResourceMap: new Map([['https://graph.microsoft.com/v1.0/me', ['user.read']]]),
       },
-      MsalService,
-      MsalGuard,
-      MsalBroadcastService
-    ];
-  }
+    },
+    MsalService,
+    MsalGuard,
+    MsalBroadcastService
+  ];
 
   constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
     // Create a dummy config to satisfy the parent constructor if it needs it
