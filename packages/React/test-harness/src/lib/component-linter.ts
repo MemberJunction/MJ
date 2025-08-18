@@ -149,6 +149,99 @@ export class ComponentLinter {
     },
     
     {
+      name: 'use-function-declaration',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check if this is the main component being defined as arrow function
+            if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
+              const init = path.node.init;
+              
+              // Check if it's an arrow function
+              if (t.isArrowFunctionExpression(init)) {
+                violations.push({
+                  rule: 'use-function-declaration',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component "${componentName}" must be defined using function declaration syntax, not arrow function.`,
+                  code: path.toString().substring(0, 150)
+                });
+              }
+            }
+            
+            // Also check for any other component-like arrow functions (starts with capital letter)
+            if (t.isIdentifier(path.node.id) && /^[A-Z]/.test(path.node.id.name)) {
+              const init = path.node.init;
+              if (t.isArrowFunctionExpression(init)) {
+                violations.push({
+                  rule: 'use-function-declaration',
+                  severity: 'high',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component-like function "${path.node.id.name}" should be defined using function declaration syntax, not arrow function.`,
+                  code: path.toString().substring(0, 150)
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'no-return-component',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Check for return statements at the program/top level
+        if (ast.program && ast.program.body) {
+          for (const statement of ast.program.body) {
+            // Check for return statement returning the component
+            if (t.isReturnStatement(statement)) {
+              const argument = statement.argument;
+              
+              // Check if it's returning the component identifier or any identifier
+              if (argument && t.isIdentifier(argument)) {
+                // If it's returning the component name or any identifier at top level
+                violations.push({
+                  rule: 'no-return-component',
+                  severity: 'critical',
+                  line: statement.loc?.start.line || 0,
+                  column: statement.loc?.start.column || 0,
+                  message: `Do not return the component at the end of the file. The component function should stand alone.`,
+                  code: `return ${argument.name};`
+                });
+              }
+            }
+            
+            // Also check for expression statements that might be standalone identifiers
+            if (t.isExpressionStatement(statement) && 
+                t.isIdentifier(statement.expression) && 
+                statement.expression.name === componentName) {
+              violations.push({
+                rule: 'no-return-component',
+                severity: 'critical',
+                line: statement.loc?.start.line || 0,
+                column: statement.loc?.start.column || 0,
+                message: `Do not reference the component "${componentName}" at the end of the file. The component function should stand alone.`,
+                code: statement.expression.name
+              });
+            }
+          }
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'no-use-reducer',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1813,6 +1906,74 @@ function MyComponent({ utilities, styles, components }) {
 // - Passed via props (utilities, components, styles)
 // - Available globally (React hooks)
 // No module loading allowed!`
+          });
+          break;
+          
+        case 'use-function-declaration':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use function declaration syntax instead of arrow functions for components.',
+            example: `// ❌ WRONG - Arrow function component:
+const MyComponent = ({ utilities, styles, components }) => {
+  const [state, setState] = useState('');
+  
+  return <div>{state}</div>;
+};
+
+// Also wrong for child components:
+const ChildComponent = () => <div>Child</div>;
+
+// ✅ CORRECT - Function declaration:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+  
+  return <div>{state}</div>;
+}
+
+// Child components also use function declaration:
+function ChildComponent() {
+  return <div>Child</div>;
+}
+
+// Why function declarations?
+// 1. Clearer component identification
+// 2. Better debugging experience (named functions)
+// 3. Hoisting allows flexible code organization
+// 4. Consistent with React documentation patterns
+// 5. Easier to distinguish from regular variables`
+          });
+          break;
+          
+        case 'no-return-component':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Remove the return statement at the end of the file. The component function should stand alone.',
+            example: `// ❌ WRONG - Returning the component:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+  
+  return <div>{state}</div>;
+}
+
+return MyComponent; // <-- Remove this!
+
+// ❌ ALSO WRONG - Component reference at end:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+MyComponent; // <-- Remove this!
+
+// ✅ CORRECT - Just the function declaration:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+  
+  return <div>{state}</div>;
+}
+// Nothing after the function - file ends here
+
+// The runtime will find and execute your component
+// by its function name. No need to return or reference it!`
           });
           break;
           

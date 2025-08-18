@@ -47,10 +47,10 @@ export class LibraryRegistry {
       // into versions in our structure
       const libraryGroups = new Map<string, ComponentLibraryEntity[]>();
       for (const lib of ComponentMetadataEngine.Instance.ComponentLibraries) {
-        if (!libraryGroups.has(lib.Name)) {
-          libraryGroups.set(lib.Name, []);
+        if (!libraryGroups.has(lib.Name.toLowerCase())) {
+          libraryGroups.set(lib.Name.toLowerCase(), []);
         }
-        libraryGroups.get(lib.Name)!.push(lib);
+        libraryGroups.get(lib.Name.toLowerCase())!.push(lib);
       }
 
       // now we have grouped libraries using the ComponentLibraryEntity type, and next up
@@ -630,7 +630,7 @@ export class LibraryRegistry {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
-    return this.libraries.get(name);
+    return this.libraries.get(name?.trim().toLowerCase());
   }
 
   /**
@@ -643,7 +643,7 @@ export class LibraryRegistry {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
-    const library = this.libraries.get(name);
+    const library = this.libraries.get(name?.trim().toLowerCase());
     if (!library) return undefined;
 
     const targetVersion = version || library.defaultVersion;
@@ -657,7 +657,7 @@ export class LibraryRegistry {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
-    return this.libraries.has(name);
+    return this.libraries.has(name?.trim().toLowerCase());
   }
 
   /**
@@ -669,7 +669,7 @@ export class LibraryRegistry {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
-    const library = this.libraries.get(name);
+    const library = this.libraries.get(name?.trim().toLowerCase());
     if (!library) return undefined;
 
     if (!versionPattern) return library.defaultVersion;
@@ -693,6 +693,6 @@ export class LibraryRegistry {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
-    this.libraries.set(definition.name, definition);
+    this.libraries.set(definition.name?.trim().toLowerCase(), definition);
   }
 }
