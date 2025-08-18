@@ -1,0 +1,36 @@
+{
+  "name": "ProductDetailsPanel",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/product-details-panel.js",
+  "functionalRequirements": "## Product Details Panel\n\n### Purpose\nSlide-out panel with detailed product performance metrics.\n\n### Features\n- Product info header\n- Revenue metrics\n- Customer breakdown\n- Trend chart\n- Top customers list",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives product details from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- product: Selected product data\n- isOpen: Panel visibility\n- onClose: Close callback",
+  "properties": [
+    {
+      "name": "product",
+      "type": "object",
+      "required": false,
+      "description": "Selected product data"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Panel visibility"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "required": true,
+      "description": "Close callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

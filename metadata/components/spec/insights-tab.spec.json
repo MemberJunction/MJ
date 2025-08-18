@@ -1,0 +1,36 @@
+{
+  "name": "InsightsTab",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/insights-tab.js",
+  "functionalRequirements": "## Insights Tab\n\n### Purpose\nProvides analytical insights and recommendations.\n\n### Features\n- AI-generated insights\n- Trend analysis\n- Recommendations\n- Performance metrics",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives insights data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- insights: Array of insight items\n- metrics: Performance metrics\n- onInsightAction: Action handler for insights",
+  "properties": [
+    {
+      "name": "insights",
+      "type": "array",
+      "required": true,
+      "description": "Insight items array"
+    },
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": false,
+      "description": "Performance metrics data"
+    },
+    {
+      "name": "onInsightAction",
+      "type": "function",
+      "required": false,
+      "description": "Insight action handler"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

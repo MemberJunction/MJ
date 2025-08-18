@@ -1,0 +1,96 @@
+{
+  "name": "EntityList",
+  "title": "Entity List",
+  "description": "Displays entities in a grid or card layout with sorting capabilities",
+  "type": "table",
+  "functionalRequirements": "## Entity List Requirements\n\n- Display entities in grid or card view based on viewMode prop\n- Support sorting by multiple fields\n- Handle entity selection and notify parent\n- Show loading state while data loads\n- Display record count badges\n- Highlight selected entity\n- Support keyboard navigation",
+  "dataRequirements": null,
+  "technicalDesign": "## Technical Design\n\n### Props\n- entities: Array of entity objects\n- viewMode: 'grid' | 'card'\n- selectedEntityId: Currently selected entity\n- onSelectEntity: Callback when entity selected\n- sortBy: Current sort field\n- sortDirection: 'asc' | 'desc'\n- onSortChange: Callback for sort changes\n\n### Rendering\n- Grid mode: Compact table with columns\n- Card mode: Cards with entity info\n- Sort indicators in headers\n- Selection highlighting",
+  "properties": [
+    {
+      "name": "entities",
+      "description": "Array of entity objects to display",
+      "type": "array",
+      "required": true
+    },
+    {
+      "name": "viewMode",
+      "description": "Display mode - grid or card view",
+      "type": "string",
+      "required": true,
+      "possibleValues": [
+        "grid",
+        "card"
+      ]
+    },
+    {
+      "name": "selectedEntityId",
+      "description": "ID of the currently selected entity",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "onSelectEntity",
+      "description": "Callback when an entity is selected",
+      "type": "function",
+      "required": true
+    },
+    {
+      "name": "sortBy",
+      "description": "Field to sort by",
+      "type": "string",
+      "required": true,
+      "defaultValue": "Name"
+    },
+    {
+      "name": "sortDirection",
+      "description": "Sort direction",
+      "type": "string",
+      "required": true,
+      "defaultValue": "asc",
+      "possibleValues": [
+        "asc",
+        "desc"
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Callback when sort changes",
+      "type": "function",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onSelectEntity",
+      "description": "Fired when an entity is selected",
+      "parameters": [
+        {
+          "name": "entityId",
+          "description": "ID of the selected entity",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Fired when sort configuration changes",
+      "parameters": [
+        {
+          "name": "sortBy",
+          "description": "Field to sort by",
+          "type": "string"
+        },
+        {
+          "name": "sortDirection",
+          "description": "Sort direction",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<EntityList\n  entities={entities}\n  viewMode={viewMode}\n  selectedEntityId={selectedEntityId}\n  onSelectEntity={handleSelectEntity}\n  sortBy={sortBy}\n  sortDirection={sortDirection}\n  onSortChange={handleSortChange}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
+  "code": "@file:../code/entity-list.js",
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,57 @@
+{
+  "name": "AIModelFilter",
+  "title": "AI Model Filter",
+  "description": "Collapsible filter panel for filtering models by type, status, developer, and provider",
+  "type": "form",
+  "functionalRequirements": "Provide filters for model type, status, developer, and provider with active filter indicators",
+  "dataRequirements": null,
+  "technicalDesign": "",
+  "properties": [
+    {
+      "name": "filters",
+      "type": "object",
+      "required": true,
+      "description": "Current filter state object"
+    },
+    {
+      "name": "modelTypes",
+      "type": "array",
+      "required": true,
+      "description": "Array of available model types for filtering"
+    },
+    {
+      "name": "vendors",
+      "type": "array",
+      "required": true,
+      "description": "Array of available vendors for filtering"
+    },
+    {
+      "name": "isCollapsed",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the filter panel is collapsed"
+    }
+  ],
+  "events": [
+    {
+      "name": "onFilterChange",
+      "description": "Fired when filters are changed",
+      "parameters": [
+        {
+          "name": "filters",
+          "type": "object",
+          "description": "New filter state"
+        }
+      ]
+    },
+    {
+      "name": "onToggleCollapse",
+      "description": "Fired when the collapse state should toggle",
+      "parameters": []
+    }
+  ],
+  "exampleUsage": "<AIModelFilter ... />",
+  "code": "@file:../code/ai-model-filter.js",
+  "dependencies": [],
+  "libraries": []
+}

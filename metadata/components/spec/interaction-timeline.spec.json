@@ -1,0 +1,30 @@
+{
+  "name": "InteractionTimeline",
+  "namespace": "CRM/Customer",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/interaction-timeline.js",
+  "functionalRequirements": "## Interaction Timeline\n\n### Purpose\nDisplay chronological timeline of customer interactions.\n\n### Features\n- Chronological event list\n- Event type icons\n- Expandable details\n- Date filtering",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives interaction events from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- interactions: Array of interaction events\n- dateRange: Date filter range",
+  "properties": [
+    {
+      "name": "interactions",
+      "type": "array",
+      "required": true,
+      "description": "Customer interaction events"
+    },
+    {
+      "name": "dateRange",
+      "type": "object",
+      "required": false,
+      "description": "Date filter range"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

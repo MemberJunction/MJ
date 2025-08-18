@@ -1,0 +1,30 @@
+{
+  "name": "CustomerHeader",
+  "namespace": "CRM/Customer",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/customer-header.js",
+  "functionalRequirements": "## Customer Header\n\n### Purpose\nDisplay customer summary information at the top.\n\n### Features\n- Customer name and logo\n- Key metrics\n- Contact info\n- Status badges",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives customer data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- customer: Customer entity\n- metrics: Key metrics object",
+  "properties": [
+    {
+      "name": "customer",
+      "type": "object",
+      "required": true,
+      "description": "Customer entity"
+    },
+    {
+      "name": "metrics",
+      "type": "object",
+      "required": true,
+      "description": "Customer metrics"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

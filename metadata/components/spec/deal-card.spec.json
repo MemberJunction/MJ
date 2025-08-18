@@ -1,0 +1,36 @@
+{
+  "name": "DealCard",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/deal-card.js",
+  "functionalRequirements": "## Deal Card Component\n\n### Purpose\nDisplay individual deal information in a card format with interactive elements.\n\n### Features\n- Deal name and amount display\n- Currency formatting\n- Date formatting\n- Probability indicator with color coding\n- Hover effects\n- Click to open deal record\n\n### Visual Design\n- Card with border and padding\n- Hover scale effect\n- Probability badge with semantic colors\n- Clean typography",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives deal object from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- deal: Deal entity object\n- onOpenDeal: Callback to open deal record\n\n### Styling\n- Background color based on state\n- Border and shadow effects\n- Probability color coding:\n  - >= 70%: Green\n  - >= 40%: Yellow\n  - < 40%: Red",
+  "properties": [
+    {
+      "name": "deal",
+      "type": "object",
+      "required": true,
+      "description": "Deal entity object with ID, DealName, Amount, CloseDate, Probability"
+    },
+    {
+      "name": "onOpenDeal",
+      "type": "function",
+      "required": true,
+      "description": "Callback to open deal record"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "dayjs",
+      "version": "^1.11.10",
+      "globalVariable": "dayjs"
+    }
+  ]
+}

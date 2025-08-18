@@ -1,0 +1,46 @@
+{
+  "name": "DealsByStageBoard",
+  "title": "Deals by Stage Board",
+  "description": "Kanban-style board showing deals grouped by stage with drag-and-drop support",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "CRM/Sales",
+  "functionalRequirements": "## Kanban Board for Deal Pipeline\n\n### Core Features\n- Display deals grouped by stage in columns\n- Show deal cards with key information\n- Display total value per stage\n- Count of deals per stage\n- Visual indicators for deal priority\n\n### Card Information\n- Deal name\n- Account name\n- Amount formatted as currency\n- Days to close\n- Probability indicator\n\n### Visual Design\n- Column headers with stage colors\n- Card shadows and hover effects\n- Responsive column layout\n- Scrollable columns for many deals",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "fields": [
+          { "name": "ID", "type": "string", "required": true },
+          { "name": "DealName", "type": "string", "required": true },
+          { "name": "AccountID", "type": "number", "required": true },
+          { "name": "Stage", "type": "string", "required": true },
+          { "name": "Amount", "type": "number", "required": true },
+          { "name": "Probability", "type": "number", "required": true },
+          { "name": "CloseDate", "type": "date", "required": true },
+          { "name": "DealSource", "type": "string", "required": false },
+          { "name": "NextStep", "type": "string", "required": false }
+        ]
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Data Loading\n- Single RunView call to load all deals\n- Client-side grouping by Stage\n- Calculate totals per stage\n\n### Layout\n- Flexbox for horizontal column layout\n- Fixed height columns with scroll\n- Responsive breakpoints for mobile\n\n### Stage Order\n1. Prospecting\n2. Qualification\n3. Proposal\n4. Negotiation\n5. Closed Won\n6. Closed Lost",
+  "properties": [
+    {
+      "name": "showClosedDeals",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": false,
+      "description": "Whether to show Closed Won and Closed Lost stages"
+    },
+    {
+      "name": "onDealClick",
+      "type": "function",
+      "required": false,
+      "description": "Callback when a deal card is clicked"
+    }
+  ],
+  "exampleUsage": "<DealsByStageBoard\n  showClosedDeals={false}\n  onDealClick={handleDealClick}\n/>",
+  "code": "@file:../code/deals-by-stage-board.js"
+}

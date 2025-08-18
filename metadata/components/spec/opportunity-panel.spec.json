@@ -1,0 +1,30 @@
+{
+  "name": "OpportunityPanel",
+  "namespace": "CRM/Customer",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/opportunity-panel.js",
+  "functionalRequirements": "## Opportunity Panel\n\n### Purpose\nDisplay customer opportunities and deals.\n\n### Features\n- Active opportunities list\n- Deal value and stage\n- Probability indicators\n- Quick actions",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives opportunity data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- opportunities: Array of opportunity data\n- onOpportunityClick: Selection callback",
+  "properties": [
+    {
+      "name": "opportunities",
+      "type": "array",
+      "required": true,
+      "description": "Customer opportunities"
+    },
+    {
+      "name": "onOpportunityClick",
+      "type": "function",
+      "required": false,
+      "description": "Opportunity selection callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,48 @@
+{
+  "name": "ProductRevenueDetailPanel",
+  "namespace": "Sales/Analytics",
+  "type": "Panel",
+  "location": "embedded",
+  "code": "@file:../code/product-revenue-detail-panel.js",
+  "functionalRequirements": "## Product Revenue Detail Panel Sub-Component\n\n### Purpose\nSlide-out panel displaying detailed product metrics and trends.\n\n### Core Features\n- **Performance Metrics**: Revenue, units, margin, customers\n- **Pricing Details**: List price, cost, average selling price\n- **Revenue Trend Chart**: 12-month trend visualization\n- **Explorer Link**: Open full product record\n- **Smooth Animations**: Slide-in/out transitions",
+  "dataRequirements": {
+    "mode": "props",
+    "props": ["product", "isOpen", "onClose", "callbacks"]
+  },
+  "technicalDesign": "## Implementation\n\n### Panel Structure\n- Fixed position slide-out panel\n- Chart.js for trend visualization\n- Metric cards with color coding\n- Responsive layout",
+  "properties": [
+    {
+      "name": "product",
+      "type": "object",
+      "description": "Selected product metrics object",
+      "required": false
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "description": "Panel visibility state",
+      "required": true
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "description": "Callback to close the panel",
+      "required": true
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Callback functions including OpenEntityRecord",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "Chart.js",
+      "version": "^4.4.1",
+      "globalVariable": "Chart"
+    }
+  ]
+}

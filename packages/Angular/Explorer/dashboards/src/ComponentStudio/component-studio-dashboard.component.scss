@@ -121,11 +121,155 @@
       background: white;
       border-bottom: 1px solid #dee2e6;
       
-      h3 {
-        margin: 0 0 16px 0;
-        font-size: 18px;
-        font-weight: 600;
-        color: #212529;
+      .panel-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        
+        h3 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 600;
+          color: #212529;
+        }
+        
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          
+          .favorites-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid #dee2e6;
+            background: white;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            
+            &:hover {
+              background: #f8f9fa;
+              border-color: #adb5bd;
+            }
+            
+            &.active {
+              background: #fff3cd;
+              border-color: #ffc107;
+              color: #856404;
+              
+              i {
+                color: #ffc107;
+              }
+            }
+            
+            i {
+              font-size: 14px;
+            }
+          }
+          
+          .component-count {
+            font-size: 13px;
+            color: #6c757d;
+            background: #f8f9fa;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+          }
+        }
+      }
+      
+      .category-filters {
+        margin-bottom: 16px;
+        
+        .filter-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          
+          .category-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            
+            &:hover {
+              transform: translateY(-1px);
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+            
+            &.active {
+              border-color: var(--pill-color);
+              background: var(--pill-color);
+              color: white;
+              
+              .pill-count {
+                background: rgba(255, 255, 255, 0.3);
+                color: white;
+              }
+            }
+            
+            .pill-name {
+              font-weight: 500;
+            }
+            
+            .pill-count {
+              background: #f1f3f5;
+              padding: 2px 6px;
+              border-radius: 10px;
+              font-size: 11px;
+              font-weight: 600;
+              min-width: 20px;
+              text-align: center;
+            }
+          }
+          
+          .more-button,
+          .clear-filters-button {
+            padding: 6px 12px;
+            border: 1px solid #dee2e6;
+            background: white;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6c757d;
+            
+            &:hover {
+              background: #f8f9fa;
+              border-color: #adb5bd;
+            }
+            
+            i {
+              font-size: 11px;
+              margin-right: 4px;
+            }
+          }
+          
+          .clear-filters-button {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #dc2626;
+            
+            &:hover {
+              background: #fca5a5;
+              color: white;
+            }
+          }
+        }
       }
       
       .search-box {
@@ -222,6 +366,42 @@
             flex-shrink: 0;
           }
           
+          .favorite-btn {
+            position: absolute;
+            top: 12px;
+            right: 48px; // Leave room for chevron
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6c757d;
+            
+            &:hover {
+              background: #f8f9fa;
+              transform: scale(1.1);
+            }
+            
+            &.is-favorite {
+              color: #ffc107;
+              border-color: #ffc107;
+              background: #fff3cd;
+              
+              &:hover {
+                background: #ffe69c;
+              }
+            }
+            
+            i {
+              font-size: 14px;
+            }
+          }
+          
           .card-info {
             flex: 1;
             min-width: 0;
@@ -297,6 +477,26 @@
                 &.text {
                   background: #f3e8ff;
                   color: #6b21a8;
+                }
+              }
+            }
+            
+            .card-namespace {
+              margin-top: 8px;
+              
+              .namespace-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 10px;
+                border-radius: 16px;
+                font-size: 12px;
+                font-weight: 500;
+                color: white;
+                
+                i {
+                  font-size: 11px;
+                  opacity: 0.9;
                 }
               }
             }
@@ -731,6 +931,8 @@
   }
 }
 
+// Removed tree view styles - using modern category filters instead
+
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -739,5 +941,14 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }

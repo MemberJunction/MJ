@@ -1,0 +1,36 @@
+{
+  "name": "DetailsPanel",
+  "namespace": "CRM/UI",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/details-panel.js",
+  "functionalRequirements": "## Details Panel\n\n### Purpose\nSlide-out panel for displaying detailed information.\n\n### Features\n- Slide-in/out animation\n- Tabbed content\n- Close button\n- Responsive layout",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives detail data from parent"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- data: Detail data object\n- isOpen: Panel open state\n- onClose: Close handler",
+  "properties": [
+    {
+      "name": "data",
+      "type": "object",
+      "required": true,
+      "description": "Detail data to display"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Panel open state"
+    },
+    {
+      "name": "onClose",
+      "type": "function",
+      "required": true,
+      "description": "Panel close handler"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

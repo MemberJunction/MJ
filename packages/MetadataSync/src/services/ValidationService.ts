@@ -1,4 +1,4 @@
-import { Metadata, RunView } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -260,12 +260,12 @@ export class ValidationService {
    */
   private async validateFields(
     fields: Record<string, any>,
-    entityInfo: any,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
-    const fieldMap = new Map(entityFields.map((f: any) => [f.Name, f]));
+    const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
 
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
       const fieldInfo = fieldMap.get(fieldName);
@@ -274,6 +274,11 @@ export class ValidationService {
         // Check if this might be a virtual property (getter/setter)
         try {
           const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
+          // we use this approach instead of checking Entity Fields because
+          // some sub-classes implement setter properties that allow you to set
+          // values that are not physically in the database but are resolved by the sub-class
+          // a good example is the sub-class for AI Prompts that has a property called TemplateText
+          // that is automatically resolved into a separate record in the Templates/Template Contents entity
           const hasProperty = fieldName in entityInstance;
 
           if (!hasProperty) {
@@ -288,8 +293,6 @@ export class ValidationService {
             continue;
           }
 
-          // It's a virtual property, validate the value
-          await this.validateFieldValue(fieldValue, { Name: fieldName }, entityInfo, filePath, parentContext);
           continue;
         } catch (error) {
           // If we can't create an entity instance, fall back to error
@@ -306,14 +309,14 @@ export class ValidationService {
       }
 
       // Check if field is settable (not system field)
-      if ((fieldInfo as any).IsSystemField || fieldName.startsWith('__mj_')) {
+      if (fieldInfo.ReadOnly || fieldName.startsWith('__mj_')) {
         this.addError({
           type: 'field',
           severity: 'error',
           entity: entityInfo.Name,
           field: fieldName,
           file: filePath,
-          message: `Field "${fieldName}" is a system field and cannot be set`,
+          message: `Field "${fieldName}" is a read-only or system field and cannot be set`,
           suggestion: 'Remove this field from your metadata file',
         });
         continue;
@@ -345,7 +348,7 @@ export class ValidationService {
         }
 
         // Skip fields that are marked as AutoUpdateOnly or ReadOnly
-        if ((field as any).AutoUpdateOnly || (field as any).ReadOnly) {
+        if (field.AutoIncrement || field.ReadOnly) {
           continue;
         }
 
@@ -382,14 +385,19 @@ export class ValidationService {
    */
   private async validateFieldValue(
     value: any,
-    fieldInfo: any,
-    entityInfo: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
-    if (typeof value === 'string' && value.startsWith('@')) {
+    if (typeof value === 'string' && this.isValidReference(value)) {
       await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext);
+      // Skip further validation for references as they will be resolved later
+      return;
     }
+
+    // Validate field value against value list if applicable
+    await this.validateFieldValueList(value, fieldInfo, entityInfo, filePath);
 
     // Validate UserID fields against allowed roles
     if (fieldInfo.Name === 'UserID' && typeof value === 'string' && value.length > 0) {
@@ -424,12 +432,102 @@ export class ValidationService {
   }
 
   /**
+   * Validates field value against the field's value list if applicable
+   */
+  private async validateFieldValueList(
+    value: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
+    filePath: string
+  ): Promise<void> {
+    // Skip validation if value is null/undefined (handled by required field check)
+    if (value === null || value === undefined || value === '') {
+      return;
+    }
+
+    // Check if this field has a value list constraint
+    if (fieldInfo.ValueListType !== 'List') {
+      return;
+    }
+
+    // Get the allowed values from EntityFieldValues
+    const entityFieldValues = fieldInfo.EntityFieldValues;
+    if (!entityFieldValues || !Array.isArray(entityFieldValues) || entityFieldValues.length === 0) {
+      // No values defined, skip validation
+      return;
+    }
+
+    // Extract the allowed values
+    const allowedValues = entityFieldValues.map((efv: any) => efv.Value);
+    
+    // Convert value to string for comparison (in case it's a number or boolean)
+    const stringValue = String(value);
+    
+    // Check if the value is in the allowed list
+    if (!allowedValues.includes(stringValue)) {
+      // Check case-insensitive match as a warning
+      const caseInsensitiveMatch = allowedValues.find((av: string) => 
+        av.toLowerCase() === stringValue.toLowerCase()
+      );
+      
+      if (caseInsensitiveMatch) {
+        this.addWarning({
+          type: 'validation',
+          severity: 'warning',
+          entity: entityInfo.Name,
+          field: fieldInfo.Name,
+          file: filePath,
+          message: `Field "${fieldInfo.Name}" has value "${stringValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
+          suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
+        });
+      } else {
+        // Format the allowed values list for display
+        const allowedValuesList = allowedValues.length <= 10 
+          ? allowedValues.join(', ')
+          : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
+        
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          field: fieldInfo.Name,
+          file: filePath,
+          message: `Field "${fieldInfo.Name}" has invalid value "${stringValue}"`,
+          suggestion: `Allowed values are: ${allowedValuesList}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Check if a string is actually a MetadataSync reference (not just any @ string)
+   */
+  private isValidReference(value: string): boolean {
+    if (typeof value !== 'string' || !value.startsWith('@')) {
+      return false;
+    }
+    
+    // List of valid reference prefixes
+    const validPrefixes = [
+      '@file:',
+      '@lookup:',
+      '@template:',
+      '@parent:',
+      '@root:',
+      '@env:',
+      '@include',  // Can be @include or @include.
+    ];
+    
+    return validPrefixes.some(prefix => value.startsWith(prefix));
+  }
+
+  /**
    * Validates special references (@file:, @lookup:, etc.)
    */
   private async validateReference(
     reference: string,
-    fieldInfo: any,
-    entityInfo: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {

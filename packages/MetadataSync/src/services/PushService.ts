@@ -10,13 +10,18 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
+import { JsonPreprocessor } from '../lib/json-preprocessor';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+
+// Configuration for parallel processing
+const PARALLEL_BATCH_SIZE = 10; // Number of records to process in parallel at each dependency level
 
 export interface PushOptions {
   dir?: string;
   dryRun?: boolean;
   verbose?: boolean;
   noValidate?: boolean;
+  parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
 }
 
 export interface PushCallbacks {
@@ -229,7 +234,9 @@ export class PushService {
       } catch (error) {
         // Rollback transaction on error
         if (!options.dryRun) {
+          callbacks?.onError?.('\n⚠️  Rolling back database transaction due to error...');
           await transactionManager.rollbackTransaction();
+          callbacks?.onError?.('✓ Database transaction rolled back successfully');
         }
         throw error;
       }
@@ -319,7 +326,21 @@ export class PushService {
           await fileBackupManager.backupFile(filePath);
         }
         
-        const fileData = await fs.readJson(filePath);
+        // Read the raw file data first
+        const rawFileData = await fs.readJson(filePath);
+        
+        // Only preprocess if there are @include directives
+        let fileData = rawFileData;
+        const jsonString = JSON.stringify(rawFileData);
+        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+        
+        if (hasIncludes) {
+          // Preprocess the JSON file to handle @include directives
+          // Create a new preprocessor instance for each file to ensure clean state
+          const jsonPreprocessor = new JsonPreprocessor();
+          fileData = await jsonPreprocessor.processFile(filePath);
+        }
+        
         const records = Array.isArray(fileData) ? fileData : [fileData];
         const isArray = Array.isArray(fileData);
         
@@ -339,29 +360,97 @@ export class PushService {
         }
         
         // Create batch context for in-memory entity resolution
+        // Note: While JavaScript is single-threaded, async operations can interleave.
+        // Map operations themselves are atomic, but we ensure records are added to
+        // the context AFTER successful save to maintain consistency.
         const batchContext = new Map<string, BaseEntity>();
         
-        // Process all flattened records in dependency order
-        for (const flattenedRecord of analysisResult.sortedRecords) {
-          try {
-            const result = await this.processFlattenedRecord(
-              flattenedRecord,
-              entityDir,
-              options,
-              batchContext,
-              callbacks
-            );
+        // Process records using dependency levels for parallel processing
+        if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
+          // Use parallel processing with dependency levels
+          for (let levelIndex = 0; levelIndex < analysisResult.dependencyLevels.length; levelIndex++) {
+            const level = analysisResult.dependencyLevels[levelIndex];
             
-            // Update stats
-            if (!result.isDuplicate) {
-              if (result.status === 'created') created++;
-              else if (result.status === 'updated') updated++;
-              else if (result.status === 'unchanged') unchanged++;
+            if (options.verbose && level.length > 1) {
+              callbacks?.onLog?.(`   Processing dependency level ${levelIndex} with ${level.length} records in parallel...`);
             }
-          } catch (recordError) {
-            const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
-            callbacks?.onError?.(errorMsg);
-            errors++;
+            
+            // Process records in this level in parallel batches
+            const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
+            for (let i = 0; i < level.length; i += batchSize) {
+              const batch = level.slice(i, Math.min(i + batchSize, level.length));
+              
+              // Process batch in parallel
+              const batchResults = await Promise.all(
+                batch.map(async (flattenedRecord) => {
+                  try {
+                    const result = await this.processFlattenedRecord(
+                      flattenedRecord,
+                      entityDir,
+                      options,
+                      batchContext,
+                      callbacks
+                    );
+                    return { success: true, result };
+                  } catch (error) {
+                    // Return error instead of throwing to handle after Promise.all
+                    return { success: false, error, record: flattenedRecord };
+                  }
+                })
+              );
+              
+              // Process results and check for errors
+              for (const batchResult of batchResults) {
+                if (!batchResult.success) {
+                  // Fail fast on first error with detailed logging
+                  const err = batchResult.error as Error;
+                  const rec = batchResult.record as FlattenedRecord;
+                  
+                  callbacks?.onError?.(`\n❌ BATCH PROCESSING FAILED`);
+                  callbacks?.onError?.(`   Processing halted at dependency level ${levelIndex}`);
+                  callbacks?.onError?.(`   Failed record: ${rec.entityName} at ${rec.path}`);
+                  callbacks?.onError?.(`   Error: ${err.message}`);
+                  callbacks?.onError?.(`   Records in this batch: ${batch.length}`);
+                  callbacks?.onError?.(`   Records successfully processed before failure: ${batchResults.filter(r => r.success).length}`);
+                  
+                  // The error has already been logged in detail by processFlattenedRecord
+                  // Now throw to trigger rollback
+                  throw new Error(`Batch processing failed: ${err.message}`);
+                }
+                
+                // Update stats for successful results
+                const result = batchResult.result!;
+                if (!result.isDuplicate) {
+                  if (result.status === 'created') created++;
+                  else if (result.status === 'updated') updated++;
+                  else if (result.status === 'unchanged') unchanged++;
+                }
+              }
+            }
+          }
+        } else {
+          // Fallback to sequential processing if no dependency levels available
+          for (const flattenedRecord of analysisResult.sortedRecords) {
+            try {
+              const result = await this.processFlattenedRecord(
+                flattenedRecord,
+                entityDir,
+                options,
+                batchContext,
+                callbacks
+              );
+              
+              // Update stats
+              if (!result.isDuplicate) {
+                if (result.status === 'created') created++;
+                else if (result.status === 'updated') updated++;
+                else if (result.status === 'unchanged') unchanged++;
+              }
+            } catch (recordError) {
+              const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
+              callbacks?.onError?.(errorMsg);
+              errors++;
+            }
           }
         }
         
@@ -542,10 +631,61 @@ export class PushService {
       }
     }
     
-    // Save the record
+    // Save the record with detailed error logging
     const saveResult = await entity.Save();
     if (!saveResult) {
-      throw new Error(`Failed to save ${entityName} record: ${entity.LatestResult?.Message || 'Unknown error'}`);
+      // Build detailed error information
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      const primaryKeyInfo: string[] = [];
+      const fieldInfo: string[] = [];
+      
+      // Collect primary key information
+      if (entityInfo) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          const pkValue = entity.Get(pk.Name);
+          primaryKeyInfo.push(`${pk.Name}=${this.formatFieldValue(pkValue)}`);
+        }
+      }
+      
+      // Collect field values that were being saved
+      for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
+        const processedValue = entity.Get(fieldName);
+        fieldInfo.push(`${fieldName}=${this.formatFieldValue(processedValue)}`);
+      }
+      
+      // Get the actual error details from the entity
+      const errorMessage = entity.LatestResult?.Message || 'Unknown error';
+      const errorDetails = entity.LatestResult?.Errors?.map(err => 
+        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+      )?.join(', ') || '';
+      
+      // Log detailed error information
+      callbacks?.onError?.(`\n❌ FATAL ERROR: Failed to save ${entityName} record`);
+      callbacks?.onError?.(`   Entity: ${entityName}`);
+      if (primaryKeyInfo.length > 0) {
+        callbacks?.onError?.(`   Primary Key: {${primaryKeyInfo.join(', ')}}`);
+      }
+      callbacks?.onError?.(`   Record Path: ${flattenedRecord.path}`);
+      callbacks?.onError?.(`   Is New Record: ${isNew}`);
+      callbacks?.onError?.(`   Field Values Being Saved:`);
+      for (const field of fieldInfo) {
+        callbacks?.onError?.(`     - ${field}`);
+      }
+      callbacks?.onError?.(`   SQL Error: ${errorMessage}`);
+      if (errorDetails) {
+        callbacks?.onError?.(`   Additional Details: ${errorDetails}`);
+      }
+      
+      // Check for common issues
+      if (errorMessage.includes('conversion failed') || errorMessage.includes('GUID')) {
+        callbacks?.onError?.(`   ⚠️  This appears to be a GUID/UUID format error. Check that all ID fields contain valid GUIDs.`);
+      }
+      if (errorMessage.includes('transaction')) {
+        callbacks?.onError?.(`   ⚠️  Transaction error detected. The database transaction may be corrupted.`);
+      }
+      
+      // Throw error to trigger rollback and stop processing
+      throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
     }
     
     // Add to batch context AFTER save so it has an ID for child @parent:ID references

@@ -160,7 +160,8 @@ export class ComponentHierarchyRegistrar {
       const compileOptions: CompileOptions = {
         componentName: spec.name,
         componentCode: spec.code,
-        styles
+        styles,
+        libraries: spec.libraries // Pass along library dependencies from the spec
       };
 
       const compilationResult = await this.compiler.compile(compileOptions);

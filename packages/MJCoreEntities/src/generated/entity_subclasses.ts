@@ -9860,6 +9860,12 @@ export const ComponentSchema = z.object({
         * * Display Name: Functional Requirements Vector Embedding Model ID
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The ID of the AI model used to generate the vector embedding for the functional requirements`),
+    HasRequiredCustomProps: z.boolean().describe(`
+        * * Field Name: HasRequiredCustomProps
+        * * Display Name: Has Required Custom Props
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -39791,6 +39797,20 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     }
     set FunctionalRequirementsVectorEmbeddingModelID(value: string | null) {
         this.Set('FunctionalRequirementsVectorEmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: HasRequiredCustomProps
+    * * Display Name: Has Required Custom Props
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.
+    */
+    get HasRequiredCustomProps(): boolean {
+        return this.Get('HasRequiredCustomProps');
+    }
+    set HasRequiredCustomProps(value: boolean) {
+        this.Set('HasRequiredCustomProps', value);
     }
 
     /**

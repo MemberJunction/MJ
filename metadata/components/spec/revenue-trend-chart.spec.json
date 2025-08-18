@@ -1,0 +1,30 @@
+{
+  "name": "RevenueTrendChart",
+  "namespace": "CRM/Finance",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/revenue-trend-chart.js",
+  "functionalRequirements": "## Revenue Trend Chart\n\n### Purpose\nVisualize revenue trends over time.\n\n### Features\n- Multi-line chart\n- Invoice vs deal revenue\n- Time period selection\n- Trend indicators",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives revenue trend data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- trendData: Array of time-series data\n- period: Selected time period",
+  "properties": [
+    {
+      "name": "trendData",
+      "type": "array",
+      "required": true,
+      "description": "Revenue trend data"
+    },
+    {
+      "name": "period",
+      "type": "string",
+      "required": false,
+      "description": "Time period selection"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

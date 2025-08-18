@@ -1,0 +1,24 @@
+{
+  "name": "AgingChart",
+  "namespace": "CRM/Finance",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/aging-chart.js",
+  "functionalRequirements": "## Aging Chart\n\n### Purpose\nVisualize accounts receivable aging buckets.\n\n### Features\n- Bar chart by age buckets\n- 0-30, 31-60, 61-90, 90+ days\n- Amount totals\n- Color coding by severity",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives aging bucket data"
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- agingData: Array of bucket data\n\n### Chart\n- Plotly bar chart\n- Color gradients",
+  "properties": [
+    {
+      "name": "agingData",
+      "type": "array",
+      "required": true,
+      "description": "Aging bucket data"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

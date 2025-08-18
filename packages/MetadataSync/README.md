@@ -711,11 +711,13 @@ When a field value starts with `@file:`, the tool will:
 1. Read content from the specified file for push operations
 2. Write content to the specified file for pull operations
 3. Track both files for change detection
+4. **For JSON files**: Automatically process any `@include` directives within them
 
 Examples:
 - `@file:greeting.prompt.md` - File in same directory as JSON
 - `@file:./shared/common-prompt.md` - Relative path
 - `@file:../templates/standard-header.md` - Parent directory reference
+- `@file:spec.json` - JSON file with `@include` directives (processed automatically)
 
 ### @url: References
 When a field value starts with `@url:`, the tool will:
@@ -798,7 +800,7 @@ Examples:
 
 The `Configuration`, `Tags`, and `Metadata` fields will automatically be converted to JSON strings when pushed to the database, while maintaining their structured format in your source files.
 
-### {@include} References in Files (NEW)
+### {@include} References in Files
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
 - Pattern: `{@include path/to/file.ext}`
 - Supports relative paths from the containing file
@@ -875,6 +877,250 @@ Benefits:
 - **Maintainability**: Update shared content in one place
 - **Flexibility**: Build complex documents from modular parts
 - **Validation**: Automatic checking of included file existence and circular references
+
+### @include References in JSON Files
+
+Enable modular JSON composition by including external JSON files directly into your metadata files. This feature allows you to break large JSON configurations into smaller, reusable components.
+
+#### Syntax Options
+
+**Object Context - Property Spreading (Default)**
+```json
+{
+  "name": "Parent Record",
+  "@include": "child.json",
+  "description": "Additional fields"
+}
+```
+The included file's properties are spread into the parent object.
+
+**Multiple Includes with Dot Notation (Eliminates VS Code Warnings)**
+```json
+{
+  "name": "Parent Record",
+  "@include.data": "shared/data-fields.json",
+  "description": "Middle field",
+  "@include.config": "shared/config-fields.json",
+  "status": "Active"
+}
+```
+Use dot notation (`@include.anything`) to include multiple files at different positions in your object. The part after the dot is ignored by the processor but makes each key unique, eliminating VS Code's duplicate key warnings. The includes are processed in the order they appear, allowing precise control over property ordering.
+
+**Array Context - Element Insertion**
+```json
+[
+  {"name": "First item"},
+  "@include:child.json",
+  {"name": "Last item"}
+]
+```
+The included file's content is inserted as array element(s).
+
+**Explicit Mode Control**
+```json
+{
+  "@include": {
+    "file": "child.json",
+    "mode": "spread"  // or "element"
+  }
+}
+```
+
+#### Modes Explained
+
+**"spread" mode**: 
+- Merges all properties from the included file into the parent object
+- Only works when including an object into an object
+- Parent properties override child properties if there are conflicts
+- Default mode for objects
+
+**"element" mode**:
+- Directly inserts the JSON content at that position
+- Works with any JSON type (object, array, string, number, etc.)
+- Replaces the @include directive with the actual content
+- Default mode for arrays when using string syntax
+
+#### Path Resolution
+- All paths are relative to the file containing the @include
+- Supports: `"child.json"`, `"./child.json"`, `"../shared/base.json"`, `"subfolder/config.json"`
+- Circular references are detected and prevented
+
+#### Complex Example
+
+Directory structure:
+```
+metadata/
+├── components/
+│   ├── dashboard.json
+│   ├── base-props.json
+│   └── items/
+│       └── dashboard-items.json
+└── shared/
+    └── common-settings.json
+```
+
+dashboard.json:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "@include.common": "../shared/common-settings.json",
+    "Type": "Dashboard",
+    "@include.defaults": "../shared/default-values.json",
+    "Configuration": {
+      "@include": {"file": "./base-props.json", "mode": "element"}
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      "@include:./items/dashboard-items.json"
+    ]
+  }
+}
+```
+
+common-settings.json:
+```json
+{
+  "CategoryID": "@lookup:Categories.Name=Analytics",
+  "Status": "Active",
+  "Priority": 1
+}
+```
+
+base-props.json:
+```json
+{
+  "refreshInterval": 60,
+  "theme": "dark",
+  "layout": "grid"
+}
+```
+
+dashboard-items.json:
+```json
+[
+  {"name": "Revenue Chart", "type": "chart"},
+  {"name": "User Stats", "type": "stats"},
+  {"name": "Activity Feed", "type": "feed"}
+]
+```
+
+Result after processing:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "CategoryID": "@lookup:Categories.Name=Analytics",
+    "Status": "Active", 
+    "Priority": 1,
+    "Type": "Dashboard",
+    "Configuration": {
+      "refreshInterval": 60,
+      "theme": "dark",
+      "layout": "grid"
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      {"name": "Revenue Chart", "type": "chart"},
+      {"name": "User Stats", "type": "stats"},
+      {"name": "Activity Feed", "type": "feed"}
+    ]
+  }
+}
+```
+
+#### Use Cases
+- **Shared Configurations**: Reuse common settings across multiple entities
+- **Modular Records**: Build complex records from smaller components
+- **Template Libraries**: Create libraries of reusable JSON fragments
+- **Environment Configs**: Include environment-specific settings
+- **Large Data Sets**: Break up large JSON files for better maintainability
+- **VS Code Compatibility**: Use dot notation to avoid duplicate key warnings when including multiple files
+
+#### Practical Example: Component with Multiple Includes
+```json
+{
+  "name": "DashboardComponent",
+  "type": "dashboard",
+  "@include.dataRequirements": "../shared/data-requirements.json",
+  "functionalRequirements": "Dashboard displays real-time metrics...",
+  "@include.libraries": "../shared/chart-libraries.json",
+  "technicalDesign": "Component uses React hooks for state...",
+  "@include.eventHandlers": "../shared/event-handlers.json",
+  "code": "const Dashboard = () => { ... }"
+}
+```
+In this example, data requirements, libraries, and event handlers are spread into the component definition at their specific positions, maintaining a logical property order while avoiding VS Code warnings about duplicate `@include` keys.
+
+#### @include in Referenced JSON Files
+When using `@file:` to reference a JSON file, any `@include` directives within that JSON file are automatically processed:
+
+#### @file References in Included JSON Files
+The system now automatically resolves `@file` references found within JSON files that are pulled in via `@include`. This allows for complete nesting of references:
+
+```json
+// main-entity.json
+{
+  "fields": {
+    "Name": "MyComponent",
+    "Specification": "@file:files/component-spec.json"
+  }
+}
+
+// files/component-spec.json
+{
+  "name": "ComponentSpec",
+  "@include.base": "../shared/base-spec.json",
+  "customFields": {
+    "feature": "advanced"
+  },
+  "@include.libs": "../shared/libraries.json"
+}
+```
+
+The `component-spec.json` file's `@include` directives are processed before the content is returned to the `Specification` field, ensuring all includes are resolved.
+
+#### Nested @file References in JSON Files
+The system now recursively processes `@file` references within JSON files loaded via `@file`. This enables powerful composition patterns:
+
+```json
+// components.json
+{
+  "fields": {
+    "Name": "RecentDealsList",
+    "Specification": "@file:spec/recent-deals-list.spec.json"
+  }
+}
+
+// spec/recent-deals-list.spec.json
+{
+  "name": "RecentDealsList",
+  "description": "List of recent deals",
+  "code": "@file:../code/recent-deals-list.js",  // This nested @file is now resolved!
+  "style": "@file:../styles/deals.css",
+  "config": {
+    "template": "@file:../templates/deal-row.html"  // Even deeply nested @file references work
+  }
+}
+```
+
+All `@file` references are recursively resolved, regardless of nesting depth. The final result will have all file contents properly loaded and embedded.
+
+#### Processing Order
+1. @include directives are processed first (recursively)
+2. @file references are recursively resolved (including nested ones in JSON)
+3. Then @template references
+4. Finally, other @ references (@lookup, etc.)
+
+This ensures that included content can contain other special references that will be properly resolved.
+
+**New Feature**: @file references within @included JSON files are now automatically resolved. This means you can have:
+- A main JSON file with `@include` directives
+- The included JSON files can have `@file` references to load code, templates, etc.
+- Those @file references are resolved to their actual content
+- If the @file points to a JSON file with @include directives, those are also processed
 
 ### @template: References (NEW)
 Enable JSON template composition for reusable configurations:
@@ -982,6 +1228,9 @@ mj sync push --verbose
 # Dry run to see what would change
 mj sync push --dry-run
 
+# Push with parallel processing (NEW)
+mj sync push --parallel-batch-size=20  # Process 20 records in parallel (default: 10, max: 50)
+
 # Show status of local vs database
 mj sync status
 
@@ -1007,6 +1256,56 @@ Configuration follows a hierarchical structure:
 - **Root config**: Global settings for all operations
 - **Entity configs**: Each entity directory has its own config defining the entity type
 - **Inheritance**: All files within an entity directory are treated as records of that entity type
+
+### Parallel Processing (NEW)
+
+MetadataSync now supports parallel processing of records during push operations, significantly improving performance for large datasets.
+
+#### How It Works
+
+Records are automatically grouped into dependency levels:
+- **Level 0**: Records with no dependencies
+- **Level 1**: Records that depend only on Level 0 records
+- **Level 2**: Records that depend on Level 0 or Level 1 records
+- And so on...
+
+Records within the same dependency level can be safely processed in parallel since they have no dependencies on each other.
+
+#### Configuration
+
+Use the `--parallel-batch-size` flag to control parallelism:
+
+```bash
+# Default: 10 records in parallel
+mj sync push
+
+# Process 20 records in parallel
+mj sync push --parallel-batch-size=20
+
+# Maximum parallelism (50 records)
+mj sync push --parallel-batch-size=50
+
+# Conservative approach for debugging
+mj sync push --parallel-batch-size=1
+```
+
+#### Performance Benefits
+
+- **2-3x faster** for typical metadata pushes
+- **5-10x faster** for records with many file references (@file) or lookups (@lookup)
+- Most beneficial when processing large numbers of independent records
+
+#### When to Use
+
+**Recommended for:**
+- Large initial data imports
+- Bulk metadata updates
+- CI/CD pipelines with time constraints
+
+**Use conservative settings for:**
+- Debugging sync issues
+- Working with complex dependencies
+- Limited database connection pools
 
 ### Directory Processing Order (NEW)
 

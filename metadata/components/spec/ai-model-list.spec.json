@@ -1,0 +1,80 @@
+{
+  "name": "AIModelList",
+  "title": "AI Model List",
+  "description": "Displays AI models in grid or list view with vendor information and sorting",
+  "type": "table",
+  "functionalRequirements": "Display models with vendor counts, support grid and list views, handle sorting and selection",
+  "dataRequirements": null,
+  "technicalDesign": "",
+  "properties": [
+    {
+      "name": "models",
+      "type": "array",
+      "required": true,
+      "description": "Array of AI model objects to display"
+    },
+    {
+      "name": "modelVendors",
+      "type": "array",
+      "required": true,
+      "description": "Array of model vendor associations"
+    },
+    {
+      "name": "viewMode",
+      "type": "string",
+      "required": true,
+      "description": "Display mode - 'grid' or 'list'"
+    },
+    {
+      "name": "selectedModelId",
+      "type": "string",
+      "required": true,
+      "description": "ID of the currently selected model"
+    },
+    {
+      "name": "sortBy",
+      "type": "string",
+      "required": true,
+      "description": "Field to sort by"
+    },
+    {
+      "name": "sortDirection",
+      "type": "string",
+      "required": true,
+      "description": "Sort direction - 'asc' or 'desc'"
+    }
+  ],
+  "events": [
+    {
+      "name": "onSelectModel",
+      "description": "Fired when a model is selected",
+      "parameters": [
+        {
+          "name": "modelId",
+          "type": "string",
+          "description": "ID of the selected model"
+        }
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Fired when sort criteria changes",
+      "parameters": [
+        {
+          "name": "sortBy",
+          "type": "string",
+          "description": "Field to sort by"
+        },
+        {
+          "name": "sortDirection",
+          "type": "string",
+          "description": "Sort direction"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<AIModelList ... />",
+  "code": "@file:../code/ai-model-list.js",
+  "dependencies": [],
+  "libraries": []
+}

@@ -26,6 +26,7 @@ export interface DependencyAnalysisResult {
   sortedRecords: FlattenedRecord[];
   circularDependencies: string[][];
   dependencyGraph: Map<string, Set<string>>;
+  dependencyLevels?: FlattenedRecord[][]; // Records grouped by dependency level for parallel processing
 }
 
 /**
@@ -72,10 +73,14 @@ export class RecordDependencyAnalyzer {
       dependencyGraph.set(record.id, record.dependencies);
     }
 
+    // Step 6: Group records into dependency levels for parallel processing
+    const dependencyLevels = this.groupByDependencyLevels(sortedRecords, dependencyGraph);
+
     return {
       sortedRecords,
       circularDependencies: circularDeps,
-      dependencyGraph
+      dependencyGraph,
+      dependencyLevels
     };
   }
 
@@ -536,5 +541,42 @@ export class RecordDependencyAnalyzer {
     }
 
     return result;
+  }
+
+  /**
+   * Groups sorted records into dependency levels for parallel processing
+   * Records in the same level have no dependencies on each other and can be processed in parallel
+   */
+  private groupByDependencyLevels(
+    sortedRecords: FlattenedRecord[],
+    dependencyGraph: Map<string, Set<string>>
+  ): FlattenedRecord[][] {
+    const levels: FlattenedRecord[][] = [];
+    const recordLevels = new Map<string, number>();
+    
+    // Calculate the level for each record
+    for (const record of sortedRecords) {
+      let maxDependencyLevel = -1;
+      
+      // Find the maximum level of all dependencies
+      for (const depId of record.dependencies) {
+        const depLevel = recordLevels.get(depId);
+        if (depLevel !== undefined && depLevel > maxDependencyLevel) {
+          maxDependencyLevel = depLevel;
+        }
+      }
+      
+      // This record's level is one more than its highest dependency
+      const recordLevel = maxDependencyLevel + 1;
+      recordLevels.set(record.id, recordLevel);
+      
+      // Add to the appropriate level array
+      if (!levels[recordLevel]) {
+        levels[recordLevel] = [];
+      }
+      levels[recordLevel].push(record);
+    }
+    
+    return levels;
   }
 }

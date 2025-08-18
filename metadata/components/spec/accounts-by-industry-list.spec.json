@@ -1,0 +1,68 @@
+{
+  "name": "AccountsByIndustryList",
+  "title": "Accounts by Industry List",
+  "description": "Sortable, paginated table component displaying filtered account records with row selection capability",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "CRM/Analytics",
+  "functionalRequirements": "## Account List Component\n\n- Display accounts in sortable table format\n- Support column sorting with visual indicators\n- Implement client-side pagination\n- Enable row hover effects\n- Handle row click for account selection\n- Format currency values appropriately\n- Show status badges with color coding\n- Display clear filter button",
+  "technicalDesign": "## Technical Design\n\n### Props\n- accounts: Filtered account array\n- sortConfig: Current sort settings\n- onSort: Sort handler callback\n- onAccountClick: Row selection callback\n- currentPage: Current pagination page\n- pageSize: Items per page\n- onPageChange: Pagination callback\n\n### Features\n- Client-side sorting logic\n- Pagination calculation\n- Hover state management\n- Status badge styling",
+  "properties": [
+    {
+      "name": "accounts",
+      "type": "array",
+      "required": true,
+      "description": "Array of account objects to display"
+    },
+    {
+      "name": "selectedIndustry",
+      "type": "string",
+      "required": true,
+      "description": "Currently selected industry for display"
+    },
+    {
+      "name": "sortConfig",
+      "type": "object",
+      "required": true,
+      "description": "Object with field and direction properties"
+    },
+    {
+      "name": "onSort",
+      "type": "function",
+      "required": true,
+      "description": "Callback when column header is clicked for sorting"
+    },
+    {
+      "name": "onAccountClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback when account row is clicked"
+    },
+    {
+      "name": "currentPage",
+      "type": "number",
+      "required": true,
+      "description": "Current page number for pagination"
+    },
+    {
+      "name": "pageSize",
+      "type": "number",
+      "required": true,
+      "description": "Number of items per page"
+    },
+    {
+      "name": "onPageChange",
+      "type": "function",
+      "required": true,
+      "description": "Callback when page is changed"
+    },
+    {
+      "name": "onClearFilter",
+      "type": "function",
+      "required": true,
+      "description": "Callback to clear the industry filter"
+    }
+  ],
+  "exampleUsage": "<AccountsByIndustryList\n  accounts={filteredAccounts}\n  selectedIndustry={selectedIndustry}\n  sortConfig={sortConfig}\n  onSort={handleSort}\n  onAccountClick={handleAccountClick}\n  currentPage={currentPage}\n  pageSize={pageSize}\n  onPageChange={setCurrentPage}\n  onClearFilter={handleClearFilter}\n/>",
+  "code": "@file:../code/accounts-by-industry-list.js"
+}

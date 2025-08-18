@@ -1,0 +1,38 @@
+{
+  "name": "Customer360Timeline",
+  "location": "embedded",
+  "code": "@file:../code/customer-360-view-timeline.js",
+  "description": "Timeline view of customer activities and interactions",
+  "category": "Customer",
+  "type": "timeline",
+  "properties": [
+    {
+      "name": "activities",
+      "type": "array",
+      "required": true,
+      "description": "Array of activity objects sorted by date"
+    },
+    {
+      "name": "onActivityClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback when an activity is clicked"
+    }
+  ],
+  "events": [
+    {
+      "name": "onActivitySelect",
+      "description": "Fired when an activity is selected",
+      "parameters": [
+        {
+          "name": "activity",
+          "type": "object",
+          "description": "The selected activity object"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<Customer360Timeline\n  activities={activities}\n  onActivityClick={(activity) => handleActivityClick(activity)}\n/>\n```",
+  "functionalRequirements": "- Display activities in chronological order\n- Show activity type with appropriate icons\n- Format dates in readable format\n- Use different colors for activity types\n- Support click interaction on activities\n- Show activity subject and type",
+  "technicalDesign": "Renders vertical timeline with activity items. Uses type-based icons and colors. Formats dates using toLocaleDateString. Implements hover effects for interactive items."
+}
