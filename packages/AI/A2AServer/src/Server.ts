@@ -7,7 +7,7 @@ import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInsta
 import { EntityOperations, OperationResult } from './EntityOperations.js';
 import { AgentOperations } from './AgentOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
-import { AIAgentEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended } from "@memberjunction/core-entities";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -267,7 +267,7 @@ async function getAgentCapabilities(contextUser: UserInfo) {
         
         try {
             const allAgents = aiEngine.Agents;
-            let agents: AIAgentEntity[] = [];
+            let agents: AIAgentEntityExtended[] = [];
             
             if (agentPattern === '*') {
                 agents = allAgents;

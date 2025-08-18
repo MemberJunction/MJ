@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection, RunViewResult } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity, ResourcePermissionEngine, EntityActionEntity } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntityExtended, ResourcePermissionEngine, EntityActionEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -1011,7 +1011,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     for(const index of this.selectedKeys){
       const viewData = this.viewData[index];
       const idField: number = viewData.ID;
-      const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+      const listDetail: ListDetailEntityExtended = await md.GetEntityObject<ListDetailEntityExtended>('List Details');
       listDetail.NewRecord();
       listDetail.ListID = list.ID;
       listDetail.RecordID = idField.toString();
@@ -1286,7 +1286,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     let errorCount: number = 0;
     for(const listEntity of this.selectedListEntities){
       for(const index of this.selectedKeys){
-        const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+        const listDetail: ListDetailEntityExtended = await md.GetEntityObject<ListDetailEntityExtended>('List Details');
         const viewData = this.viewData[index];
         const idField: number = viewData.ID;
         listDetail.NewRecord();

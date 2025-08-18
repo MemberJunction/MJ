@@ -1,11 +1,9 @@
 import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { UserViewEntity } from '@memberjunction/core-entities';
+import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
-import { PubSubEngine } from 'type-graphql';
 import sql from 'mssql';
 import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 export type UserPayload = {
   email: string;
@@ -66,7 +64,7 @@ export type DirectiveBuilder = {
 };
 
 export type RunViewGenericParams = {
-  viewInfo: UserViewEntity;
+  viewInfo: UserViewEntityExtended;
   provider: DatabaseProviderBase;
   extraFilter: string;
   orderBy: string;

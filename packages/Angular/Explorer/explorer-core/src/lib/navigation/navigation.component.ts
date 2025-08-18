@@ -6,7 +6,7 @@ import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
+import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 
@@ -48,7 +48,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public selectedDrawerItem: DrawerItem | null = null;
   public selectedApp: ApplicationInfo | null = null;
   public selectedEntity: EntityInfo | null = null;
-  public selectedView: UserViewEntity | null = null;
+  public selectedView: UserViewEntityExtended | null = null;
   public loading: boolean = true;
   public loader: boolean = false;
   public tabs: any[] = [];

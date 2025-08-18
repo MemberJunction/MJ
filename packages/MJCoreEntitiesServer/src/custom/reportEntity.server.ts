@@ -73,7 +73,7 @@ export class ReportEntity_Server extends ReportEntity  {
                         // const get highest new version number already in DB
                         let newVersionNumber: number = 1;
                         if (!wasNewRecord) {
-                            const rv = new RunView();
+                            const rv = this.RunViewProviderToUse;
                             const rvResult = await rv.RunView({
                                 Fields: ['VersionNumber'],
                                 EntityName: 'MJ: Report Versions',

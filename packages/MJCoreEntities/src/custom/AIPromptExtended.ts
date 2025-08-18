@@ -88,7 +88,7 @@ export class AIPromptEntityExtended extends AIPromptEntity {
     protected async LoadTemplateText() {
         if (this.TemplateID && !this.TemplateText) {
             // need to get the Template Contents for this AI Prompt
-            const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+            const rv = this.RunViewProviderToUse;
             const templateContentResult = await rv.RunView<TemplateContentEntity>({
                 EntityName: "Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
@@ -118,7 +118,7 @@ export class AIPromptEntityExtended extends AIPromptEntity {
      */
     protected async LoadTemplateParams(): Promise<boolean> {
         if (this.TemplateID) {
-            const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
+            const rv = this.RunViewProviderToUse;
             const templateParamsResult = await rv.RunView<TemplateParamEntity>({
                 EntityName: "Template Params",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,

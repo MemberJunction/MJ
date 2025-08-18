@@ -196,7 +196,7 @@ The following protected methods provide granular control points for subclasses:
  * @example
  * ```typescript
  * protected override getFailoverConfiguration(
- *   prompt: AIPromptEntity,
+ *   prompt: AIPromptEntityExtended,
  *   params: AIPromptParams
  * ): FailoverConfiguration {
  *   const config = super.getFailoverConfiguration(prompt, params);
@@ -210,7 +210,7 @@ The following protected methods provide granular control points for subclasses:
  * ```
  */
 protected getFailoverConfiguration(
-  prompt: AIPromptEntity,
+  prompt: AIPromptEntityExtended,
   params: AIPromptParams
 ): FailoverConfiguration
 ```

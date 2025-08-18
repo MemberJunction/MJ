@@ -3,7 +3,7 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIPromptEntity, TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { AIPromptEntityExtended, TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
@@ -20,7 +20,7 @@ export interface CreatePromptConfig {
 
 export interface CreatePromptResult {
   /** Created prompt entity (not saved to database) */
-  prompt: AIPromptEntity;
+  prompt: AIPromptEntityExtended;
   /** Created template entity (not saved to database) */
   template?: TemplateEntity;
   /** Template content entities (not saved to database) */
@@ -55,7 +55,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   availablePromptTypes$ = new BehaviorSubject<AIPromptTypeEntity[]>([]);
   
   // Entities (not saved to database)
-  promptEntity: AIPromptEntity | null = null;
+  promptEntity: AIPromptEntityExtended | null = null;
   templateEntity: TemplateEntity | null = null;
   templateContents: TemplateContentEntity[] = [];
   
@@ -133,7 +133,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
       // Create the prompt entity
       const md = new Metadata();
-      this.promptEntity = await md.GetEntityObject<AIPromptEntity>('AI Prompts');
+      this.promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
       this.promptEntity.NewRecord();
       
       // Set default values

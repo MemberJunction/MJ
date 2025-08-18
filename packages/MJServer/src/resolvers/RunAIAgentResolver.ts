@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -169,12 +169,12 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Validate the agent entity
      */
-    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntity> {
+    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntityExtended> {
         // Use AIEngine to get cached agent data
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntity) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntityExtended) => a.ID === agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);

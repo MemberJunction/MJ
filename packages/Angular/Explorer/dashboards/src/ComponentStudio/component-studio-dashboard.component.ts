@@ -2,7 +2,7 @@ import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import { ComponentEntity } from '@memberjunction/core-entities';
+import { ComponentEntityExtended } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -26,7 +26,7 @@ interface FileLoadedComponent {
 }
 
 // Union type for both database and file-loaded components
-type DisplayComponent = (ComponentEntity & { isFileLoaded?: false }) | FileLoadedComponent;
+type DisplayComponent = (ComponentEntityExtended & { isFileLoaded?: false }) | FileLoadedComponent;
 
 // Modern category interface
 interface Category {
@@ -45,7 +45,7 @@ interface Category {
 export class ComponentStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   
   // Component data
-  public components: ComponentEntity[] = [];
+  public components: ComponentEntityExtended[] = [];
   public fileLoadedComponents: FileLoadedComponent[] = []; // Components loaded from files
   public allComponents: DisplayComponent[] = []; // Combined list
   public filteredComponents: DisplayComponent[] = [];
@@ -121,7 +121,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ComponentEntity>({
+      const result = await rv.RunView<ComponentEntityExtended>({
         EntityName: 'MJ: Components',
         ExtraFilter: 'HasRequiredCustomProps = 0', // Only load components without required custom props
         OrderBy: 'Name',
@@ -424,7 +424,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       // File-loaded components might not have namespace
       return (component as FileLoadedComponent).specification.namespace;
     } else {
-      return (component as ComponentEntity).Namespace || undefined;
+      return (component as ComponentEntityExtended).Namespace || undefined;
     }
   }
 
@@ -859,7 +859,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           (this.selectedComponent as FileLoadedComponent).specification = parsed;
         } else {
           // Update database component's Specification field in memory only
-          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(parsed);
+          (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(parsed);
         }
         
         // Update the runtime spec
@@ -923,7 +923,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           (this.selectedComponent as FileLoadedComponent).specification = spec;
         } else {
           // Update database component's Specification field in memory only
-          (this.selectedComponent as ComponentEntity).Specification = JSON.stringify(spec);
+          (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(spec);
         }
         
         // Update the runtime spec

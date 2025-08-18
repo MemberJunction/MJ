@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
-import { AIAgentEntity, AIPromptEntityExtended, AIAgentPromptEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { BaseAction } from "@memberjunction/actions";
@@ -94,7 +94,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
 
             // Create new agent
             const md = this.getMetadata();
-            const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents', params.ContextUser);
+            const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', params.ContextUser);
             
             if (!agent) {
                 return {

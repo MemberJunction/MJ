@@ -110,7 +110,7 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
         
         try {
             // Get existing template parameters
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const existingParamsResult = await rv.RunView<TemplateParamEntity>({
                 EntityName: 'Template Params',
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
