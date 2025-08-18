@@ -1,4 +1,4 @@
-const AccountsByIndustryChart = ({ industryData, selectedIndustry, onSliceClick, colorScheme = 'default' }) => {
+function AccountsByIndustryChart ({ industryData, selectedIndustry, onSliceClick, colorScheme = 'default' }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   
@@ -163,7 +163,7 @@ const AccountsByIndustryChart = ({ industryData, selectedIndustry, onSliceClick,
             weight: label === selectedIndustry ? 'bold' : 'normal'
           }
         }));
-      };
+      }; 
       
       chartInstance.current.update('none'); // No animation to prevent flicker
     }
@@ -174,4 +174,4 @@ const AccountsByIndustryChart = ({ industryData, selectedIndustry, onSliceClick,
       <canvas ref={chartRef}></canvas>
     </div>
   );
-};
+}
