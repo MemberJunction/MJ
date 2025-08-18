@@ -1,5 +1,13 @@
 # @memberjunction/interactive-component-types
 
+## 2.90.0
+
+### Patch Changes
+
+- d4530d7: tweaks to interface
+- Updated dependencies [146ebcc]
+  - @memberjunction/core@2.90.0
+
 ## 2.89.0
 
 ### Patch Changes

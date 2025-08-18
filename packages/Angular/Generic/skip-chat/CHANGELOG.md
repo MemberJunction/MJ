@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [d4530d7]
+- Updated dependencies [146ebcc]
+- Updated dependencies [187527b]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [da3eb4f]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/interactive-component-types@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/ng-react@2.90.0
+  - @memberjunction/skip-types@2.90.0
+  - @memberjunction/ng-base-types@2.90.0
+  - @memberjunction/ng-code-editor@2.90.0
+  - @memberjunction/ng-container-directives@2.90.0
+  - @memberjunction/ng-data-context@2.90.0
+  - @memberjunction/ng-notifications@2.90.0
+  - @memberjunction/ng-resource-permissions@2.90.0
+  - @memberjunction/graphql-dataprovider@2.90.0
+  - @memberjunction/data-context@2.90.0
+  - @memberjunction/global@2.90.0
+
 ## 2.89.0
 
 ### Patch Changes

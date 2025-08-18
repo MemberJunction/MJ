@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.90.0
+
+### Minor Changes
+
+- 146ebcc: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.90.0
+
 ## 2.89.0
 
 ### Patch Changes

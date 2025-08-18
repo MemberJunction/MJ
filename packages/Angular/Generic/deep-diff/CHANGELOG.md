@@ -1,5 +1,13 @@
 # @memberjunction/ng-deep-diff
 
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+  - @memberjunction/core@2.90.0
+  - @memberjunction/global@2.90.0
+
 ## 2.89.0
 
 ### Patch Changes
