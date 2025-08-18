@@ -614,29 +614,7 @@
       "lastModified": "2025-08-17T02:38:32.824Z",
       "checksum": "204629ebd066b4a8d7eb42aba14ee0ccf380442b4dd8182d162f9a2954c15492"
     }
-  },
-  {
-    "fields": {
-      "Name": "SalesFunnelVisualization",
-      "Namespace": "CRM/Analytics",
-      "Description": "Interactive sales funnel showing conversion rates and deal values at each stage with animated transitions and drill-down capabilities",
-      "Title": "Sales Funnel Visualization",
-      "Type": "Chart",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/sales-funnel-visualization.spec.json",
-      "FunctionalRequirements": "## Sales Funnel Visualization\n\n### Purpose\nVisualize the sales pipeline as an interactive funnel showing conversion rates and deal values at each stage.\n\n### Core Features\n- **Interactive Funnel Chart**: Visual representation of deal flow through stages\n- **Dual View Modes**: \n  - Count view: Number of deals at each stage\n  - Value view: Total deal value at each stage\n- **Conversion Metrics**: Show conversion rates between stages\n- **Time Period Filtering**: Filter by date ranges (month, quarter, year)\n- **Slide-out Details Panel**: Click stage to see deals list\n- **Card/List View Toggle**: For deals display\n- **Sorting & Filtering**: Sort by value, date, probability\n\n### Visual Design\n- Animated funnel segments using Framer Motion\n- Color-coded stages with gradients\n- Percentage labels and value annotations\n- Smooth transitions between views\n- Side panel slides in from right",
-      "TechnicalDesign": "## Implementation Details\n\n### Component Architecture\n- Main component: SalesFunnelVisualization\n- Sub-components:\n  - FunnelChart: Renders the funnel visualization\n  - StageDetailsPanel: Slide-out panel for stage details\n  - DealCard: Card view for individual deals\n  - FilterBar: Time period and view mode controls\n\n### Animation Strategy\n- Framer Motion for smooth transitions\n- Stagger animations for funnel segments\n- Spring physics for panel slide\n- Opacity transitions for view changes\n\n### State Management\n- deals: Array of all deals\n- selectedStage: Currently selected stage\n- viewMode: 'count' or 'value'\n- displayMode: 'cards' or 'list'\n- timeFilter: Selected time period\n- sortBy: Current sort field\n- filterBy: Active filters"
-    },
-    "primaryKey": {
-      "ID": "A48CE9CD-9C8C-42E1-9045-0BFB1DF15A53"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T21:15:07.773Z",
-      "checksum": "f27c61f50764734217c3b1a42794f95336e3f9ca616b8ce0ebdb44ae67d64ddd"
-    }
-  },
+  }, 
   {
     "fields": {
       "Name": "SalesPipelineDashboard",
@@ -743,8 +721,8 @@
       "ID": "11036C9C-3AC6-4026-B3CC-74A8C28D831B"
     },
     "sync": {
-      "lastModified": "2025-08-17T21:15:09.566Z",
-      "checksum": "0e3e1bc007c777ffce5bddf003fd7f9e8cd7cb6036521c61b81564dad0e7c4ec"
+      "lastModified": "2025-08-18T01:54:28.073Z",
+      "checksum": "1fa63771298a6f2a56d51e7b411a7e591bee7272a8a225c76beaac3eb81c4448"
     }
   },
   {
@@ -765,7 +743,7 @@
       "ID": "7FCF004A-87E5-47FA-AF21-C7FCC1F4D319"
     },
     "sync": {
-      "lastModified": "2025-08-17T21:15:09.892Z",
+      "lastModified": "2025-08-17T23:28:52.765Z",
       "checksum": "9ba4bbac8b93188653065106f5154b9d9be19becc20275317287f117478be69c"
     }
   },
@@ -809,8 +787,8 @@
       "ID": "D06D4A6B-F272-445D-8839-E5D1A4253381"
     },
     "sync": {
-      "lastModified": "2025-08-17T21:15:10.220Z",
-      "checksum": "51cc73330cf621bbef565265fc3c5cf2fa16f7367baecd56878ae84116cd6083"
+      "lastModified": "2025-08-18T01:54:28.100Z",
+      "checksum": "9686fe6995821592f3b0dd16baca298c4512fc397cf98333ce6b125e26ba3c68"
     }
   },
   {
@@ -831,7 +809,7 @@
       "ID": "69A0DF56-869F-4D88-8EA3-BCBAB2AC96C3"
     },
     "sync": {
-      "lastModified": "2025-08-17T21:15:10.539Z",
+      "lastModified": "2025-08-18T02:26:44.866Z",
       "checksum": "f4c58d7cd07a61439622604709cd9b272dd284ffc8ae7f66ae1e57a2cbfc84c6"
     }
   },
@@ -1823,6 +1801,116 @@
     "sync": {
       "lastModified": "2025-08-17T21:23:48.114Z",
       "checksum": "2dfe66f361f7e2525ebd5276c6961c3e6bba75e2d29ed84b590b7e94dd5b5001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SalesFunnelVisualization",
+      "Namespace": "CRM/Analytics",
+      "Description": "Interactive sales funnel visualization with conversion metrics and drill-down capabilities",
+      "Title": "Sales Funnel Visualization",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/sales-funnel-visualization.spec.json",
+      "FunctionalRequirements": "## Sales Funnel Visualization\n\n### Purpose\nVisualize the sales pipeline as an interactive funnel showing conversion rates and deal values at each stage.\n\n### Core Features\n- **Interactive Funnel Chart**: Visual representation of deal flow through stages\n- **Dual View Modes**: \n  - Count view: Number of deals at each stage\n  - Value view: Total deal value at each stage\n- **Conversion Metrics**: Show conversion rates between stages\n- **Time Period Filtering**: Filter by date ranges (month, quarter, year)\n- **Slide-out Details Panel**: Click stage to see deals list\n- **Card/List View Toggle**: For deals display\n- **Sorting & Filtering**: Sort by value, date, probability\n\n### Visual Design\n- Animated funnel segments using Framer Motion\n- Color-coded stages with gradients\n- Percentage labels and value annotations\n- Smooth transitions between views\n- Side panel slides in from right",
+      "TechnicalDesign": "## Implementation Details\n\n### Component Architecture\n- Main component: SalesFunnelVisualization\n- Sub-components:\n  - FunnelChart: Renders the funnel visualization\n  - StageDetailsPanel: Slide-out panel for stage details\n  - DealCard: Card view for individual deals\n  - FilterBar: Time period and view mode controls\n\n### Animation Strategy\n- Framer Motion for smooth transitions\n- Stagger animations for funnel segments\n- Spring physics for panel slide\n- Opacity transitions for view changes\n\n### State Management\n- deals: Array of all deals\n- selectedStage: Currently selected stage\n- viewMode: 'count' or 'value'\n- displayMode: 'cards' or 'list'\n- timeFilter: Selected time period\n- sortBy: Current sort field\n- filterBy: Active filters"
+    },
+    "primaryKey": {
+      "ID": "50E31AC5-B851-4927-821D-CFFCC13EA9A0"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T02:24:59.388Z",
+      "checksum": "47cbab9e8fad4028eeab3767cac9dd771fcb867e33bc1ef85a3771d2020f5616"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SalesFunnelChart",
+      "Namespace": "CRM/Analytics",
+      "Description": "Funnel chart visualization sub-component for displaying sales pipeline stages",
+      "Title": "Sales Funnel Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/sales-funnel-chart.spec.json",
+      "FunctionalRequirements": "## Funnel Chart Sub-Component\n\n### Purpose\nRender the visual funnel chart with interactive stages.\n\n### Core Features\n- **Funnel Visualization**: Trapezoid shapes for each stage\n- **Dynamic Sizing**: Width based on conversion rates\n- **Clickable Stages**: Trigger drill-down panels\n- **Metrics Display**: Count and value per stage\n- **Conversion Rates**: Show between stages\n- **Closed Lost Indicator**: Separate indicator for lost deals",
+      "TechnicalDesign": "## Implementation\n\n### Visual Rendering\n- SVG-based funnel segments\n- Dynamic path calculations\n- Gradient fills for depth\n- Hover animations\n\n### Interaction\n- Click handlers on each segment\n- Tooltip on hover\n- Smooth transitions"
+    },
+    "primaryKey": {
+      "ID": "ECAEA5F2-8E3B-4C25-B896-3132AFE8F477"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T02:24:58.856Z",
+      "checksum": "d064c1be50109132e349711eafb713dbadea1db40c0eb198fea5732dcb2bb7c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SalesFunnelStagePanel",
+      "Namespace": "CRM/Analytics",
+      "Description": "Slide-out panel showing detailed information for a selected sales funnel stage",
+      "Title": "Sales Funnel Stage Panel",
+      "Type": "Widget",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/sales-funnel-stage-panel.spec.json",
+      "FunctionalRequirements": "## Stage Details Panel Sub-Component\n\n### Purpose\nSlide-out panel showing detailed information for a selected stage.\n\n### Core Features\n- **Stage Overview**: Count, value, conversion metrics\n- **Deal List**: Filtered deals for the stage\n- **Search & Filter**: Local search within stage\n- **Sort Options**: Multiple sort criteria\n- **View Modes**: Card or list display",
+      "TechnicalDesign": "## Implementation\n\n### Panel Behavior\n- Fixed positioning with slide animation\n- Local state for search and sort\n- Uses DealCard and DealList sub-components"
+    },
+    "primaryKey": {
+      "ID": "0F73187F-CD63-4E93-8B36-9BC245FC0F44"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T02:24:59.368Z",
+      "checksum": "4736b253ca3d89d7df571a68702ba951c9941216e28d3c51aa1c04021a3ea1e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SalesFunnelDealCard",
+      "Namespace": "CRM/Analytics",
+      "Description": "Card component for displaying individual deal information in the sales funnel",
+      "Title": "Sales Funnel Deal Card",
+      "Type": "Widget",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/sales-funnel-deal-card.spec.json",
+      "FunctionalRequirements": "## Deal Card Sub-Component\n\n### Purpose\nDisplay individual deal information in a card format.\n\n### Core Features\n- **Deal Summary**: Name, amount, stage\n- **Account Information**: Associated account details\n- **Probability Indicator**: Visual probability gauge\n- **Date Display**: Close date formatting\n- **Click Actions**: Open in Explorer",
+      "TechnicalDesign": "## Implementation\n\n### Card Layout\n- Structured card with sections\n- Color-coded by stage\n- Hover effects\n- Click handlers"
+    },
+    "primaryKey": {
+      "ID": "AC13E1FE-4D3E-4CBA-8E18-A9CC77A8C730"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T02:24:59.169Z",
+      "checksum": "0f287ebb01d78e0030d53c42a92958ed7b6fd6d68d9ac2446b7fb1d84f2488a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SalesFunnelDealList",
+      "Namespace": "CRM/Analytics",
+      "Description": "Table component for displaying deals in a compact list format",
+      "Title": "Sales Funnel Deal List",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/sales-funnel-deal-list.spec.json",
+      "FunctionalRequirements": "## Deal List Sub-Component\n\n### Purpose\nDisplay deals in a compact table format.\n\n### Core Features\n- **Tabular Display**: Compact list view\n- **Key Metrics**: Amount, probability, dates\n- **Interactive Rows**: Click to open deals\n- **Responsive Design**: Fits container width",
+      "TechnicalDesign": "## Implementation\n\n### Table Structure\n- Responsive table layout\n- Hover effects on rows\n- Optimized for scanning"
+    },
+    "primaryKey": {
+      "ID": "888FA965-DC8E-4E2C-8E0D-4D99F7AC7F44"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T02:24:58.704Z",
+      "checksum": "0b889273e25d8baf8a6597ff6a158875645638f682fa08463fa94f9a5ca37d3a"
     }
   }
 ]

@@ -366,7 +366,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
           <div style={{ display: 'grid', gap: '8px', maxHeight: '400px', overflow: 'auto' }}>
             {topDebtors.map(customer => (
               <div
-                key={customer.id}
+                key={customer.ID}
                 style={{
                   padding: '12px',
                   backgroundColor: customer.overdueAmount > 0 ? '#FEE2E2' : '#F9FAFB',
@@ -376,7 +376,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
                 }}
                 onClick={() => {
                   const customerInvoices = invoices.filter(inv => 
-                    inv.AccountID === customer.id && 
+                    inv.AccountID === customer.ID && 
                     inv.Status !== 'Paid' && 
                     inv.Status !== 'Cancelled'
                   );
@@ -387,7 +387,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                      Customer #{customer.id.substring(0, 8)}
+                      Customer #{customer.ID.substring(0, 8)}
                     </div>
                     <div style={{ fontSize: '12px', color: '#6B7280' }}>
                       {customer.invoiceCount} invoices
@@ -420,11 +420,11 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
             <tbody>
               {topDebtors.map(customer => (
                 <tr
-                  key={customer.id}
+                  key={customer.ID}
                   style={{ borderBottom: '1px solid #E5E7EB', cursor: 'pointer' }}
                   onClick={() => {
                     const customerInvoices = invoices.filter(inv => 
-                      inv.AccountID === customer.id && 
+                      inv.AccountID === customer.ID && 
                       inv.Status !== 'Paid' && 
                       inv.Status !== 'Cancelled'
                     );
@@ -432,7 +432,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
                     setIsPanelOpen(true);
                   }}
                 >
-                  <td style={{ padding: '4px' }}>#{customer.id.substring(0, 8)}</td>
+                  <td style={{ padding: '4px' }}>#{customer.ID.substring(0, 8)}</td>
                   <td style={{ padding: '4px', textAlign: 'center' }}>{customer.invoiceCount}</td>
                   <td style={{ padding: '4px', textAlign: 'right', fontWeight: 'bold' }}>
                     {accounting.formatMoney(customer.totalDue)}

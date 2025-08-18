@@ -12,6 +12,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
   
   const treemapRef = useRef(null);
   const matrixRef = useRef(null);
+  const sparklineCharts = useRef({});
 
   useEffect(() => {
     loadData();
@@ -160,7 +161,6 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
     Object.values(productMetrics).forEach(product => {
       if (!categories[product.category]) {
         categories[product.category] = {
-          id: product.category,
           name: product.category,
           children: []
         };
@@ -168,100 +168,164 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       
       if (product.revenue > 0) {
         categories[product.category].children.push({
-          id: product.id,
           name: product.name,
           value: product.revenue,
-          colorValue: product.margin,
+          margin: product.margin,
           product: product
         });
       }
     });
     
     const treemapData = {
-      id: 'root',
       name: 'Products',
       children: Object.values(categories).filter(cat => cat.children.length > 0)
     };
     
-    const options = {
-      series: [{
-        type: 'treemap',
-        layoutAlgorithm: 'squarified',
-        allowDrillToNode: true,
-        animationLimit: 1000,
-        dataLabels: {
-          enabled: false
-        },
-        levelIsConstant: false,
-        levels: [{
-          level: 1,
-          dataLabels: {
-            enabled: true,
-            align: 'left',
-            verticalAlign: 'top',
-            style: {
-              fontSize: '15px',
-              fontWeight: 'bold'
-            }
-          },
-          borderWidth: 3,
-          borderColor: '#ffffff'
-        }, {
-          level: 2,
-          dataLabels: {
-            enabled: true,
-            style: {
-              fontSize: '12px'
-            }
-          },
-          borderWidth: 1,
-          borderColor: '#ffffff'
-        }],
-        data: treemapData.children,
-        tooltip: {
-          pointFormatter: function() {
-            const product = this.product;
-            if (product) {
-              return `<b>${product.name}</b><br/>
-                Revenue: $${product.revenue.toFixed(0)}<br/>
-                Quantity: ${product.quantity}<br/>
-                Margin: ${product.margin.toFixed(1)}%<br/>
-                Customers: ${product.customerCount}`;
-            }
-            return this.name;
-          }
-        },
-        colorAxis: {
-          min: 0,
-          max: 50,
-          stops: [
-            [0, '#EF4444'],
-            [0.5, '#F59E0B'],
-            [1, '#10B981']
-          ]
-        },
-        events: {
-          click: function(event) {
-            if (event.point.product) {
-              setSelectedProduct(event.point.product);
-              setIsPanelOpen(true);
-            }
-          }
-        }
-      }],
-      title: {
-        text: 'Product Revenue Treemap'
-      },
-      colorAxis: {
-        minColor: '#EF4444',
-        maxColor: '#10B981'
-      }
-    };
+    // Clear previous visualization
+    d3.select(treemapRef.current).selectAll('*').remove();
     
-    if (treemapRef.current._chart) {
-      treemapRef.current._chart.destroy();
-    }
-    treemapRef.current._chart = Highcharts.chart(treemapRef.current, options);
+    // Set dimensions
+    const width = treemapRef.current.clientWidth || 800;
+    const height = 500;
+    
+    // Create color scale based on margin
+    const colorScale = d3.scaleLinear()
+      .domain([0, 25, 50])
+      .range(['#EF4444', '#F59E0B', '#10B981']);
+    
+    // Create treemap layout
+    const treemap = d3.treemap()
+      .size([width, height])
+      .padding(2);
+    
+    // Create hierarchy and compute layout
+    const root = d3.hierarchy(treemapData)
+      .sum(d => d.value)
+      .sort((a, b) => b.value - a.value);
+    
+    treemap(root);
+    
+    // Create SVG
+    const svg = d3.select(treemapRef.current)
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height);
+    
+    // Create tooltip
+    const tooltip = d3.select('body').append('div')
+      .attr('class', 'tooltip')
+      .style('position', 'absolute')
+      .style('visibility', 'hidden')
+      .style('background', 'rgba(0, 0, 0, 0.8)')
+      .style('color', 'white')
+      .style('padding', '8px')
+      .style('border-radius', '4px')
+      .style('font-size', '12px')
+      .style('pointer-events', 'none')
+      .style('z-index', '9999');
+    
+    // Create groups for categories
+    const categories_g = svg.selectAll('.category')
+      .data(root.children)
+      .enter().append('g')
+      .attr('class', 'category')
+      .attr('transform', d => `translate(${d.x0},${d.y0})`);
+    
+    // Add category rectangles
+    categories_g.append('rect')
+      .attr('width', d => d.x1 - d.x0)
+      .attr('height', d => d.y1 - d.y0)
+      .style('fill', 'none')
+      .style('stroke', '#fff')
+      .style('stroke-width', 2);
+    
+    // Add category labels
+    categories_g.append('text')
+      .attr('x', 4)
+      .attr('y', 16)
+      .style('font-weight', 'bold')
+      .style('font-size', '14px')
+      .style('fill', '#374151')
+      .text(d => d.data.name);
+    
+    // Create product rectangles
+    const products_g = svg.selectAll('.product')
+      .data(root.leaves())
+      .enter().append('g')
+      .attr('class', 'product')
+      .attr('transform', d => `translate(${d.x0},${d.y0})`);
+    
+    products_g.append('rect')
+      .attr('width', d => d.x1 - d.x0)
+      .attr('height', d => d.y1 - d.y0)
+      .style('fill', d => colorScale(d.data.margin))
+      .style('stroke', '#fff')
+      .style('stroke-width', 1)
+      .style('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        tooltip.style('visibility', 'visible')
+          .html(`
+            <strong>${d.data.name}</strong><br/>
+            Revenue: $${(d.data.product.revenue / 1000).toFixed(1)}K<br/>
+            Quantity: ${d.data.product.quantity}<br/>
+            Margin: ${d.data.margin.toFixed(1)}%<br/>
+            Customers: ${d.data.product.customerCount}
+          `);
+      })
+      .on('mousemove', function(event) {
+        tooltip.style('top', (event.pageY - 10) + 'px')
+          .style('left', (event.pageX + 10) + 'px');
+      })
+      .on('mouseout', function() {
+        tooltip.style('visibility', 'hidden');
+      })
+      .on('click', function(event, d) {
+        setSelectedProduct(d.data.product);
+        setIsPanelOpen(true);
+      });
+    
+    // Add product labels
+    products_g.append('text')
+      .attr('x', 4)
+      .attr('y', 20)
+      .style('font-size', '11px')
+      .style('fill', d => {
+        // Ensure text is readable on background
+        const margin = d.data.margin;
+        return margin > 30 ? 'white' : '#374151';
+      })
+      .each(function(d) {
+        const text = d3.select(this);
+        const width = d.x1 - d.x0;
+        const name = d.data.name;
+        
+        // Truncate text if too long
+        if (width > 60) {
+          text.text(name.length > 15 ? name.substring(0, 15) + '...' : name);
+        }
+      });
+    
+    // Add revenue labels for larger boxes
+    products_g.append('text')
+      .attr('x', 4)
+      .attr('y', 36)
+      .style('font-size', '10px')
+      .style('font-weight', 'bold')
+      .style('fill', d => d.data.margin > 30 ? 'white' : '#374151')
+      .each(function(d) {
+        const width = d.x1 - d.x0;
+        const height = d.y1 - d.y0;
+        
+        // Only show revenue if box is large enough
+        if (width > 80 && height > 50) {
+          d3.select(this).text(`$${(d.data.product.revenue / 1000).toFixed(0)}K`);
+        }
+      });
+    
+    // Clean up tooltip on component unmount
+    return () => {
+      d3.select('.tooltip').remove();
+    };
   };
 
   const renderMatrix = () => {
@@ -285,12 +349,12 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
         }
       });
     
-    // Create color scale
-    const maxRevenue = Math.max(...sortedProducts.map(p => p.revenue));
-    const colorScale = chroma.scale(['#FEE2E2', '#DC2626']).domain([0, maxRevenue]);
-    
-    // Clear previous content
+    // Clear previous content and charts
     matrixRef.current.innerHTML = '';
+    Object.values(sparklineCharts.current).forEach(chart => {
+      if (chart) chart.destroy();
+    });
+    sparklineCharts.current = {};
     
     // Create matrix grid
     const table = document.createElement('table');
@@ -326,6 +390,16 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
     });
     table.appendChild(headerRow);
     
+    // Create color scale for revenue cells
+    const maxRevenue = Math.max(...sortedProducts.map(p => p.revenue));
+    const getRevenueColor = (revenue) => {
+      const intensity = revenue / maxRevenue;
+      const r = Math.floor(220 + (intensity * 35));
+      const g = Math.floor(38 + (intensity * -38));
+      const b = Math.floor(38 + (intensity * -38));
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    
     // Data rows
     sortedProducts.slice(0, 20).forEach(product => {
       const row = document.createElement('tr');
@@ -354,7 +428,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       revenueCell.style.padding = '12px';
       revenueCell.style.textAlign = 'center';
       revenueCell.style.fontWeight = 'bold';
-      revenueCell.style.backgroundColor = colorScale(product.revenue).hex();
+      revenueCell.style.backgroundColor = getRevenueColor(product.revenue);
       revenueCell.style.color = product.revenue > maxRevenue * 0.6 ? 'white' : '#111827';
       row.appendChild(revenueCell);
       
@@ -383,12 +457,14 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       
       // Trend sparkline
       const trendCell = document.createElement('td');
-      trendCell.style.padding = '12px';
-      const sparklineContainer = document.createElement('div');
-      sparklineContainer.id = `sparkline-${product.id}`;
-      sparklineContainer.style.width = '100px';
-      sparklineContainer.style.height = '30px';
-      trendCell.appendChild(sparklineContainer);
+      trendCell.style.padding = '8px';
+      const canvas = document.createElement('canvas');
+      canvas.id = `sparkline-${product.id}`;
+      canvas.width = 100;
+      canvas.height = 30;
+      canvas.style.width = '100px';
+      canvas.style.height = '30px';
+      trendCell.appendChild(canvas);
       row.appendChild(trendCell);
       
       // Row click handler
@@ -401,37 +477,39 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       
       // Render sparkline after adding to DOM
       setTimeout(() => {
-        const container = document.getElementById(`sparkline-${product.id}`);
-        if (container) {
-          Highcharts.chart(container, {
-            chart: {
-              type: 'area',
-              margin: [2, 0, 2, 0],
-              width: 100,
-              height: 30,
-              style: { overflow: 'visible' },
-              skipClone: true
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          sparklineCharts.current[product.id] = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: Array(6).fill(''),
+              datasets: [{
+                data: product.trend.slice(-6),
+                borderColor: '#8B5CF6',
+                borderWidth: 1,
+                fill: {
+                  target: 'origin',
+                  above: 'rgba(139, 92, 246, 0.2)'
+                },
+                tension: 0.4,
+                pointRadius: 0
+              }]
             },
-            title: { text: '' },
-            credits: { enabled: false },
-            xAxis: { visible: false },
-            yAxis: { visible: false },
-            legend: { enabled: false },
-            tooltip: { enabled: false },
-            plotOptions: {
-              series: {
-                animation: false,
-                lineWidth: 1,
-                shadow: false,
-                states: { hover: { lineWidth: 1 } },
-                marker: { radius: 1 },
-                fillOpacity: 0.25
+            options: {
+              responsive: false,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false }
+              },
+              scales: {
+                x: { display: false },
+                y: { display: false }
+              },
+              elements: {
+                line: { borderWidth: 1 }
               }
-            },
-            series: [{
-              data: product.trend.slice(-6),
-              color: '#8B5CF6'
-            }]
+            }
           });
         }
       }, 0);
@@ -442,6 +520,62 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
 
   // Sub-component: Product Details Panel
   const ProductDetailsPanel = () => {
+    const trendChartRef = useRef(null);
+    const productTrendChart = useRef(null);
+    
+    useEffect(() => {
+      if (selectedProduct && isPanelOpen && trendChartRef.current) {
+        // Destroy previous chart if exists
+        if (productTrendChart.current) {
+          productTrendChart.current.destroy();
+        }
+        
+        // Create new trend chart
+        const ctx = trendChartRef.current.getContext('2d');
+        productTrendChart.current = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+              label: 'Revenue',
+              data: selectedProduct.trend.slice(-6),
+              borderColor: '#8B5CF6',
+              backgroundColor: 'rgba(139, 92, 246, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) => `Revenue: $${(context.raw / 1000).toFixed(1)}K`
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: (value) => `$${(value / 1000).toFixed(0)}K`
+                }
+              }
+            }
+          }
+        });
+        
+        // Cleanup on unmount
+        return () => {
+          if (productTrendChart.current) {
+            productTrendChart.current.destroy();
+          }
+        };
+      }
+    }, [selectedProduct, isPanelOpen]);
+    
     if (!selectedProduct) return null;
     
     return isPanelOpen && (
@@ -463,7 +597,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
         <div style={{
           padding: '20px',
           borderBottom: '1px solid #E5E7EB',
-          background: `linear-gradient(135deg, ${chroma('#8B5CF6').alpha(0.9).css()}, ${chroma('#6366F1').alpha(0.9).css()})`,
+          background: 'linear-gradient(135deg, #8B5CF6, #6366F1)',
           color: 'white'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -549,10 +683,9 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
           
           <div style={{ marginBottom: '24px' }}>
             <h4 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Revenue Trend</h4>
-            <div 
-              id="product-trend-chart"
-              style={{ height: '150px', backgroundColor: '#F9FAFB', borderRadius: '6px', padding: '8px' }}
-            />
+            <div style={{ height: '150px', backgroundColor: '#F9FAFB', borderRadius: '6px', padding: '8px' }}>
+              <canvas ref={trendChartRef} />
+            </div>
           </div>
           
           <div>
@@ -577,41 +710,6 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       </div>
     );
   };
-
-  useEffect(() => {
-    if (selectedProduct && isPanelOpen) {
-      setTimeout(() => {
-        const container = document.getElementById('product-trend-chart');
-        if (container) {
-          Highcharts.chart(container, {
-            chart: { type: 'area', backgroundColor: 'transparent' },
-            title: { text: '' },
-            credits: { enabled: false },
-            xAxis: { 
-              categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-              labels: { style: { fontSize: '10px' } }
-            },
-            yAxis: { 
-              title: { text: '' },
-              labels: { style: { fontSize: '10px' } }
-            },
-            legend: { enabled: false },
-            plotOptions: {
-              area: {
-                fillOpacity: 0.3,
-                marker: { enabled: false }
-              }
-            },
-            series: [{
-              name: 'Revenue',
-              data: selectedProduct.trend.slice(-6),
-              color: '#8B5CF6'
-            }]
-          });
-        }
-      }, 100);
-    }
-  }, [selectedProduct, isPanelOpen]);
 
   if (loading) {
     return (

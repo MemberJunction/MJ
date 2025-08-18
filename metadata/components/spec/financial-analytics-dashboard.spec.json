@@ -35,19 +35,14 @@
   "dependencies": [],
   "libraries": [
     {
+      "name": "Chart.js",
+      "version": "^4.4.1",
+      "globalVariable": "Chart"
+    },
+    {
       "name": "ApexCharts",
       "version": "^3.45.1",
       "globalVariable": "ApexCharts"
-    },
-    {
-      "name": "jspdf",
-      "version": "^2.5.1",
-      "globalVariable": "jsPDF"
-    },
-    {
-      "name": "xlsx",
-      "version": "^0.20.1",
-      "globalVariable": "XLSX"
     }
   ]
 }

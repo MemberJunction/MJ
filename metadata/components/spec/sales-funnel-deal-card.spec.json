@@ -1,0 +1,36 @@
+{
+  "name": "SalesFunnelDealCard",
+  "namespace": "CRM/Analytics",
+  "type": "Card",
+  "location": "embedded",
+  "code": "@file:../code/sales-funnel-deal-card.js",
+  "functionalRequirements": "## Deal Card Sub-Component\n\n### Purpose\nDisplay individual deal information in a card format.\n\n### Core Features\n- **Deal Information**: Name, account, amount\n- **Visual Indicators**: Stage colors and status\n- **Interactive Elements**: Click to open deal\n- **Responsive Layout**: Adapts to container",
+  "dataRequirements": {
+    "mode": "props",
+    "props": ["deal", "callbacks", "formatCurrency"]
+  },
+  "technicalDesign": "## Implementation\n\n### Card Layout\n- Flexbox for responsive design\n- Hover effects for interactivity\n- Click handlers for navigation",
+  "properties": [
+    {
+      "name": "deal",
+      "type": "object",
+      "description": "Deal entity data",
+      "required": true
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Callback functions including OpenEntityRecord",
+      "required": true
+    },
+    {
+      "name": "formatCurrency",
+      "type": "function",
+      "description": "Currency formatting function",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

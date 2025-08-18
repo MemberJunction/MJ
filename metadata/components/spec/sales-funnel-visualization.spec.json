@@ -57,7 +57,10 @@
       "description": "Open deal record in explorer"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    "@include:sales-funnel-chart.spec.json",
+    "@include:sales-funnel-stage-panel.spec.json"
+  ],
   "libraries": [
     {
       "name": "dayjs",

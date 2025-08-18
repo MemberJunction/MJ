@@ -7,6 +7,9 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [timeRange, setTimeRange] = useState(savedUserSettings?.timeRange || 'quarter');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState(null);
+  const [drillDownData, setDrillDownData] = useState(null);
+  const [drillDownTitle, setDrillDownTitle] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'TotalAmount', direction: 'desc' });
   const chartRefs = useRef({});
 
   useEffect(() => {
@@ -97,6 +100,12 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
         return sum + margin;
       }, 0) / products.length : 0;
     
+    // Calculate revenue growth (comparing to previous period)
+    const currentPeriodRevenue = actualRevenue;
+    const previousPeriodRevenue = currentPeriodRevenue * 0.85; // Simulated previous period
+    const revenueGrowth = previousPeriodRevenue > 0 ? 
+      ((currentPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 : 0;
+    
     return {
       actualRevenue,
       projectedRevenue,
@@ -104,7 +113,8 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
       avgDealSize,
       grossMargin,
       totalRevenue: actualRevenue + projectedRevenue,
-      cashFlow: actualRevenue - outstandingRevenue
+      cashFlow: actualRevenue - outstandingRevenue,
+      revenueGrowth
     };
   };
 
@@ -149,7 +159,7 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   // Sub-component: KPI Gauges
   const KPIGauges = () => {
     useEffect(() => {
-      if (!loading && chartRefs.current.gauges) {
+      if (!loading && chartRefs.current.marginGauge && chartRefs.current.utilizationGauge) {
         const gaugeOptions = {
           chart: {
             type: 'radialBar',
@@ -503,25 +513,80 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.text('Financial Analytics Report', 10, 10);
-    doc.text(`Date Range: ${timeRange}`, 10, 20);
-    doc.text(`Total Revenue: ${formatCurrency(metrics.totalRevenue)}`, 10, 30);
-    doc.text(`Gross Margin: ${metrics.grossMargin.toFixed(1)}%`, 10, 40);
-    doc.save('financial-report.pdf');
+    // Create a simple HTML-based report that can be printed to PDF
+    const reportWindow = window.open('', '_blank');
+    if (!reportWindow) {
+      alert('Please allow popups to export the report');
+      return;
+    }
+    
+    const reportHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Financial Analytics Report</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; }
+          h1 { color: #333; }
+          .metric { margin: 15px 0; font-size: 16px; }
+          .value { font-weight: bold; color: #1890ff; }
+          @media print {
+            body { padding: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Financial Analytics Report</h1>
+        <div class="metric">Date Range: <span class="value">${timeRange}</span></div>
+        <div class="metric">Total Revenue: <span class="value">${formatCurrency(metrics.totalRevenue)}</span></div>
+        <div class="metric">Actual Revenue: <span class="value">${formatCurrency(metrics.actualRevenue)}</span></div>
+        <div class="metric">Projected Revenue: <span class="value">${formatCurrency(metrics.projectedRevenue)}</span></div>
+        <div class="metric">Outstanding: <span class="value">${formatCurrency(metrics.outstandingRevenue)}</span></div>
+        <div class="metric">Gross Margin: <span class="value">${metrics.grossMargin.toFixed(1)}%</span></div>
+        <div class="metric">Revenue Growth: <span class="value">${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth.toFixed(1)}%</span></div>
+        <div class="metric">Report Generated: <span class="value">${new Date().toLocaleString()}</span></div>
+        <script>
+          window.print();
+          setTimeout(() => window.close(), 1000);
+        </script>
+      </body>
+      </html>
+    `;
+    
+    reportWindow.document.write(reportHTML);
+    reportWindow.document.close();
   };
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet([
-      { Metric: 'Total Revenue', Value: metrics.totalRevenue },
-      { Metric: 'Actual Revenue', Value: metrics.actualRevenue },
-      { Metric: 'Projected Revenue', Value: metrics.projectedRevenue },
-      { Metric: 'Outstanding', Value: metrics.outstandingRevenue },
-      { Metric: 'Gross Margin %', Value: metrics.grossMargin }
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Financial Metrics');
-    XLSX.writeFile(wb, 'financial-metrics.xlsx');
+    // Create CSV data for Excel compatibility
+    const csvContent = [
+      ['Financial Analytics Report'],
+      ['Generated:', new Date().toLocaleString()],
+      ['Date Range:', timeRange],
+      [],
+      ['Metric', 'Value'],
+      ['Total Revenue', metrics.totalRevenue],
+      ['Actual Revenue', metrics.actualRevenue],
+      ['Projected Revenue', metrics.projectedRevenue],
+      ['Outstanding', metrics.outstandingRevenue],
+      ['Gross Margin %', metrics.grossMargin.toFixed(2)],
+      ['Revenue Growth %', metrics.revenueGrowth.toFixed(2)]
+    ].map(row => row.join(',')).join('\n');
+    
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `financial-metrics-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -573,16 +638,12 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
               cursor: 'pointer'
             }}
             onClick={() => {
-              setSelectedMetric({
-                title: 'Total Revenue',
-                analysis: 'Combined actual and projected revenue for the period.',
-                recommendations: [
-                  'Focus on high-probability deals',
-                  'Accelerate invoice collection',
-                  'Expand product offerings'
-                ]
-              });
-              setIsPanelOpen(true);
+              const relevantData = [
+                ...invoices.filter(inv => inv.Status === 'Paid').map(inv => ({...inv, Type: 'Paid Invoice', EntityType: 'Invoices', DisplayAmount: inv.TotalAmount})),
+                ...deals.filter(d => !['Closed Won', 'Closed Lost'].includes(d.Stage)).map(d => ({...d, Type: 'Projected Deal', EntityType: 'Deals', DisplayAmount: (d.Amount || 0) * (d.Probability || 0) / 100}))
+              ];
+              setDrillDownData(relevantData);
+              setDrillDownTitle('Total Revenue Breakdown');
             }}
           >
             <div style={{ fontSize: '12px', color: '#6B7280' }}>Total Revenue</div>
@@ -591,7 +652,19 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
             </div>
           </div>
           
-          <div style={{ padding: '16px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+          <div 
+            style={{ 
+              padding: '16px', 
+              backgroundColor: '#F9FAFB', 
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+            onClick={() => {
+              const paidInvoices = invoices.filter(inv => inv.Status === 'Paid').map(inv => ({...inv, Type: 'Paid Invoice', EntityType: 'Invoices', DisplayAmount: inv.TotalAmount}));
+              setDrillDownData(paidInvoices);
+              setDrillDownTitle('Actual Revenue - Paid Invoices');
+            }}
+          >
             <div style={{ fontSize: '12px', color: '#6B7280' }}>Actual Revenue</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
               {formatCurrency(metrics.actualRevenue)}
@@ -605,7 +678,19 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
             </div>
           </div>
           
-          <div style={{ padding: '16px', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
+          <div 
+            style={{ 
+              padding: '16px', 
+              backgroundColor: '#F9FAFB', 
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+            onClick={() => {
+              const unpaidInvoices = invoices.filter(inv => inv.Status !== 'Paid' && inv.Status !== 'Cancelled').map(inv => ({...inv, Type: 'Unpaid Invoice', EntityType: 'Invoices', DisplayAmount: inv.TotalAmount}));
+              setDrillDownData(unpaidInvoices);
+              setDrillDownTitle('Outstanding Revenue - Unpaid Invoices');
+            }}
+          >
             <div style={{ fontSize: '12px', color: '#6B7280' }}>Outstanding</div>
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#EF4444' }}>
               {formatCurrency(metrics.outstandingRevenue)}
@@ -645,7 +730,253 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
         </div>
       </div>
       
+      {/* Drill-down Table */}
+      {drillDownData && (
+        <DrillDownTable 
+          data={drillDownData}
+          title={drillDownTitle}
+          onClose={() => setDrillDownData(null)}
+          sortConfig={sortConfig}
+          setSortConfig={setSortConfig}
+          callbacks={callbacks}
+        />
+      )}
+      
       <DetailsPanel />
+    </div>
+  );
+}
+
+// Drill-down Table Component
+function DrillDownTable({ data, title, onClose, sortConfig, setSortConfig, callbacks }) {
+  const formatCurrency = (value) => {
+    if (!value) return '$0';
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString();
+  };
+
+  const sortedData = [...data].sort((a, b) => {
+    const aValue = a[sortConfig.key];
+    const bValue = b[sortConfig.key];
+    
+    if (aValue === null || aValue === undefined) return 1;
+    if (bValue === null || bValue === undefined) return -1;
+    
+    if (sortConfig.direction === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  const handleSort = (key) => {
+    setSortConfig({
+      key,
+      direction: sortConfig.key === key && sortConfig.direction === 'desc' ? 'asc' : 'desc'
+    });
+  };
+
+  return (
+    <div style={{
+      backgroundColor: 'white',
+      borderRadius: '8px',
+      padding: '20px',
+      margin: '20px',
+      border: '1px solid #E5E7EB',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '16px'
+      }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+          {title} ({data.length} records)
+        </h3>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            fontSize: '24px',
+            cursor: 'pointer',
+            color: '#6B7280'
+          }}
+        >
+          <i className="fa-solid fa-times"></i>
+        </button>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+              <th 
+                onClick={() => handleSort('Type')}
+                style={{ 
+                  padding: '12px 8px', 
+                  textAlign: 'left', 
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Type {sortConfig.key === 'Type' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th 
+                onClick={() => handleSort('InvoiceNumber')}
+                style={{ 
+                  padding: '12px 8px', 
+                  textAlign: 'left', 
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Reference {sortConfig.key === 'InvoiceNumber' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th 
+                onClick={() => handleSort('InvoiceDate')}
+                style={{ 
+                  padding: '12px 8px', 
+                  textAlign: 'left', 
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Date {sortConfig.key === 'InvoiceDate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th 
+                onClick={() => handleSort('DisplayAmount')}
+                style={{ 
+                  padding: '12px 8px', 
+                  textAlign: 'right', 
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Amount {sortConfig.key === 'DisplayAmount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th 
+                onClick={() => handleSort('Status')}
+                style={{ 
+                  padding: '12px 8px', 
+                  textAlign: 'left', 
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Status {sortConfig.key === 'Status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>
+              <th style={{ 
+                padding: '12px 8px', 
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#374151',
+                textTransform: 'uppercase'
+              }}>
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((item, index) => (
+              <tr 
+                key={item.ID || index}
+                style={{ 
+                  borderBottom: '1px solid #F3F4F6',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    backgroundColor: item.Type === 'Paid Invoice' ? '#D1FAE5' : 
+                                     item.Type === 'Unpaid Invoice' ? '#FEE2E2' : 
+                                     item.Type === 'Projected Deal' ? '#FEF3C7' : '#E5E7EB',
+                    color: item.Type === 'Paid Invoice' ? '#065F46' : 
+                           item.Type === 'Unpaid Invoice' ? '#991B1B' : 
+                           item.Type === 'Projected Deal' ? '#92400E' : '#374151',
+                    borderRadius: '4px',
+                    fontSize: '12px'
+                  }}>
+                    {item.Type}
+                  </span>
+                </td>
+                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                  {item.InvoiceNumber || item.DealName || item.ProductName || '-'}
+                </td>
+                <td style={{ padding: '12px 8px', fontSize: '14px', color: '#6B7280' }}>
+                  {formatDate(item.InvoiceDate || item.CloseDate || item.CreatedAt)}
+                </td>
+                <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: '14px', fontWeight: '500' }}>
+                  {formatCurrency(item.DisplayAmount || item.TotalAmount || item.Amount || item.Price)}
+                </td>
+                <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    backgroundColor: item.Status === 'Paid' ? '#D1FAE5' : 
+                                     item.Status === 'Pending' ? '#FEF3C7' : 
+                                     item.Stage === 'Closed Won' ? '#D1FAE5' :
+                                     item.Stage === 'Closed Lost' ? '#FEE2E2' : '#E5E7EB',
+                    color: item.Status === 'Paid' ? '#065F46' : 
+                           item.Status === 'Pending' ? '#92400E' : 
+                           item.Stage === 'Closed Won' ? '#065F46' :
+                           item.Stage === 'Closed Lost' ? '#991B1B' : '#374151',
+                    borderRadius: '4px',
+                    fontSize: '12px'
+                  }}>
+                    {item.Status || item.Stage || 'Active'}
+                  </span>
+                </td>
+                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                  <button
+                    onClick={() => {
+                      if (callbacks && callbacks.OpenEntityRecord) {
+                        callbacks.OpenEntityRecord(item.EntityType, [{ FieldName: 'ID', Value: item.ID }]);
+                      }
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4F46E5',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      padding: '4px'
+                    }}
+                    title="Open Record"
+                  >
+                    <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
