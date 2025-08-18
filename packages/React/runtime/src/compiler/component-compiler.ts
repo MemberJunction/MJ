@@ -80,7 +80,7 @@ export class ComponentCompiler {
       this.validateCompileOptions(options);
 
       // Load required libraries if specified
-      const loadedLibraries = await this.loadRequiredLibraries(options.libraries);
+      const loadedLibraries = await this.loadRequiredLibraries(options.libraries, options.contextUser);
 
       // Transpile the component code
       const transpiledCode = this.transpileComponent(
@@ -207,9 +207,10 @@ export class ComponentCompiler {
   /**
    * Load required libraries from the registry
    * @param libraries - Array of library dependencies
+   * @param contextUser - Context user for accessing library registry
    * @returns Map of loaded libraries
    */
-  private async loadRequiredLibraries(libraries?: any[]): Promise<Map<string, any>> {
+  private async loadRequiredLibraries(libraries?: any[], contextUser?: any): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
     if (!libraries || libraries.length === 0) {
@@ -220,6 +221,11 @@ export class ComponentCompiler {
     if (typeof window === 'undefined') {
       console.warn('Library loading is only supported in browser environments');
       return loadedLibraries;
+    }
+
+    // Initialize LibraryRegistry with contextUser if provided
+    if (contextUser) {
+      await LibraryRegistry.Config(false, contextUser);
     }
 
     const loadPromises = libraries.map(async (lib) => {

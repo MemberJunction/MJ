@@ -43,6 +43,112 @@ export class ComponentLinter {
   // Universal rules that apply to all components with SavedUserSettings pattern
   private static universalComponentRules: Rule[] = [
     {
+      name: 'no-import-statements',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
+            violations.push({
+              rule: 'no-import-statements',
+              severity: 'critical',
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
+              message: `Component "${componentName}" contains an import statement. Interactive components cannot use import statements - all dependencies must be passed as props.`,
+              code: path.toString().substring(0, 100)
+            });
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'no-export-statements',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {
+            violations.push({
+              rule: 'no-export-statements',
+              severity: 'critical',
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
+              message: `Component "${componentName}" contains an export statement. Interactive components are self-contained and cannot export values.`,
+              code: path.toString().substring(0, 100)
+            });
+          },
+          ExportDefaultDeclaration(path: NodePath<t.ExportDefaultDeclaration>) {
+            violations.push({
+              rule: 'no-export-statements',
+              severity: 'critical',
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
+              message: `Component "${componentName}" contains an export default statement. Interactive components are self-contained and cannot export values.`,
+              code: path.toString().substring(0, 100)
+            });
+          },
+          ExportAllDeclaration(path: NodePath<t.ExportAllDeclaration>) {
+            violations.push({
+              rule: 'no-export-statements',
+              severity: 'critical',
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
+              message: `Component "${componentName}" contains an export * statement. Interactive components are self-contained and cannot export values.`,
+              code: path.toString().substring(0, 100)
+            });
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'no-require-statements',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for require() calls
+            if (t.isIdentifier(callee) && callee.name === 'require') {
+              violations.push({
+                rule: 'no-require-statements',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Component "${componentName}" contains a require() statement. Interactive components cannot use require - all dependencies must be passed as props.`,
+                code: path.toString().substring(0, 100)
+              });
+            }
+            
+            // Also check for dynamic import() calls
+            if (t.isImport(callee)) {
+              violations.push({
+                rule: 'no-require-statements',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Component "${componentName}" contains a dynamic import() statement. Interactive components cannot use dynamic imports - all dependencies must be passed as props.`,
+                code: path.toString().substring(0, 100)
+              });
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'no-use-reducer',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1611,6 +1717,105 @@ export class ComponentLinter {
     
     for (const violation of violations) {
       switch (violation.rule) {
+        case 'no-import-statements':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Remove all import statements. Interactive components receive everything through props.',
+            example: `// ❌ WRONG - Using import statements:
+import React from 'react';
+import { useState } from 'react';
+import { format } from 'date-fns';
+import './styles.css';
+
+function MyComponent({ utilities, styles }) {
+  // ...
+}
+
+// ✅ CORRECT - Everything passed as props:
+function MyComponent({ utilities, styles, components }) {
+  // React hooks are available globally (useState, useEffect, etc.)
+  const [value, setValue] = useState('');
+  
+  // Utilities include formatting functions
+  const formatted = utilities.formatDate(new Date());
+  
+  // Styles are passed as props
+  return <div style={styles.container}>...</div>;
+}
+
+// All dependencies must be:
+// 1. Passed through the 'utilities' prop (formatting, helpers)
+// 2. Passed through the 'components' prop (child components)
+// 3. Passed through the 'styles' prop (styling)
+// 4. Available globally (React hooks)`
+          });
+          break;
+          
+        case 'no-export-statements':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Remove all export statements. The component function should be the only code, not exported.',
+            example: `// ❌ WRONG - Using export:
+export function MyComponent({ utilities }) {
+  return <div>Hello</div>;
+}
+
+export const helper = () => {};
+export default MyComponent;
+
+// ✅ CORRECT - Just the function, no exports:
+function MyComponent({ utilities, styles, components }) {
+  // Helper functions defined inside if needed
+  const helper = () => {
+    // ...
+  };
+  
+  return <div>Hello</div>;
+}
+
+// The component is self-contained.
+// No exports needed - the host environment
+// will execute the function directly.`
+          });
+          break;
+          
+        case 'no-require-statements':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Remove all require() and dynamic import() statements. Use props instead.',
+            example: `// ❌ WRONG - Using require or dynamic import:
+function MyComponent({ utilities }) {
+  const lodash = require('lodash');
+  const module = await import('./module');
+  
+  return <div>...</div>;
+}
+
+// ✅ CORRECT - Use utilities and components props:
+function MyComponent({ utilities, styles, components }) {
+  // Use utilities for helper functions
+  const result = utilities.debounce(() => {
+    // ...
+  }, 300);
+  
+  // Use components prop for child components
+  const { DataTable, FilterPanel } = components;
+  
+  return (
+    <div>
+      <DataTable {...props} />
+      <FilterPanel {...props} />
+    </div>
+  );
+}
+
+// Everything the component needs must be:
+// - Passed via props (utilities, components, styles)
+// - Available globally (React hooks)
+// No module loading allowed!`
+          });
+          break;
+          
         case 'full-state-ownership':
           suggestions.push({
             violation: violation.rule,

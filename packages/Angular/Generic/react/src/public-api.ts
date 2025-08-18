@@ -17,13 +17,3 @@ export * from './lib/services/angular-adapter.service';
 
 // Constants
 export * from './lib/default-styles';
-
-// Re-export useful types from react-runtime for convenience
-export { 
-  ComponentProps,
-  ComponentCallbacks,
-  ComponentStyles,
-  ComponentError,
-  CompileOptions,
-  CompilationResult
-} from '@memberjunction/react-runtime';

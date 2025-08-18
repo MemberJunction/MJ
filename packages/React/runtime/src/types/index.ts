@@ -4,6 +4,9 @@
  * @module @memberjunction/react-runtime/types
  */
 
+import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryDependency, ComponentStyles } from '@memberjunction/interactive-component-types';
+
 /**
  * Represents a compiled React component with its metadata
  */
@@ -37,20 +40,10 @@ export interface CompileOptions {
   /** Custom Babel presets to use */
   babelPresets?: string[];
   /** Library dependencies that the component requires */
-  libraries?: any[]; // Using any[] to avoid circular dependency with InteractiveComponents
+  libraries?: ComponentLibraryDependency[];
+  contextUser?: UserInfo
 }
 
-/**
- * Component styles that can be applied
- */
-export interface ComponentStyles {
-  /** CSS classes to apply */
-  className?: string;
-  /** Inline styles */
-  style?: Record<string, any>;
-  /** Global CSS to inject */
-  globalCss?: string;
-}
 
 /**
  * Registry entry for a compiled component

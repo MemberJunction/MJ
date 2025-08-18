@@ -7,13 +7,12 @@
 import { 
   CompilationResult,
   CompileOptions,
-  ComponentStyles,
   RuntimeContext
 } from '../types';
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
  * Result of a hierarchy registration operation
