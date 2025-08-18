@@ -4,6 +4,7 @@
  * @module @memberjunction/react-runtime/compiler
  */
 
+import { UserInfo } from '@memberjunction/core';
 import { 
   CompileOptions, 
   CompiledComponent, 
@@ -80,7 +81,7 @@ export class ComponentCompiler {
       this.validateCompileOptions(options);
 
       // Load required libraries if specified
-      const loadedLibraries = await this.loadRequiredLibraries(options.libraries, options.contextUser);
+      const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.contextUser);
 
       // Transpile the component code
       const transpiledCode = this.transpileComponent(
@@ -210,7 +211,7 @@ export class ComponentCompiler {
    * @param contextUser - Context user for accessing library registry
    * @returns Map of loaded libraries
    */
-  private async loadRequiredLibraries(libraries?: any[], contextUser?: any): Promise<Map<string, any>> {
+  private async loadRequiredLibraries(libraries: any[], contextUser: UserInfo): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
     if (!libraries || libraries.length === 0) {

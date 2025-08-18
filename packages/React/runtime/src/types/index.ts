@@ -41,7 +41,11 @@ export interface CompileOptions {
   babelPresets?: string[];
   /** Library dependencies that the component requires */
   libraries?: ComponentLibraryDependency[];
-  contextUser?: UserInfo
+
+  /**
+   * Required, contextUser is the UserInfo for the currently logged in user, must be passed in explicitly
+   */
+  contextUser: UserInfo
 }
 
 

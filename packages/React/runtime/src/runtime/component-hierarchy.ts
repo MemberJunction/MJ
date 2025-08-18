@@ -13,6 +13,7 @@ import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
 import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * Result of a hierarchy registration operation
@@ -47,6 +48,10 @@ export interface HierarchyRegistrationOptions {
   continueOnError?: boolean;
   /** Whether to override existing components */
   allowOverride?: boolean;
+  /**
+   * Required UserInfo for the current user
+   */
+  contextUser: UserInfo;
 }
 
 /**
@@ -67,7 +72,7 @@ export class ComponentHierarchyRegistrar {
    */
   async registerHierarchy(
     rootSpec: ComponentSpec,
-    options: HierarchyRegistrationOptions = {}
+    options: HierarchyRegistrationOptions
   ): Promise<HierarchyRegistrationResult> {
     const {
       styles,
@@ -84,7 +89,7 @@ export class ComponentHierarchyRegistrar {
     // Register the root component
     const rootResult = await this.registerSingleComponent(
       rootSpec,
-      { styles, namespace, version, allowOverride }
+      { styles, namespace, version, allowOverride, contextUser: options.contextUser }
     );
 
     if (rootResult.success) {
@@ -101,7 +106,7 @@ export class ComponentHierarchyRegistrar {
     if (childComponents.length > 0) {
       const childResult = await this.registerChildComponents(
         childComponents,
-        { styles, namespace, version, continueOnError, allowOverride },
+        { styles, namespace, version, continueOnError, allowOverride, contextUser: options.contextUser },
         registeredComponents,
         errors,
         warnings
@@ -129,6 +134,7 @@ export class ComponentHierarchyRegistrar {
       namespace?: string;
       version?: string;
       allowOverride?: boolean;
+      contextUser: UserInfo;
     }
   ): Promise<{ success: boolean; error?: ComponentRegistrationError }> {
     const { styles, namespace = 'Global', version = 'v1', allowOverride = true } = options;
@@ -160,7 +166,8 @@ export class ComponentHierarchyRegistrar {
         componentName: spec.name,
         componentCode: spec.code,
         styles,
-        libraries: spec.libraries // Pass along library dependencies from the spec
+        libraries: spec.libraries, // Pass along library dependencies from the spec
+        contextUser: options.contextUser
       };
 
       const compilationResult = await this.compiler.compile(compileOptions);
@@ -222,7 +229,8 @@ export class ComponentHierarchyRegistrar {
         styles: options.styles,
         namespace: options.namespace,
         version: options.version,
-        allowOverride: options.allowOverride
+        allowOverride: options.allowOverride,
+        contextUser: options.contextUser
       });
 
       if (childResult.success) {
@@ -265,7 +273,7 @@ export async function registerComponentHierarchy(
   compiler: ComponentCompiler,
   registry: ComponentRegistry,
   runtimeContext: RuntimeContext,
-  options: HierarchyRegistrationOptions = {}
+  options: HierarchyRegistrationOptions
 ): Promise<HierarchyRegistrationResult> {
   const registrar = new ComponentHierarchyRegistrar(compiler, registry, runtimeContext);
   return registrar.registerHierarchy(rootSpec, options);

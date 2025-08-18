@@ -444,7 +444,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         styles: this.styles as any, // Skip components use SkipComponentStyles which is a superset
         namespace: 'Global',
         version: version,  // Use hash-based version instead of hardcoded 'v1'
-        allowOverride: false  // Don't override - each version is unique
+        allowOverride: false,  // Don't override - each version is unique
+        contextUser: Metadata.Provider.CurrentUser
       }
     );
     
