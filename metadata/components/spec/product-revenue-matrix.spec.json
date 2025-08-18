@@ -39,7 +39,11 @@
       "description": "Navigate to product details"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    "@include:product-revenue-treemap.spec.json",
+    "@include:product-revenue-matrix-table.spec.json",
+    "@include:product-revenue-detail-panel.spec.json"
+  ],
   "libraries": [
     {
       "name": "d3",

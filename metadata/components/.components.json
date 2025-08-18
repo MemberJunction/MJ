@@ -199,28 +199,6 @@
   },
   {
     "fields": {
-      "Name": "AIAgentAnalyticsDashboard",
-      "Namespace": "AI/Agents",
-      "Description": "A comprehensive analytics dashboard for monitoring AI agent executions, performance metrics, hierarchical relationships, and step-by-step analysis with real-time updates and interactive visualizations",
-      "Title": "AI Agent Analytics Dashboard",
-      "Type": "Dashboard",
-      "Version": "1.0.0",
-      "VersionSequence": 1,
-      "Status": "Deprecated",
-      "Specification": "Deprecated",
-      "FunctionalRequirements": "Display real-time agent execution status with live updates, show hierarchical agent relationships and sub-agent orchestration, provide step-by-step execution analysis with timing and success metrics, visualize performance metrics including execution time, token usage/cost",
-      "TechnicalDesign": "Multi-panel dashboard with WebSocket real-time updates, coordinated views across child components, time range filtering, and interactive agent selection."
-    },
-    "primaryKey": {
-      "ID": "EC9FC426-5C79-4C8C-AEB5-211268BCCB9C"
-    },
-    "sync": {
-      "lastModified": "2025-08-17T21:51:21.749Z",
-      "checksum": "798a1afed8eb5a2e836e5927eca5a46ab96eb879807d5596c069017302d0d6b6"
-    }
-  },
-  {
-    "fields": {
       "Name": "AIPerformanceDashboard",
       "Namespace": "AI/Analytics/Performance",
       "Description": "Comprehensive dashboard for analyzing AI agent and prompt performance with time-series charts, cost analysis, and drill-down capabilities",
@@ -614,7 +592,7 @@
       "lastModified": "2025-08-17T02:38:32.824Z",
       "checksum": "204629ebd066b4a8d7eb42aba14ee0ccf380442b4dd8182d162f9a2954c15492"
     }
-  }, 
+  },
   {
     "fields": {
       "Name": "SalesPipelineDashboard",
@@ -721,8 +699,8 @@
       "ID": "11036C9C-3AC6-4026-B3CC-74A8C28D831B"
     },
     "sync": {
-      "lastModified": "2025-08-18T01:54:28.073Z",
-      "checksum": "1fa63771298a6f2a56d51e7b411a7e591bee7272a8a225c76beaac3eb81c4448"
+      "lastModified": "2025-08-18T03:03:40.975Z",
+      "checksum": "c647ae06cf185306ffae3eb5229264ecd59dc3fda2e65820cad05157e636f62f"
     }
   },
   {
