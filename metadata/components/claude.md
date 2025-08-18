@@ -1,5 +1,20 @@
 # MemberJunction Interactive Components Development Guide
 
+## Exemplary Component Example
+
+### ProductRevenueMatrix - Best Practices Showcase
+The `ProductRevenueMatrix` component exemplifies our best practices:
+- **Modular Architecture**: Broken into 3 focused sub-components (Treemap, MatrixTable, DetailPanel)
+- **Efficient Data Loading**: Uses `RunViews` for batch loading instead of multiple calls
+- **Responsive Design**: Detail panel adapts from side-by-side to stacked on mobile
+- **Accessibility**: Varied pastel colors in treemap for better visual distinction
+- **User Settings**: Persists view preferences, date ranges, and sort options
+- **Rich Interactivity**: Multiple view modes, custom date ranges, sort indicators
+- **Clean Separation**: Each sub-component has single responsibility
+- **Proper Schema Usage**: Correctly references MJ entities (Products, Invoice Line Items, Invoices)
+
+See `/metadata/components/code/product-revenue-matrix.js` for implementation.
+
 ## Component Architecture Rules
 
 ### 1. Favor Sub-Components Over Monolithic Components

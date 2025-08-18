@@ -43,6 +43,11 @@
       "name": "accounting",
       "version": "^0.4.1",
       "globalVariable": "accounting"
+    },
+    {
+      "name": "Chart.js",
+      "version": "^4.4.1",
+      "globalVariable": "Chart"
     }
   ]
 }

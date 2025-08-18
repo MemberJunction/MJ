@@ -1,49 +1,117 @@
 function InvoiceStatusDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [selectedData, setSelectedData] = useState(null);
+  const [drillDownType, setDrillDownType] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [viewMode, setViewMode] = useState(savedUserSettings?.viewMode || 'cards');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [timePeriod, setTimePeriod] = useState(savedUserSettings?.timePeriod || 'month');
+  const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
+  const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
   
   const statusChartRef = useRef(null);
   const agingChartRef = useRef(null);
-  const calendarRef = useRef(null);
+  const statusChartInstance = useRef(null);
+  const agingChartInstance = useRef(null);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [timePeriod, startDate, endDate]);
+
+  const getDateFilter = () => {
+    // If custom dates are set, use them
+    if (timePeriod === 'custom' && startDate && endDate) {
+      return `InvoiceDate >= '${startDate}' AND InvoiceDate <= '${endDate}'`;
+    }
+    
+    const now = new Date();
+    let filterStart, filterEnd;
+    
+    switch (timePeriod) {
+      case 'month':
+        filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        filterEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case 'lastMonth':
+        filterStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        filterEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      case 'quarter':
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        filterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+        filterEnd = new Date(now.getFullYear(), currentQuarter * 3 + 3, 0);
+        break;
+      case 'lastQuarter':
+        const lastQuarter = Math.floor(now.getMonth() / 3) - 1;
+        const year = lastQuarter < 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const quarter = lastQuarter < 0 ? 3 : lastQuarter;
+        filterStart = new Date(year, quarter * 3, 1);
+        filterEnd = new Date(year, quarter * 3 + 3, 0);
+        break;
+      case 'year':
+        filterStart = new Date(now.getFullYear(), 0, 1);
+        filterEnd = new Date(now.getFullYear(), 11, 31);
+        break;
+      case 'lastYear':
+        filterStart = new Date(now.getFullYear() - 1, 0, 1);
+        filterEnd = new Date(now.getFullYear() - 1, 11, 31);
+        break;
+      default:
+        return '';
+    }
+    
+    if (filterStart && filterEnd) {
+      return `InvoiceDate >= '${filterStart.toISOString().split('T')[0]}' AND InvoiceDate <= '${filterEnd.toISOString().split('T')[0]}'`;
+    }
+    return '';
+  };
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const [invoicesResult, paymentsResult] = await Promise.all([
-        utilities.rv.RunView({
+      const dateFilter = getDateFilter();
+      
+      // Use RunViews for batch loading
+      const results = await utilities.rv.RunViews([
+        {
           EntityName: 'Invoices',
+          ExtraFilter: dateFilter,
           OrderBy: 'DueDate ASC',
           ResultType: 'entity_object'
-        }),
-        utilities.rv.RunView({
+        },
+        {
           EntityName: 'Payments',
           OrderBy: 'PaymentDate DESC',
           MaxRows: 500,
           ResultType: 'entity_object'
-        })
+        },
+        {
+          EntityName: 'Accounts',
+          OrderBy: 'AccountName ASC',
+          ResultType: 'entity_object'
+        }
       ]);
 
-      if (invoicesResult.Success) {
-        setInvoices(invoicesResult.Results || []);
-      }
-      if (paymentsResult.Success) {
-        setPayments(paymentsResult.Results || []);
-      }
-      
-      if (!invoicesResult.Success) {
-        setError('Failed to load invoice data');
+      if (results && results.length === 3) {
+        const [invoicesResult, paymentsResult, accountsResult] = results;
+        
+        if (invoicesResult.Success) {
+          setInvoices(invoicesResult.Results || []);
+        }
+        if (paymentsResult.Success) {
+          setPayments(paymentsResult.Results || []);
+        }
+        if (accountsResult.Success) {
+          setAccounts(accountsResult.Results || []);
+        }
+        
+        if (!invoicesResult.Success) {
+          setError('Failed to load invoice data');
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -52,527 +120,590 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
     }
   };
 
-  useEffect(() => {
-    if (!loading && invoices.length > 0) {
-      renderStatusChart();
-      renderAgingChart();
-      renderPaymentCalendar();
-    }
-  }, [invoices, payments, loading]);
-
   const calculateMetrics = () => {
-    const now = new Date();
     const metrics = {
       total: invoices.length,
       totalAmount: 0,
+      paid: 0,
       paidAmount: 0,
+      overdue: 0,
       overdueAmount: 0,
-      statuses: {
-        'Draft': 0,
-        'Sent': 0,
-        'Paid': 0,
-        'Overdue': 0,
-        'Cancelled': 0
-      },
-      aging: {
-        'Current': { count: 0, amount: 0 },
-        '1-30 days': { count: 0, amount: 0 },
-        '31-60 days': { count: 0, amount: 0 },
-        '61-90 days': { count: 0, amount: 0 },
-        '90+ days': { count: 0, amount: 0 }
-      }
+      pending: 0,
+      pendingAmount: 0,
+      partial: 0,
+      partialAmount: 0
     };
+    
+    const today = new Date();
+    
+    // Calculate paid amounts from payments
+    const paidByInvoice = {};
+    payments.forEach(payment => {
+      if (!paidByInvoice[payment.InvoiceID]) {
+        paidByInvoice[payment.InvoiceID] = 0;
+      }
+      paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+    });
     
     invoices.forEach(invoice => {
       const amount = invoice.TotalAmount || 0;
-      const paidAmount = invoice.PaidAmount || 0;
-      const outstanding = amount - paidAmount;
+      const paidAmount = paidByInvoice[invoice.ID] || 0;
+      const remainingAmount = amount - paidAmount;
       
       metrics.totalAmount += amount;
-      metrics.paidAmount += paidAmount;
       
-      // Status counting
-      const status = invoice.Status || 'Draft';
-      if (metrics.statuses[status] !== undefined) {
-        metrics.statuses[status]++;
-      }
-      
-      // Aging analysis for unpaid invoices
-      if (status !== 'Paid' && status !== 'Cancelled' && outstanding > 0) {
-        const dueDate = new Date(invoice.DueDate);
-        const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-        
-        if (daysOverdue < 0) {
-          metrics.aging['Current'].count++;
-          metrics.aging['Current'].amount += outstanding;
-        } else if (daysOverdue <= 30) {
-          metrics.aging['1-30 days'].count++;
-          metrics.aging['1-30 days'].amount += outstanding;
-          metrics.overdueAmount += outstanding;
-        } else if (daysOverdue <= 60) {
-          metrics.aging['31-60 days'].count++;
-          metrics.aging['31-60 days'].amount += outstanding;
-          metrics.overdueAmount += outstanding;
-        } else if (daysOverdue <= 90) {
-          metrics.aging['61-90 days'].count++;
-          metrics.aging['61-90 days'].amount += outstanding;
-          metrics.overdueAmount += outstanding;
-        } else {
-          metrics.aging['90+ days'].count++;
-          metrics.aging['90+ days'].amount += outstanding;
-          metrics.overdueAmount += outstanding;
+      if (invoice.Status === 'Paid' || remainingAmount <= 0) {
+        metrics.paid++;
+        metrics.paidAmount += amount;
+      } else if (invoice.Status === 'Cancelled') {
+        // Skip cancelled invoices
+      } else if (invoice.Status === 'Partial' || (paidAmount > 0 && remainingAmount > 0)) {
+        metrics.partial++;
+        metrics.partialAmount += remainingAmount;
+        if (new Date(invoice.DueDate) < today) {
+          metrics.overdue++;
+          metrics.overdueAmount += remainingAmount;
         }
+      } else if (new Date(invoice.DueDate) < today) {
+        metrics.overdue++;
+        metrics.overdueAmount += remainingAmount;
+      } else {
+        metrics.pending++;
+        metrics.pendingAmount += remainingAmount;
       }
     });
-    
-    // Calculate DSO (Days Sales Outstanding)
-    const avgDailySales = metrics.totalAmount / 30;
-    metrics.dso = avgDailySales > 0 ? (metrics.totalAmount - metrics.paidAmount) / avgDailySales : 0;
     
     return metrics;
   };
 
-  const renderStatusChart = () => {
-    if (!statusChartRef.current) return;
-    
-    const metrics = calculateMetrics();
-    const statusData = Object.entries(metrics.statuses).filter(([_, count]) => count > 0);
-    
-    const data = [{
-      values: statusData.map(([_, count]) => count),
-      labels: statusData.map(([status, _]) => status),
-      type: 'pie',
-      hole: 0.4,
-      marker: {
-        colors: {
-          'Draft': '#9CA3AF',
-          'Sent': '#3B82F6',
-          'Paid': '#10B981',
-          'Overdue': '#EF4444',
-          'Cancelled': '#6B7280'
-        }[statusData.map(([status, _]) => status)]
-      },
-      textinfo: 'label+percent',
-      hovertemplate: '%{label}: %{value}<br>%{percent}<extra></extra>'
-    }];
-    
-    const layout = {
-      title: 'Invoice Status Distribution',
-      height: 300,
-      margin: { t: 40, b: 40, l: 40, r: 40 },
-      showlegend: true,
-      legend: {
-        orientation: 'v',
-        y: 0.5,
-        x: 1.1
-      }
-    };
-    
-    Plotly.newPlot(statusChartRef.current, data, layout, { responsive: true });
+  const openDrillDown = (type, data) => {
+    setDrillDownType(type);
+    setSelectedData(data);
+    setIsPanelOpen(true);
   };
 
-  const renderAgingChart = () => {
-    if (!agingChartRef.current) return;
-    
-    const metrics = calculateMetrics();
-    const agingData = Object.entries(metrics.aging);
-    
-    const data = [{
-      x: agingData.map(([bucket, _]) => bucket),
-      y: agingData.map(([_, data]) => data.amount),
-      type: 'bar',
-      marker: {
-        color: agingData.map(([bucket, _]) => {
-          if (bucket === 'Current') return '#10B981';
-          if (bucket === '1-30 days') return '#F59E0B';
-          if (bucket === '31-60 days') return '#FB923C';
-          if (bucket === '61-90 days') return '#F87171';
-          return '#DC2626';
-        })
-      },
-      text: agingData.map(([_, data]) => `${data.count} invoices<br>${accounting.formatMoney(data.amount)}`),
-      textposition: 'outside',
-      hovertemplate: '%{text}<extra></extra>'
-    }];
-    
-    const layout = {
-      title: 'Accounts Receivable Aging',
-      height: 300,
-      xaxis: { title: 'Age Bucket' },
-      yaxis: { 
-        title: 'Outstanding Amount',
-        tickformat: '$,.0f'
-      },
-      margin: { t: 60, b: 60 }
-    };
-    
-    Plotly.newPlot(agingChartRef.current, data, layout, { responsive: true });
+  const closeDrillDown = () => {
+    setIsPanelOpen(false);
+    setTimeout(() => {
+      setSelectedData(null);
+      setDrillDownType(null);
+    }, 300);
   };
 
-  const renderPaymentCalendar = () => {
-    if (!calendarRef.current) return;
-    
-    // Create calendar heatmap data
-    const calendarData = {};
-    const now = new Date();
-    
-    invoices.forEach(invoice => {
-      if (invoice.DueDate && invoice.Status !== 'Paid' && invoice.Status !== 'Cancelled') {
-        const dueDate = new Date(invoice.DueDate).toISOString().split('T')[0];
-        if (!calendarData[dueDate]) {
-          calendarData[dueDate] = {
-            count: 0,
-            amount: 0,
-            invoices: []
-          };
-        }
-        calendarData[dueDate].count++;
-        calendarData[dueDate].amount += (invoice.TotalAmount - (invoice.PaidAmount || 0));
-        calendarData[dueDate].invoices.push(invoice);
-      }
-    });
-    
-    // Generate calendar grid
-    const dates = [];
-    const values = [];
-    const texts = [];
-    
-    for (let i = -30; i <= 60; i++) {
-      const date = new Date(now);
-      date.setDate(date.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
+  // Status Distribution Chart with click handler
+  useEffect(() => {
+    if (!loading && statusChartRef.current && invoices.length > 0) {
+      const metrics = calculateMetrics();
+      const ctx = statusChartRef.current.getContext('2d');
       
-      if (calendarData[dateStr]) {
-        values.push(calendarData[dateStr].amount);
-        texts.push(`${dateStr}<br>${calendarData[dateStr].count} invoices<br>${accounting.formatMoney(calendarData[dateStr].amount)}`);
-      } else {
-        values.push(0);
-        texts.push(`${dateStr}<br>No invoices due`);
+      // Destroy existing chart
+      if (statusChartInstance.current) {
+        statusChartInstance.current.destroy();
       }
+      
+      statusChartInstance.current = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Paid', 'Pending', 'Overdue', 'Partial'],
+          datasets: [{
+            data: [metrics.paid, metrics.pending, metrics.overdue, metrics.partial],
+            backgroundColor: ['#10B981', '#3B82F6', '#EF4444', '#F59E0B'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (event, activeElements) => {
+            if (activeElements.length > 0) {
+              const index = activeElements[0].index;
+              const labels = ['Paid', 'Pending', 'Overdue', 'Partial'];
+              openDrillDown('status', labels[index]);
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                padding: 20,
+                font: { size: 12 }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const value = context.raw;
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                  const percentage = ((value / total) * 100).toFixed(1);
+                  return `${context.label}: ${value} (${percentage}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
     }
     
-    const data = [{
-      x: dates,
-      y: values,
-      type: 'scatter',
-      mode: 'markers',
-      marker: {
-        size: values.map(v => Math.sqrt(v / 1000) + 5),
-        color: values,
-        colorscale: [
-          [0, '#10B981'],
-          [0.5, '#F59E0B'],
-          [1, '#EF4444']
-        ],
-        showscale: true,
-        colorbar: {
-          title: 'Amount Due',
-          tickformat: '$,.0f'
-        }
-      },
-      text: texts,
-      hovertemplate: '%{text}<extra></extra>'
-    }];
-    
-    const layout = {
-      title: 'Payment Due Date Timeline',
-      height: 250,
-      xaxis: {
-        title: 'Due Date',
-        type: 'date'
-      },
-      yaxis: {
-        title: 'Amount Due',
-        tickformat: '$,.0f'
-      },
-      margin: { t: 60, b: 60 }
+    return () => {
+      if (statusChartInstance.current) {
+        statusChartInstance.current.destroy();
+      }
     };
-    
-    Plotly.newPlot(calendarRef.current, data, layout, { responsive: true });
-  };
+  }, [loading, invoices]);
 
-  // Sub-component: Customer Balances
+  // Aging Chart with click handler
+  useEffect(() => {
+    if (!loading && agingChartRef.current && invoices.length > 0) {
+      const aging = { current: 0, '30days': 0, '60days': 0, '90days': 0, 'over90': 0 };
+      const agingInvoices = { current: [], '30days': [], '60days': [], '90days': [], 'over90': [] };
+      const today = new Date();
+      
+      // Calculate paid amounts
+      const paidByInvoice = {};
+      payments.forEach(payment => {
+        if (!paidByInvoice[payment.InvoiceID]) {
+          paidByInvoice[payment.InvoiceID] = 0;
+        }
+        paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+      });
+      
+      invoices.forEach(invoice => {
+        if (invoice.Status !== 'Paid' && invoice.Status !== 'Cancelled') {
+          const paidAmount = paidByInvoice[invoice.ID] || 0;
+          const outstanding = (invoice.TotalAmount || 0) - paidAmount;
+          
+          if (outstanding > 0) {
+            const dueDate = new Date(invoice.DueDate);
+            const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysPastDue <= 0) {
+              aging.current += outstanding;
+              agingInvoices.current.push(invoice);
+            } else if (daysPastDue <= 30) {
+              aging['30days'] += outstanding;
+              agingInvoices['30days'].push(invoice);
+            } else if (daysPastDue <= 60) {
+              aging['60days'] += outstanding;
+              agingInvoices['60days'].push(invoice);
+            } else if (daysPastDue <= 90) {
+              aging['90days'] += outstanding;
+              agingInvoices['90days'].push(invoice);
+            } else {
+              aging.over90 += outstanding;
+              agingInvoices.over90.push(invoice);
+            }
+          }
+        }
+      });
+      
+      const ctx = agingChartRef.current.getContext('2d');
+      
+      if (agingChartInstance.current) {
+        agingChartInstance.current.destroy();
+      }
+      
+      agingChartInstance.current = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Current', '1-30 Days', '31-60 Days', '61-90 Days', 'Over 90'],
+          datasets: [{
+            label: 'Outstanding Amount',
+            data: Object.values(aging),
+            backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#FB923C', '#EF4444']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (event, activeElements) => {
+            if (activeElements.length > 0) {
+              const index = activeElements[0].index;
+              const keys = ['current', '30days', '60days', '90days', 'over90'];
+              const labels = ['Current', '1-30 Days Overdue', '31-60 Days Overdue', '61-90 Days Overdue', 'Over 90 Days Overdue'];
+              openDrillDown('aging', { label: labels[index], invoices: agingInvoices[keys[index]] });
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => `$${(context.raw / 1000).toFixed(1)}K`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => `$${(value / 1000).toFixed(0)}K`
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    return () => {
+      if (agingChartInstance.current) {
+        agingChartInstance.current.destroy();
+      }
+    };
+  }, [loading, invoices, payments]);
+
   const CustomerBalances = () => {
     const customerBalances = {};
+    
+    // Calculate paid amounts from payments
+    const paidByInvoice = {};
+    payments.forEach(payment => {
+      if (!paidByInvoice[payment.InvoiceID]) {
+        paidByInvoice[payment.InvoiceID] = 0;
+      }
+      paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+    });
+    
+    // Create account lookup map
+    const accountMap = {};
+    accounts.forEach(account => {
+      accountMap[account.ID] = account;
+    });
     
     invoices.forEach(invoice => {
       if (invoice.Status !== 'Paid' && invoice.Status !== 'Cancelled') {
         const customerId = invoice.AccountID || 'Unknown';
         if (!customerBalances[customerId]) {
+          const account = accountMap[customerId];
           customerBalances[customerId] = {
             id: customerId,
+            name: account ? account.AccountName : `Account #${customerId}`,
             totalDue: 0,
             overdueAmount: 0,
             invoiceCount: 0,
+            invoices: [],
             oldestDue: null
           };
         }
         
-        const outstanding = (invoice.TotalAmount || 0) - (invoice.PaidAmount || 0);
-        customerBalances[customerId].totalDue += outstanding;
-        customerBalances[customerId].invoiceCount++;
+        const paidAmount = paidByInvoice[invoice.ID] || 0;
+        const outstanding = (invoice.TotalAmount || 0) - paidAmount;
         
-        const dueDate = new Date(invoice.DueDate);
-        if (dueDate < new Date()) {
-          customerBalances[customerId].overdueAmount += outstanding;
-        }
-        
-        if (!customerBalances[customerId].oldestDue || dueDate < customerBalances[customerId].oldestDue) {
-          customerBalances[customerId].oldestDue = dueDate;
+        if (outstanding > 0) {
+          customerBalances[customerId].totalDue += outstanding;
+          customerBalances[customerId].invoiceCount++;
+          customerBalances[customerId].invoices.push({
+            ...invoice,
+            outstanding,
+            paidAmount
+          });
+          
+          const dueDate = new Date(invoice.DueDate);
+          if (dueDate < new Date()) {
+            customerBalances[customerId].overdueAmount += outstanding;
+          }
+          
+          if (!customerBalances[customerId].oldestDue || dueDate < customerBalances[customerId].oldestDue) {
+            customerBalances[customerId].oldestDue = dueDate;
+          }
         }
       }
     });
     
-    const topDebtors = Object.values(customerBalances)
+    const topCustomers = Object.values(customerBalances)
       .sort((a, b) => b.totalDue - a.totalDue)
-      .slice(0, 10);
+      .slice(0, 5);
     
     return (
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #E5E7EB' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Top Customer Balances</h3>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <button
-            onClick={() => setViewMode('cards')}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: viewMode === 'cards' ? '#3B82F6' : '#F3F4F6',
-              color: viewMode === 'cards' ? 'white' : '#374151',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            Cards
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: viewMode === 'list' ? '#3B82F6' : '#F3F4F6',
-              color: viewMode === 'list' ? 'white' : '#374151',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            List
-          </button>
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px' }}>Top Customer Balances</h3>
         </div>
         
-        {viewMode === 'cards' ? (
-          <div style={{ display: 'grid', gap: '8px', maxHeight: '400px', overflow: 'auto' }}>
-            {topDebtors.map(customer => (
-              <div
-                key={customer.ID}
-                style={{
-                  padding: '12px',
-                  backgroundColor: customer.overdueAmount > 0 ? '#FEE2E2' : '#F9FAFB',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  borderLeft: `4px solid ${customer.overdueAmount > 0 ? '#EF4444' : '#3B82F6'}`
-                }}
-                onClick={() => {
-                  const customerInvoices = invoices.filter(inv => 
-                    inv.AccountID === customer.ID && 
-                    inv.Status !== 'Paid' && 
-                    inv.Status !== 'Cancelled'
-                  );
-                  setSelectedInvoice({ customer, invoices: customerInvoices });
-                  setIsPanelOpen(true);
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                      Customer #{customer.ID.substring(0, 8)}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                      {customer.invoiceCount} invoices
-                    </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {topCustomers.map((customer, index) => (
+            <div
+              key={customer.id}
+              style={{
+                padding: '12px',
+                backgroundColor: '#F9FAFB',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                borderLeft: `4px solid ${customer.overdueAmount > 0 ? '#EF4444' : '#3B82F6'}`
+              }}
+              onClick={() => openDrillDown('customer', customer)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateX(4px)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateX(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                    {customer.name}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                      {accounting.formatMoney(customer.totalDue)}
-                    </div>
-                    {customer.overdueAmount > 0 && (
-                      <div style={{ fontSize: '11px', color: '#DC2626' }}>
-                        {accounting.formatMoney(customer.overdueAmount)} overdue
-                      </div>
-                    )}
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                    {customer.invoiceCount} invoice{customer.invoiceCount !== 1 ? 's' : ''} outstanding
                   </div>
                 </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: customer.overdueAmount > 0 ? '#EF4444' : '#111827' }}>
+                    ${(customer.totalDue / 1000).toFixed(1)}K
+                  </div>
+                  {customer.overdueAmount > 0 && (
+                    <div style={{ fontSize: '11px', color: '#EF4444' }}>
+                      ${(customer.overdueAmount / 1000).toFixed(1)}K overdue
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <table style={{ width: '100%', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-                <th style={{ padding: '4px', textAlign: 'left' }}>Customer</th>
-                <th style={{ padding: '4px', textAlign: 'center' }}>Invoices</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>Total Due</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>Overdue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topDebtors.map(customer => (
-                <tr
-                  key={customer.ID}
-                  style={{ borderBottom: '1px solid #E5E7EB', cursor: 'pointer' }}
-                  onClick={() => {
-                    const customerInvoices = invoices.filter(inv => 
-                      inv.AccountID === customer.ID && 
-                      inv.Status !== 'Paid' && 
-                      inv.Status !== 'Cancelled'
-                    );
-                    setSelectedInvoice({ customer, invoices: customerInvoices });
-                    setIsPanelOpen(true);
-                  }}
-                >
-                  <td style={{ padding: '4px' }}>#{customer.ID.substring(0, 8)}</td>
-                  <td style={{ padding: '4px', textAlign: 'center' }}>{customer.invoiceCount}</td>
-                  <td style={{ padding: '4px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {accounting.formatMoney(customer.totalDue)}
-                  </td>
-                  <td style={{ padding: '4px', textAlign: 'right', color: customer.overdueAmount > 0 ? '#DC2626' : '#10B981' }}>
-                    {accounting.formatMoney(customer.overdueAmount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
 
-  // Sub-component: Action Panel
-  const ActionPanel = () => {
-    if (!selectedInvoice) return null;
+  const DrillDownPanel = () => {
+    if (!isPanelOpen || !selectedData) return null;
     
-    return isPanelOpen && (
+    const renderContent = () => {
+      switch (drillDownType) {
+        case 'status':
+          const statusInvoices = invoices.filter(inv => {
+            if (selectedData === 'Overdue') {
+              return inv.Status !== 'Paid' && inv.Status !== 'Cancelled' && new Date(inv.DueDate) < new Date();
+            }
+            if (selectedData === 'Pending') {
+              return inv.Status === 'Sent' || (inv.Status !== 'Paid' && inv.Status !== 'Cancelled' && new Date(inv.DueDate) >= new Date());
+            }
+            return inv.Status === selectedData;
+          });
+          
+          return (
+            <div>
+              <h3 style={{ margin: '0 0 16px 0' }}>{selectedData} Invoices</h3>
+              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                {statusInvoices.map(invoice => (
+                  <div key={invoice.ID} style={{ 
+                    padding: '12px', 
+                    marginBottom: '8px', 
+                    backgroundColor: '#F9FAFB', 
+                    borderRadius: '6px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 'bold' }}>#{invoice.InvoiceNumber}</div>
+                      <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                        Due: {new Date(invoice.DueDate).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 'bold' }}>
+                        ${((invoice.TotalAmount || 0) / 1000).toFixed(1)}K
+                      </div>
+                      <button
+                        onClick={() => callbacks.OpenEntityRecord('Invoices', [{ FieldName: 'ID', Value: invoice.ID }])}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#3B82F6',
+                          cursor: 'pointer',
+                          fontSize: '16px'
+                        }}
+                        title="Open Invoice"
+                      >
+                        <i className="fa-solid fa-up-right-from-square"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+          
+        case 'aging':
+          return (
+            <div>
+              <h3 style={{ margin: '0 0 16px 0' }}>{selectedData.label}</h3>
+              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                {selectedData.invoices.map(invoice => (
+                  <div key={invoice.ID} style={{ 
+                    padding: '12px', 
+                    marginBottom: '8px', 
+                    backgroundColor: '#F9FAFB', 
+                    borderRadius: '6px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 'bold' }}>#{invoice.InvoiceNumber}</div>
+                      <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                        Due: {new Date(invoice.DueDate).toLocaleDateString()}
+                        {new Date(invoice.DueDate) < new Date() && (
+                          <span style={{ color: '#EF4444', marginLeft: '8px' }}>
+                            ({Math.floor((new Date() - new Date(invoice.DueDate)) / (1000 * 60 * 60 * 24))} days overdue)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 'bold' }}>
+                        ${((invoice.TotalAmount || 0) / 1000).toFixed(1)}K
+                      </div>
+                      <button
+                        onClick={() => callbacks.OpenEntityRecord('Invoices', [{ FieldName: 'ID', Value: invoice.ID }])}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#3B82F6',
+                          cursor: 'pointer',
+                          fontSize: '16px'
+                        }}
+                        title="Open Invoice"
+                      >
+                        <i className="fa-solid fa-up-right-from-square"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+          
+        case 'customer':
+          return (
+            <div>
+              <h3 style={{ margin: '0 0 16px 0' }}>{selectedData.name}</h3>
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#6B7280' }}>Total Outstanding</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                      ${(selectedData.totalDue / 1000).toFixed(1)}K
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#6B7280' }}>Overdue Amount</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#EF4444' }}>
+                      ${(selectedData.overdueAmount / 1000).toFixed(1)}K
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <h4 style={{ margin: '16px 0 8px 0', fontSize: '14px' }}>Outstanding Invoices</h4>
+              <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                {selectedData.invoices.map(invoice => (
+                  <div key={invoice.ID} style={{ 
+                    padding: '12px', 
+                    marginBottom: '8px', 
+                    backgroundColor: '#F9FAFB', 
+                    borderRadius: '6px',
+                    borderLeft: `3px solid ${new Date(invoice.DueDate) < new Date() ? '#EF4444' : '#3B82F6'}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold' }}>Invoice #{invoice.InvoiceNumber}</div>
+                        <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                          Due: {new Date(invoice.DueDate).toLocaleDateString()}
+                          {new Date(invoice.DueDate) < new Date() && (
+                            <span style={{ color: '#EF4444', marginLeft: '8px' }}>
+                              ({Math.floor((new Date() - new Date(invoice.DueDate)) / (1000 * 60 * 60 * 24))} days overdue)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#6B7280' }}>Outstanding</div>
+                          <div style={{ fontWeight: 'bold' }}>
+                            ${(invoice.outstanding / 1000).toFixed(1)}K
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => callbacks.OpenEntityRecord('Invoices', [{ FieldName: 'ID', Value: invoice.ID }])}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#3B82F6',
+                            cursor: 'pointer',
+                            fontSize: '16px'
+                          }}
+                          title="Open Invoice"
+                        >
+                          <i className="fa-solid fa-up-right-from-square"></i>
+                        </button>
+                      </div>
+                    </div>
+                    {invoice.paidAmount > 0 && (
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: '#059669' }}>
+                        Partial payment: ${(invoice.paidAmount / 1000).toFixed(1)}K paid
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+          
+        default:
+          return null;
+      }
+    };
+    
+    return (
       <div
         style={{
-          position: 'fixed',
-          right: isPanelOpen ? 0 : '-400px',
-          top: 0,
-          bottom: 0,
-          width: '400px',
           backgroundColor: 'white',
-          boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
-          zIndex: 1000,
-          transition: 'right 0.3s ease',
-          display: 'flex',
-          flexDirection: 'column'
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          overflow: 'hidden',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
         }}
       >
         <div style={{
-          padding: '20px',
+          padding: '16px',
           borderBottom: '1px solid #E5E7EB',
-          backgroundColor: selectedInvoice.customer.overdueAmount > 0 ? '#EF4444' : '#3B82F6',
-          color: 'white'
+          background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+          color: 'white',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Customer Details</h3>
-              <div style={{ marginTop: '4px', opacity: 0.9, fontSize: '14px' }}>
-                {selectedInvoice.invoices.length} outstanding invoices
-              </div>
-            </div>
-            <button
-              onClick={() => setIsPanelOpen(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'white',
-                fontSize: '24px',
-                cursor: 'pointer'
-              }}
-            >
-              ×
-            </button>
-          </div>
+          <h3 style={{ margin: 0, fontSize: '16px' }}>
+            {drillDownType === 'status' ? `${selectedData} Invoices` : 
+             drillDownType === 'aging' ? selectedData.label :
+             'Customer Details'}
+          </h3>
+          <button
+            onClick={closeDrillDown}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: 'white',
+              fontSize: '20px',
+              cursor: 'pointer',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              transition: 'background 0.2s',
+              lineHeight: '1'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+          >
+            ×
+          </button>
         </div>
         
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-          <div style={{ marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 12px 0' }}>Summary</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ padding: '8px', backgroundColor: '#F9FAFB', borderRadius: '4px' }}>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>Total Due</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {accounting.formatMoney(selectedInvoice.customer.totalDue)}
-                </div>
-              </div>
-              <div style={{ padding: '8px', backgroundColor: '#FEE2E2', borderRadius: '4px' }}>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>Overdue</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#DC2626' }}>
-                  {accounting.formatMoney(selectedInvoice.customer.overdueAmount)}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <h4 style={{ margin: '0 0 12px 0' }}>Outstanding Invoices</h4>
-            {selectedInvoice.invoices.map(invoice => (
-              <div
-                key={invoice.ID}
-                style={{
-                  padding: '12px',
-                  marginBottom: '8px',
-                  backgroundColor: '#F9FAFB',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-                onClick={() => callbacks.OpenEntityRecord('Invoices', [{ FieldName: 'ID', Value: invoice.ID }])}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                    {invoice.InvoiceNumber}
-                  </span>
-                  <span style={{ fontWeight: 'bold' }}>
-                    {accounting.formatMoney(invoice.TotalAmount - (invoice.PaidAmount || 0))}
-                  </span>
-                </div>
-                <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                  Due: {new Date(invoice.DueDate).toLocaleDateString()}
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div style={{ marginTop: '20px', display: 'grid', gap: '8px' }}>
-            <button
-              style={{
-                padding: '10px',
-                backgroundColor: '#10B981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              Send Reminder
-            </button>
-            <button
-              style={{
-                padding: '10px',
-                backgroundColor: '#F59E0B',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              Schedule Call
-            </button>
-          </div>
+        <div style={{ maxHeight: '400px', overflow: 'auto', padding: '16px' }}>
+          {renderContent()}
         </div>
       </div>
     );
@@ -581,7 +712,15 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   if (loading) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading invoice dashboard...</div>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading invoice data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#EF4444' }}>Error: {error}</div>
       </div>
     );
   }
@@ -590,55 +729,274 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
-      <div style={{ marginBottom: '20px' }}>
-        <h2 style={{ margin: '0 0 20px 0', fontSize: '24px', fontWeight: 'bold' }}>
-          Invoice Status Dashboard
-        </h2>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-          <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Total Outstanding</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-              {accounting.formatMoney(metrics.totalAmount - metrics.paidAmount)}
-            </div>
-          </div>
-          <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Overdue Amount</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#EF4444' }}>
-              {accounting.formatMoney(metrics.overdueAmount)}
-            </div>
-          </div>
-          <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Collection Rate</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>
-              {((metrics.paidAmount / metrics.totalAmount) * 100).toFixed(1)}%
-            </div>
-          </div>
-          <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>DSO</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-              {metrics.dso.toFixed(0)} days
-            </div>
-          </div>
+      <style>{`
+        @media (max-width: 1024px) {
+          .invoice-charts {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            max-height: 0;
+          }
+          to {
+            opacity: 1;
+            max-height: 800px;
+          }
+        }
+      `}</style>
+      
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Invoice Status Dashboard</h2>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select
+            value={timePeriod}
+            onChange={(e) => {
+              const newPeriod = e.target.value;
+              setTimePeriod(newPeriod);
+              if (newPeriod !== 'custom') {
+                setStartDate(null);
+                setEndDate(null);
+                onSaveUserSettings({ 
+                  ...savedUserSettings, 
+                  timePeriod: newPeriod,
+                  startDate: null,
+                  endDate: null
+                });
+              } else {
+                onSaveUserSettings({ ...savedUserSettings, timePeriod: newPeriod });
+              }
+            }}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #D1D5DB',
+              borderRadius: '6px',
+              backgroundColor: 'white',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="month">This Month</option>
+            <option value="lastMonth">Last Month</option>
+            <option value="quarter">This Quarter</option>
+            <option value="lastQuarter">Last Quarter</option>
+            <option value="year">This Year</option>
+            <option value="lastYear">Last Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          
+          {timePeriod === 'custom' && (
+            <>
+              <input
+                type="date"
+                value={startDate || ''}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  if (e.target.value && endDate) {
+                    onSaveUserSettings({ 
+                      ...savedUserSettings, 
+                      startDate: e.target.value,
+                      endDate,
+                      timePeriod: 'custom'
+                    });
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '6px',
+                  backgroundColor: 'white'
+                }}
+              />
+              <span style={{ color: '#6B7280', fontSize: '14px' }}>to</span>
+              <input
+                type="date"
+                value={endDate || ''}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  if (startDate && e.target.value) {
+                    onSaveUserSettings({ 
+                      ...savedUserSettings, 
+                      startDate,
+                      endDate: e.target.value,
+                      timePeriod: 'custom'
+                    });
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '6px',
+                  backgroundColor: 'white'
+                }}
+              />
+            </>
+          )}
         </div>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #E5E7EB' }}>
-            <div ref={statusChartRef} />
-          </div>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #E5E7EB' }}>
-            <div ref={agingChartRef} />
-          </div>
-        </div>
-        
-        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', marginBottom: '20px', border: '1px solid #E5E7EB' }}>
-          <div ref={calendarRef} />
-        </div>
-        
-        <CustomerBalances />
       </div>
       
-      <ActionPanel />
+      {/* Top Metrics Cards - Side by Side */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+        <div 
+          style={{ 
+            padding: '16px', 
+            backgroundColor: 'white', 
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onClick={() => openDrillDown('status', 'Overdue')}
+          onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Overdue</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#EF4444' }}>
+                {metrics.overdue}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                ${(metrics.overdueAmount / 1000).toFixed(1)}K
+              </div>
+            </div>
+            <div style={{ fontSize: '32px', color: '#FEE2E2' }}>
+              <i className="fa-solid fa-exclamation-circle"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div 
+          style={{ 
+            padding: '16px', 
+            backgroundColor: 'white', 
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onClick={() => openDrillDown('status', 'Pending')}
+          onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Pending</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3B82F6' }}>
+                {metrics.pending}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                ${(metrics.pendingAmount / 1000).toFixed(1)}K
+              </div>
+            </div>
+            <div style={{ fontSize: '32px', color: '#DBEAFE' }}>
+              <i className="fa-solid fa-clock"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div 
+          style={{ 
+            padding: '16px', 
+            backgroundColor: 'white', 
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onClick={() => openDrillDown('status', 'Partial')}
+          onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Partial</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B' }}>
+                {metrics.partial}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                ${(metrics.partialAmount / 1000).toFixed(1)}K
+              </div>
+            </div>
+            <div style={{ fontSize: '32px', color: '#FEF3C7' }}>
+              <i className="fa-solid fa-chart-pie"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div 
+          style={{ 
+            padding: '16px', 
+            backgroundColor: 'white', 
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onClick={() => openDrillDown('status', 'Paid')}
+          onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Paid</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>
+                {metrics.paid}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                ${(metrics.paidAmount / 1000).toFixed(1)}K
+              </div>
+            </div>
+            <div style={{ fontSize: '32px', color: '#D1FAE5' }}>
+              <i className="fa-solid fa-check-circle"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Total</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6B7280' }}>
+                {metrics.total}
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                ${(metrics.totalAmount / 1000).toFixed(1)}K
+              </div>
+            </div>
+            <div style={{ fontSize: '32px', color: '#E5E7EB' }}>
+              <i className="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Charts Row - Side by Side, wider overall */}
+      <div className="invoice-charts" style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '20px', marginBottom: '20px' }}>
+        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Status Distribution</h3>
+          <div style={{ height: '280px' }}>
+            <canvas ref={statusChartRef} />
+          </div>
+        </div>
+        
+        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Payment Due Timeline</h3>
+          <div style={{ height: '280px' }}>
+            <canvas ref={agingChartRef} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Customer Balances */}
+      <CustomerBalances />
+      
+      {/* Drill-down Panel - below all content */}
+      {isPanelOpen && (
+        <div style={{ 
+          marginTop: '20px',
+          animation: 'slideDown 0.3s ease',
+          overflow: 'hidden'
+        }}>
+          <DrillDownPanel />
+        </div>
+      )}
     </div>
   );
 }
