@@ -139,7 +139,8 @@ export class ResolverBase {
           viewInput.AuditLogDescription,
           viewInput.ResultType,
           userPayload,
-          viewInput.MaxRows
+          viewInput.MaxRows,
+          viewInput.StartRow
         );
       }
       else {
@@ -173,7 +174,8 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        viewInput.MaxRows
+        viewInput.MaxRows,
+        viewInput.StartRow
       );
     } catch (err) {
       console.log(err);
@@ -210,7 +212,8 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        viewInput.MaxRows
+        viewInput.MaxRows,
+        viewInput.StartRow
       );
     } catch (err) {
       console.log(err);
@@ -370,7 +373,8 @@ export class ResolverBase {
     auditLogDescription: string | undefined,
     resultType: string | undefined,
     userPayload: UserPayload | null,
-    maxRows: number | undefined
+    maxRows: number | undefined,
+    startRow: number | undefined
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -420,6 +424,7 @@ export class ResolverBase {
           ExcludeDataFromAllPriorViewRuns: excludeDataFromAllPriorViewRuns,
           IgnoreMaxRows: ignoreMaxRows,
           MaxRows: maxRows,
+          StartRow: startRow,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
