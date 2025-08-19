@@ -352,11 +352,16 @@ export class ComponentCompiler {
       // Check if script already exists
       const existingScript = document.querySelector(`script[src="${url}"]`);
       if (existingScript) {
-        // Wait for it to finish loading
+        // Wait for it to finish loading with exponential backoff
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds total with 100ms intervals
         const checkLoaded = () => {
           if ((window as any)[globalName]) {
             resolve();
+          } else if (attempts >= maxAttempts) {
+            reject(new Error(`${globalName} not found after ${maxAttempts * 100}ms waiting for existing script`));
           } else {
+            attempts++;
             setTimeout(checkLoaded, 100);
           }
         };
@@ -370,14 +375,28 @@ export class ComponentCompiler {
       script.async = true;
       
       script.onload = () => {
-        // Give the library a moment to initialize
-        setTimeout(() => {
+        // More robust checking with multiple attempts
+        let attempts = 0;
+        const maxAttempts = 20; // 2 seconds total
+        const checkInterval = 100; // Check every 100ms
+        
+        const checkGlobal = () => {
           if ((window as any)[globalName]) {
+            console.log(`  ✓ Global variable ${globalName} found after ${attempts * checkInterval}ms`);
             resolve();
+          } else if (attempts >= maxAttempts) {
+            // Final check - some libraries might use a different global name pattern
+            console.error(`  ❌ ${globalName} not found after ${attempts * checkInterval}ms`);
+            console.log(`  ℹ️ Window properties:`, Object.keys(window).filter(k => k.toLowerCase().includes(globalName.toLowerCase())));
+            reject(new Error(`${globalName} not found after loading script from ${url}`));
           } else {
-            reject(new Error(`${globalName} not found after loading script`));
+            attempts++;
+            setTimeout(checkGlobal, checkInterval);
           }
-        }, 100);
+        };
+        
+        // Start checking immediately (don't wait 100ms first)
+        checkGlobal();
       };
       
       script.onerror = () => {

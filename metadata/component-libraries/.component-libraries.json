@@ -82,6 +82,7 @@
       "Version": "2.10.4",
       "GlobalVariable": "Recharts",
       "Category": "Charting",
+      "Status": "Disabled",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js",
       "CDNCssUrl": null,
       "Description": "React charting library built on D3"
@@ -90,8 +91,8 @@
       "ID": "5A8C6518-889B-4868-BA20-4E50531309C6"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:14.511Z",
-      "checksum": "829f8fd1222578b456f1eb5d732449666da2482a365c28c8b4ac15c3ab69a2a6"
+      "lastModified": "2025-08-19T19:02:06.718Z",
+      "checksum": "0c4d5e41bef291ce7bbbb5160ed7ee4d554be14a59f0d03cd9c7e61b7bd65790"
     }
   },
   {
@@ -175,6 +176,7 @@
       "Name": "Victory",
       "DisplayName": "Victory",
       "Version": "36.9.1",
+      "Status": "Disabled",
       "GlobalVariable": "Victory",
       "Category": "Charting",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/victory@36.9.1/dist/victory.min.js",
@@ -185,8 +187,8 @@
       "ID": "51377687-DA3B-4BDD-8EB2-6CD44CE96E3D"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.315Z",
-      "checksum": "48b0d8b7c1d4eab5d5116c35e2dabf813d4434fa98553c5d246698a06533d7ad"
+      "lastModified": "2025-08-19T19:02:06.729Z",
+      "checksum": "6ed6712aa1b667c5e7992ff71a291f221e7c70430f1ab11d56ea7e02309f1450"
     }
   },
   {
@@ -232,6 +234,7 @@
       "Name": "date-fns",
       "DisplayName": "date-fns",
       "Version": "3.0.6",
+      "Status": "Deprecated",
       "GlobalVariable": "dateFns",
       "Category": "Utility",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/date-fns@3.0.6/cdn.min.js",
@@ -242,8 +245,8 @@
       "ID": "94552655-B996-4791-9008-A2D6AAC526AC"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:15.806Z",
-      "checksum": "317542a0ef091b9da519d603cc4e15b8cc76b2c22459ff5ab6ba409c28f9334d"
+      "lastModified": "2025-08-19T19:02:06.803Z",
+      "checksum": "b60735a8e9ca825504faac0e8d788bcaf7f3b9cb7955e4b92b34210135c2a555"
     }
   },
   {
@@ -308,6 +311,7 @@
       "Name": "classnames",
       "DisplayName": "Classnames",
       "Version": "2.5.1",
+      "Status": "Deprecated",
       "GlobalVariable": "classNames",
       "Category": "Utility",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/classnames@2.5.1/index.min.js",
@@ -318,8 +322,8 @@
       "ID": "8086FB43-A9A6-4CB4-B0BA-64DF478429F7"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:15.818Z",
-      "checksum": "806757dcab4d2fdfffcedf1554ea4f112ecdc0622d321d493dc392221b417817"
+      "lastModified": "2025-08-19T19:02:06.813Z",
+      "checksum": "d7986fbea3e73883514e44c9b5d3dc273859e58f2f06e0038a6095635f968ec3"
     }
   },
   {
@@ -480,6 +484,7 @@
       "DisplayName": "Material Table",
       "Version": "2.0.5",
       "GlobalVariable": "MaterialTable",
+      "Status": "Disabled",
       "Category": "UI",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/material-table@2.0.5/dist/material-table.min.js",
       "CDNCssUrl": null,
@@ -489,8 +494,8 @@
       "ID": "BBABE030-7C12-4080-8DFD-ECB634C8615E"
     },
     "sync": {
-      "lastModified": "2025-08-18T21:56:26.775Z",
-      "checksum": "4d63fdb8ab281a8d98907e4821a6eca8ca7eb9932dbbd373d5d1ade54f4f7324"
+      "lastModified": "2025-08-19T19:02:06.887Z",
+      "checksum": "3f8c386ffc094c0bf308983c34d96cbc3f32787beb8aa1f11080dd3d3162a2fe"
     }
   },
   {
@@ -536,6 +541,7 @@
       "Name": "framer-motion",
       "DisplayName": "Framer Motion",
       "Version": "10.16.16",
+      "Status": "Disabled",
       "GlobalVariable": "FramerMotion",
       "Category": "UI",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/framer-motion@10.16.16/dist/framer-motion.js",
@@ -546,8 +552,8 @@
       "ID": "DB3D64C3-0D00-4D40-9AA7-99243916CF38"
     },
     "sync": {
-      "lastModified": "2025-08-18T21:56:26.792Z",
-      "checksum": "1823f13d0442d2ea7f3fc226850a40f744b86824de544933aab41f0d15acfe3d"
+      "lastModified": "2025-08-19T19:02:06.897Z",
+      "checksum": "fe5eec1b81d5754a0c0a313477dd16042e9bc9640e893c1180df8eb017f82c35"
     }
   },
   {
@@ -632,6 +638,7 @@
       "DisplayName": "React Select",
       "Version": "2.1.2",
       "GlobalVariable": "ReactSelect",
+      "Status": "Disabled",
       "Category": "UI",
       "CDNUrl": "https://unpkg.com/react-select@2.1.2/dist/react-select.min.js",
       "CDNCssUrl": null,
@@ -641,8 +648,8 @@
       "ID": "3B520A11-731D-4C7B-9699-18906BB4CA53"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:15.932Z",
-      "checksum": "2c2756ba77c204446ddee444d72fb7d96b86fd3b452cc51df7dc83dc0d861ec9"
+      "lastModified": "2025-08-19T19:02:06.966Z",
+      "checksum": "d0f044f83cf858ba12192e8d448a3e3ae77f6b5de60d8272b61eab8b9442b506"
     }
   },
   {

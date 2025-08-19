@@ -86,7 +86,7 @@ export class ComponentRunner {
     const consoleLogs: { type: string; text: string }[] = [];
     let renderCount = 0;
     
-    const debug = options.debug === true;
+    const debug = options.debug !== false; // Default to true for debugging
     const globalTimeout = options.timeout || 30000; // Default 30 seconds total timeout
     
     if (debug) {

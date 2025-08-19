@@ -39135,6 +39135,10 @@ export class ComponentLibrary_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used`}) 
+    @MaxLength(40)
+    Status: string;
+        
     @Field(() => [ComponentLibraryLink_])
     MJ_ComponentLibraryLinks_LibraryIDArray: ComponentLibraryLink_[]; // Link to MJ_ComponentLibraryLinks
     
@@ -39171,6 +39175,9 @@ export class CreateComponentLibraryInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -39205,6 +39212,9 @@ export class UpdateComponentLibraryInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
