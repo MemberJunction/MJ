@@ -2171,6 +2171,81 @@ export class ComponentLinter {
           JSXElement(path: NodePath<t.JSXElement>) {
             const openingElement = path.node.openingElement;
             
+            // Handle JSXMemberExpression (e.g., <library.Component>)
+            if (t.isJSXMemberExpression(openingElement.name)) {
+              let objectName = '';
+              
+              if (t.isJSXIdentifier(openingElement.name.object)) {
+                objectName = openingElement.name.object.name;
+              }
+              
+              // Check if the object (library global) is available
+              if (objectName && !availableIdentifiers.has(objectName)) {
+                // Check if it looks like a library global that should exist
+                const isLikelyLibrary = /^[a-z][a-zA-Z]*$/.test(objectName) || // camelCase like agGrid
+                                       /^[A-Z][a-zA-Z]*$/.test(objectName);    // PascalCase like MaterialUI
+                
+                if (isLikelyLibrary) {
+                  // Suggest available library globals
+                  const availableLibraries = Array.from(libraryGlobalVars);
+                  
+                  if (availableLibraries.length > 0) {
+                    // Try to find a close match
+                    let suggestion = '';
+                    for (const lib of availableLibraries) {
+                      // Check for common patterns like agGridReact -> agGrid
+                      if (objectName.toLowerCase().includes(lib.toLowerCase().replace('grid', '')) ||
+                          lib.toLowerCase().includes(objectName.toLowerCase().replace('react', ''))) {
+                        suggestion = lib;
+                        break;
+                      }
+                    }
+                    
+                    if (suggestion) {
+                      violations.push({
+                        rule: 'undefined-jsx-component',
+                        severity: 'critical',
+                        line: openingElement.loc?.start.line || 0,
+                        column: openingElement.loc?.start.column || 0,
+                        message: `Library global "${objectName}" is not defined. Did you mean "${suggestion}"? Available library globals: ${availableLibraries.join(', ')}`,
+                        code: `<${objectName}.${t.isJSXIdentifier(openingElement.name.property) ? openingElement.name.property.name : '...'} />`
+                      });
+                    } else {
+                      violations.push({
+                        rule: 'undefined-jsx-component',
+                        severity: 'critical',
+                        line: openingElement.loc?.start.line || 0,
+                        column: openingElement.loc?.start.column || 0,
+                        message: `Library global "${objectName}" is not defined. Available library globals: ${availableLibraries.join(', ')}`,
+                        code: `<${objectName}.${t.isJSXIdentifier(openingElement.name.property) ? openingElement.name.property.name : '...'} />`
+                      });
+                    }
+                  } else {
+                    violations.push({
+                      rule: 'undefined-jsx-component',
+                      severity: 'critical',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `"${objectName}" is not defined. It appears to be a library global, but no libraries are specified in the component specification.`,
+                      code: `<${objectName}.${t.isJSXIdentifier(openingElement.name.property) ? openingElement.name.property.name : '...'} />`
+                    });
+                  }
+                } else {
+                  // Not a typical library pattern, just undefined
+                  violations.push({
+                    rule: 'undefined-jsx-component',
+                    severity: 'critical',
+                    line: openingElement.loc?.start.line || 0,
+                    column: openingElement.loc?.start.column || 0,
+                    message: `"${objectName}" is not defined in the current scope.`,
+                    code: `<${objectName}.${t.isJSXIdentifier(openingElement.name.property) ? openingElement.name.property.name : '...'} />`
+                  });
+                }
+              }
+              return; // Done with member expression
+            }
+            
+            // Handle regular JSXIdentifier (e.g., <Component>)
             if (t.isJSXIdentifier(openingElement.name)) {
               const tagName = openingElement.name.name;
               
@@ -2258,6 +2333,175 @@ export class ComponentLinter {
                     message: `JSX element "${tagName}" is not recognized as a valid HTML element or React component. Check the spelling or ensure it's properly defined.`,
                     code: `<${tagName} ... />`
                   });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'dependency-prop-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Skip if no dependencies
+        if (!componentSpec?.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+        
+        // Build a map of dependency components and their expected props
+        const dependencyPropsMap = new Map<string, { 
+          required: string[], 
+          all: string[],
+          location: string 
+        }>();
+        
+        for (const dep of componentSpec.dependencies) {
+          const requiredProps = dep.properties
+            ?.filter(p => p.required)
+            ?.map(p => p.name) || [];
+          const allProps = dep.properties?.map(p => p.name) || [];
+          dependencyPropsMap.set(dep.name, { 
+            required: requiredProps, 
+            all: allProps,
+            location: dep.location || 'embedded'
+          });
+        }
+        
+        // Helper function to find closest matching prop name
+        function findClosestMatch(target: string, candidates: string[]): string | null {
+          if (candidates.length === 0) return null;
+          
+          // Simple Levenshtein distance implementation
+          function levenshtein(a: string, b: string): number {
+            const matrix: number[][] = [];
+            for (let i = 0; i <= b.length; i++) {
+              matrix[i] = [i];
+            }
+            for (let j = 0; j <= a.length; j++) {
+              matrix[0][j] = j;
+            }
+            for (let i = 1; i <= b.length; i++) {
+              for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                  matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                  matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                  );
+                }
+              }
+            }
+            return matrix[b.length][a.length];
+          }
+          
+          // Find the closest match
+          let bestMatch = '';
+          let bestDistance = Infinity;
+          
+          for (const candidate of candidates) {
+            const distance = levenshtein(target.toLowerCase(), candidate.toLowerCase());
+            if (distance < bestDistance && distance <= 3) { // Max distance of 3 for suggestions
+              bestDistance = distance;
+              bestMatch = candidate;
+            }
+          }
+          
+          return bestMatch || null;
+        }
+        
+        // Standard props that are always valid (passed by the runtime)
+        const standardProps = new Set([
+          'styles', 'utilities', 'components', 'callbacks', 
+          'savedUserSettings', 'onSaveUserSettings'
+        ]);
+        
+        // Track JSX elements and their props
+        traverse(ast, {
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            
+            // Get the element name
+            let elementName = '';
+            if (t.isJSXIdentifier(openingElement.name)) {
+              elementName = openingElement.name.name;
+            } else if (t.isJSXMemberExpression(openingElement.name)) {
+              // Handle cases like <MaterialUI.Button>
+              return; // Skip member expressions for now
+            }
+            
+            // Check if this is one of our dependencies
+            if (dependencyPropsMap.has(elementName)) {
+              const { required, all, location } = dependencyPropsMap.get(elementName)!;
+              
+              // Get passed props
+              const passedProps = new Set<string>();
+              const propLocations = new Map<string, { line: number, column: number }>();
+              
+              for (const attr of openingElement.attributes) {
+                if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                  const propName = attr.name.name;
+                  passedProps.add(propName);
+                  propLocations.set(propName, {
+                    line: attr.loc?.start.line || 0,
+                    column: attr.loc?.start.column || 0
+                  });
+                }
+              }
+              
+              // Check for missing required props
+              for (const requiredProp of required) {
+                if (!passedProps.has(requiredProp) && !standardProps.has(requiredProp)) {
+                  violations.push({
+                    rule: 'dependency-prop-validation',
+                    severity: 'critical',
+                    line: openingElement.loc?.start.line || 0,
+                    column: openingElement.loc?.start.column || 0,
+                    message: `Missing required prop '${requiredProp}' for dependency component '${elementName}'`,
+                    code: `<${elementName} ... />`
+                  });
+                }
+              }
+              
+              // Check for unknown props (potential typos)
+              for (const passedProp of passedProps) {
+                // Skip standard props and spread operators
+                if (standardProps.has(passedProp) || passedProp === 'key' || passedProp === 'ref') {
+                  continue;
+                }
+                
+                if (!all.includes(passedProp)) {
+                  // Try to find a close match
+                  const suggestion = findClosestMatch(passedProp, all);
+                  
+                  if (suggestion) {
+                    const loc = propLocations.get(passedProp);
+                    violations.push({
+                      rule: 'dependency-prop-validation',
+                      severity: 'high',
+                      line: loc?.line || openingElement.loc?.start.line || 0,
+                      column: loc?.column || openingElement.loc?.start.column || 0,
+                      message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Did you mean '${suggestion}'?`,
+                      code: `${passedProp}={...}`
+                    });
+                  } else {
+                    const loc = propLocations.get(passedProp);
+                    violations.push({
+                      rule: 'dependency-prop-validation',
+                      severity: 'medium',
+                      line: loc?.line || openingElement.loc?.start.line || 0,
+                      column: loc?.column || openingElement.loc?.start.column || 0,
+                      message: `Unknown prop '${passedProp}' passed to dependency component '${elementName}'. Expected props: ${all.join(', ')}`,
+                      code: `${passedProp}={...}`
+                    });
+                  }
                 }
               }
             }
