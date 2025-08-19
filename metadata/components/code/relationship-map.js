@@ -59,6 +59,4 @@ const RelationshipMap = ({ data, onDataClick, utilities, styles, components, cal
   }, [data, onDataClick]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '350px' }} />;
-};
-
-return RelationshipMap;
+}

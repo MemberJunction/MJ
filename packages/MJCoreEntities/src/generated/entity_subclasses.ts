@@ -9575,6 +9575,17 @@ export const ComponentLibrarySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -39104,6 +39115,25 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
     }
 }
 

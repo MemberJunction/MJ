@@ -59,6 +59,4 @@ const CashFlowChart = ({ data, onDataClick, utilities, styles, components, callb
   }, [data, onDataClick]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '350px' }} />;
-};
-
-return CashFlowChart;
+}

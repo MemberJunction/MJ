@@ -12,8 +12,8 @@ env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
 
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
 export class LocalEmbedding extends BaseEmbeddings {
-    private pipelines: Map<string, any> = new Map();
-    private loadingPromises: Map<string, Promise<any>> = new Map();
+    private static pipelines: Map<string, any> = new Map();
+    private static loadingPromises: Map<string, Promise<any>> = new Map();
 
     constructor(apiKey?: string) {
         // Local embeddings don't require an API key
@@ -25,27 +25,29 @@ export class LocalEmbedding extends BaseEmbeddings {
      */
     private async getPipeline(modelName: string): Promise<any> {
         // Check if pipeline already exists
-        if (this.pipelines.has(modelName)) {
-            return this.pipelines.get(modelName)!;
+        if (LocalEmbedding.pipelines.has(modelName)) {
+            return LocalEmbedding.pipelines.get(modelName)!;
         }
 
         // Check if pipeline is currently being loaded
-        if (this.loadingPromises.has(modelName)) {
-            return this.loadingPromises.get(modelName)!;
+        if (LocalEmbedding.loadingPromises.has(modelName)) {
+            return LocalEmbedding.loadingPromises.get(modelName)!;
         }
 
         // Create loading promise
         // The modelName should be the Hugging Face model ID (e.g., 'Xenova/all-MiniLM-L6-v2')
+        console.log(`Loading local embedding model: ${modelName}`);
         const loadingPromise = this.loadPipeline(modelName);
-        this.loadingPromises.set(modelName, loadingPromise);
+        LocalEmbedding.loadingPromises.set(modelName, loadingPromise);
 
         try {
             const pipeline = await loadingPromise;
-            this.pipelines.set(modelName, pipeline);
-            this.loadingPromises.delete(modelName);
+            LocalEmbedding.pipelines.set(modelName, pipeline);
+            LocalEmbedding.loadingPromises.delete(modelName);
+            console.log(`Successfully loaded model: ${modelName}`);
             return pipeline;
         } catch (error) {
-            this.loadingPromises.delete(modelName);
+            LocalEmbedding.loadingPromises.delete(modelName);
             throw error;
         }
     }
@@ -54,15 +56,12 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Load a pipeline for the specified model
      */
     private async loadPipeline(modelId: string): Promise<any> {
-        console.log(`Loading local embedding model: ${modelId}`);
-        
         try {
             // Create feature extraction pipeline
             const pipe = await pipeline('feature-extraction', modelId, {
                 quantized: true, // Use quantized models for better performance
             });
             
-            console.log(`Successfully loaded model: ${modelId}`);
             return pipe;
         } catch (error) {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
@@ -99,7 +98,10 @@ export class LocalEmbedding extends BaseEmbeddings {
             const tokenCount = Math.ceil(params.text.length / 4);
             
             const endTime = Date.now();
-            console.log(`Embedded text in ${endTime - startTime}ms using ${modelName}`);
+            // Only log if it took more than 1 second (indicating potential performance issues)
+            if (endTime - startTime > 1000) {
+                console.log(`Embedded text in ${endTime - startTime}ms using ${modelName}`);
+            }
 
             return {
                 object: 'object',
@@ -161,7 +163,10 @@ export class LocalEmbedding extends BaseEmbeddings {
             }
             
             const endTime = Date.now();
-            console.log(`Embedded ${params.texts.length} texts in ${endTime - startTime}ms using ${modelName}`);
+            // Only log if it took more than 1 second per text on average
+            if ((endTime - startTime) / params.texts.length > 1000) {
+                console.log(`Embedded ${params.texts.length} texts in ${endTime - startTime}ms using ${modelName}`);
+            }
 
             return {
                 object: 'list',
@@ -220,9 +225,18 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Clear loaded pipelines to free memory
      */
     public clearCache(): void {
-        this.pipelines.clear();
-        this.loadingPromises.clear();
+        LocalEmbedding.pipelines.clear();
+        LocalEmbedding.loadingPromises.clear();
         console.log('Cleared local embedding model cache');
+    }
+    
+    /**
+     * Static method to clear the shared cache
+     */
+    public static clearSharedCache(): void {
+        LocalEmbedding.pipelines.clear();
+        LocalEmbedding.loadingPromises.clear();
+        console.log('Cleared shared local embedding model cache');
     }
 
     /**

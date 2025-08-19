@@ -82,6 +82,4 @@ const CustomerBalances = ({ data, columns, onRowClick, sortConfig, onSort, utili
       )}
     </div>
   );
-};
-
-return CustomerBalances;
+}

@@ -1,5 +1,5 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
+import { ComponentExecutionOptions, ComponentExecutionResult, ComponentRunner } from './component-runner';
 import { AssertionHelpers } from './assertion-helpers';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -7,6 +7,7 @@ export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
   screenshotOnError?: boolean;
   screenshotPath?: string;
+  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (can be serialized JSON)
 }
 
 /**

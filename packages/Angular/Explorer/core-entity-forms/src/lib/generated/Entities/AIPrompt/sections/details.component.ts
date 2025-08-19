@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { AIPromptEntityExtended } from '@memberjunction/core-entities';
+import { AIPromptEntity } from '@memberjunction/core-entities';
 
 @RegisterClass(BaseFormSectionComponent, 'AI Prompts.details') // Tell MemberJunction about this class 
 @Component({
@@ -410,7 +410,7 @@ import { AIPromptEntityExtended } from '@memberjunction/core-entities';
     `
 })
 export class AIPromptDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: AIPromptEntityExtended;
+    @Input() override record!: AIPromptEntity;
     @Input() override EditMode: boolean = false;
 }
 

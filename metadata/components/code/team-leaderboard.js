@@ -137,6 +137,4 @@ const TeamLeaderboard = ({ teamData, onRepClick, utilities, styles, components, 
       </div>
     </div>
   );
-};
-
-return TeamLeaderboard;
+}

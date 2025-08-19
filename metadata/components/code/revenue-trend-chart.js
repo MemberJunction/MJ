@@ -59,6 +59,4 @@ const RevenueTrendChart = ({ data, onDataClick, utilities, styles, components, c
   }, [data, onDataClick]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '350px' }} />;
-};
-
-return RevenueTrendChart;
+}

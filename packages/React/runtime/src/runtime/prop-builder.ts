@@ -4,7 +4,8 @@
  * @module @memberjunction/react-runtime/runtime
  */
 
-import { ComponentProps, ComponentCallbacks, ComponentStyles } from '../types';
+import { ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentProps, ComponentCallbacks } from '../types';
 import { Subject, debounceTime, Subscription } from 'rxjs';
 
 /**
@@ -187,7 +188,7 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
     utilities: {},
     callbacks: {},
     components: {},
-    styles: {}
+    styles: {} as ComponentStyles
   };
 
   for (const props of propsList) {

@@ -116,6 +116,4 @@ const CustomerHeader = ({ customer, metrics, utilities, styles, components, call
       </div>
     </div>
   );
-};
-
-return CustomerHeader;
+}

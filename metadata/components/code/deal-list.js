@@ -208,6 +208,4 @@ const DealList = ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, co
       )}
     </div>
   );
-};
-
-return DealList;
+}
