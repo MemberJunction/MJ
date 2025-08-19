@@ -9,15 +9,15 @@
       "IsActive": true,
       "UIFormSectionKey": null,
       "UIFormKey": null,
-      "UIFormSectionExpandedByDefault": true
+      "UIFormSectionExpandedByDefault": false
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2025-08-18T21:56:24.334Z",
-      "checksum": "487a877b3b8b8d705ca89954e33818f74c1631480dea807e2067f5d89f0de98c"
+      "lastModified": "2025-08-19T16:17:50.974Z",
+      "checksum": "049bd9d3ed38d19fabeb3b890e6965ab7f9e5319a92e9bdfbc7be076535dee2b"
     }
   },
   {
@@ -30,14 +30,14 @@
       "DriverClass": "FlowAgentType",
       "UIFormSectionKey": "FlowAgentSection",
       "UIFormKey": null,
-      "UIFormSectionExpandedByDefault": true
+      "UIFormSectionExpandedByDefault": false
     },
     "primaryKey": {
       "ID": "4F6A189B-C068-4736-9F23-3FF540B40FDD"
     },
     "sync": {
-      "lastModified": "2025-08-18T21:56:24.322Z",
-      "checksum": "950573b81da9303d49d1e9bd72a6cbb7b523ae81c934243b7ca7e683c6dcede8"
+      "lastModified": "2025-08-19T16:17:50.964Z",
+      "checksum": "258749c212a25d38d0b03bc4fb41b63c15593192ff3827f0cc022b99752df5cb"
     }
   }
 ]
