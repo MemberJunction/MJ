@@ -5374,3 +5374,7 @@ EXEC [${flyway:defaultSchema}].spUpdateAIAgentType @Name = @Name_f7be4ff4,
 
 
 
+--Recharts correct CDN
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNUrl = 'https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js'
+WHERE ID = '5A8C6518-889B-4868-BA20-4E50531309C6';

@@ -87,6 +87,7 @@ export class ComponentRunner {
     let renderCount = 0;
     
     const debug = options.debug === true;
+    const globalTimeout = options.timeout || 30000; // Default 30 seconds total timeout
     
     if (debug) {
       console.log('\n🔍 === Component Execution Debug Mode ===');
@@ -96,6 +97,9 @@ export class ComponentRunner {
 
     // Get a fresh page for this test execution
     const page = await this.browserManager.getPage();
+    
+    // Set default timeout for all page operations (Recommendation #2)
+    page.setDefaultTimeout(globalTimeout);
 
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
@@ -177,8 +181,8 @@ export class ComponentRunner {
         }
       }
 
-      // Execute the component using the real React runtime
-      const executionResult = await page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
+      // Execute the component using the real React runtime with timeout (Recommendation #1)
+      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
           console.log('📚 BROWSER: Received componentLibraries:', componentLibraries?.length || 0);
@@ -186,6 +190,9 @@ export class ComponentRunner {
             console.log('  First library:', componentLibraries[0]);
           }
         }
+        
+        // Declare renderCheckInterval at the top scope for cleanup
+        let renderCheckInterval: any;
         
         try {
           // Access the real runtime classes
@@ -364,6 +371,32 @@ export class ComponentRunner {
 
           const root = (window as any).ReactDOM.createRoot(rootElement);
           
+          // Set up render count protection (Recommendation #5)
+          const MAX_RENDERS_ALLOWED = 500; // Reasonable limit for complex components
+          
+          if (typeof window !== 'undefined') {
+            renderCheckInterval = setInterval(() => {
+              const currentRenderCount = (window as any).__testHarnessRenderCount || 0;
+              if (currentRenderCount > MAX_RENDERS_ALLOWED) {
+                clearInterval(renderCheckInterval);
+                // Mark test as failed due to excessive renders
+                (window as any).__testHarnessTestFailed = true;
+                (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+                (window as any).__testHarnessRuntimeErrors.push({
+                  message: `Excessive re-renders detected: ${currentRenderCount} renders (max: ${MAX_RENDERS_ALLOWED})`,
+                  type: 'render-loop'
+                });
+                // Try to unmount to stop the madness
+                try {
+                  root.unmount();
+                } catch (e) {
+                  console.error('Failed to unmount after render loop:', e);
+                }
+                throw new Error(`Excessive re-renders: ${currentRenderCount} renders detected`);
+              }
+            }, 100); // Check every 100ms
+          }
+          
           // Build complete props
           const componentProps = {
             ...props,
@@ -422,6 +455,11 @@ export class ComponentRunner {
             )
           );
 
+          // Clear the render check interval since we succeeded
+          if (renderCheckInterval) {
+            clearInterval(renderCheckInterval);
+          }
+          
           if (debug) {
             console.log('✅ Component rendered successfully');
           }
@@ -432,6 +470,11 @@ export class ComponentRunner {
           };
 
         } catch (error: any) {
+          // Clean up render check interval if it exists
+          if (typeof renderCheckInterval !== 'undefined' && renderCheckInterval) {
+            clearInterval(renderCheckInterval);
+          }
+          
           console.error('🔴 BROWSER: Component execution failed:', error);
           console.error('🔴 BROWSER: Error stack:', error.stack);
           console.error('🔴 BROWSER: Error type:', typeof error);
@@ -455,7 +498,25 @@ export class ComponentRunner {
         props: options.props, 
         debug,
         componentLibraries: allLibraries || []
-      }) as { success: boolean; error?: string; componentCount?: number };
+      }) as Promise<{ success: boolean; error?: string; componentCount?: number }>;
+      
+      // Create timeout promise (Recommendation #1)
+      const timeoutPromise = new Promise<{ success: boolean; error?: string; componentCount?: number }>((_, reject) => 
+        setTimeout(() => reject(new Error(`Component execution timeout after ${globalTimeout}ms`)), globalTimeout)
+      );
+      
+      // Race between execution and timeout
+      let executionResult: { success: boolean; error?: string; componentCount?: number };
+      try {
+        executionResult = await Promise.race([executionPromise, timeoutPromise]);
+      } catch (timeoutError) {
+        // Handle timeout gracefully
+        errors.push(`Component execution timed out after ${globalTimeout}ms`);
+        executionResult = { 
+          success: false, 
+          error: timeoutError instanceof Error ? timeoutError.message : 'Execution timeout' 
+        };
+      }
 
       if (debug) {
         console.log('Execution result:', executionResult);
@@ -593,12 +654,26 @@ export class ComponentRunner {
    * Load runtime libraries into the page
    */
   private async loadRuntimeLibraries(page: any, componentSpec?: ComponentSpec, allLibraries?: ComponentLibraryEntity[], debug: boolean = false) {
-    // Load React and ReactDOM
-    await page.addScriptTag({ url: 'https://unpkg.com/react@18/umd/react.development.js' });
-    await page.addScriptTag({ url: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js' });
+    // Helper function to load scripts with timeout (Recommendation #3)
+    const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
+      try {
+        await Promise.race([
+          page.addScriptTag({ url }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Script load timeout: ${url}`)), timeout)
+          )
+        ]);
+      } catch (error) {
+        throw new Error(`Failed to load script ${url}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     
-    // Load Babel for JSX transformation
-    await page.addScriptTag({ url: 'https://unpkg.com/@babel/standalone/babel.min.js' });
+    // Load React and ReactDOM with timeout protection
+    await loadScriptWithTimeout('https://unpkg.com/react@18/umd/react.development.js');
+    await loadScriptWithTimeout('https://unpkg.com/react-dom@18/umd/react-dom.development.js');
+    
+    // Load Babel for JSX transformation with timeout
+    await loadScriptWithTimeout('https://unpkg.com/@babel/standalone/babel.min.js');
     
     // Load the real MemberJunction React Runtime UMD bundle
     const fs = await import('fs');
@@ -695,10 +770,16 @@ export class ComponentRunner {
         }
       }
 
-      // Load the library script
+      // Load the library script with timeout protection
       if (libDef.CDNUrl) {
         try {
-          await page.addScriptTag({ url: libDef.CDNUrl });
+          // Add timeout for library loading (Recommendation #3)
+          await Promise.race([
+            page.addScriptTag({ url: libDef.CDNUrl }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`Library load timeout: ${libDef.CDNUrl}`)), 10000)
+            )
+          ]);
           
           // Verify the library loaded
           const isLoaded = await page.evaluate((globalVar: string) => {
