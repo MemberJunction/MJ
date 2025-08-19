@@ -2400,6 +2400,156 @@ export class ComponentLinter {
     },
     
     {
+      name: 'runview-runquery-result-direct-usage',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, { line: number; column: number; method: string }>();
+        
+        traverse(ast, {
+          // First pass: identify RunView/RunQuery calls and their assigned variables
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              // Check for utilities.rv.RunView or utilities.rq.RunQuery pattern
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities') {
+                
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                const isRunView = method === 'RunView' || method === 'RunViews';
+                const isRunQuery = method === 'RunQuery';
+                
+                if (isRunView || isRunQuery) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    // const result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: isRunView ? 'RunView' : 'RunQuery'
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    // result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: isRunView ? 'RunView' : 'RunQuery'
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for misuse of these result variables
+        traverse(ast, {
+          // Check for direct array operations
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for array methods being called on result objects
+            if (t.isMemberExpression(path.node.callee) && 
+                t.isIdentifier(path.node.callee.object) &&
+                t.isIdentifier(path.node.callee.property)) {
+              
+              const objName = path.node.callee.object.name;
+              const methodName = path.node.callee.property.name;
+              
+              // Array methods that would fail on a result object
+              const arrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat'];
+              
+              if (resultVariables.has(objName) && arrayMethods.includes(methodName)) {
+                const resultInfo = resultVariables.get(objName)!;
+                violations.push({
+                  rule: 'runview-runquery-result-direct-usage',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Cannot call array method "${methodName}" directly on ${resultInfo.method} result. Use "${objName}.Results.${methodName}(...)" instead. ${resultInfo.method} returns an object with { Success, Results, ... }, not an array.`,
+                  code: `${objName}.${methodName}(...)`
+                });
+              }
+            }
+          },
+          
+          // Check for direct usage in setState or as function arguments
+          Identifier(path: NodePath<t.Identifier>) {
+            const varName = path.node.name;
+            
+            if (resultVariables.has(varName)) {
+              const resultInfo = resultVariables.get(varName)!;
+              const parent = path.parent;
+              
+              // Check if being passed to setState-like functions
+              if (t.isCallExpression(parent) && path.node === parent.arguments[0]) {
+                const callee = parent.callee;
+                
+                // Check for setState patterns
+                if (t.isIdentifier(callee) && /^set[A-Z]/.test(callee.name)) {
+                  // Likely a setState function
+                  violations.push({
+                    rule: 'runview-runquery-result-direct-usage',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Passing ${resultInfo.method} result directly to setState. Use "${varName}.Results" or check "${varName}.Success" first. ${resultInfo.method} returns { Success, Results, ErrorMessage }, not the data array.`,
+                    code: `${callee.name}(${varName})`
+                  });
+                }
+                
+                // Check for array-expecting functions
+                if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+                  const methodName = callee.property.name;
+                  if (methodName === 'concat' || methodName === 'push' || methodName === 'unshift') {
+                    violations.push({
+                      rule: 'runview-runquery-result-direct-usage',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Passing ${resultInfo.method} result to array method. Use "${varName}.Results" instead of "${varName}".`,
+                      code: `...${methodName}(${varName})`
+                    });
+                  }
+                }
+              }
+              
+              // Check for ternary with Array.isArray check (common pattern)
+              if (t.isConditionalExpression(parent) && 
+                  t.isCallExpression(parent.test) &&
+                  t.isMemberExpression(parent.test.callee) &&
+                  t.isIdentifier(parent.test.callee.object) &&
+                  parent.test.callee.object.name === 'Array' &&
+                  t.isIdentifier(parent.test.callee.property) &&
+                  parent.test.callee.property.name === 'isArray') {
+                
+                // Pattern: Array.isArray(result) ? result : []
+                if (parent.test.arguments[0] === path.node && parent.consequent === path.node) {
+                  violations.push({
+                    rule: 'runview-runquery-result-direct-usage',
+                    severity: 'high',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `${resultInfo.method} result is never an array. Use "${varName}.Results || []" instead of "Array.isArray(${varName}) ? ${varName} : []".`,
+                    code: `Array.isArray(${varName}) ? ${varName} : []`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'runquery-runview-result-structure',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -4198,6 +4348,58 @@ function RootComponent({ utilities, styles, components, callbacks, savedUserSett
   
   return <div>{/* Use state, not props */}</div>;
 }`
+          });
+          break;
+          
+        case 'runview-runquery-result-direct-usage':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'RunView and RunQuery return result objects, not arrays. Access the data with .Results property.',
+            example: `// ❌ WRONG - Using result directly as array:
+const result = await utilities.rv.RunView({
+  EntityName: 'Users',
+  Fields: ['ID', 'Name']
+});
+
+// These will all fail:
+setUsers(result);  // Wrong! result is an object
+result.map(u => u.Name);  // Wrong! Can't map on object
+const users = Array.isArray(result) ? result : [];  // Wrong! Will always be []
+
+// ✅ CORRECT - Access the Results property:
+const result = await utilities.rv.RunView({
+  EntityName: 'Users',
+  Fields: ['ID', 'Name']
+});
+
+// Check success first (recommended):
+if (result.Success) {
+  setUsers(result.Results || []);
+} else {
+  console.error('Failed:', result.ErrorMessage);
+  setUsers([]);
+}
+
+// Or use optional chaining:
+setUsers(result?.Results || []);
+
+// Now array methods work:
+const names = result.Results?.map(u => u.Name) || [];
+
+// ✅ For RunQuery - same pattern:
+const queryResult = await utilities.rq.RunQuery({
+  QueryName: 'UserSummary'
+});
+setData(queryResult.Results || []);  // NOT queryResult directly!
+
+// Result object structure:
+// {
+//   Success: boolean,
+//   Results: Array,  // Your data is here!
+//   ErrorMessage?: string,
+//   TotalRowCount?: number,
+//   ExecutionTime?: number
+// }`
           });
           break;
       }

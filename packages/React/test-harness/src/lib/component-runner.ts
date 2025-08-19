@@ -167,7 +167,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options.contextUser, dataErrors)
+      await this.exposeMJUtilities(page, options.contextUser, dataErrors, debug)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -1007,7 +1007,7 @@ export class ComponentRunner {
   /**
    * Expose MJ utilities to the browser context
    */
-  private async exposeMJUtilities(page: any, contextUser: UserInfo, dataErrors: string[]): Promise<void> {
+  private async exposeMJUtilities(page: any, contextUser: UserInfo, dataErrors: string[], debug: boolean = false): Promise<void> {
     // Don't check if already exposed - we always start fresh after goto('about:blank')
     // The page.exposeFunction calls need to be made for each new page instance
 
@@ -1104,10 +1104,28 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
       try {
-        return await runView.RunView(params, contextUser);
+        const result = await runView.RunView(params, contextUser);
+        
+        // Debug logging for successful calls
+        if (debug) {
+          const rowCount = result.Results?.length || 0;
+          console.log(`✅ RunView SUCCESS: Entity="${params.EntityName}" Rows=${rowCount}`);
+          if (params.ExtraFilter) {
+            console.log(`   Filter: ${params.ExtraFilter}`);
+          }
+        }
+        
+        return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Error in __mjRunView:', errorMessage);
+        
+        // Debug logging for errors
+        if (debug) {
+          console.log(`❌ RunView FAILED: Entity="${params.EntityName || 'unknown'}"`);
+          console.log(`   Error: ${errorMessage}`);
+        } else {
+          console.error('Error in __mjRunView:', errorMessage);
+        }
         
         // Collect this error for the test report
         dataErrors.push(`RunView error: ${errorMessage} (Entity: ${params.EntityName || 'unknown'})`);
@@ -1119,13 +1137,31 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
       try {
-        return await runView.RunViews(params, contextUser);
+        const results = await runView.RunViews(params, contextUser);
+        
+        // Debug logging for successful calls
+        if (debug) {
+          console.log(`✅ RunViews SUCCESS: ${params.length} queries executed`);
+          params.forEach((p, i) => {
+            const rowCount = results[i]?.Results?.length || 0;
+            console.log(`   [${i+1}] Entity="${p.EntityName}" Rows=${rowCount}`);
+          });
+        }
+        
+        return results;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Error in __mjRunViews:', errorMessage);
+        const entities = params.map(p => p.EntityName || 'unknown').join(', ');
+        
+        // Debug logging for errors
+        if (debug) {
+          console.log(`❌ RunViews FAILED: Entities=[${entities}]`);
+          console.log(`   Error: ${errorMessage}`);
+        } else {
+          console.error('Error in __mjRunViews:', errorMessage);
+        }
         
         // Collect this error for the test report
-        const entities = params.map(p => p.EntityName || 'unknown').join(', ');
         dataErrors.push(`RunViews error: ${errorMessage} (Entities: ${entities})`);
         
         // Return error results that won't crash the component
@@ -1135,13 +1171,32 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
       try {
-        return await runQuery.RunQuery(params, contextUser);
+        const result = await runQuery.RunQuery(params, contextUser);
+        
+        // Debug logging for successful calls
+        if (debug) {
+          const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
+          const rowCount = result.Results?.length || 0;
+          console.log(`✅ RunQuery SUCCESS: Query="${queryIdentifier}" Rows=${rowCount}`);
+          if (params.Parameters && Object.keys(params.Parameters).length > 0) {
+            console.log(`   Parameters:`, params.Parameters);
+          }
+        }
+        
+        return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Error in __mjRunQuery:', errorMessage);
+        const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
+        
+        // Debug logging for errors
+        if (debug) {
+          console.log(`❌ RunQuery FAILED: Query="${queryIdentifier}"`);
+          console.log(`   Error: ${errorMessage}`);
+        } else {
+          console.error('Error in __mjRunQuery:', errorMessage);
+        }
         
         // Collect this error for the test report
-        const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
         dataErrors.push(`RunQuery error: ${errorMessage} (Query: ${queryIdentifier})`);
         
         // Return error result that won't crash the component
