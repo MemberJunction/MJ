@@ -5216,3 +5216,8 @@ WHERE ID = '5A8C6518-889B-4868-BA20-4E50531309C6';
 UPDATE ${flyway:defaultSchema}.ComponentLibrary
 SET CDNCssUrl = 'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/styles/ag-grid.css'
 WHERE ID = 'F7881AA4-83AF-4841-8475-55BBFD5187CC';
+
+--antd auto loads it CSS from its JS so this isn't needed
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNCssUrl = NULL
+WHERE ID = '91591953-DB49-4E61-A81D-4F7755E2FF73';
