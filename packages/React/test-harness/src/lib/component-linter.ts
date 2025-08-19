@@ -638,6 +638,76 @@ export class ComponentLinter {
     },
     
     {
+      name: 'library-variable-names',
+      appliesTo: 'all', 
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build a map of library names to their globalVariables
+        const libraryGlobals = new Map<string, string>();
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            // Store both the exact name and lowercase for comparison
+            libraryGlobals.set(lib.name.toLowerCase(), lib.globalVariable);
+          }
+        }
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for destructuring from a variable (library global)
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              const sourceVar = path.node.init.name;
+              
+              // Check if this looks like a library name (case-insensitive match)
+              const matchedLib = Array.from(libraryGlobals.entries()).find(([libName, globalVar]) => 
+                sourceVar.toLowerCase() === libName || 
+                sourceVar.toLowerCase() === globalVar.toLowerCase()
+              );
+              
+              if (matchedLib) {
+                const [libName, correctGlobal] = matchedLib;
+                if (sourceVar !== correctGlobal) {
+                  violations.push({
+                    rule: 'library-variable-names',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Incorrect library global variable "${sourceVar}". Use the exact globalVariable from the library spec: "${correctGlobal}". Change "const { ... } = ${sourceVar};" to "const { ... } = ${correctGlobal};"`
+                  });
+                }
+              }
+            }
+            
+            // Check for self-assignment (const chroma = chroma)
+            if (t.isIdentifier(path.node.id) && t.isIdentifier(path.node.init)) {
+              const idName = path.node.id.name;
+              const initName = path.node.init.name;
+              
+              if (idName === initName) {
+                // Check if this is a library global
+                const isLibraryGlobal = Array.from(libraryGlobals.values()).some(
+                  global => global === idName
+                );
+                
+                if (isLibraryGlobal) {
+                  violations.push({
+                    rule: 'library-variable-names', 
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Self-assignment of library global "${idName}". This variable is already available as a global from the library. Remove this line entirely - the library global is already accessible.`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'pass-standard-props',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1492,27 +1562,80 @@ export class ComponentLinter {
               const methodName = callee.property.name;
               
               if (methodName === 'RunView' || methodName === 'RunViews') {
+                // Check that first parameter exists
+                if (!path.node.arguments[0]) {
+                  violations.push({
+                    rule: 'runview-runquery-valid-properties',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `${methodName} requires a ${methodName === 'RunViews' ? 'array of RunViewParams objects' : 'RunViewParams object'} as the first parameter.`,
+                    code: `${methodName}()`
+                  });
+                  return;
+                }
+                
                 // Get the config object(s)
                 let configs: t.ObjectExpression[] = [];
+                let hasValidFirstParam = false;
                 
-                if (methodName === 'RunViews' && path.node.arguments[0]) {
+                if (methodName === 'RunViews') {
                   // RunViews takes an array of configs
                   if (t.isArrayExpression(path.node.arguments[0])) {
+                    hasValidFirstParam = true;
                     configs = path.node.arguments[0].elements
                       .filter((e): e is t.ObjectExpression => t.isObjectExpression(e));
+                  } else {
+                    violations.push({
+                      rule: 'runview-runquery-valid-properties',
+                      severity: 'critical',
+                      line: path.node.arguments[0].loc?.start.line || 0,
+                      column: path.node.arguments[0].loc?.start.column || 0,
+                      message: `RunViews expects an array of RunViewParams objects, not a ${t.isObjectExpression(path.node.arguments[0]) ? 'single object' : 'non-array'}. Use: RunViews([{ EntityName: 'Entity1' }, { EntityName: 'Entity2' }])`,
+                      code: path.toString().substring(0, 100)
+                    });
                   }
-                } else if (methodName === 'RunView' && path.node.arguments[0]) {
+                } else if (methodName === 'RunView') {
                   // RunView takes a single config
                   if (t.isObjectExpression(path.node.arguments[0])) {
+                    hasValidFirstParam = true;
                     configs = [path.node.arguments[0]];
+                  } else {
+                    const argType = t.isStringLiteral(path.node.arguments[0]) ? 'string' : 
+                                   t.isArrayExpression(path.node.arguments[0]) ? 'array' :
+                                   t.isIdentifier(path.node.arguments[0]) ? 'identifier' : 
+                                   'non-object';
+                    violations.push({
+                      rule: 'runview-runquery-valid-properties',
+                      severity: 'critical',
+                      line: path.node.arguments[0].loc?.start.line || 0,
+                      column: path.node.arguments[0].loc?.start.column || 0,
+                      message: `RunView expects a RunViewParams object, not ${argType === 'array' ? 'an' : 'a'} ${argType}. Use: RunView({ EntityName: 'YourEntity' }) or for multiple use RunViews([...])`,
+                      code: path.toString().substring(0, 100)
+                    });
                   }
                 }
                 
-                // Check each config for invalid properties
+                if (!hasValidFirstParam) {
+                  return;
+                }
+                
+                // Check each config for invalid properties and required fields
                 for (const config of configs) {
+                  // Check for required properties (must have ViewID, ViewName, ViewEntity, or EntityName)
+                  let hasViewID = false;
+                  let hasViewName = false;
+                  let hasViewEntity = false;
+                  let hasEntityName = false;
+                  
                   for (const prop of config.properties) {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
+                      
+                      if (propName === 'ViewID') hasViewID = true;
+                      if (propName === 'ViewName') hasViewName = true;
+                      if (propName === 'ViewEntity') hasViewEntity = true;
+                      if (propName === 'EntityName') hasEntityName = true;
                       
                       if (!validRunViewProps.has(propName)) {
                         // Special error messages for common mistakes
@@ -1541,6 +1664,18 @@ export class ComponentLinter {
                       }
                     }
                   }
+                  
+                  // Check that at least one required property is present
+                  if (!hasViewID && !hasViewName && !hasViewEntity && !hasEntityName) {
+                    violations.push({
+                      rule: 'runview-runquery-valid-properties',
+                      severity: 'critical',
+                      line: config.loc?.start.line || 0,
+                      column: config.loc?.start.column || 0,
+                      message: `${methodName} requires one of: ViewID, ViewName, ViewEntity, or EntityName. Add one to identify what data to retrieve.`,
+                      code: `${methodName}({ ... })`
+                    });
+                  }
                 }
               }
             }
@@ -1555,12 +1690,42 @@ export class ComponentLinter {
                 t.isIdentifier(callee.property) && 
                 callee.property.name === 'RunQuery') {
               
-              if (path.node.arguments[0] && t.isObjectExpression(path.node.arguments[0])) {
+              // Check that first parameter exists and is an object
+              if (!path.node.arguments[0]) {
+                violations.push({
+                  rule: 'runview-runquery-valid-properties',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `RunQuery requires a RunQueryParams object as the first parameter. Must provide an object with either QueryID or QueryName.`,
+                  code: `RunQuery()`
+                });
+              } else if (!t.isObjectExpression(path.node.arguments[0])) {
+                // First parameter is not an object
+                const argType = t.isStringLiteral(path.node.arguments[0]) ? 'string' : 
+                               t.isIdentifier(path.node.arguments[0]) ? 'identifier' : 
+                               'non-object';
+                violations.push({
+                  rule: 'runview-runquery-valid-properties',
+                  severity: 'critical',
+                  line: path.node.arguments[0].loc?.start.line || 0,
+                  column: path.node.arguments[0].loc?.start.column || 0,
+                  message: `RunQuery expects a RunQueryParams object, not a ${argType}. Use: RunQuery({ QueryName: 'YourQuery' }) or RunQuery({ QueryID: 'id' })`,
+                  code: path.toString().substring(0, 100)
+                });
+              } else {
                 const config = path.node.arguments[0];
+                
+                // Check for required properties (must have QueryID or QueryName)
+                let hasQueryID = false;
+                let hasQueryName = false;
                 
                 for (const prop of config.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
+                    
+                    if (propName === 'QueryID') hasQueryID = true;
+                    if (propName === 'QueryName') hasQueryName = true;
                     
                     if (!validRunQueryProps.has(propName)) {
                       let message = `Invalid property '${propName}' on RunQuery. Valid properties: ${Array.from(validRunQueryProps).join(', ')}`;
@@ -1587,6 +1752,18 @@ export class ComponentLinter {
                       });
                     }
                   }
+                }
+                
+                // Check that at least one required property is present
+                if (!hasQueryID && !hasQueryName) {
+                  violations.push({
+                    rule: 'runview-runquery-valid-properties',
+                    severity: 'critical',
+                    line: config.loc?.start.line || 0,
+                    column: config.loc?.start.column || 0,
+                    message: `RunQuery requires either QueryID or QueryName property. Add one of these to identify the query to run.`,
+                    code: `RunQuery({ ... })`
+                  });
                 }
               }
             }
@@ -1758,6 +1935,175 @@ export class ComponentLinter {
     },
 
     {
+      name: 'unsafe-array-operations',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track which parameters are from props (likely from queries/RunView)
+        const propsParams = new Set<string>();
+        
+        traverse(ast, {
+          // Find the main component function to identify props
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id?.name === componentName) {
+              const params = path.node.params[0];
+              if (t.isObjectPattern(params)) {
+                params.properties.forEach(prop => {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    propsParams.add(prop.key.name);
+                  }
+                });
+              }
+            }
+          },
+          
+          FunctionExpression(path: NodePath<t.FunctionExpression>) {
+            // Also check function expressions
+            const parent = path.parent;
+            if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+              if (parent.id.name === componentName) {
+                const params = path.node.params[0];
+                if (t.isObjectPattern(params)) {
+                  params.properties.forEach(prop => {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      propsParams.add(prop.key.name);
+                    }
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for unsafe array operations
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            const { object, property } = path.node;
+            
+            // Check for array methods that will crash on undefined
+            const unsafeArrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'length'];
+            
+            if (t.isIdentifier(property) && unsafeArrayMethods.includes(property.name)) {
+              // Check if the object is a prop parameter
+              if (t.isIdentifier(object) && propsParams.has(object.name)) {
+                // Look for common data prop patterns
+                const isDataProp = object.name.toLowerCase().includes('data') ||
+                                  object.name.toLowerCase().includes('items') ||
+                                  object.name.toLowerCase().includes('results') ||
+                                  object.name.toLowerCase().includes('records') ||
+                                  object.name.toLowerCase().includes('list') ||
+                                  object.name.toLowerCase().includes('types') ||
+                                  object.name.toLowerCase().includes('options');
+                
+                if (isDataProp || property.name === 'length') {
+                  // Check if there's a guard nearby (within the same function/block)
+                  let hasGuard = false;
+                  
+                  // Check for optional chaining (?.length, ?.map)
+                  if (path.node.optional) {
+                    hasGuard = true;
+                  }
+                  
+                  // Check for (data || []).map pattern
+                  const parent = path.parent;
+                  if (t.isMemberExpression(parent) && t.isLogicalExpression(parent.object)) {
+                    if (parent.object.operator === '||' && t.isIdentifier(parent.object.left)) {
+                      if (parent.object.left.name === object.name) {
+                        hasGuard = true;
+                      }
+                    }
+                  }
+                  
+                  // Check for inline guards like: data && data.map(...)
+                  const grandParent = path.parentPath?.parent;
+                  if (t.isLogicalExpression(grandParent) && grandParent.operator === '&&') {
+                    if (t.isIdentifier(grandParent.left) && grandParent.left.name === object.name) {
+                      hasGuard = true;
+                    }
+                  }
+                  
+                  // Check for early return guards in the function
+                  // This is harder to detect perfectly, but we can look for common patterns
+                  const functionParent = path.getFunctionParent();
+                  if (functionParent && !hasGuard) {
+                    let hasEarlyReturn = false;
+                    
+                    // Look for if statements with returns that check our variable
+                    functionParent.traverse({
+                      IfStatement(ifPath: NodePath<t.IfStatement>) {
+                        // Skip if this if statement comes after our usage
+                        if (ifPath.node.loc && path.node.loc) {
+                          if (ifPath.node.loc.start.line > path.node.loc.start.line) {
+                            return;
+                          }
+                        }
+                        
+                        const test = ifPath.node.test;
+                        let checksOurVariable = false;
+                        
+                        // Check if the test involves our variable
+                        if (t.isUnaryExpression(test) && test.operator === '!') {
+                          if (t.isIdentifier(test.argument) && test.argument.name === object.name) {
+                            checksOurVariable = true;
+                          }
+                        }
+                        
+                        if (t.isLogicalExpression(test)) {
+                          // Check for !data || !Array.isArray(data) pattern
+                          ifPath.traverse({
+                            Identifier(idPath: NodePath<t.Identifier>) {
+                              if (idPath.node.name === object.name) {
+                                checksOurVariable = true;
+                              }
+                            }
+                          });
+                        }
+                        
+                        // Check if the consequent has a return statement
+                        if (checksOurVariable) {
+                          const consequent = ifPath.node.consequent;
+                          if (t.isBlockStatement(consequent)) {
+                            for (const stmt of consequent.body) {
+                              if (t.isReturnStatement(stmt)) {
+                                hasEarlyReturn = true;
+                                break;
+                              }
+                            }
+                          } else if (t.isReturnStatement(consequent)) {
+                            hasEarlyReturn = true;
+                          }
+                        }
+                      }
+                    });
+                    
+                    if (hasEarlyReturn) {
+                      hasGuard = true;
+                    }
+                  }
+                  
+                  if (!hasGuard) {
+                    const methodName = property.name;
+                    const severity = methodName === 'length' ? 'high' : 'high';
+                    
+                    violations.push({
+                      rule: 'unsafe-array-operations',
+                      severity,
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Unsafe operation "${object.name}.${methodName}" on prop that may be undefined. Props from queries/RunView can be null/undefined on initial render. Add a guard: if (!${object.name} || !Array.isArray(${object.name})) return <div>Loading...</div>; OR use: ${object.name}?.${methodName} or (${object.name} || []).${methodName}`,
+                      code: `${object.name}.${methodName}`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
       name: 'undefined-jsx-component',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1884,7 +2230,7 @@ export class ComponentLinter {
                       severity: 'critical',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is not defined. This looks like a library component, but no libraries are configured in the component spec. Add the required library to the componentSpec.libraries array.`,
+                      message: `JSX component "${tagName}" is not defined. This appears to be a library component, but no libraries have been specified in the component specification. The use of external libraries has not been authorized for this component. Components without library specifications cannot use external libraries.`,
                       code: `<${tagName} ... />`
                     });
                   }

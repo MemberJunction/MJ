@@ -63,10 +63,6 @@ export class ReactTestHarness {
   async testComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
-    // Pass component libraries from harness options if not provided in component options
-    if (!options.componentLibraries && this.options.componentLibraries) {
-      options.componentLibraries = this.options.componentLibraries;
-    }
     // First, lint the component code
     const spec = options.componentSpec;
     if (spec.code) {
@@ -144,7 +140,6 @@ export class ReactTestHarness {
       componentSpec: spec,
       props: props || {},
       contextUser: options?.contextUser || { Name: 'Test User', Email: 'test@test.com' } as any,
-      componentLibraries: this.options.componentLibraries || [],
       ...options
     };
     

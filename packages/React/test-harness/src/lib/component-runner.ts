@@ -3,6 +3,7 @@ import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
 import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -16,7 +17,6 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
-  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (serialized)
 }
 
 export interface ComponentExecutionResult {
@@ -157,17 +157,30 @@ export class ComponentRunner {
       // Expose MJ utilities to the page
       await this.exposeMJUtilities(page, options.contextUser);
 
+      await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
+      const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[]; // do the map to ensure we just have values that can be serialized
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
         console.log('  - spec.code length:', options.componentSpec.code?.length || 0);
         console.log('  - props:', JSON.stringify(options.props || {}, null, 2));
+        console.log('  - componentLibraries count:', allLibraries?.length || 0);
+        if (allLibraries && allLibraries.length > 0) {
+          console.log('  - First few libraries:', allLibraries.slice(0, 3).map(lib => ({
+            Name: lib.Name,
+            GlobalVariable: lib.GlobalVariable
+          })));
+        }
       }
 
       // Execute the component using the real React runtime
       const executionResult = await page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
+          console.log('📚 BROWSER: Received componentLibraries:', componentLibraries?.length || 0);
+          if (componentLibraries?.length > 0) {
+            console.log('  First library:', componentLibraries[0]);
+          }
         }
         
         try {
@@ -229,6 +242,9 @@ export class ComponentRunner {
           // IMPORTANT: Pass component libraries for library loading to work
           if (debug) {
             console.log('📚 Registering component with', componentLibraries?.length || 0, 'libraries');
+            if (componentLibraries?.length > 0) {
+              console.log('  Passing libraries to registrar:', componentLibraries.slice(0, 2).map(l => l.Name));
+            }
           }
           const registrationResult = await registrar.registerHierarchy(spec, {
             styles,
@@ -360,7 +376,7 @@ export class ComponentRunner {
         spec: options.componentSpec, 
         props: options.props, 
         debug,
-        componentLibraries: options.componentLibraries || []
+        componentLibraries: allLibraries || []
       }) as { success: boolean; error?: string; componentCount?: number };
 
       if (debug) {
@@ -703,14 +719,8 @@ export class ComponentRunner {
    * Expose MJ utilities to the browser context
    */
   private async exposeMJUtilities(page: any, contextUser: UserInfo): Promise<void> {
-    // Check if already exposed
-    const alreadyExposed = await page.evaluate(() => {
-      return typeof (window as any).__mjGetEntityObject === 'function';
-    });
-
-    if (alreadyExposed) {
-      return;
-    }
+    // Don't check if already exposed - we always start fresh after goto('about:blank')
+    // The page.exposeFunction calls need to be made for each new page instance
 
     // Serialize contextUser to pass to the browser context
     // UserInfo is a simple object that can be serialized
