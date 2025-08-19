@@ -860,5 +860,153 @@
       "lastModified": "2025-08-18T03:51:05.812Z",
       "checksum": "ed40bee56172f893c5d786705cb5380e4dcc47f06d4be30fac26dfd584c9bd66"
     }
+  },
+  {
+    "fields": {
+      "Name": "three",
+      "GlobalVariable": "THREE",
+      "Description": "JavaScript 3D library - create and display animated 3D computer graphics in a web browser using WebGL",
+      "Category": "UI",
+      "Version": "r128",
+      "CDNUrl": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "24F3C236-7F27-487A-B394-390A76E22B51"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.147Z",
+      "checksum": "3caac48278908073f1ce4155bf6663c2b7668f2f561c3764b5522797f5f26f0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "xlsx",
+      "GlobalVariable": "XLSX",
+      "Description": "SheetJS - Parser and writer for spreadsheet formats including Excel XLSX, CSV, and more",
+      "Category": "Other",
+      "Version": "0.18.5",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "15303B03-E102-40E9-8A40-92CBB68050B1"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.160Z",
+      "checksum": "fd01116d4a6a769791a1a7e3f55181241987e4a70cc8deebf3a335c9a28292d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "luxon",
+      "GlobalVariable": "luxon",
+      "Description": "A powerful, modern, and friendly wrapper for JavaScript dates and times",
+      "Category": "UI",
+      "Version": "3.7.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/luxon@3.7.1/build/global/luxon.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A9A8612A-20A1-4787-BB90-D0F18727AC67"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.172Z",
+      "checksum": "ab494193a01f150c992f90619c5f7898692efafc670e604fc6c1dfe2afb3f049"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@turf/turf",
+      "GlobalVariable": "turf",
+      "Description": "Advanced geospatial analysis for browsers and Node.js",
+      "Category": "UI",
+      "Version": "7.2.0",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0F9A4301-8F1A-4811-8735-54BB94F37C42"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.185Z",
+      "checksum": "b449b039700f671e924266e2fac6ccad5e85d2196c4cc5188fdf07c68620c82b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "openlayers",
+      "GlobalVariable": "ol",
+      "Description": "OpenLayers - High-performance, feature-packed library for creating interactive maps on the web",
+      "Category": "UI",
+      "Version": "10.6.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BB19F62C-6430-42FD-9E00-4C1A5AE2282D"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.195Z",
+      "checksum": "3799605ac1ab241010dcc93a09dae97ccbbd75922c641f64752cb3fb127f090a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "sortablejs",
+      "GlobalVariable": "Widget",
+      "Description": "Reorderable drag-and-drop lists for modern browsers and touch devices",
+      "Category": "UI",
+      "Version": "1.15.6",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js",
+      "CDNCssUrl": null,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F56A8E34-2317-48E6-8C4C-7739FA6F1873"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.209Z",
+      "checksum": "47a7eae7990d7bf9ae694a7ed4dc2fa992239f910fd001227cefd475989882e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "c3",
+      "GlobalVariable": "c3",
+      "Description": "D3-based reusable chart library that enables deeper integration of charts into web applications",
+      "Category": "Charting",
+      "Version": "0.7.20",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/c3@0.7.20/c3.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/c3@0.7.20/c3.min.css",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "09C90CD3-3A4A-4A55-94D1-BEB54B44C43D"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.220Z",
+      "checksum": "a0c72db26d34799c468970302d020c691fd4b913fd2ea244967bee1bdf4b31b2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "vis-network",
+      "GlobalVariable": "vis",
+      "Description": "Display dynamic, automatically organised, customizable network views for visualization of networks and graphs",
+      "Category": "Charting",
+      "Version": "10.0.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/vis-network@10.0.1/dist/vis-network.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/vis-network@10.0.1/dist/dist/vis-network.min.css",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F3F27E7-2C43-4BC3-85AF-5B0DC2CFE638"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.228Z",
+      "checksum": "56378fbae1c386fb6c3b0612f542ccaedef50e8cb3e565566d119bcac23b70ac"
+    }
   }
 ]
