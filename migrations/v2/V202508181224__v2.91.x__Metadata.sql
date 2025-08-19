@@ -5185,3 +5185,34 @@ EXEC [${flyway:defaultSchema}].spUpdateComponent @Namespace = @Namespace_fbe3a34
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+-- Update classnames to use minified version
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNUrl = 'https://cdn.jsdelivr.net/npm/classnames@2.5.1/index.min.js'
+WHERE ID = '8086FB43-A9A6-4CB4-B0BA-64DF478429F7';
+
+-- Update date-fns to use correct CDN bundle
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNUrl = 'https://cdn.jsdelivr.net/npm/date-fns@3.0.6/cdn.min.js'
+WHERE ID = '94552655-B996-4791-9008-A2D6AAC526AC';
+
+-- Update Recharts to use correct UMD path
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNUrl = 'https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js'
+WHERE ID = '5A8C6518-889B-4868-BA20-4E50531309C6';
+
+-- Update ag-grid CSS URL (remove /dist from path as of v28+)
+UPDATE ${flyway:defaultSchema}.ComponentLibrary
+SET CDNCssUrl = 'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/styles/ag-grid.css'
+WHERE ID = 'F7881AA4-83AF-4841-8475-55BBFD5187CC';
