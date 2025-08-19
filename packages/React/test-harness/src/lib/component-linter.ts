@@ -1,7 +1,7 @@
 import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 
 export interface LintResult {
   success: boolean;
@@ -2352,6 +2352,9 @@ export class ComponentLinter {
     const requiredEntities = new Set<string>();
     const requiredQueries = new Set<string>();
     
+    // Map to store full query definitions for parameter validation
+    const queryDefinitionsMap = new Map<string, ComponentQueryDataRequirement>();
+    
     // Map to track allowed fields per entity
     const entityFieldsMap = new Map<string, {
       displayFields: Set<string>;
@@ -2376,6 +2379,7 @@ export class ComponentLinter {
       for (const query of componentSpec.dataRequirements.queries) {
         if (query.name) {
           requiredQueries.add(query.name);
+          queryDefinitionsMap.set(query.name, query);
         }
       }
     }
@@ -2407,6 +2411,7 @@ export class ComponentLinter {
           for (const query of dep.dataRequirements.queries) {
             if (query.name) {
               requiredQueries.add(query.name);
+              queryDefinitionsMap.set(query.name, query);
             }
           }
         }
@@ -2590,6 +2595,73 @@ export class ComponentLinter {
                     }`,
                     code: `QueryName: "${usedQuery}"`
                   });
+                } else if (queryDefinitionsMap.has(usedQuery)) {
+                  // Query is valid, now check parameters
+                  const queryDef = queryDefinitionsMap.get(usedQuery);
+                  if (queryDef?.parameters && queryDef.parameters.length > 0) {
+                    // Extract parameters from the RunQuery call
+                    const paramsInCall = new Map<string, any>();
+                    
+                    // Look for Parameters property in the config object
+                    for (const prop of configObj.properties) {
+                      if (t.isObjectProperty(prop) && 
+                          t.isIdentifier(prop.key) && 
+                          prop.key.name === 'Parameters' &&
+                          t.isObjectExpression(prop.value)) {
+                        
+                        // Extract each parameter from the Parameters object
+                        for (const paramProp of prop.value.properties) {
+                          if (t.isObjectProperty(paramProp) && t.isIdentifier(paramProp.key)) {
+                            paramsInCall.set(paramProp.key.name, paramProp);
+                          }
+                        }
+                        
+                        // Check for required parameters
+                        const requiredParams = queryDef.parameters.filter(p => p.value !== '@runtime' || p.value === '@runtime');
+                        for (const reqParam of requiredParams) {
+                          if (!paramsInCall.has(reqParam.name)) {
+                            violations.push({
+                              rule: 'missing-query-parameter',
+                              severity: 'critical',
+                              line: prop.value.loc?.start.line || 0,
+                              column: prop.value.loc?.start.column || 0,
+                              message: `Missing required parameter "${reqParam.name}" for query "${usedQuery}". ${reqParam.description ? `Description: ${reqParam.description}` : ''}`,
+                              code: `Parameters: { ${reqParam.name}: ... }`
+                            });
+                          }
+                        }
+                        
+                        // Check for unknown parameters
+                        const validParamNames = new Set(queryDef.parameters.map(p => p.name));
+                        for (const [paramName, paramNode] of paramsInCall) {
+                          if (!validParamNames.has(paramName)) {
+                            violations.push({
+                              rule: 'unknown-query-parameter',
+                              severity: 'high',
+                              line: (paramNode as any).loc?.start.line || 0,
+                              column: (paramNode as any).loc?.start.column || 0,
+                              message: `Unknown parameter "${paramName}" for query "${usedQuery}". Valid parameters: ${Array.from(validParamNames).join(', ')}`,
+                              code: `${paramName}: ...`
+                            });
+                          }
+                        }
+                        
+                        break; // Found Parameters property, no need to continue
+                      }
+                    }
+                    
+                    // If query has parameters but no Parameters property was found in the call
+                    if (paramsInCall.size === 0 && queryDef.parameters.length > 0) {
+                      violations.push({
+                        rule: 'missing-parameters-object',
+                        severity: 'critical',
+                        line: configObj.loc?.start.line || 0,
+                        column: configObj.loc?.start.column || 0,
+                        message: `Query "${usedQuery}" requires parameters but none were provided. Required parameters: ${queryDef.parameters.map(p => p.name).join(', ')}`,
+                        code: `RunQuery({ QueryName: "${usedQuery}", Parameters: { ... } })`
+                      });
+                    }
+                  }
                 }
               }
             }
@@ -3152,6 +3224,89 @@ await utilities.rv.RunViews([
 
 // The linter validates that all entity names in RunView/RunViews calls
 // match those declared in the component spec's dataRequirements`
+          });
+          break;
+          
+        case 'missing-query-parameter':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Provide all required parameters defined in dataRequirements for the query',
+            example: `// The component spec defines required parameters:
+// dataRequirements: {
+//   queries: [
+//     { 
+//       name: "User Activity Summary",
+//       parameters: [
+//         { name: "UserID", value: "@runtime", description: "User to filter by" },
+//         { name: "StartDate", value: "@runtime", description: "Start of date range" }
+//       ]
+//     }
+//   ]
+// }
+
+// ❌ WRONG - Missing required parameter:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary",
+  Parameters: {
+    UserID: currentUserId
+    // Missing StartDate!
+  }
+});
+
+// ✅ CORRECT - All required parameters provided:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary",
+  Parameters: {
+    UserID: currentUserId,
+    StartDate: startDate  // All parameters included
+  }
+});`
+          });
+          break;
+          
+        case 'unknown-query-parameter':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Only use parameters that are defined in dataRequirements for the query',
+            example: `// ❌ WRONG - Using undefined parameter:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary",
+  Parameters: {
+    UserID: currentUserId,
+    EndDate: endDate,  // Not defined in dataRequirements!
+    ExtraParam: 123    // Unknown parameter!
+  }
+});
+
+// ✅ CORRECT - Only use defined parameters:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary",
+  Parameters: {
+    UserID: currentUserId,
+    StartDate: startDate  // Only parameters from dataRequirements
+  }
+});`
+          });
+          break;
+          
+        case 'missing-parameters-object':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Queries with parameters must include a Parameters object in RunQuery',
+            example: `// ❌ WRONG - Query requires parameters but none provided:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary"
+  // Missing Parameters object!
+});
+
+// ✅ CORRECT - Include Parameters object:
+await utilities.rq.RunQuery({
+  QueryName: "User Activity Summary",
+  Parameters: {
+    UserID: currentUserId,
+    StartDate: startDate
+  }
+});`
           });
           break;
           

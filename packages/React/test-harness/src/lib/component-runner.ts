@@ -86,7 +86,7 @@ export class ComponentRunner {
     const consoleLogs: { type: string; text: string }[] = [];
     let renderCount = 0;
     
-    const debug = options.debug !== false;
+    const debug = options.debug === true;
     
     if (debug) {
       console.log('\n🔍 === Component Execution Debug Mode ===');
@@ -135,7 +135,7 @@ export class ComponentRunner {
       // Always load runtime libraries after setting content
       // This ensures they persist in the current page context
       // allLibraries is loaded above from ComponentMetadataEngine
-      await this.loadRuntimeLibraries(page, options.componentSpec, allLibraries);
+      await this.loadRuntimeLibraries(page, options.componentSpec, allLibraries, debug);
       
       // Verify the runtime is actually loaded
       const runtimeCheck = await page.evaluate(() => {
@@ -592,7 +592,7 @@ export class ComponentRunner {
   /**
    * Load runtime libraries into the page
    */
-  private async loadRuntimeLibraries(page: any, componentSpec?: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
+  private async loadRuntimeLibraries(page: any, componentSpec?: ComponentSpec, allLibraries?: ComponentLibraryEntity[], debug: boolean = false) {
     // Load React and ReactDOM
     await page.addScriptTag({ url: 'https://unpkg.com/react@18/umd/react.development.js' });
     await page.addScriptTag({ url: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js' });
@@ -639,7 +639,7 @@ export class ComponentRunner {
 
     // Load component-specific libraries from CDN
     if (componentSpec?.libraries && allLibraries) {
-      await this.loadComponentLibraries(page, componentSpec.libraries, allLibraries);
+      await this.loadComponentLibraries(page, componentSpec.libraries, allLibraries, debug);
     }
   }
 
@@ -649,9 +649,9 @@ export class ComponentRunner {
   private async loadComponentLibraries(
     page: any, 
     specLibraries: any[], 
-    allLibraries: ComponentLibraryEntity[]
+    allLibraries: ComponentLibraryEntity[],
+    debug: boolean = false
   ): Promise<void> {
-    const debug = true;
     
     if (debug) {
       console.log('📚 Loading component libraries:', {
