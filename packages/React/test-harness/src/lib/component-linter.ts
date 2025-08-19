@@ -156,6 +156,15 @@ export class ComponentLinter {
         
         traverse(ast, {
           VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Only check TOP-LEVEL declarations (not nested inside functions)
+            // This prevents flagging arrow functions inside the component
+            const isTopLevel = path.getFunctionParent() === null || 
+                              path.scope.path.type === 'Program';
+            
+            if (!isTopLevel) {
+              return; // Skip non-top-level declarations
+            }
+            
             // Check if this is the main component being defined as arrow function
             if (t.isIdentifier(path.node.id) && path.node.id.name === componentName) {
               const init = path.node.init;
@@ -173,16 +182,18 @@ export class ComponentLinter {
               }
             }
             
-            // Also check for any other component-like arrow functions (starts with capital letter)
+            // Also check for any other TOP-LEVEL component-like arrow functions (starts with capital letter)
+            // But ONLY at the top level, not inside the component
             if (t.isIdentifier(path.node.id) && /^[A-Z]/.test(path.node.id.name)) {
               const init = path.node.init;
               if (t.isArrowFunctionExpression(init)) {
+                // Only flag if it's at the top level (parallel to main component)
                 violations.push({
                   rule: 'use-function-declaration',
                   severity: 'high',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component-like function "${path.node.id.name}" should be defined using function declaration syntax, not arrow function.`,
+                  message: `Top-level component "${path.node.id.name}" should use function declaration syntax.`,
                   code: path.toString().substring(0, 150)
                 });
               }
@@ -233,6 +244,95 @@ export class ComponentLinter {
                 message: `Do not reference the component "${componentName}" at the end of the file. The component function should stand alone.`,
                 code: statement.expression.name
               });
+            }
+          }
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'no-iife-wrapper',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Check if the entire code is wrapped in an IIFE
+        if (ast.program && ast.program.body) {
+          for (const statement of ast.program.body) {
+            // Check for IIFE pattern: (function() { ... })() or (function() { ... }())
+            if (t.isExpressionStatement(statement)) {
+              const expr = statement.expression;
+              
+              // Pattern 1: (function() { ... })()
+              if (t.isCallExpression(expr)) {
+                const callee = expr.callee;
+                
+                // Check if calling a function expression wrapped in parentheses
+                if (t.isParenthesizedExpression && t.isParenthesizedExpression(callee)) {
+                  const inner = callee.expression;
+                  if (t.isFunctionExpression(inner) || t.isArrowFunctionExpression(inner)) {
+                    violations.push({
+                      rule: 'no-iife-wrapper',
+                      severity: 'critical',
+                      line: statement.loc?.start.line || 0,
+                      column: statement.loc?.start.column || 0,
+                      message: `Component code must not be wrapped in an IIFE (Immediately Invoked Function Expression). Define the component function directly.`,
+                      code: statement.toString().substring(0, 50) + '...'
+                    });
+                  }
+                }
+                
+                // Also check without ParenthesizedExpression (some parsers handle it differently)
+                if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
+                  violations.push({
+                    rule: 'no-iife-wrapper',
+                    severity: 'critical',
+                    line: statement.loc?.start.line || 0,
+                    column: statement.loc?.start.column || 0,
+                    message: `Component code must not be wrapped in an IIFE. Define the component function directly.`,
+                    code: statement.toString().substring(0, 50) + '...'
+                  });
+                }
+              }
+              
+              // Pattern 2: (function() { ... }())
+              if (t.isParenthesizedExpression && t.isParenthesizedExpression(expr)) {
+                const inner = expr.expression;
+                if (t.isCallExpression(inner)) {
+                  const callee = inner.callee;
+                  if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
+                    violations.push({
+                      rule: 'no-iife-wrapper',
+                      severity: 'critical',
+                      line: statement.loc?.start.line || 0,
+                      column: statement.loc?.start.column || 0,
+                      message: `Component code must not be wrapped in an IIFE. Define the component function directly.`,
+                      code: statement.toString().substring(0, 50) + '...'
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Also check for variable assignment with IIFE
+            if (t.isVariableDeclaration(statement)) {
+              for (const decl of statement.declarations) {
+                if (decl.init && t.isCallExpression(decl.init)) {
+                  const callee = decl.init.callee;
+                  if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
+                    violations.push({
+                      rule: 'no-iife-wrapper',
+                      severity: 'critical',
+                      line: decl.loc?.start.line || 0,
+                      column: decl.loc?.start.column || 0,
+                      message: `Do not use IIFE pattern for component initialization. Define components as plain functions.`,
+                      code: decl.toString().substring(0, 50) + '...'
+                    });
+                  }
+                }
+              }
             }
           }
         }
@@ -1418,6 +1518,224 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+
+    {
+      name: 'invalid-components-destructuring',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build sets of valid component names and library names
+        const validComponentNames = new Set<string>();
+        const libraryNames = new Set<string>();
+        const libraryGlobalVars = new Set<string>();
+        
+        // Add dependency components
+        if (componentSpec?.dependencies) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep.name) {
+              validComponentNames.add(dep.name);
+            }
+          }
+        }
+        
+        // Add libraries
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            if (lib.name) {
+              libraryNames.add(lib.name);
+            }
+            if (lib.globalVariable) {
+              libraryGlobalVars.add(lib.globalVariable);
+            }
+          }
+        }
+        
+        // Check for invalid destructuring from components
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Look for: const { Something } = components;
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) && 
+                path.node.init.name === 'components') {
+              
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const destructuredName = prop.key.name;
+                  
+                  // Check if this is NOT a valid component from dependencies
+                  if (!validComponentNames.has(destructuredName)) {
+                    // Check if it might be a library being incorrectly destructured
+                    if (libraryNames.has(destructuredName) || libraryGlobalVars.has(destructuredName)) {
+                      violations.push({
+                        rule: 'invalid-components-destructuring',
+                        severity: 'critical',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: `Attempting to destructure library "${destructuredName}" from components prop. Libraries should be accessed directly via their globalVariable, not from components.`,
+                        code: `const { ${destructuredName} } = components;`
+                      });
+                    } else {
+                      violations.push({
+                        rule: 'invalid-components-destructuring',
+                        severity: 'high',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: `Destructuring "${destructuredName}" from components prop, but it's not in the component's dependencies array. Either add it to dependencies or it might be a missing library.`,
+                        code: `const { ${destructuredName} } = components;`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'undefined-jsx-component',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track what's available in scope
+        const availableIdentifiers = new Set<string>();
+        const componentsFromProp = new Set<string>();
+        const libraryGlobalVars = new Set<string>();
+        
+        // Add React hooks and built-ins
+        availableIdentifiers.add('React');
+        availableIdentifiers.add('Fragment');
+        availableIdentifiers.add('useState');
+        availableIdentifiers.add('useEffect');
+        availableIdentifiers.add('useCallback');
+        availableIdentifiers.add('useMemo');
+        availableIdentifiers.add('useRef');
+        availableIdentifiers.add('useContext');
+        availableIdentifiers.add('useReducer');
+        availableIdentifiers.add('useLayoutEffect');
+        
+        // Add HTML elements (lowercase)
+        const htmlElements = ['div', 'span', 'button', 'input', 'form', 'table', 'tr', 'td', 'th', 
+                              'ul', 'li', 'ol', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                              'img', 'a', 'nav', 'header', 'footer', 'section', 'article',
+                              'aside', 'main', 'textarea', 'select', 'option', 'label',
+                              'style', 'script', 'canvas', 'svg', 'path', 'g', 'circle',
+                              'rect', 'line', 'polygon', 'polyline', 'text', 'strong', 'em',
+                              'code', 'pre', 'blockquote', 'iframe', 'video', 'audio'];
+        htmlElements.forEach(el => availableIdentifiers.add(el));
+        
+        // Add library global variables
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            if (lib.globalVariable) {
+              libraryGlobalVars.add(lib.globalVariable);
+              availableIdentifiers.add(lib.globalVariable);
+            }
+          }
+        }
+        
+        // Track what's destructured from components
+        if (componentSpec?.dependencies) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep.name) {
+              componentsFromProp.add(dep.name);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          // Track variable declarations
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id)) {
+              availableIdentifiers.add(path.node.id.name);
+            } else if (t.isObjectPattern(path.node.id)) {
+              // Track destructured variables
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop)) {
+                  if (t.isIdentifier(prop.value)) {
+                    availableIdentifiers.add(prop.value.name);
+                  } else if (t.isIdentifier(prop.key)) {
+                    availableIdentifiers.add(prop.key.name);
+                  }
+                }
+              }
+            }
+          },
+          
+          // Track function declarations
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id) {
+              availableIdentifiers.add(path.node.id.name);
+            }
+          },
+          
+          // Check JSX elements
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            
+            if (t.isJSXIdentifier(openingElement.name)) {
+              const tagName = openingElement.name.name;
+              
+              // Skip HTML elements (lowercase)
+              if (/^[a-z]/.test(tagName)) {
+                return;
+              }
+              
+              // Check if this component is available
+              if (!availableIdentifiers.has(tagName)) {
+                // Determine if it's likely a missing library component
+                const looksLikeLibraryComponent = /^[A-Z][a-zA-Z]*(?:Chart|Graph|Plot|Container|Grid|List|Table|Modal|Dialog|Tooltip|Button|Input|Select)/.test(tagName);
+                
+                if (looksLikeLibraryComponent) {
+                  // Check if we have libraries that might provide this
+                  const possibleLibraries: string[] = [];
+                  if (tagName.includes('Chart') || tagName.includes('Graph') || tagName.includes('Plot')) {
+                    possibleLibraries.push('recharts', 'd3', 'chart.js', 'plotly');
+                  }
+                  if (tagName.includes('Modal') || tagName.includes('Dialog') || tagName.includes('Tooltip')) {
+                    possibleLibraries.push('react-modal', 'material-ui', 'antd', 'bootstrap');
+                  }
+                  
+                  violations.push({
+                    rule: 'undefined-jsx-component',
+                    severity: 'critical',
+                    line: openingElement.loc?.start.line || 0,
+                    column: openingElement.loc?.start.column || 0,
+                    message: `JSX component "${tagName}" is not defined. This looks like a library component. Check if the required library is in the componentSpec.libraries array and that it's being properly imported.${possibleLibraries.length > 0 ? ` Possible libraries: ${possibleLibraries.join(', ')}` : ''}`,
+                    code: `<${tagName} ... />`
+                  });
+                } else if (componentsFromProp.has(tagName)) {
+                  violations.push({
+                    rule: 'undefined-jsx-component',
+                    severity: 'high',
+                    line: openingElement.loc?.start.line || 0,
+                    column: openingElement.loc?.start.column || 0,
+                    message: `JSX component "${tagName}" is in dependencies but not destructured from components prop. Add: const { ${tagName} } = components;`,
+                    code: `<${tagName} ... />`
+                  });
+                } else {
+                  violations.push({
+                    rule: 'undefined-jsx-component',
+                    severity: 'high',
+                    line: openingElement.loc?.start.line || 0,
+                    column: openingElement.loc?.start.column || 0,
+                    message: `JSX component "${tagName}" is not defined. Either add it to the component's dependencies or check if it's a missing library component.`,
+                    code: `<${tagName} ... />`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -1912,22 +2230,26 @@ function MyComponent({ utilities, styles, components }) {
         case 'use-function-declaration':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Use function declaration syntax instead of arrow functions for components.',
-            example: `// ❌ WRONG - Arrow function component:
+            suggestion: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
+            example: `// ❌ WRONG - Top-level arrow function component:
 const MyComponent = ({ utilities, styles, components }) => {
   const [state, setState] = useState('');
   
   return <div>{state}</div>;
 };
 
-// Also wrong for child components:
-const ChildComponent = () => <div>Child</div>;
-
-// ✅ CORRECT - Function declaration:
+// ✅ CORRECT - Function declaration for top-level:
 function MyComponent({ utilities, styles, components }) {
   const [state, setState] = useState('');
   
-  return <div>{state}</div>;
+  // Arrow functions are FINE inside the component:
+  const handleClick = () => {
+    setState('clicked');
+  };
+  
+  const ChildComponent = () => <div>This is OK inside the component</div>;
+  
+  return <div onClick={handleClick}>{state}</div>;
 }
 
 // Child components also use function declaration:
@@ -1974,6 +2296,46 @@ function MyComponent({ utilities, styles, components }) {
 
 // The runtime will find and execute your component
 // by its function name. No need to return or reference it!`
+          });
+          break;
+          
+        case 'no-iife-wrapper':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+            example: `// ❌ WRONG - IIFE wrapper patterns:
+(function() {
+  function MyComponent({ utilities, styles, components }) {
+    return <div>Hello</div>;
+  }
+  return MyComponent;
+})();
+
+// Also wrong:
+(function() {
+  const MyComponent = ({ utilities }) => {
+    return <div>Hello</div>;
+  };
+})();
+
+// Also wrong - arrow function IIFE:
+(() => {
+  function MyComponent({ utilities }) {
+    return <div>Hello</div>;
+  }
+})();
+
+// ✅ CORRECT - Direct function declaration:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+// Why no IIFE?
+// 1. Components run in their own scope already
+// 2. The runtime handles isolation
+// 3. IIFEs prevent proper component discovery
+// 4. Makes debugging harder
+// 5. Unnecessary complexity`
           });
           break;
           

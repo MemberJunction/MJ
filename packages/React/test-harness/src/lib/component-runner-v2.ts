@@ -1,0 +1,750 @@
+import { BrowserManager } from './browser-context';
+import { Metadata, RunView, RunQuery } from '@memberjunction/core';
+import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
+import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+
+export interface ComponentExecutionOptions {
+  componentSpec: ComponentSpec;
+  props?: Record<string, any>;
+  setupCode?: string;
+  timeout?: number;
+  renderWaitTime?: number; // Default 500ms for render completion
+  asyncErrorWaitTime?: number; // Default 1000ms for async errors
+  waitForSelector?: string;
+  waitForLoadState?: 'load' | 'domcontentloaded' | 'networkidle';
+  contextUser: UserInfo;
+  isRootComponent?: boolean;
+  debug?: boolean;
+}
+
+export interface ComponentExecutionResult {
+  success: boolean;
+  html: string;
+  errors: Violation[];
+  warnings: Violation[];
+  criticalWarnings: string[];
+  console: { type: string; text: string }[];
+  screenshot?: Buffer;
+  executionTime: number;
+  renderCount?: number;
+  lintViolations?: Violation[];
+  fixSuggestions?: FixSuggestion[];
+}
+
+/**
+ * Simplified ComponentRunner that uses the actual React runtime via Playwright
+ */
+export class ComponentRunnerV2 {
+  // Critical warning patterns that should fail tests
+  private static readonly CRITICAL_WARNING_PATTERNS = [
+    /Maximum update depth exceeded/i,
+    /Cannot update a component .* while rendering a different component/i,
+    /Cannot update during an existing state transition/i,
+    /Warning: setState.*unmounted component/i,
+    /Warning: Can't perform a React state update on an unmounted component/i,
+    /Encountered two children with the same key/i,
+    /Error: Minified React error/i,
+    /too many re-renders/i,
+  ];
+
+  private static readonly MAX_RENDER_COUNT = 1000;
+
+  constructor(private browserManager: BrowserManager) {}
+
+  /**
+   * Lint component code before execution
+   */
+  async lintComponent(
+    componentCode: string, 
+    componentName: string,
+    componentSpec?: any,
+    isRootComponent?: boolean
+  ): Promise<{ violations: Violation[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
+    const lintResult = await ComponentLinter.lintComponent(
+      componentCode,
+      componentName,
+      componentSpec,
+      isRootComponent
+    );
+
+    const hasErrors = lintResult.violations.some(v => v.severity === 'critical' || v.severity === 'high');
+
+    return {
+      violations: lintResult.violations,
+      suggestions: lintResult.suggestions,
+      hasErrors
+    };
+  }
+
+  async executeComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {
+    const startTime = Date.now();
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const criticalWarnings: string[] = [];
+    const consoleLogs: { type: string; text: string }[] = [];
+    let renderCount = 0;
+    
+    const debug = options.debug !== false;
+    
+    if (debug) {
+      console.log('\n🔍 === Component Execution Debug Mode (V2) ===');
+      console.log('Component:', options.componentSpec.name);
+      console.log('Props:', JSON.stringify(options.props || {}, null, 2));
+    }
+
+    try {
+      const page = await this.browserManager.getPage();
+      
+      // Navigate to a blank page FIRST, then load runtime
+      await page.goto('about:blank');
+      
+      // Set up the basic HTML structure
+      await page.setContent(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>React Component Test (V2)</title>
+          <style>
+            body { 
+              margin: 0; 
+              padding: 20px; 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            #root { 
+              min-height: 100vh;
+              background-color: white;
+              padding: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="root" data-testid="react-root"></div>
+        </body>
+        </html>
+      `);
+
+      // Always load runtime libraries after setting content
+      // This ensures they persist in the current page context
+      console.log('📚 Loading runtime libraries...');
+      await this.loadRuntimeLibraries(page);
+      
+      // Verify the runtime is actually loaded
+      const runtimeCheck = await page.evaluate(() => {
+        return {
+          hasMJRuntime: typeof (window as any).MJReactRuntime !== 'undefined',
+          hasReact: typeof (window as any).React !== 'undefined',
+          hasReactDOM: typeof (window as any).ReactDOM !== 'undefined',
+          hasBabel: typeof (window as any).Babel !== 'undefined',
+          mjRuntimeKeys: (window as any).MJReactRuntime ? Object.keys((window as any).MJReactRuntime) : []
+        };
+      });
+      console.log('📚 Runtime check after loading:', runtimeCheck);
+      
+      if (!runtimeCheck.hasMJRuntime) {
+        throw new Error('Failed to inject MJReactRuntime into page context');
+      }
+
+      // Set up error tracking
+      await this.setupErrorTracking(page);
+      
+      // Set up console logging
+      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
+      
+      // Expose MJ utilities to the page
+      await this.exposeMJUtilities(page, options.contextUser);
+
+      if (debug) {
+        console.log('📤 NODE: About to call page.evaluate with:');
+        console.log('  - spec.name:', options.componentSpec.name);
+        console.log('  - spec.code length:', options.componentSpec.code?.length || 0);
+        console.log('  - props:', JSON.stringify(options.props || {}, null, 2));
+      }
+
+      // Execute the component using the real React runtime
+      const executionResult = await page.evaluate(async ({ spec, props, debug }: { spec: any; props: any; debug: boolean }) => {
+        console.log('🎯 BROWSER: page.evaluate started');
+        console.log('🎯 BROWSER: spec received:', spec);
+        console.log('🎯 BROWSER: debug mode:', debug);
+        
+        try {
+          // Access the real runtime classes
+          const MJRuntime = (window as any).MJReactRuntime;
+          console.log('🎯 BROWSER: MJRuntime available?', !!MJRuntime);
+          if (!MJRuntime) {
+            throw new Error('React runtime not loaded');
+          }
+          console.log('🎯 BROWSER: MJRuntime classes:', Object.keys(MJRuntime));
+
+          const {
+            ComponentCompiler,
+            ComponentRegistry,
+            ComponentHierarchyRegistrar,
+            createRuntimeUtilities,
+            SetupStyles
+          } = MJRuntime;
+
+          if (debug) {
+            console.log('🚀 Starting component execution with real runtime');
+            console.log('Available runtime classes:', Object.keys(MJRuntime));
+          }
+
+          // Initialize LibraryRegistry if needed
+          // Note: In test environment, we may not have full database access
+          // so libraries are handled by the runtime internally
+
+          // Create runtime context
+          const runtimeContext = {
+            React: (window as any).React,
+            ReactDOM: (window as any).ReactDOM,
+            libraries: {} // Will be populated by the runtime as needed
+          };
+
+          // Create instances
+          const compiler = new ComponentCompiler();
+          compiler.setBabelInstance((window as any).Babel);
+
+          const registry = new ComponentRegistry();
+          
+          const registrar = new ComponentHierarchyRegistrar(
+            compiler,
+            registry,
+            runtimeContext
+          );
+
+          // Create utilities and styles
+          const runtimeUtils = createRuntimeUtilities();
+          const utilities = runtimeUtils.buildUtilities();
+          const styles = SetupStyles();
+
+          if (debug) {
+            console.log('📦 Registering component hierarchy...');
+          }
+
+          // Register the component hierarchy
+          const registrationResult = await registrar.registerHierarchy(spec, {
+            styles,
+            namespace: 'Global',
+            version: 'v1' // Use v1 to match the registry defaults
+          });
+
+          if (!registrationResult.success) {
+            throw new Error('Component registration failed: ' + JSON.stringify(registrationResult.errors));
+          }
+
+          if (debug) {
+            console.log('✅ Registered components:', registrationResult.registeredComponents);
+            // Also log what's actually in the registry for debugging
+            console.log('📊 Registry contents:', Array.from(registry.components.keys()));
+          }
+
+          // Get the root component - explicitly pass namespace and version
+          const RootComponent = registry.get(spec.name, 'Global', 'v1');
+          if (!RootComponent) {
+            // Enhanced error message with debugging info
+            console.error('Failed to find component:', spec.name);
+            console.error('Registry keys:', Array.from(registry.components.keys()));
+            throw new Error('Root component not found: ' + spec.name);
+          }
+
+          // Get all registered components for prop passing
+          const components = registry.getAll('Global', 'v1');
+
+          // Render the component
+          const rootElement = document.getElementById('root');
+          if (!rootElement) {
+            throw new Error('Root element not found');
+          }
+
+          const root = (window as any).ReactDOM.createRoot(rootElement);
+          
+          // Build complete props
+          const componentProps = {
+            ...props,
+            utilities,
+            styles,
+            components,
+            savedUserSettings: {},
+            onSaveUserSettings: (settings: any) => {
+              console.log('User settings saved:', settings);
+            }
+          };
+
+          if (debug) {
+            console.log('🎨 Rendering component with props:', Object.keys(componentProps));
+          }
+
+          // Create error boundary wrapper
+          const ErrorBoundary = class extends (window as any).React.Component {
+            constructor(props: any) {
+              super(props);
+              this.state = { hasError: false, error: null };
+            }
+            
+            static getDerivedStateFromError(error: any) {
+              (window as any).__testHarnessTestFailed = true;
+              return { hasError: true, error };
+            }
+            
+            componentDidCatch(error: any, errorInfo: any) {
+              console.error('React Error Boundary caught:', error, errorInfo);
+              (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+              (window as any).__testHarnessRuntimeErrors.push({
+                message: error.message,
+                stack: error.stack,
+                componentStack: errorInfo.componentStack,
+                type: 'react-error-boundary'
+              });
+              (window as any).__testHarnessTestFailed = true;
+            }
+            
+            render() {
+              if (this.state.hasError) {
+                // Re-throw to fail hard
+                throw this.state.error;
+              }
+              return this.props.children;
+            }
+          };
+
+          // Render with error boundary
+          root.render(
+            (window as any).React.createElement(
+              ErrorBoundary,
+              null,
+              (window as any).React.createElement(RootComponent, componentProps)
+            )
+          );
+
+          if (debug) {
+            console.log('✅ Component rendered successfully');
+          }
+
+          return {
+            success: true,
+            componentCount: registrationResult.registeredComponents.length
+          };
+
+        } catch (error: any) {
+          console.error('🔴 BROWSER: Component execution failed:', error);
+          console.error('🔴 BROWSER: Error stack:', error.stack);
+          console.error('🔴 BROWSER: Error type:', typeof error);
+          console.error('🔴 BROWSER: Error stringified:', JSON.stringify(error, null, 2));
+          
+          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+          (window as any).__testHarnessRuntimeErrors.push({
+            message: error.message || String(error),
+            stack: error.stack,
+            type: 'execution-error'
+          });
+          (window as any).__testHarnessTestFailed = true;
+          
+          return {
+            success: false,
+            error: error.message || String(error)
+          };
+        }
+      }, { spec: options.componentSpec, props: options.props, debug }) as { success: boolean; error?: string; componentCount?: number };
+
+      if (debug) {
+        console.log('Execution result:', executionResult);
+      }
+
+      // Wait for render completion
+      const renderWaitTime = options.renderWaitTime || 500;
+      await page.waitForTimeout(renderWaitTime);
+
+      // Get render count
+      renderCount = await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
+
+      // Collect all errors
+      const runtimeErrors = await this.collectRuntimeErrors(page);
+      errors.push(...runtimeErrors);
+
+      // Capture async errors
+      const asyncWaitTime = options.asyncErrorWaitTime || 1000;
+      await page.waitForTimeout(asyncWaitTime);
+      
+      const asyncErrors = await this.collectRuntimeErrors(page);
+      // Only add new errors
+      asyncErrors.forEach(err => {
+        if (!errors.includes(err)) {
+          errors.push(err);
+        }
+      });
+
+      // Get the rendered HTML
+      const html = await page.content();
+
+      // Take screenshot
+      const screenshot = await page.screenshot();
+
+      // Determine success
+      const success = errors.length === 0 && 
+                     criticalWarnings.length === 0 && 
+                     renderCount <= ComponentRunnerV2.MAX_RENDER_COUNT &&
+                     executionResult.success;
+
+      if (renderCount > ComponentRunnerV2.MAX_RENDER_COUNT) {
+        errors.push(`Excessive render count: ${renderCount} renders detected`);
+      }
+
+      const result: ComponentExecutionResult = {
+        success,
+        html,
+        errors: errors.map(e => ({
+          message: e,
+          severity: 'critical' as const,
+          rule: 'runtime-error',
+          line: 0,
+          column: 0
+        })),
+        warnings: warnings.map(w => ({
+          message: w,
+          severity: 'low' as const,
+          rule: 'warning',
+          line: 0,
+          column: 0
+        })),
+        criticalWarnings,
+        console: consoleLogs,
+        screenshot,
+        executionTime: Date.now() - startTime,
+        renderCount
+      };
+
+      if (debug) {
+        this.dumpDebugInfo(result);
+      }
+
+      return result;
+
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      
+      const result: ComponentExecutionResult = {
+        success: false,
+        html: '',
+        errors: errors.map(e => ({
+          message: e,
+          severity: 'critical' as const,
+          rule: 'runtime-error',
+          line: 0,
+          column: 0
+        })),
+        warnings: warnings.map(w => ({
+          message: w,
+          severity: 'low' as const,
+          rule: 'warning',
+          line: 0,
+          column: 0
+        })),
+        criticalWarnings,
+        console: consoleLogs,
+        executionTime: Date.now() - startTime,
+        renderCount
+      };
+
+      if (debug) {
+        console.log('\n❌ Component execution failed with error:', error);
+        this.dumpDebugInfo(result);
+      }
+
+      return result;
+    }
+  }
+
+  /**
+   * Load runtime libraries into the page
+   */
+  private async loadRuntimeLibraries(page: any) {
+    console.log('Loading runtime libraries...');
+
+    // Load React and ReactDOM
+    await page.addScriptTag({ url: 'https://unpkg.com/react@18/umd/react.development.js' });
+    await page.addScriptTag({ url: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js' });
+    
+    // Load Babel for JSX transformation
+    await page.addScriptTag({ url: 'https://unpkg.com/@babel/standalone/babel.min.js' });
+    
+    // Load the real MemberJunction React Runtime UMD bundle
+    const fs = await import('fs');
+    
+    // Resolve the path to the UMD bundle
+    const runtimePath = require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
+    const runtimeBundle = fs.readFileSync(runtimePath, 'utf-8');
+    
+    console.log(`Loading MJ React Runtime UMD bundle (${(runtimeBundle.length / 1024).toFixed(2)} KB)...`);
+    
+    // Inject the UMD bundle into the page
+    await page.addScriptTag({ content: runtimeBundle });
+
+    // The UMD bundle should have created window.MJReactRuntime
+    // Let's verify and potentially add any test-harness specific overrides
+    await page.evaluate(() => {
+      // Check if MJReactRuntime was loaded from the UMD bundle
+      if (typeof (window as any).MJReactRuntime === 'undefined') {
+        throw new Error('MJReactRuntime UMD bundle did not load correctly');
+      }
+
+      // The real runtime is now available!
+      console.log('MJReactRuntime loaded from UMD bundle:', Object.keys((window as any).MJReactRuntime));
+    });
+
+    // Verify everything loaded
+    const loaded = await page.evaluate(() => {
+      return {
+        React: typeof (window as any).React !== 'undefined',
+        ReactDOM: typeof (window as any).ReactDOM !== 'undefined',
+        Babel: typeof (window as any).Babel !== 'undefined',
+        MJRuntime: typeof (window as any).MJReactRuntime !== 'undefined'
+      };
+    });
+
+    console.log('Libraries loaded:', loaded);
+
+    if (!loaded.React || !loaded.ReactDOM || !loaded.Babel || !loaded.MJRuntime) {
+      throw new Error('Failed to load required libraries');
+    }
+  }
+
+  /**
+   * Set up error tracking in the page
+   */
+  private async setupErrorTracking(page: any) {
+    await page.evaluate(() => {
+      // Initialize error tracking
+      (window as any).__testHarnessRuntimeErrors = [];
+      (window as any).__testHarnessConsoleErrors = [];
+      (window as any).__testHarnessTestFailed = false;
+      (window as any).__testHarnessRenderCount = 0;
+
+      // Track renders
+      const originalCreateElement = (window as any).React?.createElement;
+      if (originalCreateElement) {
+        (window as any).React.createElement = function(...args: any[]) {
+          (window as any).__testHarnessRenderCount++;
+          return originalCreateElement.apply(this, args);
+        };
+      }
+
+      // Override console.error
+      const originalConsoleError = console.error;
+      console.error = function(...args: any[]) {
+        const errorText = args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+        ).join(' ');
+        
+        (window as any).__testHarnessConsoleErrors.push(errorText);
+        (window as any).__testHarnessTestFailed = true;
+        originalConsoleError.apply(console, args);
+      };
+
+      // Global error handler
+      window.addEventListener('error', (event) => {
+        (window as any).__testHarnessRuntimeErrors.push({
+          message: event.error?.message || event.message,
+          stack: event.error?.stack,
+          type: 'runtime'
+        });
+        (window as any).__testHarnessTestFailed = true;
+      });
+
+      // Unhandled promise rejection handler
+      window.addEventListener('unhandledrejection', (event) => {
+        (window as any).__testHarnessRuntimeErrors.push({
+          message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason),
+          stack: event.reason?.stack,
+          type: 'promise-rejection'
+        });
+        (window as any).__testHarnessTestFailed = true;
+        event.preventDefault();
+      });
+    });
+  }
+
+  /**
+   * Collect runtime errors from the page
+   */
+  private async collectRuntimeErrors(page: any): Promise<string[]> {
+    const errorData = await page.evaluate(() => {
+      return {
+        runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
+        consoleErrors: (window as any).__testHarnessConsoleErrors || [],
+        testFailed: (window as any).__testHarnessTestFailed || false
+      };
+    });
+
+    const errors: string[] = [];
+
+    if (errorData.testFailed) {
+      errors.push('Test marked as failed by error handlers');
+    }
+
+    errorData.runtimeErrors.forEach((error: any) => {
+      const errorMsg = `${error.type} error: ${error.message}`;
+      if (!errors.includes(errorMsg)) {
+        errors.push(errorMsg);
+      }
+    });
+
+    errorData.consoleErrors.forEach((error: string) => {
+      const errorMsg = `Console error: ${error}`;
+      if (!errors.includes(errorMsg)) {
+        errors.push(errorMsg);
+      }
+    });
+
+    return errors;
+  }
+
+  /**
+   * Set up console logging
+   */
+  private setupConsoleLogging(
+    page: any,
+    consoleLogs: { type: string; text: string }[],
+    warnings: string[],
+    criticalWarnings: string[]
+  ): void {
+    page.on('console', (msg: any) => {
+      const type = msg.type();
+      const text = msg.text();
+      
+      consoleLogs.push({ type, text });
+      
+      if (type === 'warning' || text.startsWith('Warning:')) {
+        warnings.push(text);
+        
+        if (ComponentRunnerV2.CRITICAL_WARNING_PATTERNS.some(pattern => pattern.test(text))) {
+          criticalWarnings.push(text);
+        }
+      }
+    });
+
+    page.on('pageerror', (error: Error) => {
+      consoleLogs.push({ type: 'error', text: error.message });
+    });
+  }
+
+  /**
+   * Expose MJ utilities to the browser context
+   */
+  private async exposeMJUtilities(page: any, contextUser: UserInfo): Promise<void> {
+    // Check if already exposed
+    const alreadyExposed = await page.evaluate(() => {
+      return typeof (window as any).__mjGetEntityObject === 'function';
+    });
+
+    if (alreadyExposed) {
+      return;
+    }
+
+    // Create instances in Node.js context
+    const metadata = new Metadata();
+    const runView = new RunView();
+    const runQuery = new RunQuery();
+
+    // Expose functions
+    await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
+      try {
+        const entity = await metadata.GetEntityObject(entityName, contextUser);
+        return entity;
+      } catch (error) {
+        console.error('Error in __mjGetEntityObject:', error);
+        return null;
+      }
+    });
+
+    await page.exposeFunction('__mjGetEntities', () => {
+      try {
+        return metadata.Entities;
+      } catch (error) {
+        console.error('Error in __mjGetEntities:', error);
+        return null;
+      }
+    });
+
+    await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
+      try {
+        return await runView.RunView(params, contextUser);
+      } catch (error) {
+        console.error('Error in __mjRunView:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+      }
+    });
+
+    await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
+      try {
+        return await runView.RunViews(params, contextUser);
+      } catch (error) {
+        console.error('Error in __mjRunViews:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return params.map(() => ({ Success: false, ErrorMessage: errorMessage, Results: [] }));
+      }
+    });
+
+    await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
+      try {
+        return await runQuery.RunQuery(params, contextUser);
+      } catch (error) {
+        console.error('Error in __mjRunQuery:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: errorMessage, Results: [] };
+      }
+    });
+
+    // Make them available in utilities
+    await page.evaluate(() => {
+      (window as any).__mjUtilities = {
+        md: {
+          entities: () => (window as any).__mjGetEntities(),
+          GetEntityObject: async (entityName: string) => 
+            await (window as any).__mjGetEntityObject(entityName)
+        },
+        rv: {
+          RunView: async (params: any) => await (window as any).__mjRunView(params),
+          RunViews: async (params: any) => await (window as any).__mjRunViews(params)
+        },
+        rq: {
+          RunQuery: async (params: any) => await (window as any).__mjRunQuery(params)
+        }
+      };
+    });
+  }
+
+  /**
+   * Dump debug information
+   */
+  private dumpDebugInfo(result: ComponentExecutionResult): void {
+    console.log('\n📊 === Component Execution Results (V2) ===');
+    console.log('Success:', result.success ? '✅' : '❌');
+    console.log('Execution time:', result.executionTime + 'ms');
+    console.log('Render count:', result.renderCount);
+    
+    if (result.errors && result.errors.length > 0) {
+      console.log('\n❌ Errors:', result.errors.length);
+      result.errors.forEach((err, i) => {
+        console.log(`  ${i + 1}. ${err.message}`);
+      });
+    }
+    
+    if (result.warnings && result.warnings.length > 0) {
+      console.log('\n⚠️ Warnings:', result.warnings.length);
+      result.warnings.forEach((warn, i) => {
+        console.log(`  ${i + 1}. ${warn.message}`);
+      });
+    }
+    
+    if (result.criticalWarnings && result.criticalWarnings.length > 0) {
+      console.log('\n🔴 Critical Warnings:', result.criticalWarnings.length);
+      result.criticalWarnings.forEach((warn, i) => {
+        console.log(`  ${i + 1}. ${warn}`);
+      });
+    }
+    
+    console.log('\n========================================\n');
+  }
+}

@@ -94,6 +94,11 @@ export {
 } from './utilities/library-loader';
 
 export {
+  LibraryRegistry,
+  LibraryDefinition
+} from './utilities/library-registry';
+
+export {
   ComponentErrorAnalyzer,
   FailedComponentInfo
 } from './utilities/component-error-analyzer';

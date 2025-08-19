@@ -1,5 +1,6 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
+import { ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
+import { ComponentRunnerV2 } from './component-runner-v2';
 import { AssertionHelpers } from './assertion-helpers';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -37,7 +38,7 @@ export interface TestHarnessOptions extends BrowserContextOptions {
  */
 export class ReactTestHarness {
   private browserManager: BrowserManager;
-  private componentRunner: ComponentRunner;
+  private componentRunner: ComponentRunnerV2;
   private options: TestHarnessOptions;
 
   constructor(options: TestHarnessOptions = {}) {
@@ -49,7 +50,7 @@ export class ReactTestHarness {
     };
 
     this.browserManager = new BrowserManager(this.options);
-    this.componentRunner = new ComponentRunner(this.browserManager);
+    this.componentRunner = new ComponentRunnerV2(this.browserManager);
   }
 
   async initialize(): Promise<void> {

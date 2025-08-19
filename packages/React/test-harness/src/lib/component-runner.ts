@@ -5,7 +5,8 @@ import {
   ComponentRegistry,
   ComponentErrorAnalyzer,
   StandardLibraryManager,
-  LibraryConfiguration
+  LibraryConfiguration,
+  LibraryRegistry
 } from '@memberjunction/react-runtime';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
@@ -126,8 +127,8 @@ export class ComponentRunner {
       this.setupErrorHandling(page, errors);
       await this.injectRenderTracking(page);
 
-      // Create and load the component
-      const htmlContent = this.createHTMLTemplate(options);
+      // Create and load the component (now async to support LibraryRegistry initialization)
+      const htmlContent = await this.createHTMLTemplate(options);
       await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
 
       // Wait for render with timeout detection
@@ -140,11 +141,11 @@ export class ComponentRunner {
       const runtimeErrors = await this.collectRuntimeErrors(page);
       errors.push(...runtimeErrors);
       
-      // Capture async errors only if wait time is specified
-      if (options.asyncErrorWaitTime && options.asyncErrorWaitTime > 0) {
-        const asyncErrors = await this.captureAsyncErrors(page, options.asyncErrorWaitTime);
-        errors.push(...asyncErrors);
-      }
+      // ALWAYS capture async errors with a default timeout
+      // This ensures we catch setTimeout, Promise rejections, and async effect errors
+      const asyncWaitTime = options.asyncErrorWaitTime || 1000; // Default 1 second
+      const asyncErrors = await this.captureAsyncErrors(page, asyncWaitTime);
+      errors.push(...asyncErrors);
       
       // Perform deep render validation
       const deepRenderErrors = await this.validateDeepRender(page);
@@ -276,16 +277,20 @@ export class ComponentRunner {
     console.log('\n========================================\n');
   }
 
-  private createHTMLTemplate(options: ComponentExecutionOptions): string {
+  private async createHTMLTemplate(options: ComponentExecutionOptions): Promise<string> {
     const propsJson = JSON.stringify(options.props || {});
     const specJson = JSON.stringify(options.componentSpec);
     
-    // Set configuration if provided
+    // Initialize LibraryRegistry with contextUser for proper database-driven library loading
+    // This ensures we use the same approved libraries as the runtime
+    await LibraryRegistry.Config(false, options.contextUser);
+    
+    // Set configuration if provided (for backward compatibility)
     if (options.libraryConfiguration) {
       StandardLibraryManager.setConfiguration(options.libraryConfiguration);
     }
     
-    // Get all enabled libraries from configuration
+    // Get all enabled libraries from configuration (for React/ReactDOM/Babel)
     const enabledLibraries = StandardLibraryManager.getEnabledLibraries();
     
     // Separate runtime and component libraries
@@ -345,41 +350,86 @@ ${cssLinks}
     }
   </style>
   <script>
-    // Initialize error and console tracking
+    // Track library load timeout
+    const LIBRARY_LOAD_TIMEOUT = 5000; // 5 seconds
+    let libraryLoadTimer = null;
+    
+    // Initialize comprehensive error tracking
     window.__testHarnessRuntimeErrors = [];
     window.__testHarnessConsoleLogs = [];
+    window.__testHarnessConsoleErrors = [];
+    window.__testHarnessTestFailed = false;
+    window.__testHarnessLibraryLoadErrors = [];
     
-    // Track console output for async error detection
+    // Override console.error to capture ALL error logs
     const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+    
     console.error = function(...args) {
+      const errorText = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
       window.__testHarnessConsoleLogs.push({
         type: 'error',
-        text: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
+        text: errorText
       });
+      window.__testHarnessConsoleErrors.push(errorText);
+      // Mark test as failed immediately
+      window.__testHarnessTestFailed = true;
       originalConsoleError.apply(console, args);
     };
     
-    // Global error handler
-    window.addEventListener('error', (event) => {
-      console.error('Runtime error:', event.error);
-      window.__testHarnessRuntimeErrors.push({
-        message: event.error.message,
-        stack: event.error.stack,
-        type: 'runtime'
+    console.warn = function(...args) {
+      const warnText = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+      window.__testHarnessConsoleLogs.push({
+        type: 'warning',
+        text: warnText
       });
+      originalConsoleWarn.apply(console, args);
+    };
+    
+    // Global error handler - catches uncaught errors
+    window.addEventListener('error', (event) => {
+      const errorInfo = {
+        message: event.error?.message || event.message || 'Unknown error',
+        stack: event.error?.stack || 'No stack trace',
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        type: 'runtime'
+      };
+      window.__testHarnessRuntimeErrors.push(errorInfo);
+      window.__testHarnessTestFailed = true;
+      console.error('Uncaught error:', errorInfo);
+      // Don't prevent default - let it propagate
     });
     
     // Unhandled promise rejection handler
     window.addEventListener('unhandledrejection', (event) => {
-      console.error('Unhandled promise rejection:', event.reason);
-      window.__testHarnessRuntimeErrors.push({
+      const errorInfo = {
         message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason || 'Unknown reason'),
         stack: event.reason?.stack || 'No stack trace available',
         type: 'promise-rejection'
-      });
-      // Prevent the default handling (which would log to console)
+      };
+      window.__testHarnessRuntimeErrors.push(errorInfo);
+      window.__testHarnessTestFailed = true;
+      console.error('Unhandled promise rejection:', event.reason);
+      // Prevent the default handling (which would only log to console)
       event.preventDefault();
     });
+    
+    // Monitor window.onerror directly as well
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errorInfo = {
+        message: message?.toString() || 'Unknown error',
+        source: source,
+        lineno: lineno,
+        colno: colno,
+        stack: error?.stack || 'No stack trace',
+        type: 'window.onerror'
+      };
+      window.__testHarnessRuntimeErrors.push(errorInfo);
+      window.__testHarnessTestFailed = true;
+      return false; // Don't suppress the error
+    };
     
     // Render tracking injection
     (function() {
@@ -426,20 +476,40 @@ ${cssLinks}
     
     ${options.setupCode || ''}
     
-    // Create runtime context with dynamic libraries
+    // Create runtime context with dynamic libraries - WITH VALIDATION
     const componentLibraries = ${JSON.stringify(
       componentLibraries.map((lib: any) => ({ 
         globalVariable: lib.globalVariable,
-        displayName: lib.displayName 
+        displayName: lib.displayName,
+        cdnUrl: lib.cdnUrl
       }))
     )};
     
     const libraries = {};
+    const libraryLoadErrors = [];
+    
+    // Validate that all required libraries loaded successfully
     componentLibraries.forEach(lib => {
       if (window[lib.globalVariable]) {
         libraries[lib.globalVariable] = window[lib.globalVariable];
+        console.log('✅ Library loaded successfully:', lib.displayName, '(' + lib.globalVariable + ')');
+      } else {
+        const errorMsg = 'Library failed to load: ' + lib.displayName + ' (expected global: ' + lib.globalVariable + ', CDN: ' + lib.cdnUrl + ')';
+        libraryLoadErrors.push(errorMsg);
+        window.__testHarnessLibraryLoadErrors.push(errorMsg);
+        window.__testHarnessTestFailed = true;
+        console.error('❌ ' + errorMsg);
       }
     });
+    
+    // Fail fast if libraries didn't load
+    if (libraryLoadErrors.length > 0) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'background: red; color: white; padding: 20px; font-weight: bold;';
+      errorDiv.textContent = 'LIBRARY LOAD FAILURES: ' + libraryLoadErrors.join(', ');
+      document.body.insertBefore(errorDiv, document.body.firstChild);
+      // Still continue to see what other errors might occur
+    }
     
     const runtimeContext = {
       React: React,
@@ -450,9 +520,12 @@ ${cssLinks}
     // Import the ComponentCompiler implementation
     ${componentCompilerCode}
     
-    // Create component compiler instance
+    // Create component compiler instance with library support
     const compiler = new ComponentCompiler();
     compiler.setBabelInstance(Babel);
+    
+    // Configure compiler to use libraries from the component spec
+    // The compiler will handle loading through its own mechanism
     
     // Create component registry
     class SimpleRegistry {
@@ -507,11 +580,12 @@ ${cssLinks}
             await registerSpec(child);
           }
           
-          // Register this component
+          // Register this component with its library dependencies
           if (spec.code) {
             const result = await this.compiler.compile({
               componentName: spec.name,
-              componentCode: spec.code
+              componentCode: spec.code,
+              libraries: spec.libraries || [] // Pass library dependencies from spec
             });
             
             if (result.success) {
@@ -661,7 +735,7 @@ ${cssLinks}
       overflow: 'auto'
     });
     
-    // React Error Boundary component
+    // React Error Boundary component - FAIL HARD version
     const ErrorBoundary = class extends React.Component {
       constructor(props) {
         super(props);
@@ -669,6 +743,8 @@ ${cssLinks}
       }
       
       static getDerivedStateFromError(error) {
+        // Mark test as failed immediately
+        window.__testHarnessTestFailed = true;
         return { hasError: true, error };
       }
       
@@ -679,15 +755,26 @@ ${cssLinks}
           message: error.message,
           stack: error.stack,
           componentStack: errorInfo.componentStack,
-          type: 'react'
+          type: 'react-error-boundary'
         });
+        
+        // Mark test as failed
+        window.__testHarnessTestFailed = true;
+        
+        // Add to console errors for visibility
+        window.__testHarnessConsoleErrors = window.__testHarnessConsoleErrors || [];
+        window.__testHarnessConsoleErrors.push('React Error Boundary: ' + error.message);
+        
+        // Add data attribute to DOM for Playwright detection
+        document.body.setAttribute('data-test-failed', 'true');
+        document.body.setAttribute('data-test-error', error.message);
       }
       
       render() {
         if (this.state.hasError) {
-          return React.createElement('div', { style: { color: 'red', padding: '20px' } }, 
-            'Component Error: ' + this.state.error.message
-          );
+          // DO NOT render fallback UI - re-throw the error to fail hard
+          // This ensures the test fails completely instead of silently continuing
+          throw this.state.error;
         }
         return this.props.children;
       }
@@ -703,8 +790,31 @@ ${cssLinks}
       console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
       console.log('Babel available:', typeof Babel !== 'undefined');
       
+      // Set library load timeout
+      libraryLoadTimer = setTimeout(() => {
+        const missingLibs = [];
+        if (typeof React === 'undefined') missingLibs.push('React');
+        if (typeof ReactDOM === 'undefined') missingLibs.push('ReactDOM');
+        if (typeof Babel === 'undefined') missingLibs.push('Babel');
+        
+        if (missingLibs.length > 0) {
+          const errorMsg = 'Critical libraries failed to load within ' + LIBRARY_LOAD_TIMEOUT + 'ms: ' + missingLibs.join(', ');
+          console.error(errorMsg);
+          window.__testHarnessLibraryLoadErrors.push(errorMsg);
+          window.__testHarnessTestFailed = true;
+          document.body.setAttribute('data-test-failed', 'true');
+          document.body.setAttribute('data-test-error', errorMsg);
+        }
+      }, LIBRARY_LOAD_TIMEOUT);
+      
       // Update the root to show progress
       document.getElementById('root').innerHTML = '<div style="background: cyan; padding: 20px; color: black;">🔄 Initializing components...</div>';
+      
+      // Clear the library load timeout since libraries are available
+      if (libraryLoadTimer) {
+        clearTimeout(libraryLoadTimer);
+        libraryLoadTimer = null;
+      }
       
       // First, test that React is working with a simple component
       const TestComponent = () => React.createElement('div', {
@@ -730,9 +840,18 @@ ${cssLinks}
       const result = await hierarchyRegistrar.registerHierarchy(componentSpec);
       
       if (!result.success) {
-        console.error('Failed to register components:', result.errors);
-        document.getElementById('root').innerHTML = '<div style="color: red; padding: 20px;">Failed to register components: ' + JSON.stringify(result.errors) + '</div>';
-        return;
+        const errorMsg = 'Failed to register components: ' + JSON.stringify(result.errors);
+        console.error(errorMsg);
+        window.__testHarnessRuntimeErrors.push({
+          message: errorMsg,
+          type: 'component-registration',
+          errors: result.errors
+        });
+        window.__testHarnessTestFailed = true;
+        document.body.setAttribute('data-test-failed', 'true');
+        document.body.setAttribute('data-test-error', errorMsg);
+        document.getElementById('root').innerHTML = '<div style="color: white; background: red; padding: 20px; font-weight: bold;">COMPONENT REGISTRATION FAILED: ' + JSON.stringify(result.errors) + '</div>';
+        throw new Error(errorMsg);
       }
       
       // Get all registered components
@@ -742,8 +861,17 @@ ${cssLinks}
       const RootComponent = registry.get(componentSpec.name);
       
       if (!RootComponent) {
-        console.error('Root component not found:', componentSpec.name);
-        return;
+        const errorMsg = 'Root component not found: ' + componentSpec.name;
+        console.error(errorMsg);
+        window.__testHarnessRuntimeErrors.push({
+          message: errorMsg,
+          type: 'component-not-found'
+        });
+        window.__testHarnessTestFailed = true;
+        document.body.setAttribute('data-test-failed', 'true');
+        document.body.setAttribute('data-test-error', errorMsg);
+        document.getElementById('root').innerHTML = '<div style="color: white; background: red; padding: 20px; font-weight: bold;">ROOT COMPONENT NOT FOUND: ' + componentSpec.name + '</div>';
+        throw new Error(errorMsg);
       }
       
       // Simple in-memory storage for user settings
@@ -942,20 +1070,65 @@ ${cssLinks}
   }
   
   /**
-   * Collects runtime errors that were caught during component execution
+   * Collects ALL runtime errors from multiple sources
    */
   private async collectRuntimeErrors(page: any): Promise<string[]> {
-    const runtimeErrors = await page.evaluate(() => {
-      return (window as any).__testHarnessRuntimeErrors || [];
+    const errorData = await page.evaluate(() => {
+      return {
+        runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
+        consoleErrors: (window as any).__testHarnessConsoleErrors || [],
+        libraryLoadErrors: (window as any).__testHarnessLibraryLoadErrors || [],
+        testFailed: (window as any).__testHarnessTestFailed || false,
+        bodyAttributes: {
+          testFailed: document.body.getAttribute('data-test-failed'),
+          testError: document.body.getAttribute('data-test-error')
+        }
+      };
     });
     
     const errors: string[] = [];
-    runtimeErrors.forEach((error: any) => {
-      errors.push(`${error.type} error: ${error.message}`);
-      if (error.componentStack) {
+    
+    // Check test failed flag first
+    if (errorData.testFailed) {
+      errors.push('Test marked as failed by error handlers');
+    }
+    
+    // Collect runtime errors
+    errorData.runtimeErrors.forEach((error: any) => {
+      const errorMsg = `${error.type} error: ${error.message}`;
+      if (!errors.includes(errorMsg)) {
+        errors.push(errorMsg);
+      }
+      if (error.componentStack && !errors.includes(`Component stack: ${error.componentStack}`)) {
         errors.push(`Component stack: ${error.componentStack}`);
       }
+      if (error.filename) {
+        errors.push(`  at ${error.filename}:${error.lineno}:${error.colno}`);
+      }
     });
+    
+    // Collect console errors
+    errorData.consoleErrors.forEach((error: string) => {
+      const errorMsg = `Console error: ${error}`;
+      if (!errors.includes(errorMsg) && !errors.some(e => e.includes(error))) {
+        errors.push(errorMsg);
+      }
+    });
+    
+    // Collect library load errors
+    errorData.libraryLoadErrors.forEach((error: string) => {
+      if (!errors.includes(error)) {
+        errors.push(error);
+      }
+    });
+    
+    // Check DOM attributes for test failure
+    if (errorData.bodyAttributes.testFailed === 'true') {
+      const domError = `DOM marked as failed: ${errorData.bodyAttributes.testError}`;
+      if (!errors.includes(domError)) {
+        errors.push(domError);
+      }
+    }
     
     return errors;
   }
@@ -1200,7 +1373,7 @@ ${cssLinks}
       }
       
       async compile(options) {
-        const { componentName, componentCode } = options;
+        const { componentName, componentCode, libraries } = options;
         
         try {
           // Validate inputs
@@ -1208,8 +1381,14 @@ ${cssLinks}
             throw new Error('componentName and componentCode are required');
           }
           
-          // Wrap component code
-          const wrappedCode = this.wrapComponentCode(componentCode, componentName);
+          // Note: In test harness, libraries are already loaded via script tags
+          // and available in the global scope. The wrapping code will make them
+          // available to components via the libraries object.
+          // In production, the real ComponentCompiler would use LibraryRegistry
+          // to dynamically load these libraries.
+          
+          // Wrap component code with library support
+          const wrappedCode = this.wrapComponentCode(componentCode, componentName, libraries);
           
           // Transform using Babel
           const result = this.babelInstance.transform(wrappedCode, {
@@ -1244,11 +1423,15 @@ ${cssLinks}
         }
       }
       
-      wrapComponentCode(componentCode, componentName) {
-        // Make component libraries available in scope
-        const libraryDeclarations = componentLibraries
-          .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'];\`)
-          .join('\\n        ');
+      wrapComponentCode(componentCode, componentName, libraries) {
+        // Generate library declarations for requested libraries
+        // These map from the libraries object to local variables
+        const libraryDeclarations = libraries && libraries.length > 0
+          ? libraries
+              .filter(lib => lib.globalVariable)
+              .map(lib => \`const \${lib.globalVariable} = libraries['\${lib.globalVariable}'] || window['\${lib.globalVariable}'];\`)
+              .join('\\n        ')
+          : '';
           
         return \`
           function createComponent(

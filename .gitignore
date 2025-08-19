@@ -130,3 +130,4 @@ plans/
 packages/AI/Providers/LocalEmbeddings/.cache/**
 packages/MJAPI/.cache/** 
 .cache/**
+packages/test-output/**
