@@ -22,7 +22,7 @@ export class MJOktaProvider extends MJAuthBase {
   static readonly PROVIDER_TYPE = 'okta';
   type = MJOktaProvider.PROVIDER_TYPE;
   private oktaAuth: OktaAuth;
-  private userClaims$ = new BehaviorSubject<IDToken | null>(null);
+  private userClaims$ = new BehaviorSubject<any>(null);
   
   /**
    * Factory function to provide Angular dependencies required by Okta
@@ -71,6 +71,92 @@ export class MJOktaProvider extends MJAuthBase {
         this.userClaims$.next(null);
       }
     });
+    
+    // Initialize Okta authentication state
+    this.initializeOkta();
+  }
+  
+  private async initializeOkta() {
+    // Start with unauthenticated state
+    this.authenticated = false;
+    this.updateAuthState(false);
+    
+    // Check URL for logout indicator
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPostLogout = urlParams.has('logout');
+    
+    if (isPostLogout) {
+      // We're returning from a logout, clear the URL and stay logged out
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+    
+    // Check if we're returning from a login redirect
+    if (this.oktaAuth.isLoginRedirect()) {
+      try {
+        await this.oktaAuth.handleLoginRedirect();
+        
+        // After handling redirect, check if we're authenticated
+        const authState = await this.oktaAuth.authStateManager.getAuthState();
+        
+        if (authState?.isAuthenticated) {
+          this.updateAuthState(true);
+          this.authenticated = true;
+          this.isAuthenticated$.next(true);
+          
+          // Get and emit the ID token with proper format
+          const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+          const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
+          if (idToken) {
+            const claims = {
+              ...idToken.claims,
+              idToken: idToken.idToken, // The actual token string
+              accessToken: accessToken?.accessToken,
+            };
+            this.userClaims$.next(claims);
+          }
+        }
+      } catch (error) {
+        console.error('Okta initialization redirect handling error:', error);
+      }
+      return; // Don't check for existing session after handling redirect
+    }
+    
+    // Only check for existing session if not a redirect
+    // This prevents auto-login after logout
+    try {
+      const isAuthenticated = await this.oktaAuth.isAuthenticated();
+      
+      if (isAuthenticated) {
+        // Double-check we actually have valid tokens
+        const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+        const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
+        
+        if (idToken && idToken.idToken) {
+          // Format claims to match what app.component expects
+          const claims = {
+            ...idToken.claims,
+            idToken: idToken.idToken, // The actual token string
+            accessToken: accessToken?.accessToken,
+          };
+          this.userClaims$.next(claims);
+          
+          // Ensure the authenticated state is properly set
+          this.authenticated = true;
+          this.updateAuthState(true);
+          
+          // Force the BehaviorSubject to emit the new value
+          this.isAuthenticated$.next(true);
+        } else {
+          // No valid tokens, stay logged out
+          this.authenticated = false;
+          this.updateAuthState(false);
+        }
+      }
+    } catch (error) {
+      // If there's an error checking authentication, stay logged out
+      console.warn('Error checking Okta authentication status:', error);
+    }
   }
 
   override login(options?: any): Observable<void> {
@@ -99,16 +185,36 @@ export class MJOktaProvider extends MJAuthBase {
 
   async logout(): Promise<any> {
     try {
-      // Clear local tokens
+      // Clear the local authentication state immediately
+      this.updateAuthState(false);
+      this.authenticated = false;
+      this.isAuthenticated$.next(false);
+      this.userClaims$.next(null);
+      
+      // Clear all tokens from local storage
+      await this.oktaAuth.tokenManager.clear();
+      
+      // Get the ID token to pass to logout (needed for proper logout)
+      let idToken: string | undefined;
+      try {
+        const token = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+        idToken = token?.idToken;
+      } catch {
+        // Token might already be cleared
+      }
+      
+      // Sign out from Okta completely
+      // The clearTokensBeforeRedirect ensures tokens are cleared before redirect
       await this.oktaAuth.signOut({
-        postLogoutRedirectUri: window.location.origin
+        postLogoutRedirectUri: window.location.origin + '?logout=true',
+        clearTokensBeforeRedirect: true
       });
       
-      this.updateAuthState(false);
-      this.userClaims$.next(null);
+      // Note: The signOut call will redirect the browser, so code after this won't execute
     } catch (error) {
       console.error('Okta logout error:', error);
-      throw error;
+      // If logout fails, at least clear local state and reload
+      window.location.href = window.location.origin;
     }
   }
 
@@ -131,24 +237,15 @@ export class MJOktaProvider extends MJAuthBase {
   }
 
   override isAuthenticated(): Observable<boolean> {
-    // Convert Promise to Observable
-    return from(this.isAuthenticatedAsync());
-  }
-
-  private async isAuthenticatedAsync(): Promise<boolean> {
-    try {
-      const authState = await this.oktaAuth.authStateManager.getAuthState();
-      this.updateAuthState(authState?.isAuthenticated || false);
-      return authState?.isAuthenticated || false;
-    } catch (error) {
-      console.error('Okta authentication check error:', error);
-      return false;
-    }
+    // Return the BehaviorSubject as an observable to ensure consistency
+    // This way all consumers get the same state
+    return this.isAuthenticated$.asObservable();
   }
 
   async getUser(): Promise<any> {
     try {
-      if (!await this.isAuthenticated()) {
+      const isAuth = await this.oktaAuth.isAuthenticated();
+      if (!isAuth) {
         return null;
       }
 
@@ -166,7 +263,17 @@ export class MJOktaProvider extends MJAuthBase {
       const authState = await this.oktaAuth.authStateManager.getAuthState();
       
       if (authState?.isAuthenticated && authState.idToken) {
-        this.userClaims$.next(authState.idToken as IDToken);
+        const idToken = authState.idToken as IDToken;
+        // Format the claims to match what the app expects
+        // The app.component expects claims.idToken to contain the actual token string
+        const claims = {
+          ...idToken.claims,
+          idToken: idToken.idToken, // Add the actual token string
+          accessToken: authState.accessToken?.accessToken,
+        };
+        this.userClaims$.next(claims);
+      } else {
+        this.userClaims$.next(null);
       }
       
       return this.userClaims$.asObservable();
@@ -192,6 +299,16 @@ export class MJOktaProvider extends MJAuthBase {
     try {
       if (this.oktaAuth.isLoginRedirect()) {
         await this.oktaAuth.handleLoginRedirect();
+        
+        // After handling redirect, check if we're authenticated
+        const authState = await this.oktaAuth.authStateManager.getAuthState();
+        if (authState?.isAuthenticated) {
+          // Do a controlled reload after successful login
+          // This ensures the app fully reinitializes with the authenticated state
+          setTimeout(() => {
+            window.location.href = window.location.origin;
+          }, 100);
+        }
       }
     } catch (error) {
       console.error('Okta callback handling error:', error);
@@ -229,8 +346,26 @@ export class MJOktaProvider extends MJAuthBase {
   async initialize(): Promise<void> {
     // Check if we're returning from a redirect
     if (this.oktaAuth.isLoginRedirect()) {
-      await this.handleCallback();
+      try {
+        await this.oktaAuth.handleLoginRedirect();
+        
+        // After handling redirect, check if we're authenticated
+        const authState = await this.oktaAuth.authStateManager.getAuthState();
+        if (authState?.isAuthenticated) {
+          this.updateAuthState(true);
+          
+          // Do a controlled reload after successful login
+          // This ensures the app fully reinitializes with the authenticated state
+          setTimeout(() => {
+            window.location.href = window.location.origin;
+          }, 100);
+          return; // Exit early since we're reloading
+        }
+      } catch (error) {
+        console.error('Okta initialization redirect handling error:', error);
+      }
     }
+    
     // Check authentication status
     const isAuthenticated = await this.oktaAuth.isAuthenticated();
     this.updateAuthState(isAuthenticated);
@@ -241,8 +376,10 @@ export class MJOktaProvider extends MJAuthBase {
   }
 
   async getToken(): Promise<string | null> {
-    const token = await this.getAccessToken();
-    return token || null;
+    // For Okta, we need to return the ID token (not access token) for backend authentication
+    // The ID token contains the user claims that the backend expects
+    const idToken = await this.getIdToken();
+    return idToken || null;
   }
 
   getRequiredConfig(): string[] {
