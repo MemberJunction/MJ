@@ -714,47 +714,40 @@ export class ComponentLinter {
         const violations: Violation[] = [];
         const requiredProps = ['styles', 'utilities', 'components'];
         
-        // Build a set of our component names from componentSpec dependencies
+        // ONLY check components that are explicitly in our dependencies
+        // Do NOT check library components, HTML elements, or anything else
         const ourComponentNames = new Set<string>();
         
-        // Add components from dependencies array
-        if (componentSpec?.dependencies) {
+        // Only add components from the componentSpec.dependencies array
+        if (componentSpec?.dependencies && Array.isArray(componentSpec.dependencies)) {
           for (const dep of componentSpec.dependencies) {
-            if (dep.name) {
+            if (dep && dep.name) {
               ourComponentNames.add(dep.name);
             }
           }
         }
         
-        // Also find components destructured from the components prop in the code
-        traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            // Look for: const { ComponentA, ComponentB } = components;
-            if (t.isObjectPattern(path.node.id) && 
-                t.isIdentifier(path.node.init) && 
-                path.node.init.name === 'components') {
-              for (const prop of path.node.id.properties) {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  ourComponentNames.add(prop.key.name);
-                }
-                // Also handle renaming: { ComponentA: RenamedComponent }
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.value)) {
-                  ourComponentNames.add(prop.value.name);
-                }
-              }
-            }
-          }
-        });
+        // If there are no dependencies, skip this rule entirely
+        if (ourComponentNames.size === 0) {
+          return violations;
+        }
         
-        // Now check only our components for standard props
+        // Now check only our dependency components for standard props
         traverse(ast, {
           JSXElement(path: NodePath<t.JSXElement>) {
             const openingElement = path.node.openingElement;
             
-            // Only check if it's one of our components
-            if (t.isJSXIdentifier(openingElement.name) && 
-                ourComponentNames.has(openingElement.name.name)) {
-              const componentBeingCalled = openingElement.name.name;
+            // Only check if it's one of our dependency components
+            if (t.isJSXIdentifier(openingElement.name)) {
+              const elementName = openingElement.name.name;
+              
+              // CRITICAL: Only check if this component is in our dependencies
+              // Skip all library components (like TableHead, PieChart, etc.)
+              // Skip all HTML elements
+              if (!ourComponentNames.has(elementName)) {
+                return; // Skip this element - it's not one of our dependencies
+              }
+              
               const passedProps = new Set<string>();
               
               // Collect all props being passed
@@ -773,8 +766,8 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: openingElement.loc?.start.line || 0,
                   column: openingElement.loc?.start.column || 0,
-                  message: `Component "${componentBeingCalled}" is missing required props: ${missingProps.join(', ')}. All child components must receive styles, utilities, and components props.`,
-                  code: `<${componentBeingCalled} ... />`
+                  message: `Dependency component "${elementName}" is missing required props: ${missingProps.join(', ')}. Components from dependencies must receive styles, utilities, and components props.`,
+                  code: `<${elementName} ... />`
                 });
               }
             }
