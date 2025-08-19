@@ -955,7 +955,7 @@
   {
     "fields": {
       "Name": "sortablejs",
-      "GlobalVariable": "Widget",
+      "GlobalVariable": "Sortable",
       "Description": "Reorderable drag-and-drop lists for modern browsers and touch devices",
       "Category": "UI",
       "Version": "1.15.6",
@@ -967,8 +967,8 @@
       "ID": "F56A8E34-2317-48E6-8C4C-7739FA6F1873"
     },
     "sync": {
-      "lastModified": "2025-08-19T20:03:40.209Z",
-      "checksum": "47a7eae7990d7bf9ae694a7ed4dc2fa992239f910fd001227cefd475989882e3"
+      "lastModified": "2025-08-19T21:46:53.993Z",
+      "checksum": "4b8d041a8c0080717a3e98aede893db5d2a017558ab22fedbd6d3d1c8a355f5a"
     }
   },
   {

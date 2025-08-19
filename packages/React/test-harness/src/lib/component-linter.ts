@@ -2927,22 +2927,45 @@ export class ComponentLinter {
                   
                   // Check if this entity is in the required entities
                   if (requiredEntities.size > 0 && !requiredEntities.has(usedEntity)) {
-                    // Try to find the closest match
-                    const possibleMatches = Array.from(requiredEntities).filter(e => 
-                      e.toLowerCase().includes(usedEntity.toLowerCase()) || 
-                      usedEntity.toLowerCase().includes(e.toLowerCase())
-                    );
+                    // Enhanced fuzzy matching for better suggestions
+                    const possibleMatches = Array.from(requiredEntities).filter(e => {
+                      const eLower = e.toLowerCase();
+                      const usedLower = usedEntity.toLowerCase();
+                      
+                      // Check various matching patterns
+                      return (
+                        // Contains match
+                        eLower.includes(usedLower) ||
+                        usedLower.includes(eLower) ||
+                        // Remove spaces and check
+                        eLower.replace(/\s+/g, '').includes(usedLower.replace(/\s+/g, '')) ||
+                        usedLower.replace(/\s+/g, '').includes(eLower.replace(/\s+/g, '')) ||
+                        // Check if the main words match (ignore prefixes like "MJ:")
+                        eLower.replace(/^mj:\s*/i, '').includes(usedLower) ||
+                        usedLower.includes(eLower.replace(/^mj:\s*/i, ''))
+                      );
+                    });
+                    
+                    // Always show all available entities for clarity
+                    const allEntities = Array.from(requiredEntities);
+                    const entityList = allEntities.length <= 5 
+                      ? allEntities.join(', ')
+                      : allEntities.slice(0, 5).join(', ') + `, ... (${allEntities.length} total)`;
+                    
+                    let message = `Entity "${usedEntity}" not found in dataRequirements.`;
+                    
+                    if (possibleMatches.length > 0) {
+                      message += ` Did you mean "${possibleMatches[0]}"?`;
+                    }
+                    
+                    message += ` Available entities: ${entityList}`;
                     
                     violations.push({
                       rule: 'entity-name-mismatch',
                       severity: 'critical',
                       line: prop.value.loc?.start.line || 0,
                       column: prop.value.loc?.start.column || 0,
-                      message: `Entity "${usedEntity}" not found in dataRequirements. ${
-                        possibleMatches.length > 0 
-                          ? `Did you mean "${possibleMatches[0]}"?` 
-                          : `Available entities: ${Array.from(requiredEntities).join(', ')}`
-                      }`,
+                      message,
                       code: `EntityName: "${usedEntity}"`
                     });
                   } else {
@@ -3048,24 +3071,45 @@ export class ComponentLinter {
                 
                 // Check if this query is in the required queries
                 if (requiredQueries.size > 0 && !requiredQueries.has(usedQuery)) {
-                  // Try to find the closest match
-                  const possibleMatches = Array.from(requiredQueries).filter(q => 
-                    q.toLowerCase().includes(usedQuery.toLowerCase()) || 
-                    usedQuery.toLowerCase().includes(q.toLowerCase())
-                  );
+                  // Enhanced fuzzy matching for better suggestions
+                  const possibleMatches = Array.from(requiredQueries).filter(q => {
+                    const qLower = q.toLowerCase();
+                    const usedLower = usedQuery.toLowerCase();
+                    
+                    return (
+                      // Contains match
+                      qLower.includes(usedLower) || 
+                      usedLower.includes(qLower) ||
+                      // Remove spaces and check
+                      qLower.replace(/\s+/g, '').includes(usedLower.replace(/\s+/g, '')) ||
+                      usedLower.replace(/\s+/g, '').includes(qLower.replace(/\s+/g, ''))
+                    );
+                  });
+                  
+                  // Always show all available queries for clarity
+                  const allQueries = Array.from(requiredQueries);
+                  const queryList = allQueries.length <= 5
+                    ? allQueries.join(', ')
+                    : allQueries.slice(0, 5).join(', ') + `, ... (${allQueries.length} total)`;
+                  
+                  let message = `Query "${usedQuery}" not found in dataRequirements.`;
+                  
+                  if (possibleMatches.length > 0) {
+                    message += ` Did you mean "${possibleMatches[0]}"?`;
+                  }
+                  
+                  if (requiredQueries.size > 0) {
+                    message += ` Available queries: ${queryList}`;
+                  } else {
+                    message += ` No queries defined in dataRequirements.`;
+                  }
                   
                   violations.push({
                     rule: 'query-name-mismatch',
                     severity: 'critical',
                     line: prop.value.loc?.start.line || 0,
                     column: prop.value.loc?.start.column || 0,
-                    message: `Query "${usedQuery}" not found in dataRequirements. ${
-                      possibleMatches.length > 0 
-                        ? `Did you mean "${possibleMatches[0]}"?` 
-                        : requiredQueries.size > 0 
-                          ? `Available queries: ${Array.from(requiredQueries).join(', ')}`
-                          : `No queries defined in dataRequirements`
-                    }`,
+                    message,
                     code: `QueryName: "${usedQuery}"`
                   });
                 } else if (queryDefinitionsMap.has(usedQuery)) {
