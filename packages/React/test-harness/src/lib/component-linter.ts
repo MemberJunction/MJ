@@ -34,6 +34,60 @@ interface Rule {
   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => Violation[];
 }
 
+// Standard HTML elements (lowercase)
+const HTML_ELEMENTS = new Set([
+  // Main root
+  'html',
+  // Document metadata
+  'base', 'head', 'link', 'meta', 'style', 'title',
+  // Sectioning root
+  'body',
+  // Content sectioning
+  'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'main', 'nav', 'section',
+  // Text content
+  'blockquote', 'dd', 'div', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'menu', 'ol', 'p', 'pre', 'ul',
+  // Inline text semantics
+  'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark',
+  'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr',
+  // Image and multimedia
+  'area', 'audio', 'img', 'map', 'track', 'video',
+  // Embedded content
+  'embed', 'iframe', 'object', 'param', 'picture', 'portal', 'source',
+  // SVG and MathML
+  'svg', 'math',
+  // Scripting
+  'canvas', 'noscript', 'script',
+  // Demarcating edits
+  'del', 'ins',
+  // Table content
+  'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr',
+  // Forms
+  'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup',
+  'option', 'output', 'progress', 'select', 'textarea',
+  // Interactive elements
+  'details', 'dialog', 'summary',
+  // Web Components
+  'slot', 'template',
+  // SVG elements (common ones)
+  'animate', 'animateMotion', 'animateTransform', 'circle', 'clipPath', 'defs', 'desc', 'ellipse',
+  'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feComposite', 'feConvolveMatrix',
+  'feDiffuseLighting', 'feDisplacementMap', 'feDistantLight', 'feDropShadow', 'feFlood',
+  'feFuncA', 'feFuncB', 'feFuncG', 'feFuncR', 'feGaussianBlur', 'feImage', 'feMerge', 'feMergeNode',
+  'feMorphology', 'feOffset', 'fePointLight', 'feSpecularLighting', 'feSpotLight', 'feTile',
+  'feTurbulence', 'filter', 'foreignObject', 'g', 'image', 'line', 'linearGradient', 'marker',
+  'mask', 'metadata', 'path', 'pattern', 'polygon', 'polyline', 'radialGradient', 'rect',
+  'stop', 'switch', 'symbol', 'text', 'textPath', 'tspan', 'use', 'view'
+]);
+
+// React built-in components (PascalCase)
+const REACT_BUILT_INS = new Set([
+  'Fragment',
+  'StrictMode',
+  'Suspense',
+  'Profiler'
+]);
+
 // Helper function
 function getLineNumber(code: string, index: number): number {
   return code.substring(0, index).split('\n').length;
@@ -247,6 +301,112 @@ export class ComponentLinter {
             }
           }
         }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'no-window-access',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build a map of library names to their global variables from the component spec
+        const libraryMap = new Map<string, string>();
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            if (lib.globalVariable) {
+              // Store both the library name and globalVariable for lookup
+              libraryMap.set(lib.name.toLowerCase(), lib.globalVariable);
+              libraryMap.set(lib.globalVariable.toLowerCase(), lib.globalVariable);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check if accessing window object
+            if (t.isIdentifier(path.node.object) && path.node.object.name === 'window') {
+              // Check what property is being accessed from window
+              let propertyName = '';
+              let isDestructuring = false;
+              
+              if (t.isIdentifier(path.node.property)) {
+                propertyName = path.node.property.name;
+              } else if (t.isMemberExpression(path.node.property)) {
+                // Handle chained access like window.Recharts.ResponsiveContainer
+                const firstProp = path.node.property;
+                if (t.isIdentifier(firstProp.object)) {
+                  propertyName = firstProp.object.name;
+                }
+              }
+              
+              // Check if this is part of a destructuring assignment
+              let currentPath: NodePath<t.Node> | null = path.parentPath;
+              while (currentPath) {
+                if (t.isVariableDeclarator(currentPath.node) && 
+                    t.isObjectPattern(currentPath.node.id)) {
+                  isDestructuring = true;
+                  break;
+                }
+                currentPath = currentPath.parentPath;
+              }
+              
+              // Check if the property matches a known library
+              const matchedLibrary = libraryMap.get(propertyName.toLowerCase());
+              
+              if (matchedLibrary) {
+                // Specific guidance for library access
+                violations.push({
+                  rule: 'no-window-access',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component "${componentName}" should not access window.${propertyName}. Use "${matchedLibrary}" directly - it's already available in the component's closure scope. Change "window.${propertyName}" to just "${matchedLibrary}".`,
+                  code: path.toString().substring(0, 100)
+                });
+              } else if (isDestructuring) {
+                // Likely trying to destructure from an unknown library
+                violations.push({
+                  rule: 'no-window-access',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component "${componentName}" is trying to destructure from window.${propertyName}. If this is a library, it should be added to the component's libraries array in the spec and accessed via its globalVariable name.`,
+                  code: path.toString().substring(0, 100)
+                });
+              } else {
+                // General window access
+                violations.push({
+                  rule: 'no-window-access',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component "${componentName}" must not access the window object. Interactive components should be self-contained and not rely on global state.`,
+                  code: path.toString().substring(0, 100)
+                });
+              }
+            }
+          },
+          Identifier(path: NodePath<t.Identifier>) {
+            // Also check for direct window references (less common but possible)
+            if (path.node.name === 'window' && path.isReferencedIdentifier()) {
+              // Make sure it's not part of a member expression we already caught
+              const parent = path.parent;
+              if (!t.isMemberExpression(parent) || parent.object !== path.node) {
+                violations.push({
+                  rule: 'no-window-access',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component "${componentName}" must not reference the window object directly. Interactive components should be self-contained.`,
+                  code: path.toString().substring(0, 100)
+                });
+              }
+            }
+          }
+        });
         
         return violations;
       }
@@ -1610,7 +1770,7 @@ export class ComponentLinter {
         
         // Add React hooks and built-ins
         availableIdentifiers.add('React');
-        availableIdentifiers.add('Fragment');
+        REACT_BUILT_INS.forEach(name => availableIdentifiers.add(name));
         availableIdentifiers.add('useState');
         availableIdentifiers.add('useEffect');
         availableIdentifiers.add('useCallback');
@@ -1620,15 +1780,8 @@ export class ComponentLinter {
         availableIdentifiers.add('useReducer');
         availableIdentifiers.add('useLayoutEffect');
         
-        // Add HTML elements (lowercase)
-        const htmlElements = ['div', 'span', 'button', 'input', 'form', 'table', 'tr', 'td', 'th', 
-                              'ul', 'li', 'ol', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-                              'img', 'a', 'nav', 'header', 'footer', 'section', 'article',
-                              'aside', 'main', 'textarea', 'select', 'option', 'label',
-                              'style', 'script', 'canvas', 'svg', 'path', 'g', 'circle',
-                              'rect', 'line', 'polygon', 'polyline', 'text', 'strong', 'em',
-                              'code', 'pre', 'blockquote', 'iframe', 'video', 'audio'];
-        htmlElements.forEach(el => availableIdentifiers.add(el));
+        // Add HTML elements from our comprehensive list
+        HTML_ELEMENTS.forEach(el => availableIdentifiers.add(el));
         
         // Add library global variables
         if (componentSpec?.libraries) {
@@ -1682,50 +1835,88 @@ export class ComponentLinter {
             if (t.isJSXIdentifier(openingElement.name)) {
               const tagName = openingElement.name.name;
               
-              // Skip HTML elements (lowercase)
-              if (/^[a-z]/.test(tagName)) {
-                return;
-              }
-              
-              // Check if this component is available
+              // Check if this component is available in scope
               if (!availableIdentifiers.has(tagName)) {
-                // Determine if it's likely a missing library component
-                const looksLikeLibraryComponent = /^[A-Z][a-zA-Z]*(?:Chart|Graph|Plot|Container|Grid|List|Table|Modal|Dialog|Tooltip|Button|Input|Select)/.test(tagName);
+                // It's not defined - check if it's a built-in or needs to be defined
+                const isHTMLElement = HTML_ELEMENTS.has(tagName.toLowerCase());
+                const isReactBuiltIn = REACT_BUILT_INS.has(tagName);
                 
-                if (looksLikeLibraryComponent) {
-                  // Check if we have libraries that might provide this
-                  const possibleLibraries: string[] = [];
-                  if (tagName.includes('Chart') || tagName.includes('Graph') || tagName.includes('Plot')) {
-                    possibleLibraries.push('recharts', 'd3', 'chart.js', 'plotly');
-                  }
-                  if (tagName.includes('Modal') || tagName.includes('Dialog') || tagName.includes('Tooltip')) {
-                    possibleLibraries.push('react-modal', 'material-ui', 'antd', 'bootstrap');
-                  }
+                if (!isHTMLElement && !isReactBuiltIn) {
+                  // Not a built-in element, so it needs to be defined
+                  // Check if it looks like PascalCase (likely a component)
+                  const isPascalCase = /^[A-Z][a-zA-Z0-9]*$/.test(tagName);
                   
-                  violations.push({
-                    rule: 'undefined-jsx-component',
-                    severity: 'critical',
-                    line: openingElement.loc?.start.line || 0,
-                    column: openingElement.loc?.start.column || 0,
-                    message: `JSX component "${tagName}" is not defined. This looks like a library component. Check if the required library is in the componentSpec.libraries array and that it's being properly imported.${possibleLibraries.length > 0 ? ` Possible libraries: ${possibleLibraries.join(', ')}` : ''}`,
-                    code: `<${tagName} ... />`
-                  });
-                } else if (componentsFromProp.has(tagName)) {
-                  violations.push({
-                    rule: 'undefined-jsx-component',
-                    severity: 'high',
-                    line: openingElement.loc?.start.line || 0,
-                    column: openingElement.loc?.start.column || 0,
-                    message: `JSX component "${tagName}" is in dependencies but not destructured from components prop. Add: const { ${tagName} } = components;`,
-                    code: `<${tagName} ... />`
-                  });
+                  if (isPascalCase) {
+                  // Check what libraries are actually available in the spec
+                  const availableLibraries = componentSpec?.libraries || [];
+                  
+                  if (availableLibraries.length > 0) {
+                    // We have libraries available - provide specific guidance
+                    const libraryNames = availableLibraries
+                      .filter(lib => lib.globalVariable)
+                      .map(lib => lib.globalVariable);
+                    
+                    if (libraryNames.length === 1) {
+                      // Single library - be very specific
+                      violations.push({
+                        rule: 'undefined-jsx-component',
+                        severity: 'critical',
+                        line: openingElement.loc?.start.line || 0,
+                        column: openingElement.loc?.start.column || 0,
+                        message: `JSX component "${tagName}" is not defined. This looks like it should be destructured from the ${libraryNames[0]} library. Add: const { ${tagName} } = ${libraryNames[0]}; at the top of your component function.`,
+                        code: `<${tagName} ... />`
+                      });
+                    } else {
+                      // Multiple libraries - suggest checking which one
+                      violations.push({
+                        rule: 'undefined-jsx-component',
+                        severity: 'critical',
+                        line: openingElement.loc?.start.line || 0,
+                        column: openingElement.loc?.start.column || 0,
+                        message: `JSX component "${tagName}" is not defined. Available libraries: ${libraryNames.join(', ')}. Destructure it from the appropriate library, e.g., const { ${tagName} } = LibraryName;`,
+                        code: `<${tagName} ... />`
+                      });
+                    }
+                  } else {
+                    // No libraries in spec but looks like a library component
+                    violations.push({
+                      rule: 'undefined-jsx-component',
+                      severity: 'critical',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `JSX component "${tagName}" is not defined. This looks like a library component, but no libraries are configured in the component spec. Add the required library to the componentSpec.libraries array.`,
+                      code: `<${tagName} ... />`
+                    });
+                  }
+                  } else if (componentsFromProp.has(tagName)) {
+                    // It's a component from the components prop
+                    violations.push({
+                      rule: 'undefined-jsx-component',
+                      severity: 'high',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `JSX component "${tagName}" is in dependencies but not destructured from components prop. Add: const { ${tagName} } = components;`,
+                      code: `<${tagName} ... />`
+                    });
+                  } else {
+                    // Unknown component - not in libraries, not in dependencies
+                    violations.push({
+                      rule: 'undefined-jsx-component',
+                      severity: 'high',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `JSX component "${tagName}" is not defined. Either define it in your component, add it to dependencies, or check if it should be destructured from a library.`,
+                      code: `<${tagName} ... />`
+                    });
+                  }
                 } else {
+                  // Not PascalCase but also not a built-in - suspicious
                   violations.push({
                     rule: 'undefined-jsx-component',
-                    severity: 'high',
+                    severity: 'medium',
                     line: openingElement.loc?.start.line || 0,
                     column: openingElement.loc?.start.column || 0,
-                    message: `JSX component "${tagName}" is not defined. Either add it to the component's dependencies or check if it's a missing library component.`,
+                    message: `JSX element "${tagName}" is not recognized as a valid HTML element or React component. Check the spelling or ensure it's properly defined.`,
                     code: `<${tagName} ... />`
                   });
                 }

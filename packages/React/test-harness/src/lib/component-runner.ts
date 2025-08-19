@@ -128,7 +128,6 @@ export class ComponentRunner {
 
       // Always load runtime libraries after setting content
       // This ensures they persist in the current page context
-      console.log('📚 Loading runtime libraries...');
       await this.loadRuntimeLibraries(page);
       
       // Verify the runtime is actually loaded
@@ -141,7 +140,9 @@ export class ComponentRunner {
           mjRuntimeKeys: (window as any).MJReactRuntime ? Object.keys((window as any).MJReactRuntime) : []
         };
       });
-      console.log('📚 Runtime check after loading:', runtimeCheck);
+      if (debug) {
+        console.log('Runtime loaded successfully');
+      }
       
       if (!runtimeCheck.hasMJRuntime) {
         throw new Error('Failed to inject MJReactRuntime into page context');
@@ -165,18 +166,16 @@ export class ComponentRunner {
 
       // Execute the component using the real React runtime
       const executionResult = await page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
-        console.log('🎯 BROWSER: page.evaluate started');
-        console.log('🎯 BROWSER: spec received:', spec);
-        console.log('🎯 BROWSER: debug mode:', debug);
+        if (debug) {
+          console.log('🎯 Starting component execution');
+        }
         
         try {
           // Access the real runtime classes
           const MJRuntime = (window as any).MJReactRuntime;
-          console.log('🎯 BROWSER: MJRuntime available?', !!MJRuntime);
           if (!MJRuntime) {
             throw new Error('React runtime not loaded');
           }
-          console.log('🎯 BROWSER: MJRuntime classes:', Object.keys(MJRuntime));
 
           const {
             ComponentCompiler,
@@ -228,19 +227,18 @@ export class ComponentRunner {
 
           // Register the component hierarchy
           // IMPORTANT: Pass component libraries for library loading to work
-          console.log('🔑 Using contextUser for registration:', (window as any).__mjContextUser?.Email || 'not found');
-          console.log('📚 Component libraries provided:', componentLibraries?.length || 0, 'libraries');
+          if (debug) {
+            console.log('📚 Registering component with', componentLibraries?.length || 0, 'libraries');
+          }
           const registrationResult = await registrar.registerHierarchy(spec, {
             styles,
             namespace: 'Global',
             version: 'v1', // Use v1 to match the registry defaults
             allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
           });
-          console.log('📚 Registration with libraries completed:', {
-            success: registrationResult.success,
-            componentCount: registrationResult.registeredComponents?.length,
-            hasLibraries: spec.libraries?.length > 0
-          });
+          if (debug && !registrationResult.success) {
+            console.log('❌ Registration failed:', registrationResult.errors);
+          }
 
           if (!registrationResult.success) {
             throw new Error('Component registration failed: ' + JSON.stringify(registrationResult.errors));
@@ -489,8 +487,6 @@ export class ComponentRunner {
    * Load runtime libraries into the page
    */
   private async loadRuntimeLibraries(page: any) {
-    console.log('Loading runtime libraries...');
-
     // Load React and ReactDOM
     await page.addScriptTag({ url: 'https://unpkg.com/react@18/umd/react.development.js' });
     await page.addScriptTag({ url: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js' });
@@ -505,8 +501,6 @@ export class ComponentRunner {
     const runtimePath = require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
     const runtimeBundle = fs.readFileSync(runtimePath, 'utf-8');
     
-    console.log(`Loading MJ React Runtime UMD bundle (${(runtimeBundle.length / 1024).toFixed(2)} KB)...`);
-    
     // Inject the UMD bundle into the page
     await page.addScriptTag({ content: runtimeBundle });
 
@@ -519,7 +513,6 @@ export class ComponentRunner {
       }
 
       // The real runtime is now available!
-      console.log('MJReactRuntime loaded from UMD bundle:', Object.keys((window as any).MJReactRuntime));
     });
 
     // Verify everything loaded
@@ -532,7 +525,7 @@ export class ComponentRunner {
       };
     });
 
-    console.log('Libraries loaded:', loaded);
+    // All libraries loaded successfully
 
     if (!loaded.React || !loaded.ReactDOM || !loaded.Babel || !loaded.MJRuntime) {
       throw new Error('Failed to load required libraries');
@@ -722,7 +715,6 @@ export class ComponentRunner {
     // Serialize contextUser to pass to the browser context
     // UserInfo is a simple object that can be serialized
     const serializedContextUser = JSON.parse(JSON.stringify(contextUser));
-    console.log('📤 Passing contextUser to browser:', { email: serializedContextUser.Email, id: serializedContextUser.ID });
     
     // Create instances in Node.js context
     const metadata = new Metadata();
@@ -737,12 +729,12 @@ export class ComponentRunner {
       if (metadata.Entities) {
         // Serialize the entities data (remove functions, keep data)
         entitiesData = JSON.parse(JSON.stringify(metadata.Entities));
-        console.log(`📚 Serialized ${entitiesData.length} entities for browser context`);
+        // Serialized entities for browser context
       } else {
-        console.log('⚠️ Metadata.Entities not available, using empty array');
+        // Metadata.Entities not available, using empty array
       }
     } catch (error) {
-      console.log('⚠️ Could not serialize entities:', error);
+      // Could not serialize entities
       entitiesData = [];
     }
     
@@ -784,12 +776,10 @@ export class ComponentRunner {
         (window as any).Metadata = {
           Provider: mockMd
         };
-        console.log('📦 Created global Metadata mock with Provider (early)');
-        console.log('Mock Provider has properties:', Object.keys(mockMd));
+        // Created global Metadata mock with Provider (early)
       }
       
-      console.log('📥 Received contextUser in browser:', { email: ctxUser.Email, id: ctxUser.ID });
-      console.log('📥 Received mock metadata with', mockMd.Entities?.length || 0, 'entities');
+      // Received contextUser and mock metadata in browser
     }, { ctxUser: serializedContextUser, mockMd: mockMetadata });
 
     // Expose functions
@@ -875,11 +865,11 @@ export class ComponentRunner {
         (window as any).Metadata = {
           Provider: mockMd
         };
-        console.log('📦 Created global Metadata mock with Provider (late)');
+        // Created global Metadata mock with Provider (late)
       } else {
         // Update the existing one to ensure it has the latest mock data
         (window as any).Metadata.Provider = mockMd;
-        console.log('📦 Updated existing Metadata.Provider with mock data');
+        // Updated existing Metadata.Provider with mock data
       }
     });
   }
