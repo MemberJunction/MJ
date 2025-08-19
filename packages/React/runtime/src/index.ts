@@ -71,10 +71,6 @@ export {
 } from './runtime';
 
 // Export utilities
-export { 
-  RuntimeUtilities, 
-  createRuntimeUtilities 
-} from './utilities/runtime-utilities';
 
 export { 
   SetupStyles,

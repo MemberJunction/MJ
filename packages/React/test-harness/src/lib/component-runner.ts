@@ -12,6 +12,7 @@ import { Metadata, RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
 import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -283,7 +284,8 @@ export class ComponentRunner {
     
     // Initialize LibraryRegistry with contextUser for proper database-driven library loading
     // This ensures we use the same approved libraries as the runtime
-    await LibraryRegistry.Config(false, options.contextUser);
+    await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
+    await LibraryRegistry.Config(false, ComponentMetadataEngine.Instance.ComponentLibraries);
     
     // Set configuration if provided (for backward compatibility)
     if (options.libraryConfiguration) {

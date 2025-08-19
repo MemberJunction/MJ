@@ -14,6 +14,7 @@ import {
   RuntimeContext
 } from '../types';
 import { LibraryRegistry } from '../utilities/library-registry';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Default compiler configuration
@@ -81,7 +82,7 @@ export class ComponentCompiler {
       this.validateCompileOptions(options);
 
       // Load required libraries if specified
-      const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.contextUser);
+      const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.allLibraries);
 
       // Transpile the component code
       const transpiledCode = this.transpileComponent(
@@ -211,14 +212,12 @@ export class ComponentCompiler {
    * @param contextUser - Context user for accessing library registry
    * @returns Map of loaded libraries
    */
-  private async loadRequiredLibraries(libraries: any[], contextUser: UserInfo): Promise<Map<string, any>> {
+  private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
     console.log('🔍 loadRequiredLibraries called with:', {
       librariesCount: libraries?.length || 0,
-      libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable })),
-      hasContextUser: !!contextUser,
-      contextUserEmail: contextUser?.Email
+      libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable }))
     });
     
     if (!libraries || libraries.length === 0) {
@@ -232,12 +231,11 @@ export class ComponentCompiler {
       return loadedLibraries;
     }
 
-    // Initialize LibraryRegistry with contextUser if provided
-    if (contextUser) {
-      console.log('🔐 Initializing LibraryRegistry with contextUser:', contextUser.Email);
-      await LibraryRegistry.Config(false, contextUser);
+    // Initialize LibraryRegistry with componentLibraries if provided
+    if (componentLibraries) {
+      await LibraryRegistry.Config(false, componentLibraries);
     } else {
-      console.warn('⚠️ No contextUser provided for LibraryRegistry initialization');
+      console.warn('⚠️ No componentLibraries provided for LibraryRegistry initialization');
     }
 
     const loadPromises = libraries.map(async (lib) => {

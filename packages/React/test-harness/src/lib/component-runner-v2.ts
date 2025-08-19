@@ -16,6 +16,7 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
+  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (serialized)
 }
 
 export interface ComponentExecutionResult {
@@ -163,7 +164,7 @@ export class ComponentRunnerV2 {
       }
 
       // Execute the component using the real React runtime
-      const executionResult = await page.evaluate(async ({ spec, props, debug }: { spec: any; props: any; debug: boolean }) => {
+      const executionResult = await page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         console.log('🎯 BROWSER: page.evaluate started');
         console.log('🎯 BROWSER: spec received:', spec);
         console.log('🎯 BROWSER: debug mode:', debug);
@@ -181,7 +182,6 @@ export class ComponentRunnerV2 {
             ComponentCompiler,
             ComponentRegistry,
             ComponentHierarchyRegistrar,
-            createRuntimeUtilities,
             SetupStyles
           } = MJRuntime;
 
@@ -213,9 +213,13 @@ export class ComponentRunnerV2 {
             runtimeContext
           );
 
-          // Create utilities and styles
-          const runtimeUtils = createRuntimeUtilities();
-          const utilities = runtimeUtils.buildUtilities();
+          // Use the utilities we already created with mock metadata
+          // Don't call createRuntimeUtilities() as it tries to create new Metadata() which fails
+          const utilities = (window as any).__mjUtilities;
+          if (!utilities) {
+            throw new Error('Utilities not found - exposeMJUtilities may have failed');
+          }
+          
           const styles = SetupStyles();
 
           if (debug) {
@@ -223,13 +227,14 @@ export class ComponentRunnerV2 {
           }
 
           // Register the component hierarchy
-          // IMPORTANT: Pass contextUser for library loading to work
+          // IMPORTANT: Pass component libraries for library loading to work
           console.log('🔑 Using contextUser for registration:', (window as any).__mjContextUser?.Email || 'not found');
+          console.log('📚 Component libraries provided:', componentLibraries?.length || 0, 'libraries');
           const registrationResult = await registrar.registerHierarchy(spec, {
             styles,
             namespace: 'Global',
             version: 'v1', // Use v1 to match the registry defaults
-            contextUser: (window as any).__mjContextUser // Pass the context user for LibraryRegistry
+            allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
           });
           console.log('📚 Registration with libraries completed:', {
             success: registrationResult.success,
@@ -353,7 +358,12 @@ export class ComponentRunnerV2 {
             error: error.message || String(error)
           };
         }
-      }, { spec: options.componentSpec, props: options.props, debug }) as { success: boolean; error?: string; componentCount?: number };
+      }, { 
+        spec: options.componentSpec, 
+        props: options.props, 
+        debug,
+        componentLibraries: options.componentLibraries || []
+      }) as { success: boolean; error?: string; componentCount?: number };
 
       if (debug) {
         console.log('Execution result:', executionResult);
@@ -714,16 +724,73 @@ export class ComponentRunnerV2 {
     const serializedContextUser = JSON.parse(JSON.stringify(contextUser));
     console.log('📤 Passing contextUser to browser:', { email: serializedContextUser.Email, id: serializedContextUser.ID });
     
-    // Inject the serialized contextUser into the page
-    await page.evaluate((ctxUser: any) => {
-      (window as any).__mjContextUser = ctxUser;
-      console.log('📥 Received contextUser in browser:', { email: ctxUser.Email, id: ctxUser.ID });
-    }, serializedContextUser);
-
     // Create instances in Node.js context
     const metadata = new Metadata();
     const runView = new RunView();
     const runQuery = new RunQuery();
+    
+    // Create a lightweight mock metadata object with serializable data
+    // This avoids authentication/provider issues in the browser context
+    let entitiesData: any[] = [];
+    try {
+      // Try to get entities if available, otherwise use empty array
+      if (metadata.Entities) {
+        // Serialize the entities data (remove functions, keep data)
+        entitiesData = JSON.parse(JSON.stringify(metadata.Entities));
+        console.log(`📚 Serialized ${entitiesData.length} entities for browser context`);
+      } else {
+        console.log('⚠️ Metadata.Entities not available, using empty array');
+      }
+    } catch (error) {
+      console.log('⚠️ Could not serialize entities:', error);
+      entitiesData = [];
+    }
+    
+    // Create the mock metadata structure with entities and user
+    // Note: Don't include functions here as they can't be serialized
+    // Include common properties that Metadata.Provider might need
+    const mockMetadata = {
+      Entities: entitiesData,
+      CurrentUser: serializedContextUser,
+      Applications: [],
+      Queries: [],
+      QueryFields: [],
+      QueryCategories: [],
+      QueryPermissions: [],
+      Roles: [],
+      Libraries: [],
+      AuditLogTypes: [],
+      Authorizations: [],
+      VisibleExplorerNavigationItems: [],
+      AllExplorerNavigationItems: []
+    };
+    
+    // Inject both the contextUser and mock metadata into the page
+    // Playwright only accepts a single argument, so wrap in an object
+    await page.evaluate((data: { ctxUser: any; mockMd: any }) => {
+      const { ctxUser, mockMd } = data;
+      (window as any).__mjContextUser = ctxUser;
+      
+      // Add the EntityByName function directly in the browser context
+      mockMd.EntityByName = (name: string) => {
+        return mockMd.Entities.find((e: any) => e.Name === name) || null;
+      };
+      
+      (window as any).__mjMockMetadata = mockMd;
+      
+      // IMPORTANT: Create global Metadata mock immediately to prevent undefined errors
+      // This must be available before any component code runs
+      if (!(window as any).Metadata) {
+        (window as any).Metadata = {
+          Provider: mockMd
+        };
+        console.log('📦 Created global Metadata mock with Provider (early)');
+        console.log('Mock Provider has properties:', Object.keys(mockMd));
+      }
+      
+      console.log('📥 Received contextUser in browser:', { email: ctxUser.Email, id: ctxUser.ID });
+      console.log('📥 Received mock metadata with', mockMd.Entities?.length || 0, 'entities');
+    }, { ctxUser: serializedContextUser, mockMd: mockMetadata });
 
     // Expose functions
     await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
@@ -738,10 +805,11 @@ export class ComponentRunnerV2 {
 
     await page.exposeFunction('__mjGetEntities', () => {
       try {
-        return metadata.Entities;
+        // Return the entities array or empty array if not available
+        return entitiesData;
       } catch (error) {
         console.error('Error in __mjGetEntities:', error);
-        return null;
+        return [];
       }
     });
 
@@ -775,11 +843,21 @@ export class ComponentRunnerV2 {
       }
     });
 
-    // Make them available in utilities
+    // Make them available in utilities with the mock metadata
     await page.evaluate(() => {
+      // Use the mock metadata for synchronous access
+      const mockMd = (window as any).__mjMockMetadata || { Entities: [], CurrentUser: null };
+      
       (window as any).__mjUtilities = {
         md: {
-          entities: () => (window as any).__mjGetEntities(),
+          // Use the mock metadata's Entities directly (synchronous)
+          Entities: mockMd.Entities,
+          entities: mockMd.Entities, // Support both cases
+          CurrentUser: mockMd.CurrentUser,
+          EntityByName: (name: string) => {
+            return mockMd.Entities.find((e: any) => e.Name === name) || null;
+          },
+          // Keep async function for GetEntityObject for compatibility
           GetEntityObject: async (entityName: string) => 
             await (window as any).__mjGetEntityObject(entityName)
         },
@@ -791,6 +869,18 @@ export class ComponentRunnerV2 {
           RunQuery: async (params: any) => await (window as any).__mjRunQuery(params)
         }
       };
+      
+      // Update or create global Metadata mock (in case it wasn't created earlier)
+      if (!(window as any).Metadata) {
+        (window as any).Metadata = {
+          Provider: mockMd
+        };
+        console.log('📦 Created global Metadata mock with Provider (late)');
+      } else {
+        // Update the existing one to ensure it has the latest mock data
+        (window as any).Metadata.Provider = mockMd;
+        console.log('📦 Updated existing Metadata.Provider with mock data');
+      }
     });
   }
 

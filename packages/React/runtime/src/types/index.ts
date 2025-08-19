@@ -5,6 +5,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 import { ComponentLibraryDependency, ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
@@ -39,13 +40,14 @@ export interface CompileOptions {
   babelPlugins?: string[];
   /** Custom Babel presets to use */
   babelPresets?: string[];
+
   /** Library dependencies that the component requires */
   libraries?: ComponentLibraryDependency[];
 
   /**
-   * Required, contextUser is the UserInfo for the currently logged in user, must be passed in explicitly
+   * Required, metadata for all possible libraries allowed by the system
    */
-  contextUser: UserInfo
+  allLibraries: ComponentLibraryEntity[];
 }
 
 

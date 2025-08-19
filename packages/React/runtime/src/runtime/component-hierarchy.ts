@@ -14,6 +14,7 @@ import { ComponentRegistry } from '../registry';
 
 import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Result of a hierarchy registration operation
@@ -49,9 +50,9 @@ export interface HierarchyRegistrationOptions {
   /** Whether to override existing components */
   allowOverride?: boolean;
   /**
-   * Required UserInfo for the current user
+   * Required, metadata for all possible libraries allowed by the system
    */
-  contextUser: UserInfo;
+  allLibraries: ComponentLibraryEntity[];
 }
 
 /**
@@ -86,9 +87,7 @@ export class ComponentHierarchyRegistrar {
       rootComponent: rootSpec.name,
       hasLibraries: !!(rootSpec.libraries && rootSpec.libraries.length > 0),
       libraryCount: rootSpec.libraries?.length || 0,
-      libraries: rootSpec.libraries?.map(l => l.name),
-      hasContextUser: !!options.contextUser,
-      contextUserEmail: options.contextUser?.Email
+      libraries: rootSpec.libraries?.map(l => l.name)
     });
 
     const registeredComponents: string[] = [];
@@ -98,7 +97,7 @@ export class ComponentHierarchyRegistrar {
     // Register the root component
     const rootResult = await this.registerSingleComponent(
       rootSpec,
-      { styles, namespace, version, allowOverride, contextUser: options.contextUser }
+      { styles, namespace, version, allowOverride, allLibraries: options.allLibraries }
     );
 
     if (rootResult.success) {
@@ -115,7 +114,7 @@ export class ComponentHierarchyRegistrar {
     if (childComponents.length > 0) {
       const childResult = await this.registerChildComponents(
         childComponents,
-        { styles, namespace, version, continueOnError, allowOverride, contextUser: options.contextUser },
+        { styles, namespace, version, continueOnError, allowOverride, allLibraries: options.allLibraries },
         registeredComponents,
         errors,
         warnings
@@ -143,7 +142,7 @@ export class ComponentHierarchyRegistrar {
       namespace?: string;
       version?: string;
       allowOverride?: boolean;
-      contextUser: UserInfo;
+      allLibraries: ComponentLibraryEntity[];
     }
   ): Promise<{ success: boolean; error?: ComponentRegistrationError }> {
     const { styles, namespace = 'Global', version = 'v1', allowOverride = true } = options;
@@ -176,13 +175,12 @@ export class ComponentHierarchyRegistrar {
         componentCode: spec.code,
         styles,
         libraries: spec.libraries, // Pass along library dependencies from the spec
-        contextUser: options.contextUser
+        allLibraries: options.allLibraries
       };
 
       console.log(`🔧 Compiling component ${spec.name} with libraries:`, {
         libraryCount: spec.libraries?.length || 0,
-        libraries: spec.libraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable })),
-        hasContextUser: !!options.contextUser
+        libraries: spec.libraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable }))
       });
 
       const compilationResult = await this.compiler.compile(compileOptions);
@@ -245,7 +243,7 @@ export class ComponentHierarchyRegistrar {
         namespace: options.namespace,
         version: options.version,
         allowOverride: options.allowOverride,
-        contextUser: options.contextUser
+        allLibraries: options.allLibraries
       });
 
       if (childResult.success) {

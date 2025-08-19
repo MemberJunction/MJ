@@ -1,6 +1,5 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
-import { ComponentRunnerV2 } from './component-runner-v2';
+import { ComponentExecutionOptions, ComponentExecutionResult, ComponentRunnerV2 } from './component-runner-v2';
 import { AssertionHelpers } from './assertion-helpers';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -8,6 +7,7 @@ export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
   screenshotOnError?: boolean;
   screenshotPath?: string;
+  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (can be serialized JSON)
 }
 
 /**
@@ -63,6 +63,10 @@ export class ReactTestHarness {
   async testComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
+    // Pass component libraries from harness options if not provided in component options
+    if (!options.componentLibraries && this.options.componentLibraries) {
+      options.componentLibraries = this.options.componentLibraries;
+    }
     // First, lint the component code
     const spec = options.componentSpec;
     if (spec.code) {
@@ -140,6 +144,7 @@ export class ReactTestHarness {
       componentSpec: spec,
       props: props || {},
       contextUser: options?.contextUser || { Name: 'Test User', Email: 'test@test.com' } as any,
+      componentLibraries: this.options.componentLibraries || [],
       ...options
     };
     
