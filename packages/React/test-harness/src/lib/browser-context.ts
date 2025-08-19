@@ -43,10 +43,14 @@ export class BrowserManager {
   }
 
   async getPage(): Promise<Page> {
-    if (!this.page) {
+    if (!this.context) {
       await this.initialize();
     }
-    return this.page!;
+    // Always create a fresh page for each test to ensure isolation
+    // This prevents issues with page.exposeFunction being called multiple times
+    // and ensures each test harness instance has its own clean page
+    const newPage = await this.context!.newPage();
+    return newPage;
   }
 
   async navigateTo(url: string): Promise<void> {

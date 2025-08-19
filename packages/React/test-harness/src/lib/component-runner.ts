@@ -94,8 +94,14 @@ export class ComponentRunner {
       console.log('Props:', JSON.stringify(options.props || {}, null, 2));
     }
 
+    // Get a fresh page for this test execution
+    const page = await this.browserManager.getPage();
+
+    // Load component metadata and libraries first (needed for library loading)
+    await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
+    const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[];
+
     try {
-      const page = await this.browserManager.getPage();
       
       // Navigate to a blank page FIRST, then load runtime
       await page.goto('about:blank');
@@ -128,7 +134,8 @@ export class ComponentRunner {
 
       // Always load runtime libraries after setting content
       // This ensures they persist in the current page context
-      await this.loadRuntimeLibraries(page);
+      // allLibraries is loaded above from ComponentMetadataEngine
+      await this.loadRuntimeLibraries(page, options.componentSpec, allLibraries);
       
       // Verify the runtime is actually loaded
       const runtimeCheck = await page.evaluate(() => {
@@ -155,10 +162,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options.contextUser);
-
-      await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
-      const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[]; // do the map to ensure we just have values that can be serialized
+      await this.exposeMJUtilities(page, options.contextUser)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -206,16 +210,52 @@ export class ComponentRunner {
           // Note: In test environment, we may not have full database access
           // so libraries are handled by the runtime internally
 
-          // Create runtime context
+          // Build libraries object from loaded libraries
+          const loadedLibraries: Record<string, any> = {};
+          if (spec.libraries && componentLibraries) {
+            for (const specLib of spec.libraries) {
+              // Find the library definition
+              const libDef = componentLibraries.find(l => 
+                l.Name.toLowerCase() === specLib.name.toLowerCase()
+              );
+              
+              if (libDef && libDef.GlobalVariable) {
+                // Check if the library is available as a global
+                const libraryValue = (window as any)[libDef.GlobalVariable];
+                if (libraryValue) {
+                  loadedLibraries[libDef.GlobalVariable] = libraryValue;
+                  if (debug) {
+                    console.log(`✅ Added ${libDef.Name} to runtime context as ${libDef.GlobalVariable}`);
+                  }
+                } else {
+                  console.warn(`⚠️ Library ${libDef.Name} not found as window.${libDef.GlobalVariable}`);
+                }
+              }
+            }
+          }
+
+          // Create runtime context with loaded libraries
           const runtimeContext = {
             React: (window as any).React,
             ReactDOM: (window as any).ReactDOM,
-            libraries: {} // Will be populated by the runtime as needed
+            libraries: loadedLibraries
           };
 
           // Create instances
           const compiler = new ComponentCompiler();
           compiler.setBabelInstance((window as any).Babel);
+          
+          // IMPORTANT: Configure the LibraryRegistry in the browser context
+          // This is needed for the compiler to know about approved libraries
+          if ((window as any).MJReactRuntime && (window as any).MJReactRuntime.LibraryRegistry) {
+            const { LibraryRegistry } = (window as any).MJReactRuntime;
+            // Configure the registry with the component libraries
+            // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
+            await LibraryRegistry.Config(false, componentLibraries || []);
+            if (debug) {
+              console.log('✅ Configured LibraryRegistry with', componentLibraries?.length || 0, 'libraries');
+            }
+          }
 
           const registry = new ComponentRegistry();
           
@@ -238,12 +278,37 @@ export class ComponentRunner {
             console.log('📦 Registering component hierarchy...');
           }
 
+          // CRITICAL: Ensure spec.libraries have globalVariable set from componentLibraries
+          // The spec might not have globalVariable, but we need it for the runtime to work
+          if (spec.libraries && componentLibraries) {
+            for (const specLib of spec.libraries) {
+              if (!specLib.globalVariable) {
+                const libDef = componentLibraries.find(l => 
+                  l.Name.toLowerCase() === specLib.name.toLowerCase()
+                );
+                if (libDef && libDef.GlobalVariable) {
+                  specLib.globalVariable = libDef.GlobalVariable;
+                  if (debug) {
+                    console.log(`  📝 Enhanced spec library ${specLib.name} with globalVariable: ${libDef.GlobalVariable}`);
+                  }
+                }
+              }
+            }
+            
+            if (debug) {
+              console.log('🔍 Spec libraries after enhancement:', spec.libraries.map((l: any) => ({
+                name: l.name,
+                globalVariable: l.globalVariable
+              })));
+            }
+          }
+          
           // Register the component hierarchy
           // IMPORTANT: Pass component libraries for library loading to work
           if (debug) {
             console.log('📚 Registering component with', componentLibraries?.length || 0, 'libraries');
             if (componentLibraries?.length > 0) {
-              console.log('  Passing libraries to registrar:', componentLibraries.slice(0, 2).map(l => l.Name));
+              console.log('  Passing libraries to registrar:', componentLibraries.slice(0, 2).map((l: any) => l.Name));
             }
           }
           const registrationResult = await registrar.registerHierarchy(spec, {
@@ -277,6 +342,19 @@ export class ComponentRunner {
 
           // Get all registered components for prop passing
           const components = registry.getAll('Global', 'v1');
+          
+          // Add all loaded library exports to the components object
+          // This allows generated code to use components.PieChart, components.ResponsiveContainer, etc.
+          // for libraries that export components (like Recharts)
+          for (const [globalVar, libraryValue] of Object.entries(loadedLibraries)) {
+            if (typeof libraryValue === 'object' && libraryValue !== null) {
+              // If the library exports an object with multiple components, spread them
+              Object.assign(components, libraryValue);
+              if (debug) {
+                console.log(`✅ Added ${globalVar} exports to components object`);
+              }
+            }
+          }
 
           // Render the component
           const rootElement = document.getElementById('root');
@@ -496,13 +574,25 @@ export class ComponentRunner {
       }
 
       return result;
+    } finally {
+      // Clean up: close the page after each test execution
+      // This is important because getPage() now creates a new page each time
+      // Closing the page ensures clean isolation between test runs
+      try {
+        await page.close();
+      } catch (closeError) {
+        // Ignore errors when closing the page
+        if (debug) {
+          console.log('Note: Error closing page (this is usually harmless):', closeError);
+        }
+      }
     }
   }
 
   /**
    * Load runtime libraries into the page
    */
-  private async loadRuntimeLibraries(page: any) {
+  private async loadRuntimeLibraries(page: any, componentSpec?: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
     // Load React and ReactDOM
     await page.addScriptTag({ url: 'https://unpkg.com/react@18/umd/react.development.js' });
     await page.addScriptTag({ url: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js' });
@@ -545,6 +635,117 @@ export class ComponentRunner {
 
     if (!loaded.React || !loaded.ReactDOM || !loaded.Babel || !loaded.MJRuntime) {
       throw new Error('Failed to load required libraries');
+    }
+
+    // Load component-specific libraries from CDN
+    if (componentSpec?.libraries && allLibraries) {
+      await this.loadComponentLibraries(page, componentSpec.libraries, allLibraries);
+    }
+  }
+
+  /**
+   * Load component-specific libraries from CDN
+   */
+  private async loadComponentLibraries(
+    page: any, 
+    specLibraries: any[], 
+    allLibraries: ComponentLibraryEntity[]
+  ): Promise<void> {
+    const debug = true;
+    
+    if (debug) {
+      console.log('📚 Loading component libraries:', {
+        count: specLibraries.length,
+        libraries: specLibraries.map(l => l.name)
+      });
+    }
+
+    // Create a map of library definitions from allLibraries
+    const libraryMap = new Map<string, ComponentLibraryEntity>();
+    for (const lib of allLibraries) {
+      libraryMap.set(lib.Name.toLowerCase(), lib);
+    }
+
+    // Load each library the component needs
+    for (const specLib of specLibraries) {
+      const libDef = libraryMap.get(specLib.name.toLowerCase());
+      
+      if (!libDef) {
+        console.warn(`⚠️ Library ${specLib.name} not found in metadata`);
+        continue;
+      }
+
+      if (debug) {
+        console.log(`📦 Loading ${specLib.name}:`, {
+          cdnUrl: libDef.CDNUrl,
+          globalVariable: libDef.GlobalVariable
+        });
+      }
+
+      // Load CSS if available
+      if (libDef.CDNCssUrl) {
+        const cssUrls = libDef.CDNCssUrl.split(',').map(url => url.trim());
+        for (const cssUrl of cssUrls) {
+          if (cssUrl) {
+            await page.addStyleTag({ url: cssUrl });
+            if (debug) {
+              console.log(`  ✅ Loaded CSS: ${cssUrl}`);
+            }
+          }
+        }
+      }
+
+      // Load the library script
+      if (libDef.CDNUrl) {
+        try {
+          await page.addScriptTag({ url: libDef.CDNUrl });
+          
+          // Verify the library loaded
+          const isLoaded = await page.evaluate((globalVar: string) => {
+            return typeof (window as any)[globalVar] !== 'undefined';
+          }, libDef.GlobalVariable);
+
+          if (isLoaded) {
+            if (debug) {
+              console.log(`  ✅ Loaded ${specLib.name} as window.${libDef.GlobalVariable}`);
+            }
+          } else {
+            console.error(`  ❌ Failed to load ${specLib.name} - global variable ${libDef.GlobalVariable} not found`);
+          }
+        } catch (error) {
+          console.error(`  ❌ Error loading ${specLib.name} from ${libDef.CDNUrl}:`, error);
+        }
+      }
+    }
+
+    if (debug) {
+      // Log all available global variables that look like libraries
+      // Get all the global variables we expect from the spec
+      const expectedGlobals = specLibraries.map(lib => {
+        const libDef = libraryMap.get(lib.name.toLowerCase());
+        return libDef?.GlobalVariable;
+      }).filter(Boolean);
+      
+      const globals = await page.evaluate((expected: string[]) => {
+        const relevantGlobals: Record<string, string> = {};
+        // Check the expected globals from the spec
+        for (const key of expected) {
+          if ((window as any)[key]) {
+            relevantGlobals[key] = typeof (window as any)[key];
+          } else {
+            relevantGlobals[key] = 'NOT FOUND';
+          }
+        }
+        // Also check some common library globals
+        const commonKeys = ['Recharts', 'chroma', '_', 'moment', 'dayjs', 'Chart', 'GSAP', 'gsap', 'lottie'];
+        for (const key of commonKeys) {
+          if (!(key in relevantGlobals) && (window as any)[key]) {
+            relevantGlobals[key] = typeof (window as any)[key];
+          }
+        }
+        return relevantGlobals;
+      }, expectedGlobals as string[]);
+      console.log('🌍 Available library globals:', globals);
     }
   }
 
