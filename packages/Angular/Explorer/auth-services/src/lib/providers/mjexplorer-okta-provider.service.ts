@@ -206,7 +206,7 @@ export class MJOktaProvider extends MJAuthBase {
       // Sign out from Okta completely
       // The clearTokensBeforeRedirect ensures tokens are cleared before redirect
       await this.oktaAuth.signOut({
-        postLogoutRedirectUri: window.location.origin + '?logout=true',
+        postLogoutRedirectUri: window.location.origin,
         clearTokensBeforeRedirect: true
       });
       
