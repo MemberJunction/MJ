@@ -214,7 +214,15 @@ export class ComponentCompiler {
   private async loadRequiredLibraries(libraries: any[], contextUser: UserInfo): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
+    console.log('🔍 loadRequiredLibraries called with:', {
+      librariesCount: libraries?.length || 0,
+      libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable })),
+      hasContextUser: !!contextUser,
+      contextUserEmail: contextUser?.Email
+    });
+    
     if (!libraries || libraries.length === 0) {
+      console.log('📚 No libraries to load, returning empty map');
       return loadedLibraries;
     }
 
@@ -226,31 +234,48 @@ export class ComponentCompiler {
 
     // Initialize LibraryRegistry with contextUser if provided
     if (contextUser) {
+      console.log('🔐 Initializing LibraryRegistry with contextUser:', contextUser.Email);
       await LibraryRegistry.Config(false, contextUser);
+    } else {
+      console.warn('⚠️ No contextUser provided for LibraryRegistry initialization');
     }
 
     const loadPromises = libraries.map(async (lib) => {
+      console.log(`📦 Processing library: ${lib.name}`);
+      
       // Check if library is approved
-      if (!LibraryRegistry.isApproved(lib.name)) {
+      const isApproved = LibraryRegistry.isApproved(lib.name);
+      console.log(`  ✓ Approved check for ${lib.name}: ${isApproved}`);
+      
+      if (!isApproved) {
+        console.error(`  ❌ Library '${lib.name}' is not approved`);
         throw new Error(`Library '${lib.name}' is not approved. Only approved libraries can be used.`);
       }
 
       // Get library definition for complete info
       const libraryDef = LibraryRegistry.getLibrary(lib.name);
+      console.log(`  ✓ Library definition found for ${lib.name}: ${!!libraryDef}`);
+      
       if (!libraryDef) {
+        console.error(`  ❌ Library '${lib.name}' not found in registry`);
         throw new Error(`Library '${lib.name}' not found in registry`);
       }
 
       // Get CDN URL for the library
       const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
+      console.log(`  ✓ Resolved version for ${lib.name}: ${resolvedVersion}`);
+      
       const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
+      console.log(`  ✓ CDN URL for ${lib.name}: ${cdnUrl}`);
       
       if (!cdnUrl) {
+        console.error(`  ❌ No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
         throw new Error(`No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
       }
 
       // Check if already loaded
       if ((window as any)[lib.globalVariable]) {
+        console.log(`  ℹ️ Library ${lib.name} already loaded globally as ${lib.globalVariable}`);
         loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
         return;
       }
@@ -262,20 +287,29 @@ export class ComponentCompiler {
       }
 
       // Load the library dynamically (cdnUrl is guaranteed to be non-null here due to check above)
+      console.log(`  📥 Loading script from CDN for ${lib.name}...`);
       await this.loadScript(cdnUrl!, lib.globalVariable);
       
       // Capture the library value from global scope
       // Note: Libraries loaded from CDN typically attach to window automatically
       // We capture them here to pass through the component's closure
       const libraryValue = (window as any)[lib.globalVariable];
+      console.log(`  ✓ Library ${lib.name} loaded successfully, global variable ${lib.globalVariable} is:`, typeof libraryValue);
+      
       if (libraryValue) {
         loadedLibraries.set(lib.globalVariable, libraryValue);
+        console.log(`  ✅ Added ${lib.name} to loaded libraries map`);
       } else {
+        console.error(`  ❌ Library '${lib.name}' failed to expose global variable '${lib.globalVariable}'`);
         throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
       }
     });
 
     await Promise.all(loadPromises);
+    
+    console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);
+    console.log('📚 Loaded libraries map:', Array.from(loadedLibraries.keys()));
+    
     return loadedLibraries;
   }
 

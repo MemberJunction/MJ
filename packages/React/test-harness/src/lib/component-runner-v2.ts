@@ -223,10 +223,18 @@ export class ComponentRunnerV2 {
           }
 
           // Register the component hierarchy
+          // IMPORTANT: Pass contextUser for library loading to work
+          console.log('🔑 Using contextUser for registration:', (window as any).__mjContextUser?.Email || 'not found');
           const registrationResult = await registrar.registerHierarchy(spec, {
             styles,
             namespace: 'Global',
-            version: 'v1' // Use v1 to match the registry defaults
+            version: 'v1', // Use v1 to match the registry defaults
+            contextUser: (window as any).__mjContextUser // Pass the context user for LibraryRegistry
+          });
+          console.log('📚 Registration with libraries completed:', {
+            success: registrationResult.success,
+            componentCount: registrationResult.registeredComponents?.length,
+            hasLibraries: spec.libraries?.length > 0
           });
 
           if (!registrationResult.success) {
@@ -362,6 +370,10 @@ export class ComponentRunnerV2 {
       const runtimeErrors = await this.collectRuntimeErrors(page);
       errors.push(...runtimeErrors);
 
+      // Collect warnings (separate from errors)
+      const collectedWarnings = await this.collectWarnings(page);
+      warnings.push(...collectedWarnings);
+
       // Capture async errors
       const asyncWaitTime = options.asyncErrorWaitTime || 1000;
       await page.waitForTimeout(asyncWaitTime);
@@ -371,6 +383,14 @@ export class ComponentRunnerV2 {
       asyncErrors.forEach(err => {
         if (!errors.includes(err)) {
           errors.push(err);
+        }
+      });
+      
+      // Also check for new warnings
+      const asyncWarnings = await this.collectWarnings(page);
+      asyncWarnings.forEach(warn => {
+        if (!warnings.includes(warn)) {
+          warnings.push(warn);
         }
       });
 
@@ -517,6 +537,7 @@ export class ComponentRunnerV2 {
       // Initialize error tracking
       (window as any).__testHarnessRuntimeErrors = [];
       (window as any).__testHarnessConsoleErrors = [];
+      (window as any).__testHarnessConsoleWarnings = [];
       (window as any).__testHarnessTestFailed = false;
       (window as any).__testHarnessRenderCount = 0;
 
@@ -536,8 +557,28 @@ export class ComponentRunnerV2 {
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
         
-        (window as any).__testHarnessConsoleErrors.push(errorText);
-        (window as any).__testHarnessTestFailed = true;
+        // Check if this is a warning rather than an error
+        // React warnings typically start with "Warning:" or contain warning-related text
+        const isWarning = 
+          errorText.includes('Warning:') ||
+          errorText.includes('DevTools') ||
+          errorText.includes('deprecated') ||
+          errorText.includes('has been renamed') ||
+          errorText.includes('will be removed') ||
+          errorText.includes('Consider using') ||
+          errorText.includes('Please update') ||
+          (errorText.includes('React') && errorText.includes('recognize the')) || // Prop warnings
+          (errorText.includes('React') && errorText.includes('Invalid'));
+        
+        if (isWarning) {
+          // Track as warning, don't fail the test
+          (window as any).__testHarnessConsoleWarnings.push(errorText);
+        } else {
+          // Real error - track and fail the test
+          (window as any).__testHarnessConsoleErrors.push(errorText);
+          (window as any).__testHarnessTestFailed = true;
+        }
+        
         originalConsoleError.apply(console, args);
       };
 
@@ -578,7 +619,8 @@ export class ComponentRunnerV2 {
 
     const errors: string[] = [];
 
-    if (errorData.testFailed) {
+    // Only add "test failed" message if there are actual errors
+    if (errorData.testFailed && (errorData.runtimeErrors.length > 0 || errorData.consoleErrors.length > 0)) {
       errors.push('Test marked as failed by error handlers');
     }
 
@@ -600,6 +642,27 @@ export class ComponentRunnerV2 {
   }
 
   /**
+   * Collect warnings from the page (non-fatal issues)
+   */
+  private async collectWarnings(page: any): Promise<string[]> {
+    const warningData = await page.evaluate(() => {
+      return {
+        consoleWarnings: (window as any).__testHarnessConsoleWarnings || []
+      };
+    });
+
+    const warnings: string[] = [];
+
+    warningData.consoleWarnings.forEach((warning: string) => {
+      if (!warnings.includes(warning)) {
+        warnings.push(warning);
+      }
+    });
+
+    return warnings;
+  }
+
+  /**
    * Set up console logging
    */
   private setupConsoleLogging(
@@ -614,9 +677,14 @@ export class ComponentRunnerV2 {
       
       consoleLogs.push({ type, text });
       
-      if (type === 'warning' || text.startsWith('Warning:')) {
-        warnings.push(text);
+      // Note: We're already handling warnings in our console.error override
+      // This catches any direct console.warn() calls
+      if (type === 'warning') {
+        if (!warnings.includes(text)) {
+          warnings.push(text);
+        }
         
+        // Check if it's a critical warning that should fail the test
         if (ComponentRunnerV2.CRITICAL_WARNING_PATTERNS.some(pattern => pattern.test(text))) {
           criticalWarnings.push(text);
         }
@@ -640,6 +708,17 @@ export class ComponentRunnerV2 {
     if (alreadyExposed) {
       return;
     }
+
+    // Serialize contextUser to pass to the browser context
+    // UserInfo is a simple object that can be serialized
+    const serializedContextUser = JSON.parse(JSON.stringify(contextUser));
+    console.log('📤 Passing contextUser to browser:', { email: serializedContextUser.Email, id: serializedContextUser.ID });
+    
+    // Inject the serialized contextUser into the page
+    await page.evaluate((ctxUser: any) => {
+      (window as any).__mjContextUser = ctxUser;
+      console.log('📥 Received contextUser in browser:', { email: ctxUser.Email, id: ctxUser.ID });
+    }, serializedContextUser);
 
     // Create instances in Node.js context
     const metadata = new Metadata();

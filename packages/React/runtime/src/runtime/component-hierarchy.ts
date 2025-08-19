@@ -82,6 +82,15 @@ export class ComponentHierarchyRegistrar {
       allowOverride = true
     } = options;
 
+    console.log('🌳 ComponentHierarchyRegistrar.registerHierarchy:', {
+      rootComponent: rootSpec.name,
+      hasLibraries: !!(rootSpec.libraries && rootSpec.libraries.length > 0),
+      libraryCount: rootSpec.libraries?.length || 0,
+      libraries: rootSpec.libraries?.map(l => l.name),
+      hasContextUser: !!options.contextUser,
+      contextUserEmail: options.contextUser?.Email
+    });
+
     const registeredComponents: string[] = [];
     const errors: ComponentRegistrationError[] = [];
     const warnings: string[] = [];
@@ -169,6 +178,12 @@ export class ComponentHierarchyRegistrar {
         libraries: spec.libraries, // Pass along library dependencies from the spec
         contextUser: options.contextUser
       };
+
+      console.log(`🔧 Compiling component ${spec.name} with libraries:`, {
+        libraryCount: spec.libraries?.length || 0,
+        libraries: spec.libraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable })),
+        hasContextUser: !!options.contextUser
+      });
 
       const compilationResult = await this.compiler.compile(compileOptions);
 
