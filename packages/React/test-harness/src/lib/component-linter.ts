@@ -2,6 +2,7 @@ import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
+import type { RunQueryResult, RunViewResult } from '@memberjunction/core';
 
 export interface LintResult {
   success: boolean;
@@ -93,7 +94,62 @@ function getLineNumber(code: string, index: number): number {
   return code.substring(0, index).split('\n').length;
 }
 
+// Extract property names from TypeScript types at compile time
+// These will be evaluated at TypeScript compile time and become static arrays
+const runQueryResultProps: readonly string[] = [
+  'QueryID', 'QueryName', 'Success', 'Results', 'RowCount', 
+  'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+] as const satisfies readonly (keyof RunQueryResult)[];
+
+const runViewResultProps: readonly string[] = [
+  'Success', 'Results', 'UserViewRunID', 'RowCount', 
+  'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+] as const satisfies readonly (keyof RunViewResult)[];
+
 export class ComponentLinter {
+  // Helper method to check if a variable comes from RunQuery or RunView
+  private static isVariableFromRunQueryOrView(path: NodePath<any>, varName: string, methodName: string): boolean {
+    let isFromMethod = false;
+    
+    // Look up the binding for this variable
+    const binding = path.scope.getBinding(varName);
+    if (binding && binding.path) {
+      // Check if it's from a .then() or await of RunQuery/RunView
+      const parent = binding.path.parent;
+      if (t.isVariableDeclarator(binding.path.node)) {
+        const init = binding.path.node.init;
+        
+        // Check for await utilities.rq.RunQuery or utilities.rv.RunView
+        if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
+          const callee = init.argument.callee;
+          if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+            if (callee.property.name === methodName || 
+                callee.property.name === methodName + 's') { // RunViews
+              isFromMethod = true;
+            }
+          }
+        }
+        
+        // Check for .then() pattern
+        if (t.isCallExpression(init) && t.isMemberExpression(init.callee)) {
+          if (t.isIdentifier(init.callee.property) && init.callee.property.name === 'then') {
+            // Check if the object being called is RunQuery/RunView
+            const obj = init.callee.object;
+            if (t.isCallExpression(obj) && t.isMemberExpression(obj.callee)) {
+              if (t.isIdentifier(obj.callee.property) && 
+                  (obj.callee.property.name === methodName || 
+                   obj.callee.property.name === methodName + 's')) {
+                isFromMethod = true;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return isFromMethod;
+  }
+  
   // Universal rules that apply to all components with SavedUserSettings pattern
   private static universalComponentRules: Rule[] = [
     {
@@ -2332,6 +2388,179 @@ export class ComponentLinter {
                     column: openingElement.loc?.start.column || 0,
                     message: `JSX element "${tagName}" is not recognized as a valid HTML element or React component. Check the spelling or ensure it's properly defined.`,
                     code: `<${tagName} ... />`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-result-structure',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Valid properties for RunQueryResult
+        const validRunQueryResultProps = new Set([
+          'QueryID', 'QueryName', 'Success', 'Results', 'RowCount', 
+          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+        ]);
+        
+        // Valid properties for RunViewResult
+        const validRunViewResultProps = new Set([
+          'Success', 'Results', 'UserViewRunID', 'RowCount', 
+          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+        ]);
+        
+        // Common incorrect patterns
+        const invalidResultPatterns = new Set(['data', 'rows', 'records', 'items', 'values']);
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check if this is accessing a property on a variable that looks like a query/view result
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+              
+              // Check if the object name suggests it's a query or view result
+              const isLikelyQueryResult = /result|response|res|data|output/i.test(objName);
+              const isFromRunQuery = path.scope.hasBinding(objName) && 
+                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(objName) && 
+                                   ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+              
+              if (isLikelyQueryResult || isFromRunQuery || isFromRunView) {
+                // Check for common incorrect patterns
+                if (invalidResultPatterns.has(propName)) {
+                  violations.push({
+                    rule: 'runquery-runview-result-structure',
+                    severity: 'high',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Incorrect property access "${objName}.${propName}". RunQuery/RunView results use ".Results" for data array, not ".${propName}". Change to "${objName}.Results"`,
+                    code: `${objName}.${propName}`
+                  });
+                } else if (propName === 'data') {
+                  // Special case for .data - very common mistake
+                  violations.push({
+                    rule: 'runquery-runview-result-structure',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `RunQuery/RunView results don't have a ".data" property. Use ".Results" to access the array of returned rows. Change "${objName}.data" to "${objName}.Results"`,
+                    code: `${objName}.${propName}`
+                  });
+                }
+                
+                // Check for nested incorrect access like result.data.entities
+                if (t.isMemberExpression(path.parent) && 
+                    t.isIdentifier(path.parent.property) && 
+                    propName === 'data') {
+                  const nestedProp = path.parent.property.name;
+                  violations.push({
+                    rule: 'runquery-runview-result-structure',
+                    severity: 'critical',
+                    line: path.parent.loc?.start.line || 0,
+                    column: path.parent.loc?.start.column || 0,
+                    message: `Incorrect nested property access "${objName}.data.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+                    code: `${objName}.data.${nestedProp}`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for destructuring patterns
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for destructuring from a result object
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              const sourceName = path.node.init.name;
+              
+              // Check if this looks like destructuring from a query/view result
+              if (/result|response|res/i.test(sourceName)) {
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const propName = prop.key.name;
+                    
+                    // Check for incorrect destructuring
+                    if (propName === 'data') {
+                      violations.push({
+                        rule: 'runquery-runview-result-structure',
+                        severity: 'critical',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: `Destructuring "data" from RunQuery/RunView result. The property is named "Results", not "data". Change "const { data } = ${sourceName}" to "const { Results } = ${sourceName}"`,
+                        code: `{ data }`
+                      });
+                    } else if (invalidResultPatterns.has(propName) && propName !== 'data') {
+                      violations.push({
+                        rule: 'runquery-runview-result-structure',
+                        severity: 'medium',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: `Destructuring "${propName}" from what appears to be a RunQuery/RunView result. Did you mean "Results"?`,
+                        code: `{ ${propName} }`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Check for conditional access without checking Success
+          IfStatement(path: NodePath<t.IfStatement>) {
+            const test = path.node.test;
+            
+            // Look for patterns like: if (result) or if (result.Results) without checking Success
+            if (t.isIdentifier(test) || 
+                (t.isMemberExpression(test) && 
+                 t.isIdentifier(test.object) && 
+                 t.isIdentifier(test.property) && 
+                 test.property.name === 'Results')) {
+              
+              let varName = '';
+              if (t.isIdentifier(test)) {
+                varName = test.name;
+              } else if (t.isMemberExpression(test) && t.isIdentifier(test.object)) {
+                varName = test.object.name;
+              }
+              
+              // Check if this variable is from RunQuery/RunView
+              if (/result|response|res/i.test(varName)) {
+                // Look for .Results access in the consequent without .Success check
+                let hasResultsAccess = false;
+                let hasSuccessCheck = false;
+                
+                traverse(path.node, {
+                  MemberExpression(innerPath: NodePath<t.MemberExpression>) {
+                    if (t.isIdentifier(innerPath.node.object) && 
+                        innerPath.node.object.name === varName) {
+                      if (t.isIdentifier(innerPath.node.property)) {
+                        if (innerPath.node.property.name === 'Results') {
+                          hasResultsAccess = true;
+                        }
+                        if (innerPath.node.property.name === 'Success') {
+                          hasSuccessCheck = true;
+                        }
+                      }
+                    }
+                  }
+                }, path.scope);
+                
+                if (hasResultsAccess && !hasSuccessCheck) {
+                  violations.push({
+                    rule: 'runquery-runview-result-structure',
+                    severity: 'medium',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `Accessing "${varName}.Results" without checking "${varName}.Success" first. Always verify Success before accessing Results.`,
+                    code: `if (${varName}) { ... ${varName}.Results ... }`
                   });
                 }
               }
