@@ -124,6 +124,4 @@ const PipelineKanban = ({ stages, deals, onDealClick, utilities, styles, compone
       ))}
     </div>
   );
-};
-
-return PipelineKanban;
+}

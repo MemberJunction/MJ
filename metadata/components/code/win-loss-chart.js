@@ -121,6 +121,4 @@ const WinLossChart = ({ winLossData, period, utilities, styles, components, call
       </div>
     </div>
   );
-};
-
-return WinLossChart;
+}

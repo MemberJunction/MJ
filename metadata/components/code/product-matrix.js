@@ -82,6 +82,4 @@ const ProductMatrix = ({ data, columns, onRowClick, sortConfig, onSort, utilitie
       )}
     </div>
   );
-};
-
-return ProductMatrix;
+}

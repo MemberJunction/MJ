@@ -87,5 +87,3 @@ const FunnelChart = ({ data, onStageClick, selectedStage, utilities, styles, com
     />
   );
 };
-
-return FunnelChart;

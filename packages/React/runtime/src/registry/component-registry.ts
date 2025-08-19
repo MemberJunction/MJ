@@ -168,6 +168,24 @@ export class ComponentRegistry {
   }
 
   /**
+   * Gets all components in a namespace and version as a map
+   * @param namespace - Namespace to query (default: 'Global')
+   * @param version - Version to query (default: 'v1')
+   * @returns Object mapping component names to components
+   */
+  getAll(namespace: string = 'Global', version: string = 'v1'): Record<string, any> {
+    const components: Record<string, any> = {};
+    
+    for (const entry of this.registry.values()) {
+      if (entry.metadata.namespace === namespace && entry.metadata.version === version) {
+        components[entry.metadata.name] = entry.component;
+      }
+    }
+
+    return components;
+  }
+
+  /**
    * Gets all registered namespaces
    * @returns Array of unique namespace names
    */

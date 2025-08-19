@@ -1,6 +1,6 @@
 /**
  * @fileoverview Runtime utilities for React components providing access to MemberJunction core functionality
- * @module @memberjunction/react-runtime/utilities
+ * @module @memberjunction/ng-react/utilities
  */
 
 import { 
@@ -16,7 +16,7 @@ import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ComponentUtilities, SimpleMetadata, SimpleRunQuery, SimpleRunView } from '@memberjunction/interactive-component-types';
 
 /**
- * Base class for providing runtime utilities to React components.
+ * Base class for providing runtime utilities to React components in Angular.
  * This class can be extended and registered with MJ's ClassFactory
  * to provide custom implementations of data access methods.
  */

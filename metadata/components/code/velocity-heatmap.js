@@ -95,6 +95,4 @@ const VelocityHeatmap = ({ data, onCellClick, utilities, styles, components, cal
       }}
     />
   );
-};
-
-return VelocityHeatmap;
+}

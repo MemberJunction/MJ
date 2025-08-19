@@ -1,7 +1,6 @@
-const AccountsByIndustry = (props) => {
-  const { utilities, styles, callbacks, savedUserSettings, onSaveUserSettings, components } = props;
-  
+function AccountsByIndustry (props) {
   // Get child components from registry
+  const { utilities, styles, callbacks, savedUserSettings, onSaveUserSettings, components } = props;
   const AccountsByIndustryChart = components?.AccountsByIndustryChart;
   const AccountsByIndustryList = components?.AccountsByIndustryList;
   const AccountsByIndustryDetails = components?.AccountsByIndustryDetails;
@@ -254,7 +253,7 @@ const AccountsByIndustry = (props) => {
       </div>
       
       {/* Account List */}
-      {AccountsByIndustryList && (
+      {AccountsByIndustryList && ( 
         <AccountsByIndustryList
           accounts={displayAccounts}
           selectedIndustry={selectedIndustry}
@@ -279,4 +278,4 @@ const AccountsByIndustry = (props) => {
       )}
     </div>
   );
-};
+}

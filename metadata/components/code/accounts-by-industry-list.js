@@ -1,4 +1,4 @@
-const AccountsByIndustryList = ({
+function AccountsByIndustryList ({
   accounts,
   selectedIndustry,
   sortConfig,
@@ -8,7 +8,7 @@ const AccountsByIndustryList = ({
   pageSize,
   onPageChange,
   onClearFilter
-}) => {
+}) {
   // Calculate pagination
   const totalPages = Math.ceil(accounts.length / pageSize);
   const paginatedAccounts = accounts.slice(
@@ -247,7 +247,7 @@ const AccountsByIndustryList = ({
                 </button>
               );
             })}
-            
+             
             <button
               onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
@@ -268,4 +268,4 @@ const AccountsByIndustryList = ({
       </div>
     </div>
   );
-};
+}

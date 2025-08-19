@@ -85,7 +85,7 @@ export class AIAgentRunDataHelper {
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
-      OrderBy: 'StepNumber'
+      OrderBy: '__mj_CreatedAt, StepNumber'
     });
     
     if (!stepsResult.Success) {
@@ -196,7 +196,7 @@ export class AIAgentRunDataHelper {
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-      OrderBy: 'StepNumber'
+      OrderBy: '__mj_CreatedAt, StepNumber'
     });
     
     if (!stepsResult.Success || !stepsResult.Results) {

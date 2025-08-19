@@ -4,6 +4,7 @@
  * @module @memberjunction/react-runtime/compiler
  */
 
+import { UserInfo } from '@memberjunction/core';
 import { 
   CompileOptions, 
   CompiledComponent, 
@@ -13,6 +14,7 @@ import {
   RuntimeContext
 } from '../types';
 import { LibraryRegistry } from '../utilities/library-registry';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Default compiler configuration
@@ -80,7 +82,7 @@ export class ComponentCompiler {
       this.validateCompileOptions(options);
 
       // Load required libraries if specified
-      const loadedLibraries = await this.loadRequiredLibraries(options.libraries);
+      const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.allLibraries);
 
       // Transpile the component code
       const transpiledCode = this.transpileComponent(
@@ -207,12 +209,19 @@ export class ComponentCompiler {
   /**
    * Load required libraries from the registry
    * @param libraries - Array of library dependencies
+   * @param contextUser - Context user for accessing library registry
    * @returns Map of loaded libraries
    */
-  private async loadRequiredLibraries(libraries?: any[]): Promise<Map<string, any>> {
+  private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
+    console.log('🔍 loadRequiredLibraries called with:', {
+      librariesCount: libraries?.length || 0,
+      libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable }))
+    });
+    
     if (!libraries || libraries.length === 0) {
+      console.log('📚 No libraries to load, returning empty map');
       return loadedLibraries;
     }
 
@@ -222,28 +231,49 @@ export class ComponentCompiler {
       return loadedLibraries;
     }
 
+    // Initialize LibraryRegistry with componentLibraries if provided
+    if (componentLibraries) {
+      await LibraryRegistry.Config(false, componentLibraries);
+    } else {
+      console.warn('⚠️ No componentLibraries provided for LibraryRegistry initialization');
+    }
+
     const loadPromises = libraries.map(async (lib) => {
+      console.log(`📦 Processing library: ${lib.name}`);
+      
       // Check if library is approved
-      if (!LibraryRegistry.isApproved(lib.name)) {
+      const isApproved = LibraryRegistry.isApproved(lib.name);
+      console.log(`  ✓ Approved check for ${lib.name}: ${isApproved}`);
+      
+      if (!isApproved) {
+        console.error(`  ❌ Library '${lib.name}' is not approved`);
         throw new Error(`Library '${lib.name}' is not approved. Only approved libraries can be used.`);
       }
 
       // Get library definition for complete info
       const libraryDef = LibraryRegistry.getLibrary(lib.name);
+      console.log(`  ✓ Library definition found for ${lib.name}: ${!!libraryDef}`);
+      
       if (!libraryDef) {
+        console.error(`  ❌ Library '${lib.name}' not found in registry`);
         throw new Error(`Library '${lib.name}' not found in registry`);
       }
 
       // Get CDN URL for the library
       const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
+      console.log(`  ✓ Resolved version for ${lib.name}: ${resolvedVersion}`);
+      
       const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
+      console.log(`  ✓ CDN URL for ${lib.name}: ${cdnUrl}`);
       
       if (!cdnUrl) {
+        console.error(`  ❌ No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
         throw new Error(`No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
       }
 
       // Check if already loaded
       if ((window as any)[lib.globalVariable]) {
+        console.log(`  ℹ️ Library ${lib.name} already loaded globally as ${lib.globalVariable}`);
         loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
         return;
       }
@@ -255,20 +285,29 @@ export class ComponentCompiler {
       }
 
       // Load the library dynamically (cdnUrl is guaranteed to be non-null here due to check above)
+      console.log(`  📥 Loading script from CDN for ${lib.name}...`);
       await this.loadScript(cdnUrl!, lib.globalVariable);
       
       // Capture the library value from global scope
       // Note: Libraries loaded from CDN typically attach to window automatically
       // We capture them here to pass through the component's closure
       const libraryValue = (window as any)[lib.globalVariable];
+      console.log(`  ✓ Library ${lib.name} loaded successfully, global variable ${lib.globalVariable} is:`, typeof libraryValue);
+      
       if (libraryValue) {
         loadedLibraries.set(lib.globalVariable, libraryValue);
+        console.log(`  ✅ Added ${lib.name} to loaded libraries map`);
       } else {
+        console.error(`  ❌ Library '${lib.name}' failed to expose global variable '${lib.globalVariable}'`);
         throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
       }
     });
 
     await Promise.all(loadPromises);
+    
+    console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);
+    console.log('📚 Loaded libraries map:', Array.from(loadedLibraries.keys()));
+    
     return loadedLibraries;
   }
 
@@ -313,11 +352,16 @@ export class ComponentCompiler {
       // Check if script already exists
       const existingScript = document.querySelector(`script[src="${url}"]`);
       if (existingScript) {
-        // Wait for it to finish loading
+        // Wait for it to finish loading with exponential backoff
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds total with 100ms intervals
         const checkLoaded = () => {
           if ((window as any)[globalName]) {
             resolve();
+          } else if (attempts >= maxAttempts) {
+            reject(new Error(`${globalName} not found after ${maxAttempts * 100}ms waiting for existing script`));
           } else {
+            attempts++;
             setTimeout(checkLoaded, 100);
           }
         };
@@ -331,14 +375,28 @@ export class ComponentCompiler {
       script.async = true;
       
       script.onload = () => {
-        // Give the library a moment to initialize
-        setTimeout(() => {
+        // More robust checking with multiple attempts
+        let attempts = 0;
+        const maxAttempts = 20; // 2 seconds total
+        const checkInterval = 100; // Check every 100ms
+        
+        const checkGlobal = () => {
           if ((window as any)[globalName]) {
+            console.log(`  ✓ Global variable ${globalName} found after ${attempts * checkInterval}ms`);
             resolve();
+          } else if (attempts >= maxAttempts) {
+            // Final check - some libraries might use a different global name pattern
+            console.error(`  ❌ ${globalName} not found after ${attempts * checkInterval}ms`);
+            console.log(`  ℹ️ Window properties:`, Object.keys(window).filter(k => k.toLowerCase().includes(globalName.toLowerCase())));
+            reject(new Error(`${globalName} not found after loading script from ${url}`));
           } else {
-            reject(new Error(`${globalName} not found after loading script`));
+            attempts++;
+            setTimeout(checkGlobal, checkInterval);
           }
-        }, 100);
+        };
+        
+        // Start checking immediately (don't wait 100ms first)
+        checkGlobal();
       };
       
       script.onerror = () => {

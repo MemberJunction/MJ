@@ -28,10 +28,11 @@ import {
   resourceManager,
   reactRootManager,
   ResolvedComponents,
-  SetupStyles,
-  createRuntimeUtilities
+  SetupStyles
 } from '@memberjunction/react-runtime';
+import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
  * Event emitted by React components
@@ -234,11 +235,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       await this.registerComponentHierarchy();
       
       // Compile main component with its library dependencies
+      await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
       const result = await this.adapter.compileComponent({
         componentName: this.component.name,
         componentCode: this.component.code,
-        styles: this.styles,
-        libraries: this.component.libraries // Pass library dependencies from ComponentSpec
+        styles: this.styles as ComponentStyles,
+        libraries: this.component.libraries, // Pass library dependencies from ComponentSpec
+        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
       });
 
       if (!result.success) {
@@ -435,6 +438,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.adapter.getRuntimeContext()
     );
     
+    await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
     // Register the entire hierarchy with hash-based version
     const result: HierarchyRegistrationResult = await registrar.registerHierarchy(
       this.component,
@@ -442,7 +446,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         styles: this.styles as any, // Skip components use SkipComponentStyles which is a superset
         namespace: 'Global',
         version: version,  // Use hash-based version instead of hardcoded 'v1'
-        allowOverride: false  // Don't override - each version is unique
+        allowOverride: false,  // Don't override - each version is unique
+        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
       }
     );
     

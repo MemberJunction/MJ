@@ -93,6 +93,4 @@ const OpportunityPanel = ({ data, isOpen, onClose, utilities, styles, components
       </div>
     </div>
   );
-};
-
-return OpportunityPanel;
+}

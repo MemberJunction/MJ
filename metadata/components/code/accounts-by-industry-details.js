@@ -1,4 +1,4 @@
-const AccountsByIndustryDetails = ({ account, isOpen, onClose, onOpenRecord }) => {
+function AccountsByIndustryDetails ({ account, isOpen, onClose, onOpenRecord }) {
   if (!isOpen || !account) {
     return null;
   }
@@ -13,7 +13,7 @@ const AccountsByIndustryDetails = ({ account, isOpen, onClose, onOpenRecord }) =
       maximumFractionDigits: 1
     }).format(value);
   };
-  
+   
   return (
     <>
       {/* Overlay */}
@@ -255,4 +255,4 @@ const AccountsByIndustryDetails = ({ account, isOpen, onClose, onOpenRecord }) =
       `}</style>
     </>
   );
-};
+}
