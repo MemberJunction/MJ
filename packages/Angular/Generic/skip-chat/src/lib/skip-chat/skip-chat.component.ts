@@ -16,7 +16,7 @@ import {
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
 import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine, ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 
@@ -1904,6 +1904,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     if (idx >= 0) {
       const currentAndSubsequentMessages = this.Messages.slice(idx);
       const tg = await this.ProviderToUse.CreateTransactionGroup();
+      
+      // Track artifacts that need to be deleted
+      const artifactsToDelete = new Map<string, { artifactId: string; versionIds: Set<string> }>();
+      
       for (const m of currentAndSubsequentMessages) {
         // need to create the BaseEntity subclass for the conversation detail entity
         // as our initial load of the conversation detail entity is not a full object it is 
@@ -1912,6 +1916,19 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         if (await actualEntityObject.Load(m.ID)) {
           // check to see if it loaded succesfully or not, sometimes it is already deleted
           if (actualEntityObject.ConversationID === this.SelectedConversation.ID) {
+            // Track artifacts before deletion
+            if (actualEntityObject.ArtifactID) {
+              if (!artifactsToDelete.has(actualEntityObject.ArtifactID)) {
+                artifactsToDelete.set(actualEntityObject.ArtifactID, {
+                  artifactId: actualEntityObject.ArtifactID,
+                  versionIds: new Set()
+                });
+              }
+              if (actualEntityObject.ArtifactVersionID) {
+                artifactsToDelete.get(actualEntityObject.ArtifactID)!.versionIds.add(actualEntityObject.ArtifactVersionID);
+              }
+            }
+            
             actualEntityObject.TransactionGroup = tg;
             await actualEntityObject.Delete();  
           }
@@ -1926,9 +1943,48 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         }
       }
 
+      // Delete orphaned artifact versions and artifacts
+      for (const [artifactId, artifactInfo] of artifactsToDelete) {
+        // Delete artifact versions
+        for (const versionId of artifactInfo.versionIds) {
+          const artifactVersion = await this.ProviderToUse.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
+          if (await artifactVersion.Load(versionId)) {
+            artifactVersion.TransactionGroup = tg;
+            await artifactVersion.Delete();
+          }
+        }
+        
+        // Check if this artifact is referenced by any other conversation details
+        const rv = new RunView();
+        const otherReferences = await rv.RunView({
+          EntityName: 'Conversation Details',
+          ExtraFilter: `ArtifactID = '${artifactId}' AND ID NOT IN ('${currentAndSubsequentMessages.map(m => m.ID).join("','")}')`,
+          MaxRows: 1
+        }, this.ProviderToUse.CurrentUser);
+        
+        // If no other references exist, delete the artifact
+        if (!otherReferences.Results || otherReferences.Results.length === 0) {
+          const artifact = await this.ProviderToUse.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
+          if (await artifact.Load(artifactId)) {
+            artifact.TransactionGroup = tg;
+            await artifact.Delete();
+          }
+        }
+      }
+
       // now submit the transaction group
       if (await tg.Submit()) {
+        // Remove messages from UI immediately
+        for (const m of currentAndSubsequentMessages) {
+          this.RemoveMessageFromCurrentConversation(m);
+        }
+        
         this.setProcessingStatus(this.SelectedConversation.ID, false); // done
+        
+        // Force change detection to update the UI
+        this.cdRef.detectChanges();
+        
+        // Optionally reload conversation to ensure sync with database
         const convo = this.SelectedConversation;
         this.SelectedConversation = undefined; // wipe out so the below does something
         this.SelectConversation(convo); // reload the conversation to get the latest messages
@@ -2125,8 +2181,44 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           await messageEntity.Load(lastUserMessage.ID);
         }
 
-        // Delete the last user message
-        await messageEntity.Delete();
+        // Handle artifact cleanup if the message has artifacts
+        if (messageEntity.ArtifactID) {
+          const tg = await this.ProviderToUse.CreateTransactionGroup();
+          
+          // Delete artifact version if exists
+          if (messageEntity.ArtifactVersionID) {
+            const artifactVersion = await this.ProviderToUse.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', this.ProviderToUse.CurrentUser);
+            if (await artifactVersion.Load(messageEntity.ArtifactVersionID)) {
+              artifactVersion.TransactionGroup = tg;
+              await artifactVersion.Delete();
+            }
+          }
+          
+          // Check if artifact is referenced elsewhere
+          const rv = new RunView();
+          const otherReferences = await rv.RunView({
+            EntityName: 'Conversation Details',
+            ExtraFilter: `ArtifactID = '${messageEntity.ArtifactID}' AND ID != '${messageEntity.ID}'`,
+            MaxRows: 1
+          }, this.ProviderToUse.CurrentUser);
+          
+          // Delete artifact if no other references
+          if (!otherReferences.Results || otherReferences.Results.length === 0) {
+            const artifact = await this.ProviderToUse.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', this.ProviderToUse.CurrentUser);
+            if (await artifact.Load(messageEntity.ArtifactID)) {
+              artifact.TransactionGroup = tg;
+              await artifact.Delete();
+            }
+          }
+          
+          // Delete the message and submit transaction
+          messageEntity.TransactionGroup = tg;
+          await messageEntity.Delete();
+          await tg.Submit();
+        } else {
+          // No artifacts, just delete the message
+          await messageEntity.Delete();
+        }
         
         // Remove from UI
         this.RemoveMessageFromCurrentConversation(lastUserMessage);
