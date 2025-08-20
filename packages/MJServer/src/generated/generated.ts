@@ -39139,6 +39139,9 @@ export class ComponentLibrary_ {
     @MaxLength(40)
     Status: string;
         
+    @Field({nullable: true, description: `JSON configuration for library-specific lint rules that are applied during component validation. This field contains structured rules that define how components using this library should be validated, including DOM element requirements, initialization patterns, lifecycle methods, and common error patterns. Example structure: {"initialization": {"constructorName": "Chart", "elementType": "canvas"}, "lifecycle": {"requiredMethods": ["render"], "cleanupMethods": ["destroy"]}}. The linter dynamically applies these rules based on the libraries referenced in a component spec, enabling extensible validation without hardcoding library-specific logic.`}) 
+    LintRules?: string;
+        
     @Field(() => [ComponentLibraryLink_])
     MJ_ComponentLibraryLinks_LibraryIDArray: ComponentLibraryLink_[]; // Link to MJ_ComponentLibraryLinks
     
@@ -39178,6 +39181,9 @@ export class CreateComponentLibraryInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    LintRules: string | null;
 }
     
 
@@ -39215,6 +39221,9 @@ export class UpdateComponentLibraryInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    LintRules?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
