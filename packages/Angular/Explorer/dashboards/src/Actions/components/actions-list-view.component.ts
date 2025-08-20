@@ -4,6 +4,12 @@ import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entitie
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 
+interface CategoryTreeNode {
+  category: ActionCategoryEntity;
+  children: CategoryTreeNode[];
+  level: number;
+}
+
 @Component({
   selector: 'mj-actions-list-view',
   templateUrl: './actions-list-view.component.html',
@@ -16,11 +22,14 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   public actions: ActionEntity[] = [];
   public filteredActions: ActionEntity[] = [];
   public categories: Map<string, ActionCategoryEntity> = new Map();
+  public categoryTree: CategoryTreeNode[] = [];
+  public categoryDescendants: Map<string, Set<string>> = new Map();
 
   public searchTerm$ = new BehaviorSubject<string>('');
   public selectedStatus$ = new BehaviorSubject<string>('all');
   public selectedType$ = new BehaviorSubject<string>('all');
   public selectedCategory$ = new BehaviorSubject<string>('all');
+  public expandedCategories: Set<string> = new Set();
 
   public statusOptions = [
     { text: 'All Statuses', value: 'all' },
@@ -71,12 +80,11 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       
       const rv = new RunView();
-      console.log('Loading Actions list data...');
       
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'Actions',
-          OrderBy: 'Name' 
+          OrderBy: 'Name'
         },
         {
           EntityName: 'Action Categories',
@@ -115,6 +123,12 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     categories.forEach(category => {
       this.categories.set(category.ID, category);
     });
+    
+    // Build the category tree
+    this.buildCategoryTree(categories);
+    
+    // Build descendant mapping for efficient filtering
+    this.buildDescendantMapping(categories);
   }
 
   private buildCategoryOptions(categories: ActionCategoryEntity[]): void {
@@ -127,9 +141,72 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     ];
   }
 
+  private buildCategoryTree(categories: ActionCategoryEntity[]): void {
+    const categoryMap = new Map<string, CategoryTreeNode>();
+    
+    // First pass: create all nodes
+    categories.forEach(category => {
+      categoryMap.set(category.ID, {
+        category,
+        children: [],
+        level: 0
+      });
+    });
+    
+    // Second pass: build tree structure
+    const rootNodes: CategoryTreeNode[] = [];
+    categoryMap.forEach(node => {
+      const parentId = node.category.ParentID;
+      if (parentId && categoryMap.has(parentId)) {
+        const parent = categoryMap.get(parentId)!;
+        parent.children.push(node);
+        node.level = parent.level + 1;
+      } else {
+        rootNodes.push(node);
+      }
+    });
+    
+    // Sort children at each level by name
+    const sortChildren = (nodes: CategoryTreeNode[]) => {
+      nodes.sort((a, b) => a.category.Name.localeCompare(b.category.Name));
+      nodes.forEach(node => sortChildren(node.children));
+    };
+    sortChildren(rootNodes);
+    
+    this.categoryTree = rootNodes;
+  }
+
+  private buildDescendantMapping(categories: ActionCategoryEntity[]): void {
+    this.categoryDescendants.clear();
+    
+    // Initialize each category with itself
+    categories.forEach(category => {
+      this.categoryDescendants.set(category.ID, new Set([category.ID]));
+    });
+    
+    // Build descendant sets
+    const addDescendants = (categoryId: string, descendantId: string) => {
+      const descendants = this.categoryDescendants.get(categoryId);
+      if (descendants) {
+        descendants.add(descendantId);
+      }
+    };
+    
+    categories.forEach(category => {
+      if (category.ParentID) {
+        // Add this category as a descendant of all its ancestors
+        let currentParentId: string | null = category.ParentID;
+        while (currentParentId) {
+          addDescendants(currentParentId, category.ID);
+          const parent = this.categories.get(currentParentId);
+          currentParentId = parent?.ParentID || null;
+        }
+      }
+    });
+  }
+
   private applyFilters(): void {
     let filtered = [...this.actions];
-    console.log('Applying filters to', this.actions.length, 'actions');
 
     // Apply search filter
     const searchTerm = this.searchTerm$.value.toLowerCase();
@@ -152,14 +229,22 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       filtered = filtered.filter(action => action.Type === type);
     }
 
-    // Apply category filter
+    // Apply category filter (includes descendants)
     const categoryId = this.selectedCategory$.value;
     if (categoryId !== 'all') {
-      filtered = filtered.filter(action => action.CategoryID === categoryId);
+      const descendantIds = this.categoryDescendants.get(categoryId);
+      if (descendantIds) {
+        // Filter actions that belong to the selected category or any of its descendants
+        filtered = filtered.filter(action => 
+          action.CategoryID && descendantIds.has(action.CategoryID)
+        );
+      } else {
+        console.warn(`Category ID ${categoryId} not found in category hierarchy`);
+        filtered = [];
+      }
     }
 
     this.filteredActions = filtered;
-    console.log('Filtered to', this.filteredActions.length, 'actions');
   }
 
   public onSearchChange(searchTerm: string): void {
@@ -213,5 +298,37 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
    */
   public getActionIcon(action: ActionEntity): string {
     return action?.IconClass || this.getTypeIcon(action.Type);
+  }
+
+  // Tree view methods
+  public toggleCategoryExpanded(categoryId: string): void {
+    if (this.expandedCategories.has(categoryId)) {
+      this.expandedCategories.delete(categoryId);
+    } else {
+      this.expandedCategories.add(categoryId);
+    }
+  }
+
+  public isCategoryExpanded(categoryId: string): boolean {
+    return this.expandedCategories.has(categoryId);
+  }
+
+  public selectCategory(categoryId: string): void {
+    this.selectedCategory$.next(categoryId);
+  }
+
+  public getCategoryActionCount(categoryId: string): number {
+    const descendantIds = this.categoryDescendants.get(categoryId);
+    if (!descendantIds) return 0;
+    
+    return this.actions.filter(action => 
+      action.CategoryID && descendantIds.has(action.CategoryID)
+    ).length;
+  }
+
+  public showCategoryTree = false;
+
+  public toggleCategoryTree(): void {
+    this.showCategoryTree = !this.showCategoryTree;
   }
 }

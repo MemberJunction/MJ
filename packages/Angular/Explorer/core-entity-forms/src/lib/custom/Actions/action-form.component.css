@@ -614,6 +614,11 @@
     border-radius: 8px;
     background: white;
     transition: all 0.2s;
+    position: relative;
+}
+
+.result-code-card.clickable {
+    cursor: pointer;
 }
 
 .result-code-card:hover {
@@ -629,6 +634,43 @@
 .result-code-card.failure {
     border-color: #dc3545;
     background: #f8d7da;
+}
+
+.result-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.result-code-card:hover .result-actions {
+    opacity: 1;
+}
+
+.result-edit-btn,
+.result-delete-btn {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85em;
+}
+
+.result-edit-btn:hover {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.result-delete-btn:hover {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
 }
 
 .result-icon {
