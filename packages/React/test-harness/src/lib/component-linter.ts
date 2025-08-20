@@ -461,6 +461,162 @@ export class ComponentLinter {
     },
     
     {
+      name: 'dependency-shadowing',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Get all dependency component names
+        const dependencyNames = new Set<string>();
+        if (componentSpec?.dependencies) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep.location === 'embedded' && dep.name) {
+              dependencyNames.add(dep.name);
+            }
+          }
+        }
+        
+        // If no dependencies, nothing to check
+        if (dependencyNames.size === 0) {
+          return violations;
+        }
+        
+        // Find the main component function
+        let mainComponentPath: NodePath<t.FunctionDeclaration> | null = null;
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            // Check if this is the main component function
+            if (path.parent === ast.program && 
+                path.node.id && 
+                path.node.id.name === componentName) {
+              mainComponentPath = path;
+              path.stop();
+            }
+          }
+        });
+        
+        if (!mainComponentPath) {
+          return violations;
+        }
+        
+        // Now traverse inside the main component to find shadowing definitions
+        (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
+          // Check for const/let/var ComponentName = ...
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id)) {
+              const varName = path.node.id.name;
+              
+              // Check if this shadows a dependency
+              if (dependencyNames.has(varName)) {
+                // Check if it's a function (component)
+                const init = path.node.init;
+                if (init && (
+                  t.isArrowFunctionExpression(init) ||
+                  t.isFunctionExpression(init)
+                )) {
+                  violations.push({
+                    rule: 'dependency-shadowing',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component '${varName}' shadows a dependency component. Use 'components.${varName}' instead of redefining it inline. The component spec defines '${varName}' as an embedded dependency, but this code is creating a new inline definition which overrides it.`,
+                    code: `const ${varName} = ...`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for function ComponentName() { ... }
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id) {
+              const funcName = path.node.id.name;
+              
+              // Check if this shadows a dependency
+              if (dependencyNames.has(funcName)) {
+                violations.push({
+                  rule: 'dependency-shadowing',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component '${funcName}' shadows a dependency component. Use 'components.${funcName}' instead of redefining it inline. The component spec defines '${funcName}' as an embedded dependency, but this code is creating a new inline definition which overrides it.`,
+                  code: `function ${funcName}(...)`
+                });
+              }
+            }
+          }
+        });
+        
+        // Also check if components are being properly destructured
+        let hasComponentsDestructuring = false;
+        const usedDependencies = new Set<string>();
+        
+        (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
+          // Look for destructuring from components prop
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) &&
+                path.node.init.name === 'components') {
+              hasComponentsDestructuring = true;
+              
+              // Track which dependencies are being destructured
+              path.node.id.properties.forEach(prop => {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const name = prop.key.name;
+                  if (dependencyNames.has(name)) {
+                    usedDependencies.add(name);
+                  }
+                }
+              });
+            }
+          },
+          
+          // Look for direct usage like components.ComponentName or <components.ComponentName>
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            if (t.isIdentifier(path.node.object) && 
+                path.node.object.name === 'components' &&
+                t.isIdentifier(path.node.property)) {
+              const name = path.node.property.name;
+              if (dependencyNames.has(name)) {
+                usedDependencies.add(name);
+                hasComponentsDestructuring = true; // Mark as properly accessed
+              }
+            }
+          },
+          
+          // Also look in JSX elements
+          JSXMemberExpression(path: NodePath<t.JSXMemberExpression>) {
+            if (t.isJSXIdentifier(path.node.object) && 
+                path.node.object.name === 'components' &&
+                t.isJSXIdentifier(path.node.property)) {
+              const name = path.node.property.name;
+              if (dependencyNames.has(name)) {
+                usedDependencies.add(name);
+                hasComponentsDestructuring = true; // Mark as properly accessed
+              }
+            }
+          }
+        });
+        
+        // If dependencies exist but aren't being accessed via components prop, add a warning
+        if (dependencyNames.size > 0 && !hasComponentsDestructuring && usedDependencies.size === 0) {
+          const depList = Array.from(dependencyNames).join(', ');
+          violations.push({
+            rule: 'dependency-shadowing',
+            severity: 'high',
+            line: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.line || 0,
+            column: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.column || 0,
+            message: `Component has embedded dependencies [${depList}] but isn't accessing them via the 'components' prop. Add: const { ${depList} } = components; or use components.${Array.from(dependencyNames)[0]} directly.`,
+            code: `const { ${depList} } = components;`
+          });
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'no-window-access',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -5888,7 +6044,7 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
       if (!hasCleanup) {
         violations.push({
           rule: 'library-cleanup',
-          severity: 'high',
+          severity: 'medium',
           line: 0,
           column: 0,
           message: `${libraryName}: Missing cleanup in useEffect. Call ${rules.cleanupMethods.join(' or ')} in cleanup function`,

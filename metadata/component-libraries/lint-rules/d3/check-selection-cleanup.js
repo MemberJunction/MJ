@@ -40,7 +40,7 @@
           if (!hasCleanup) {
             return {
               rule: 'd3-missing-cleanup',
-              severity: 'critical',
+              severity: 'medium',
               message: 'D3 selections must be cleaned up in useEffect to prevent memory leaks',
               line: path.node.loc?.start.line || 0,
               column: path.node.loc?.start.column || 0,

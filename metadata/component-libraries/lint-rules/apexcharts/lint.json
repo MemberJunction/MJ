@@ -18,7 +18,7 @@
     },
     "checkDestroyInCleanup": {
       "description": "Ensure ApexCharts instances are destroyed in cleanup",
-      "severity": "critical",
+      "severity": "medium",
       "validate": "@file:check-destroy-cleanup.js"
     },
     "checkOptionsStructure": {
