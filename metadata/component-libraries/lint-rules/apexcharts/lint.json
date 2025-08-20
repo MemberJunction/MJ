@@ -25,6 +25,21 @@
       "description": "Validate ApexCharts options structure",
       "severity": "high",
       "validate": "@file:check-options-structure.js"
+    },
+    "checkSeriesDataFormat": {
+      "description": "Validate data is in correct ApexCharts series format",
+      "severity": "critical",
+      "validate": "@file:check-series-data-format.js"
+    },
+    "checkChartRefManagement": {
+      "description": "Ensure chart instances are properly stored in refs for exports",
+      "severity": "high",
+      "validate": "@file:check-chart-ref-management.js"
+    },
+    "checkAnomalyFormat": {
+      "description": "Validate anomaly data format for annotations",
+      "severity": "medium",
+      "validate": "@file:check-anomaly-format.js"
     }
   }
 }

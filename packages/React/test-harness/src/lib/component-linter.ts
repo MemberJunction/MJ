@@ -17,6 +17,10 @@ export interface LintResult {
   lowCount?: number;
 }
 
+export interface LintOptions {
+  debugMode?: boolean;
+}
+
 export interface Violation {
   rule: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -110,6 +114,19 @@ const runViewResultProps: readonly string[] = [
 ] as const satisfies readonly (keyof RunViewResult)[];
 
 export class ComponentLinter {
+  // Helper method to check if a statement contains a return
+  private static containsReturn(node: t.Node): boolean {
+    let hasReturn = false;
+    
+    traverse(node as any, {
+      ReturnStatement() {
+        hasReturn = true;
+      }
+    }, null, null, null, true); // Last param prevents traversing into nested functions
+    
+    return hasReturn;
+  }
+  
   // Helper method to check if a variable comes from RunQuery or RunView
   private static isVariableFromRunQueryOrView(path: NodePath<any>, varName: string, methodName: string): boolean {
     let isFromMethod = false;
@@ -1488,6 +1505,179 @@ export class ComponentLinter {
                     code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
                   });
                 }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'react-hooks-rules',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const hooks = ['useState', 'useEffect', 'useMemo', 'useCallback', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect'];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isIdentifier(path.node.callee) && hooks.includes(path.node.callee.name)) {
+              const hookName = path.node.callee.name;
+              
+              // Rule 1: Check if hook is inside the main component function or custom hook
+              let funcParent = path.getFunctionParent();
+              
+              if (funcParent) {
+                const funcName = ComponentLinter.getFunctionName(funcParent);
+                
+                // Violation: Hook not in component or custom hook
+                if (funcName && funcName !== componentName && !funcName.startsWith('use')) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" cannot be called inside function "${funcName}". Hooks can only be called at the top level of React components or custom hooks.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  return; // Skip further checks for this hook
+                }
+              }
+              
+              // Rule 2: Check if hook is inside a conditional (if statement)
+              let parent = path.parentPath;
+              while (parent) {
+                // Check if we've reached the component function - stop looking
+                if (t.isFunctionDeclaration(parent.node) || 
+                    t.isFunctionExpression(parent.node) || 
+                    t.isArrowFunctionExpression(parent.node)) {
+                  const parentFuncName = ComponentLinter.getFunctionName(parent as any);
+                  if (parentFuncName === componentName || parentFuncName?.startsWith('use')) {
+                    break; // We've reached the component/hook boundary
+                  }
+                }
+                
+                // Check for conditional statements
+                if (t.isIfStatement(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally. Hooks must be called in the exact same order in every component render.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for ternary expressions
+                if (t.isConditionalExpression(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally in a ternary expression. Hooks must be called unconditionally.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for logical expressions (&&, ||)
+                if (t.isLogicalExpression(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally in a logical expression. Hooks must be called unconditionally.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for switch statements
+                if (t.isSwitchStatement(parent.node) || t.isSwitchCase(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called inside a switch statement. Hooks must be called at the top level.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 3: Check for loops
+                if (t.isForStatement(parent.node) || 
+                    t.isForInStatement(parent.node) || 
+                    t.isForOfStatement(parent.node) ||
+                    t.isWhileStatement(parent.node) ||
+                    t.isDoWhileStatement(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" may not be called inside a loop. This can lead to hooks being called in different order between renders.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 4: Check for try/catch blocks
+                if (t.isTryStatement(parent.node) || t.isCatchClause(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'high', // Less severe as it might be intentional
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called inside a try/catch block. While not strictly forbidden, this can lead to issues if the hook throws.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 5: Check for early returns before this hook
+                // This is complex and would need to track control flow, so we'll do a simpler check
+                if (t.isBlockStatement(parent.node)) {
+                  const statements = parent.node.body;
+                  const hookIndex = statements.findIndex(stmt => stmt === path.parentPath?.node);
+                  
+                  // Check if there's a return statement before this hook
+                  for (let i = 0; i < hookIndex; i++) {
+                    const stmt = statements[i];
+                    if (t.isReturnStatement(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a conditional early return. All hooks must be called before any conditional returns.`,
+                        code: path.toString().substring(0, 100)
+                      });
+                      break;
+                    }
+                    
+                    // Check for conditional returns
+                    if (t.isIfStatement(stmt) && ComponentLinter.containsReturn(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a possible early return. Move this hook before any conditional logic.`,
+                        code: path.toString().substring(0, 100)
+                      });
+                      break;
+                    }
+                  }
+                }
+                
+                parent = parent.parentPath;
               }
             }
           }
@@ -3468,7 +3658,8 @@ export class ComponentLinter {
     componentName: string,
     componentSpec?: ComponentSpec,
     isRootComponent?: boolean,
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    debugMode?: boolean
   ): Promise<LintResult> {
     try {
       const ast = parser.parse(code, {
@@ -3504,8 +3695,8 @@ export class ComponentLinter {
       }
       
       // Apply library-specific lint rules if available
-      if (componentSpec?.dependencies && contextUser) {
-        const libraryViolations = await this.applyLibraryLintRules(ast, componentSpec, contextUser);
+      if (componentSpec?.libraries && contextUser) {
+        const libraryViolations = await this.applyLibraryLintRules(ast, componentSpec, contextUser, debugMode);
         violations.push(...libraryViolations);
       }
       
@@ -3517,6 +3708,35 @@ export class ComponentLinter {
       const highCount = uniqueViolations.filter(v => v.severity === 'high').length;
       const mediumCount = uniqueViolations.filter(v => v.severity === 'medium').length;
       const lowCount = uniqueViolations.filter(v => v.severity === 'low').length;
+      
+      // Debug mode summary
+      if (debugMode && uniqueViolations.length > 0) {
+        console.log('\n' + '='.repeat(60));
+        console.log('📊 LINT SUMMARY:');
+        console.log('='.repeat(60));
+        if (criticalCount > 0) console.log(`  🔴 Critical: ${criticalCount}`);
+        if (highCount > 0) console.log(`  🟠 High: ${highCount}`);
+        if (mediumCount > 0) console.log(`  🟡 Medium: ${mediumCount}`);
+        if (lowCount > 0) console.log(`  🟢 Low: ${lowCount}`);
+        console.log('='.repeat(60));
+        
+        // Group violations by library
+        const libraryViolations = uniqueViolations.filter(v => v.rule.includes('-validator'));
+        if (libraryViolations.length > 0) {
+          console.log('\n📚 Library-Specific Issues:');
+          const byLibrary = new Map<string, Violation[]>();
+          libraryViolations.forEach(v => {
+            const lib = v.rule.replace('-validator', '');
+            if (!byLibrary.has(lib)) byLibrary.set(lib, []);
+            byLibrary.get(lib)!.push(v);
+          });
+          
+          byLibrary.forEach((violations, library) => {
+            console.log(`  • ${library}: ${violations.length} issue${violations.length > 1 ? 's' : ''}`);
+          });
+        }
+        console.log('');
+      }
       
       // Generate fix suggestions
       const suggestions = this.generateFixSuggestions(uniqueViolations);
@@ -4992,7 +5212,8 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
   private static async applyLibraryLintRules(
     ast: t.File,
     componentSpec: ComponentSpec,
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    debugMode?: boolean
   ): Promise<Violation[]> {
     const violations: Violation[] = [];
     
@@ -5001,15 +5222,18 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
       const cache = LibraryLintCache.getInstance();
       await cache.loadLibraryRules(contextUser);
       
-      // Check each dependency in the component spec
-      if (componentSpec.dependencies) {
-        for (const dep of componentSpec.dependencies) {
+      // Check each library that this component uses
+      if (componentSpec.libraries) {
+        // Run library checks in parallel for performance
+        const libraryPromises = componentSpec.libraries.map(async (lib) => {
+          const libraryViolations: Violation[] = [];
+          
           // Get the cached and compiled rules for this library
-          const compiledRules = cache.getLibraryRules(dep.name);
+          const compiledRules = cache.getLibraryRules(lib.name);
           
           if (compiledRules) {
             const library = compiledRules.library;
-            const libraryName = library.Name || dep.name;
+            const libraryName = library.Name || lib.name;
             
             // Apply initialization rules
             if (compiledRules.initialization) {
@@ -5018,7 +5242,19 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
                 libraryName,
                 compiledRules.initialization
               );
-              violations.push(...initViolations);
+              
+              // Debug logging for library violations
+              if (debugMode && initViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Initialization Violations Found:`);
+                initViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...initViolations);
             }
             
             // Apply lifecycle rules
@@ -5028,7 +5264,19 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
                 libraryName,
                 compiledRules.lifecycle
               );
-              violations.push(...lifecycleViolations);
+              
+              // Debug logging for library violations
+              if (debugMode && lifecycleViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Lifecycle Violations Found:`);
+                lifecycleViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...lifecycleViolations);
             }
             
             // Apply options validation
@@ -5038,7 +5286,19 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
                 libraryName,
                 compiledRules.options
               );
-              violations.push(...optionsViolations);
+              
+              // Debug logging for library violations
+              if (debugMode && optionsViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Options Violations Found:`);
+                optionsViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...optionsViolations);
             }
             
             // Apply compiled validators (already compiled in cache)
@@ -5047,12 +5307,23 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
                 ast,
                 libraryName,
                 library.GlobalVariable || '',
-                compiledRules.validators
+                compiledRules.validators,
+                debugMode
               );
-              violations.push(...validatorViolations);
+              libraryViolations.push(...validatorViolations);
             }
           }
-        }
+          
+          return libraryViolations;
+        });
+        
+        // Wait for all library checks to complete
+        const allLibraryViolations = await Promise.all(libraryPromises);
+        
+        // Flatten the results
+        allLibraryViolations.forEach(libViolations => {
+          violations.push(...libViolations);
+        });
       }
     } catch (error) {
       console.warn('Failed to apply library lint rules:', error);
@@ -5292,82 +5563,6 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
   }
   
   /**
-   * Check common library-specific error patterns
-   */
-  private static checkCommonLibraryErrors(
-    ast: t.File,
-    libraryName: string,
-    errorPatterns: any[]
-  ): Violation[] {
-    const violations: Violation[] = [];
-    
-    for (const pattern of errorPatterns) {
-      if (pattern.pattern === 'canvas_element') {
-        // Check for canvas elements with chart refs
-        traverse(ast, {
-          JSXElement(path: NodePath<t.JSXElement>) {
-            const openingElement = path.node.openingElement;
-            
-            if (t.isJSXIdentifier(openingElement.name) && 
-                openingElement.name.name === 'canvas') {
-              
-              // Check if it has a ref that might be used for charts
-              const refAttr = openingElement.attributes.find(attr => 
-                t.isJSXAttribute(attr) && 
-                t.isJSXIdentifier(attr.name) && 
-                attr.name.name === 'ref'
-              );
-              
-              if (refAttr) {
-                violations.push({
-                  rule: 'library-common-error',
-                  severity: 'critical',
-                  line: openingElement.loc?.start.line || 0,
-                  column: openingElement.loc?.start.column || 0,
-                  message: pattern.message.replace('${library}', libraryName),
-                  code: pattern.fix
-                });
-              }
-            }
-          }
-        });
-      } else if (pattern.pattern === 'ref_usage') {
-        // Check for inappropriate ref usage
-        traverse(ast, {
-          JSXElement(path: NodePath<t.JSXElement>) {
-            const openingElement = path.node.openingElement;
-            
-            // Check if this is a component from the library
-            if (t.isJSXIdentifier(openingElement.name) && 
-                pattern.components?.includes(openingElement.name.name)) {
-              
-              // Check if it has a ref attribute
-              const refAttr = openingElement.attributes.find(attr => 
-                t.isJSXAttribute(attr) && 
-                t.isJSXIdentifier(attr.name) && 
-                attr.name.name === 'ref'
-              );
-              
-              if (refAttr) {
-                violations.push({
-                  rule: 'library-common-error',
-                  severity: 'high',
-                  line: openingElement.loc?.start.line || 0,
-                  column: openingElement.loc?.start.column || 0,
-                  message: pattern.message.replace('${library}', libraryName),
-                  code: pattern.fix
-                });
-              }
-            }
-          }
-        });
-      }
-    }
-    
-    return violations;
-  }
-  
-  /**
    * Check library options and configuration
    */
   private static checkLibraryOptions(
@@ -5445,15 +5640,17 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
     ast: t.File,
     libraryName: string,
     globalVariable: string,
-    validators: Record<string, any>
+    validators: Record<string, any>,
+    debugMode?: boolean
   ): Violation[] {
     const violations: Violation[] = [];
     
     // Create context object for validators
-    const context = {
+    const context: any = {
       libraryName,
       globalVariable,
-      instanceVariables: new Set<string>()
+      instanceVariables: new Set<string>(),
+      violations: [] // Validators push violations here
     };
     
     // First pass: identify library instance variables
@@ -5474,90 +5671,56 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
     // Execute each compiled validator
     for (const [validatorName, validator] of Object.entries(validators)) {
       if (validator && validator.validateFn) {
+        const beforeCount = context.violations.length;
+        
         // Traverse AST and apply validator
         traverse(ast, {
           enter(path: NodePath) {
             try {
-              const violation = validator.validateFn(ast, path, t, context);
-              if (violation) {
-                violations.push(violation);
-              }
+              // Validators don't return violations, they push to context.violations
+              validator.validateFn(ast, path, t, context);
             } catch (error) {
               // Validator execution error - log but don't crash
               console.warn(`Validator ${validatorName} failed:`, error);
             }
           }
         });
+        
+        // Debug logging for this specific validator
+        const newViolations = context.violations.length - beforeCount;
+        if (debugMode && newViolations > 0) {
+          console.log(`\n📋 ${libraryName} - ${validatorName}:`);
+          console.log(`  📊 ${validator.description || 'No description'}`);
+          console.log(`  ⚠️  Found ${newViolations} violation${newViolations > 1 ? 's' : ''}`);
+          
+          // Show the violations from this validator
+          const validatorViolations = context.violations.slice(beforeCount);
+          validatorViolations.forEach((v: any) => {
+            const icon = v.type === 'error' || v.severity === 'critical' ? '🔴' : 
+                         v.type === 'warning' || v.severity === 'high' ? '🟠' :
+                         v.severity === 'medium' ? '🟡' : '🟢';
+            console.log(`    ${icon} Line ${v.line || 'unknown'}: ${v.message}`);
+            if (v.suggestion) {
+              console.log(`       💡 ${v.suggestion}`);
+            }
+          });
+        }
       }
     }
+    
+    // Convert context violations to standard format
+    const standardViolations = context.violations.map((v: any) => ({
+      rule: `${libraryName.toLowerCase()}-validator`,
+      severity: v.severity || (v.type === 'error' ? 'critical' : v.type === 'warning' ? 'high' : 'medium'),
+      line: v.line || 0,
+      column: v.column || 0,
+      message: v.message,
+      code: v.code
+    }));
+    
+    violations.push(...standardViolations);
     
     return violations;
   }
 
-  /**
-   * Execute library-specific validators defined as executable functions
-   * @deprecated Use executeCompiledValidators with cached functions instead
-   */
-  private static executeLibraryValidators(
-    ast: t.File,
-    libraryName: string,
-    globalVariable: string,
-    validators: Record<string, any>
-  ): Violation[] {
-    const violations: Violation[] = [];
-    
-    // Create context object for validators
-    const context = {
-      libraryName,
-      globalVariable,
-      instanceVariables: new Set<string>()
-    };
-    
-    // First pass: identify library instance variables
-    traverse(ast, {
-      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-        if (t.isNewExpression(path.node.init) &&
-            t.isIdentifier(path.node.init.callee)) {
-          // Check if it's a library constructor
-          if (path.node.init.callee.name === globalVariable ||
-              validators.constructorName === path.node.init.callee.name) {
-            if (t.isIdentifier(path.node.id)) {
-              context.instanceVariables.add(path.node.id.name);
-            }
-          }
-        }
-      }
-    });
-    
-    // Execute each validator
-    for (const [validatorName, validatorDef] of Object.entries(validators)) {
-      if (validatorDef && typeof validatorDef === 'object' && validatorDef.validate) {
-        try {
-          // Create the validation function from the string
-          const validateFn = new Function('ast', 'path', 't', 'context', 
-            `return (${validatorDef.validate})(ast, path, t, context);`
-          );
-          
-          // Traverse AST and apply validator
-          traverse(ast, {
-            enter(path: NodePath) {
-              try {
-                const violation = validateFn(ast, path, t, context);
-                if (violation) {
-                  violations.push(violation);
-                }
-              } catch (error) {
-                // Validator execution error - log but don't crash
-                console.warn(`Validator ${validatorName} failed:`, error);
-              }
-            }
-          });
-        } catch (error) {
-          console.warn(`Failed to create validator function ${validatorName}:`, error);
-        }
-      }
-    }
-    
-    return violations;
-  }
 }
