@@ -275,7 +275,7 @@
 /* Content Area */
 .content-area {
   position: relative;
-  height: calc(100vh - 280px);
+  height: calc(100vh - 390px);
   overflow: auto;
   background: white;
 }

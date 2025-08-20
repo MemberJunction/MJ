@@ -390,6 +390,77 @@ export class ComponentLinter {
     },
     
     {
+      name: 'component-name-mismatch',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // The expected component name from the spec
+        const expectedName = componentSpec?.name || componentName;
+        
+        // Find the main function declaration
+        let foundMainFunction = false;
+        let actualFunctionName: string | null = null;
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            // Only check top-level function declarations
+            if (path.parent === ast.program && path.node.id) {
+              const funcName = path.node.id.name;
+              
+              // Check if this looks like the main component function
+              // (starts with capital letter and has the typical props parameter)
+              if (/^[A-Z]/.test(funcName)) {
+                foundMainFunction = true;
+                actualFunctionName = funcName;
+                
+                // Check if the function name matches the spec name
+                if (funcName !== expectedName) {
+                  violations.push({
+                    rule: 'component-name-mismatch',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component function name "${funcName}" does not match the spec name "${expectedName}". The function must be named exactly as specified in the component spec. Rename the function to: function ${expectedName}(...)`,
+                    code: `function ${funcName}(...)`
+                  });
+                }
+                
+                // Also check that the first letter case matches
+                const expectedFirstChar = expectedName.charAt(0);
+                const actualFirstChar = funcName.charAt(0);
+                if (expectedFirstChar !== actualFirstChar && 
+                    expectedName.toLowerCase() === funcName.toLowerCase()) {
+                  violations.push({
+                    rule: 'component-name-mismatch',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component function name "${funcName}" has incorrect capitalization. Expected "${expectedName}" (note the case of the first letter). The function name must match exactly, including capitalization: function ${expectedName}(...)`,
+                    code: `function ${funcName}(...)`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        // If we didn't find a main function with the expected name
+        if (!foundMainFunction && componentSpec?.name) {
+          violations.push({
+            rule: 'component-name-mismatch',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `No function declaration found with the expected name "${expectedName}". The main component function must be named exactly as specified in the spec. Add a function declaration: function ${expectedName}({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) { ... }`
+          });
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'no-window-access',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -3156,6 +3227,160 @@ export class ComponentLinter {
                     column: openingElement.loc?.start.column || 0,
                     message: `JSX element "${tagName}" is not recognized as a valid HTML element or React component. Check the spelling or ensure it's properly defined.`,
                     code: `<${tagName} ... />`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Extract declared queries and entities from dataRequirements
+        const declaredQueries = new Set<string>();
+        const declaredEntities = new Set<string>();
+        
+        if (componentSpec?.dataRequirements) {
+          // Handle queries in different possible locations
+          if (Array.isArray(componentSpec.dataRequirements)) {
+            // If it's an array directly
+            componentSpec.dataRequirements.forEach((req: any) => {
+              if (req.type === 'query' && req.name) {
+                declaredQueries.add(req.name.toLowerCase());
+              }
+              if (req.type === 'entity' && req.name) {
+                declaredEntities.add(req.name.toLowerCase());
+              }
+            });
+          } else if (typeof componentSpec.dataRequirements === 'object') {
+            // If it's an object with queries/entities properties
+            if (componentSpec.dataRequirements.queries) {
+              componentSpec.dataRequirements.queries.forEach((q: any) => {
+                if (q.name) declaredQueries.add(q.name.toLowerCase());
+              });
+            }
+            if (componentSpec.dataRequirements.entities) {
+              componentSpec.dataRequirements.entities.forEach((e: any) => {
+                if (e.name) declaredEntities.add(e.name.toLowerCase());
+              });
+            }
+          }
+        }
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for RunQuery calls
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'RunQuery') {
+              
+              const args = path.node.arguments;
+              if (args.length > 0 && t.isObjectExpression(args[0])) {
+                const props = args[0].properties;
+                
+                // Find QueryName property
+                const queryNameProp = props.find(p => 
+                  t.isObjectProperty(p) && 
+                  t.isIdentifier(p.key) && 
+                  p.key.name === 'QueryName'
+                );
+                
+                if (queryNameProp && t.isObjectProperty(queryNameProp)) {
+                  const value = queryNameProp.value;
+                  
+                  // Check if it's a string literal
+                  if (t.isStringLiteral(value)) {
+                    const queryName = value.value;
+                    
+                    // Check if it looks like SQL (contains SELECT, FROM, etc.)
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'JOIN'];
+                    const upperQuery = queryName.toUpperCase();
+                    const looksLikeSQL = sqlKeywords.some(keyword => upperQuery.includes(keyword));
+                    
+                    if (looksLikeSQL) {
+                      violations.push({
+                        rule: 'runquery-runview-validation',
+                        severity: 'critical',
+                        line: value.loc?.start.line || 0,
+                        column: value.loc?.start.column || 0,
+                        message: `RunQuery cannot accept SQL statements. QueryName must be a registered query name, not SQL: "${queryName.substring(0, 50)}..."`,
+                        code: value.value.substring(0, 100)
+                      });
+                    } else if (declaredQueries.size > 0 && !declaredQueries.has(queryName.toLowerCase())) {
+                      // Only validate if we have declared queries
+                      violations.push({
+                        rule: 'runquery-runview-validation',
+                        severity: 'high',
+                        line: value.loc?.start.line || 0,
+                        column: value.loc?.start.column || 0,
+                        message: `Query "${queryName}" is not declared in dataRequirements.queries. Available queries: ${Array.from(declaredQueries).join(', ')}`,
+                        code: path.toString().substring(0, 100)
+                      });
+                    }
+                  } else if (t.isIdentifier(value) || t.isTemplateLiteral(value)) {
+                    // Dynamic query name - check if it might be SQL
+                    violations.push({
+                      rule: 'runquery-runview-validation',
+                      severity: 'medium',
+                      line: value.loc?.start.line || 0,
+                      column: value.loc?.start.column || 0,
+                      message: `Dynamic QueryName detected. Ensure this is a query name, not a SQL statement.`,
+                      code: path.toString().substring(0, 100)
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Check for RunView calls
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.property) && 
+                (callee.property.name === 'RunView' || callee.property.name === 'RunViews')) {
+              
+              const args = path.node.arguments;
+              
+              // Handle both single object and array of objects
+              const checkEntityName = (objExpr: t.ObjectExpression) => {
+                const entityNameProp = objExpr.properties.find(p => 
+                  t.isObjectProperty(p) && 
+                  t.isIdentifier(p.key) && 
+                  p.key.name === 'EntityName'
+                );
+                
+                if (entityNameProp && t.isObjectProperty(entityNameProp) && t.isStringLiteral(entityNameProp.value)) {
+                  const entityName = entityNameProp.value.value;
+                  
+                  if (declaredEntities.size > 0 && !declaredEntities.has(entityName.toLowerCase())) {
+                    violations.push({
+                      rule: 'runquery-runview-validation',
+                      severity: 'high',
+                      line: entityNameProp.value.loc?.start.line || 0,
+                      column: entityNameProp.value.loc?.start.column || 0,
+                      message: `Entity "${entityName}" is not declared in dataRequirements.entities. Available entities: ${Array.from(declaredEntities).join(', ')}`,
+                      code: path.toString().substring(0, 100)
+                    });
+                  }
+                }
+              };
+              
+              if (args.length > 0) {
+                if (t.isObjectExpression(args[0])) {
+                  checkEntityName(args[0]);
+                } else if (t.isArrayExpression(args[0])) {
+                  args[0].elements.forEach(elem => {
+                    if (t.isObjectExpression(elem)) {
+                      checkEntityName(elem);
+                    }
                   });
                 }
               }
