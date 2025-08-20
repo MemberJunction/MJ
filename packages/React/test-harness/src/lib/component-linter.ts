@@ -705,10 +705,10 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                     violations.push({
                       rule: 'no-data-prop',
-                      severity: 'medium',  // It's a pattern issue, not critical
+                      severity: 'low',  // Opinion-based style preference, not a functional issue
                       line: prop.loc?.start.line || 0,
                       column: prop.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                      message: `Component "${componentName}" accepts generic 'data' prop. Consider using more specific prop names like 'items', 'customers', etc. for clarity.`,
                       code: 'data prop in component signature'
                     });
                   }
@@ -728,10 +728,10 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                       violations.push({
                         rule: 'no-data-prop',
-                        severity: 'critical',
+                        severity: 'low',  // Opinion-based style preference, not a functional issue
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
-                        message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                        message: `Component "${componentName}" accepts generic 'data' prop. Consider using more specific prop names like 'items', 'customers', etc. for clarity.`,
                         code: 'data prop in component signature'
                       });
                     }

@@ -6,7 +6,7 @@
     "requiredConfig": ["chart", "series"]
   },
   "lifecycle": {
-    "requiredMethods": ["render"],
+    "requiredMethods": [],
     "cleanupMethods": ["destroy"],
     "updateMethods": ["updateOptions", "updateSeries", "appendSeries"]
   },
