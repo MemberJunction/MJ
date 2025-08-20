@@ -138,6 +138,55 @@ Ideal for:
 - Cost-conscious deployments
 - Edge computing scenarios
 
+## ESM/CommonJS Compatibility Note
+
+### Current Implementation (CommonJS with Dynamic Imports)
+This package is built as CommonJS to maintain consistency with 96% of the MemberJunction codebase. However, the underlying `@xenova/transformers` library is ESM-only. We use dynamic imports as a workaround:
+
+```javascript
+// Current workaround in localEmbedding.ts
+const transformers = await eval('import("@xenova/transformers")');
+```
+
+This is the **official recommended approach** by HuggingFace for using their ESM library in CommonJS environments and works perfectly in production.
+
+### Future ESM Migration
+If/when MemberJunction migrates to ESM, this workaround should be reverted to standard imports:
+
+**Step 1: Update package.json**
+```json
+{
+  "type": "module"
+}
+```
+
+**Step 2: Update tsconfig.json**
+```json
+{
+  "compilerOptions": {
+    "module": "ESNext" // or "NodeNext"
+  }
+}
+```
+
+**Step 3: Revert to standard imports in localEmbedding.ts**
+```typescript
+// Remove the dynamic import workaround:
+// DELETE: const transformers = await eval('import("@xenova/transformers")');
+// DELETE: The entire loadTransformers() function
+
+// Replace with standard ESM import at top of file:
+import { pipeline, env } from '@xenova/transformers';
+
+// Update initialization to use imports directly without the loadTransformers() call
+```
+
+**Note for AI Assistants**: If you're migrating this package to ESM, remember to:
+1. Remove the entire `loadTransformers()` function and its interfaces
+2. Replace all dynamic import logic with standard ESM imports
+3. Remove null checks for `pipeline` and `env` as they'll be available at import time
+4. Update all dependent packages that import this module
+
 ## Troubleshooting
 
 ### Model Download Issues
