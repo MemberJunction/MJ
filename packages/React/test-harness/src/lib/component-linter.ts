@@ -118,11 +118,18 @@ export class ComponentLinter {
   private static containsReturn(node: t.Node): boolean {
     let hasReturn = false;
     
-    traverse(node as any, {
-      ReturnStatement() {
-        hasReturn = true;
+    // Create a mini AST to traverse
+    const file = t.file(t.program([t.expressionStatement(node as any)]));
+    
+    traverse(file, {
+      ReturnStatement(path) {
+        // Don't count returns in nested functions
+        const parent = path.getFunctionParent();
+        if (!parent || parent.node === node) {
+          hasReturn = true;
+        }
       }
-    }, null, null, null, true); // Last param prevents traversing into nested functions
+    });
     
     return hasReturn;
   }
@@ -1547,7 +1554,7 @@ export class ComponentLinter {
               }
               
               // Rule 2: Check if hook is inside a conditional (if statement)
-              let parent = path.parentPath;
+              let parent: NodePath | null = path.parentPath;
               while (parent) {
                 // Check if we've reached the component function - stop looking
                 if (t.isFunctionDeclaration(parent.node) || 
