@@ -47,6 +47,7 @@ import { ActionTestHarnessComponent } from "./Actions/action-test-harness.compon
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
+import { ActionResultCodeDialogComponent } from "./Actions/action-result-code-dialog.component";
 import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
@@ -88,6 +89,7 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
+        ActionResultCodeDialogComponent,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,

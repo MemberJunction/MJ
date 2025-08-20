@@ -38,12 +38,12 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
   public navigationItems: string[] = ['overview', 'execution', 'scheduled', 'code', 'entities', 'security'];
   
   public navigationConfig = [
-    { text: 'Overview', icon: 'fa-solid fa-dashboard' },
-    { text: 'Execution', icon: 'fa-solid fa-play-circle' },
-    { text: 'Scheduled', icon: 'fa-solid fa-clock' },
-    { text: 'Code', icon: 'fa-solid fa-code' },
-    { text: 'Entities', icon: 'fa-solid fa-sitemap' },
-    { text: 'Security', icon: 'fa-solid fa-lock' }
+    { text: 'Overview', icon: '', faIcon: 'fa-solid fa-dashboard' },
+    { text: 'Execution', icon: '', faIcon: 'fa-solid fa-play-circle' },
+    { text: 'Scheduled', icon: '', faIcon: 'fa-solid fa-clock' },
+    { text: 'Code', icon: '', faIcon: 'fa-solid fa-code' },
+    { text: 'Entities', icon: '', faIcon: 'fa-solid fa-sitemap' },
+    { text: 'Security', icon: '', faIcon: 'fa-solid fa-lock' }
   ];
 
   private stateChangeSubject = new Subject<ActionsManagementState>();

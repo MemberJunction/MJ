@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.91.0
+
+### Patch Changes
+
+- 70bf265: Fixed CodeGen Database Schema JSON generation errors caused by unescaped control characters
+
+  - Added comprehensive JSON string escaping function to handle all control characters (newlines, tabs, carriage returns, etc.)
+  - Fixed null reference errors when dbSchemaJSONOutput configuration is missing or incomplete
+  - Applied proper escaping to all string fields in JSON output (entity names, descriptions, field names, types, etc.)
+  - Ensures generated JSON files are valid and can be parsed without errors
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/core-entities-server@2.91.0
+  - @memberjunction/aiengine@2.91.0
+  - @memberjunction/actions@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+  - @memberjunction/ai@2.91.0
+  - @memberjunction/ai-anthropic@2.91.0
+  - @memberjunction/ai-groq@2.91.0
+  - @memberjunction/ai-mistral@2.91.0
+  - @memberjunction/ai-openai@2.91.0
+  - @memberjunction/global@2.91.0
+
 ## 2.90.0
 
 ### Patch Changes

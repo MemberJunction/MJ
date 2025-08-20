@@ -1,5 +1,12 @@
 # @memberjunction/interactive-component-types
 
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+
 ## 2.90.0
 
 ### Patch Changes

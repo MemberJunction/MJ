@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ElementRef, inject, ViewContainerRef } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ActionEntity, ActionParamEntity, ActionResultCodeEntity, ActionCategoryEntity, ActionExecutionLogEntity, ActionLibraryEntity, LibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -8,6 +8,7 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { ActionFormComponent } from '../../generated/Entities/Action/action.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { ActionParamDialogComponent } from './action-param-dialog.component';
+import { ActionResultCodeDialogComponent } from './action-result-code-dialog.component';
 
 @RegisterClass(BaseFormComponent, 'Actions')
 @Component({
@@ -32,6 +33,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     
     // Track params to delete
     private paramsToDelete: ActionParamEntity[] = [];
+    
+    // Track result codes to delete
+    private resultCodesToDelete: ActionResultCodeEntity[] = [];
     
     // Loading states
     public isLoadingParams = false;
@@ -64,13 +68,15 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     public codeLanguage = 'typescript';
     public showCodeComments = false;
     
+    private dialogService = inject(DialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    
     constructor(
         elementRef: ElementRef,
         sharedService: SharedService,
         router: Router,
         route: ActivatedRoute,
-        public cdr: ChangeDetectorRef,
-        private dialogService: DialogService
+        public cdr: ChangeDetectorRef
     ) {
         super(elementRef, sharedService, router, route, cdr);
     }
@@ -88,6 +94,110 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.loadActionLibraries(),
                 this.loadExecutionStats()
             ]);
+        }
+    }
+    
+    /**
+     * Override InternalSaveRecord to handle Action and related ActionParams in a transaction
+     * This follows the same pattern as AIAgentFormComponent
+     */
+    protected async InternalSaveRecord(): Promise<boolean> {
+        if (!this.record) {
+            return false;
+        }
+        
+        try {
+            const md = new Metadata();
+            const transactionGroup = await md.CreateTransactionGroup();
+            
+            // Set transaction group on the Action record
+            this.record.TransactionGroup = transactionGroup;
+            
+            // Save the Action record first
+            const actionSaved = await this.record.Save();
+            
+            if (!actionSaved) {
+                console.error('Failed to save Action record');
+                this.sharedService.CreateSimpleNotification('Failed to save Action record', 'error', 5000);
+                return false;
+            }
+            
+            // Process all pending records (params and result codes to save or delete)
+            for (const pendingRecord of this.PendingRecords) {
+                if (pendingRecord.entityObject.EntityInfo.Name === 'Action Params') {
+                    const param = pendingRecord.entityObject as ActionParamEntity;
+                    
+                    // Ensure ActionID is set for new params
+                    if (!param.ActionID) {
+                        param.ActionID = this.record.ID;
+                    }
+                    
+                    param.TransactionGroup = transactionGroup;
+                    
+                    if (pendingRecord.action === 'save') {
+                        const saved = await param.Save();
+                        if (!saved) {
+                            console.error('Failed to save parameter:', param.Name);
+                            return false;
+                        }
+                    } else if (pendingRecord.action === 'delete') {
+                        const deleted = await param.Delete();
+                        if (!deleted) {
+                            console.error('Failed to delete parameter:', param.Name);
+                            return false;
+                        }
+                    }
+                } else if (pendingRecord.entityObject.EntityInfo.Name === 'Action Result Codes') {
+                    const resultCode = pendingRecord.entityObject as ActionResultCodeEntity;
+                    
+                    // Ensure ActionID is set for new result codes
+                    if (!resultCode.ActionID) {
+                        resultCode.ActionID = this.record.ID;
+                    }
+                    
+                    resultCode.TransactionGroup = transactionGroup;
+                    
+                    if (pendingRecord.action === 'save') {
+                        const saved = await resultCode.Save();
+                        if (!saved) {
+                            console.error('Failed to save result code:', resultCode.ResultCode);
+                            return false;
+                        }
+                    } else if (pendingRecord.action === 'delete') {
+                        const deleted = await resultCode.Delete();
+                        if (!deleted) {
+                            console.error('Failed to delete result code:', resultCode.ResultCode);
+                            return false;
+                        }
+                    }
+                }
+            }
+            
+            // Submit the transaction
+            const success = await transactionGroup.Submit();
+            
+            if (success) {
+                // Clear pending records after successful save
+                this.PendingRecords.length = 0;
+                this.paramsToDelete = [];
+                this.resultCodesToDelete = [];
+                
+                // Reload params and result codes to get updated data
+                await Promise.all([
+                    this.loadActionParams(),
+                    this.loadResultCodes()
+                ]);
+                
+                // Show success message
+                this.sharedService.CreateSimpleNotification('Action and related records saved successfully', 'success', 3000);
+            }
+            
+            return success;
+            
+        } catch (error) {
+            console.error('Error saving Action and parameters:', error);
+            this.sharedService.CreateSimpleNotification('Error saving Action: ' + error, 'error', 5000);
+            return false;
         }
     }
 
@@ -112,7 +222,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionParamEntity>({
                 EntityName: 'Action Params',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'Name' 
+                OrderBy: 'Name',
+                ResultType: 'entity_object'  // This ensures we get proper entity instances
             });
             
             if (result.Success) {
@@ -150,7 +261,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             const result = await rv.RunView<ActionResultCodeEntity>({
                 EntityName: 'Action Result Codes',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'IsSuccess DESC, ResultCode' 
+                OrderBy: 'IsSuccess DESC, ResultCode',
+                ResultType: 'entity_object'  // This ensures we get proper entity instances
             });
             
             if (result.Success) {
@@ -495,7 +607,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         const dialogRef = this.dialogService.open({
             content: ActionParamDialogComponent,
             width: 500,
-            appendTo: this.elementRef.nativeElement
+            appendTo: this.viewContainerRef
         });
         
         const dialog = dialogRef.content.instance;
@@ -505,9 +617,18 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         
         dialogRef.result.subscribe(result => {
             if (result && (result as any).save) {
-                // Add to local array and mark as new/dirty
+                // The dialog has already modified the newParam entity directly
+                // New entities are automatically dirty (IsSaved = false)
+                
+                // Add to local array
                 this.actionParams.push(newParam);
-                // New params are not saved yet, they'll be detected by !IsSaved
+                
+                // Add to pending records for saving
+                this.PendingRecords.push({
+                    entityObject: newParam,
+                    action: 'save'
+                });
+                
                 // Update the filtered arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -519,7 +640,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         const dialogRef = this.dialogService.open({
             content: ActionParamDialogComponent,
             width: 500,
-            appendTo: this.elementRef.nativeElement
+            appendTo: this.viewContainerRef
         });
         
         const dialog = dialogRef.content.instance;
@@ -530,6 +651,19 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         dialogRef.result.subscribe(result => {
             if (result && (result as any).save && this.EditMode) {
                 // Param will be dirty from property changes in dialog
+                // Ensure it's in pending records if modified
+                if (param.Dirty) {
+                    const exists = this.PendingRecords.some(pr => 
+                        pr.entityObject === param && pr.action === 'save'
+                    );
+                    if (!exists) {
+                        this.PendingRecords.push({
+                            entityObject: param,
+                            action: 'save'
+                        });
+                    }
+                }
+                
                 // Update the local arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -548,26 +682,6 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.editParameter(param);
     }
 
-    async deleteParameter(param: ActionParamEntity) {
-        if (!this.EditMode) return;
-        
-        if (confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
-            if (param.IsSaved) {
-                // Track for deletion using a separate array
-                if (!this.paramsToDelete) this.paramsToDelete = [];
-                this.paramsToDelete.push(param);
-            } else {
-                // Remove from local array if it's new
-                const index = this.actionParams.indexOf(param);
-                if (index > -1) {
-                    this.actionParams.splice(index, 1);
-                }
-            }
-            // Update the filtered arrays
-            await this.updateParamArrays();
-            this.cdr.detectChanges();
-        }
-    }
     
     private async updateParamArrays() {
         // Update cached filtered params - exclude deleted items
@@ -584,18 +698,87 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         });
     }
     
-    // Override to populate pending records with our action params
+    // Override to populate pending records with our action params and result codes
     protected PopulatePendingRecords() {
+        // Preserve existing pending records before base class clears them
+        const currentPendingRecords = [...this.PendingRecords];
+        
+        // Call parent to handle child components
         super.PopulatePendingRecords();
         
-        // Add our action params to pending records
-        if (this.actionParams && this.actionParams.length > 0) {
-            for (const param of this.actionParams) {
-                if (param.Dirty || (this.paramsToDelete && this.paramsToDelete.includes(param)) || !param.IsSaved) {
-                    const action = (this.paramsToDelete && this.paramsToDelete.includes(param)) ? 'delete' : 'save';
+        // Re-add our preserved records
+        for (const record of currentPendingRecords) {
+            // Only re-add if it's an Action Param or Result Code (avoid duplicates)
+            if (record.entityObject.EntityInfo.Name === 'Action Params' || 
+                record.entityObject.EntityInfo.Name === 'Action Result Codes') {
+                const exists = this.PendingRecords.some(pr => 
+                    pr.entityObject === record.entityObject
+                );
+                if (!exists) {
+                    this.PendingRecords.push(record);
+                }
+            }
+        }
+        
+        // Add action params that need saving
+        for (const param of this.actionParams) {
+            if (!param.IsSaved || param.Dirty) {
+                // Check if not already in pending records
+                const exists = this.PendingRecords.some(pr => 
+                    pr.entityObject === param
+                );
+                if (!exists) {
                     this.PendingRecords.push({
                         entityObject: param,
-                        action: action
+                        action: 'save'
+                    });
+                }
+            }
+        }
+        
+        // Add params marked for deletion
+        for (const param of this.paramsToDelete) {
+            if (param.IsSaved) {
+                // Check if not already in pending records
+                const exists = this.PendingRecords.some(pr => 
+                    pr.entityObject === param
+                );
+                if (!exists) {
+                    this.PendingRecords.push({
+                        entityObject: param,
+                        action: 'delete'
+                    });
+                }
+            }
+        }
+        
+        // Add result codes that need saving
+        for (const resultCode of this.resultCodes) {
+            if (!resultCode.IsSaved || resultCode.Dirty) {
+                // Check if not already in pending records
+                const exists = this.PendingRecords.some(pr => 
+                    pr.entityObject === resultCode
+                );
+                if (!exists) {
+                    this.PendingRecords.push({
+                        entityObject: resultCode,
+                        action: 'save'
+                    });
+                }
+            }
+        }
+        
+        // Add result codes marked for deletion
+        for (const resultCode of this.resultCodesToDelete) {
+            if (resultCode.IsSaved) {
+                // Check if not already in pending records
+                const exists = this.PendingRecords.some(pr => 
+                    pr.entityObject === resultCode
+                );
+                if (!exists) {
+                    this.PendingRecords.push({
+                        entityObject: resultCode,
+                        action: 'delete'
                     });
                 }
             }
@@ -608,6 +791,161 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
      */
     public getActionIcon(): string {
         return this.record?.IconClass || 'fa-solid fa-cog';
+    }
+    
+    // Result Code management methods
+    async addResultCode() {
+        if (!this.EditMode || !this.record.IsSaved) return;
+        
+        const md = new Metadata();
+        const newResultCode = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes');
+        
+        // Set default values
+        newResultCode.ActionID = this.record.ID;
+        newResultCode.ResultCode = '';
+        newResultCode.Description = '';
+        newResultCode.IsSuccess = false;
+        
+        const dialogRef = this.dialogService.open({
+            content: ActionResultCodeDialogComponent,
+            width: 500,
+            appendTo: this.viewContainerRef
+        });
+        
+        const dialog = dialogRef.content.instance;
+        dialog.resultCode = newResultCode;
+        dialog.isNew = true;
+        dialog.editMode = true;
+        
+        dialogRef.result.subscribe(result => {
+            if (result && (result as any).save) {
+                // Add to local array
+                this.resultCodes.push(newResultCode);
+                
+                // Add to pending records for saving
+                this.PendingRecords.push({
+                    entityObject: newResultCode,
+                    action: 'save'
+                });
+                
+                this.cdr.detectChanges();
+            }
+        });
+    }
+    
+    async editResultCode(resultCode: ActionResultCodeEntity) {
+        const dialogRef = this.dialogService.open({
+            content: ActionResultCodeDialogComponent,
+            width: 500,
+            appendTo: this.viewContainerRef
+        });
+        
+        const dialog = dialogRef.content.instance;
+        dialog.resultCode = resultCode;
+        dialog.isNew = false;
+        dialog.editMode = this.EditMode;
+        
+        dialogRef.result.subscribe(result => {
+            if (result && (result as any).save && this.EditMode) {
+                // Ensure it's in pending records if modified
+                if (resultCode.Dirty) {
+                    const exists = this.PendingRecords.some(pr => 
+                        pr.entityObject === resultCode && pr.action === 'save'
+                    );
+                    if (!exists) {
+                        this.PendingRecords.push({
+                            entityObject: resultCode,
+                            action: 'save'
+                        });
+                    }
+                }
+                
+                this.cdr.detectChanges();
+            }
+        });
+    }
+    
+    onResultCodeClick(resultCode: ActionResultCodeEntity, event: Event) {
+        // Prevent event bubbling if clicking on edit/delete buttons
+        const target = event.target as HTMLElement;
+        if (target.closest('.result-edit-btn') || target.closest('.result-delete-btn')) {
+            return;
+        }
+        
+        // Show the result code dialog
+        this.editResultCode(resultCode);
+    }
+    
+    /**
+     * Delete a result code (marks for deletion on save)
+     */
+    deleteResultCode(resultCode: ActionResultCodeEntity) {
+        if (!this.EditMode) return;
+        
+        // Remove from main array
+        const index = this.resultCodes.indexOf(resultCode);
+        if (index > -1) {
+            this.resultCodes.splice(index, 1);
+        }
+        
+        // Handle pending records
+        if (resultCode.IsSaved) {
+            // Add to deletion list for saved result codes
+            this.resultCodesToDelete.push(resultCode);
+            
+            // Add to pending records for deletion
+            this.PendingRecords.push({
+                entityObject: resultCode,
+                action: 'delete'
+            });
+        } else {
+            // For unsaved result codes, just remove from pending records
+            const pendingIndex = this.PendingRecords.findIndex(pr => 
+                pr.entityObject === resultCode && pr.action === 'save'
+            );
+            if (pendingIndex >= 0) {
+                this.PendingRecords.splice(pendingIndex, 1);
+            }
+        }
+        
+        this.cdr.detectChanges();
+    }
+    
+    /**
+     * Delete a parameter (marks for deletion on save)
+     */
+    deleteParameter(param: ActionParamEntity) {
+        if (!this.EditMode) return;
+        
+        // Remove from main array
+        const index = this.actionParams.indexOf(param);
+        if (index > -1) {
+            this.actionParams.splice(index, 1);
+        }
+        
+        // Handle pending records
+        if (param.IsSaved) {
+            // Add to deletion list for saved params
+            this.paramsToDelete.push(param);
+            
+            // Add to pending records for deletion
+            this.PendingRecords.push({
+                entityObject: param,
+                action: 'delete'
+            });
+        } else {
+            // For unsaved params, just remove from pending records
+            const pendingIndex = this.PendingRecords.findIndex(pr => 
+                pr.entityObject === param && pr.action === 'save'
+            );
+            if (pendingIndex >= 0) {
+                this.PendingRecords.splice(pendingIndex, 1);
+            }
+        }
+        
+        // Update filtered arrays
+        this.updateParamArrays();
+        this.cdr.detectChanges();
     }
 }
 

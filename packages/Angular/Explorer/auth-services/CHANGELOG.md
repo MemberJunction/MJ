@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.91.0
+
+### Minor Changes
+
+- f703033: Implement extensible N-provider authentication architecture
+
+  - Created shared authentication types in @memberjunction/core for use
+    across frontend and backend
+  - Refactored authentication to support multiple providers using MJGlobal
+    ClassFactory pattern
+  - Implemented dynamic provider discovery and registration without
+    modifying core code
+  - Added support for multiple concurrent auth providers via authProviders
+    array configuration
+  - Replaced static method with cleaner property pattern for Angular
+    provider dependencies
+  - Eliminated code duplication and removed unused configuration methods
+  - Maintained full backward compatibility with existing auth
+    implementations
+
+  This enables teams to add custom authentication providers (SAML,
+  proprietary SSO, etc.)
+  without forking or modifying the core authentication modules.
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+
 ## 2.90.0
 
 ### Patch Changes

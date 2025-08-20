@@ -1,5 +1,75 @@
 # Change Log - @memberjunction/server
 
+## 2.91.0
+
+### Minor Changes
+
+- f703033: Implement extensible N-provider authentication architecture
+
+  - Created shared authentication types in @memberjunction/core for use
+    across frontend and backend
+  - Refactored authentication to support multiple providers using MJGlobal
+    ClassFactory pattern
+  - Implemented dynamic provider discovery and registration without
+    modifying core code
+  - Added support for multiple concurrent auth providers via authProviders
+    array configuration
+  - Replaced static method with cleaner property pattern for Angular
+    provider dependencies
+  - Eliminated code duplication and removed unused configuration methods
+  - Maintained full backward compatibility with existing auth
+    implementations
+
+  This enables teams to add custom authentication providers (SAML,
+  proprietary SSO, etc.)
+  without forking or modifying the core authentication modules.
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- 6891a01: Pass StartRow parameter through RunView resolver chain for pagination.
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ai-local-embeddings@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/core-entities-server@2.91.0
+  - @memberjunction/ai-agent-manager-actions@2.91.0
+  - @memberjunction/ai-agents@2.91.0
+  - @memberjunction/ai-core-plus@2.91.0
+  - @memberjunction/aiengine@2.91.0
+  - @memberjunction/ai-prompts@2.91.0
+  - @memberjunction/ai-vectors-pinecone@2.91.0
+  - @memberjunction/actions-apollo@2.91.0
+  - @memberjunction/actions-bizapps-accounting@2.91.0
+  - @memberjunction/actions-bizapps-crm@2.91.0
+  - @memberjunction/actions-bizapps-lms@2.91.0
+  - @memberjunction/actions-bizapps-social@2.91.0
+  - @memberjunction/core-actions@2.91.0
+  - @memberjunction/actions@2.91.0
+  - @memberjunction/entity-communications-server@2.91.0
+  - @memberjunction/doc-utils@2.91.0
+  - @memberjunction/external-change-detection@2.91.0
+  - @memberjunction/graphql-dataprovider@2.91.0
+  - @memberjunction/data-context@2.91.0
+  - @memberjunction/queue@2.91.0
+  - @memberjunction/storage@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+  - @memberjunction/skip-types@2.91.0
+  - @memberjunction/templates@2.91.0
+  - @memberjunction/data-context-server@2.91.0
+  - @memberjunction/ai@2.91.0
+  - @memberjunction/ai-anthropic@2.91.0
+  - @memberjunction/ai-cerebras@2.91.0
+  - @memberjunction/ai-groq@2.91.0
+  - @memberjunction/ai-lmstudio@2.91.0
+  - @memberjunction/ai-mistral@2.91.0
+  - @memberjunction/ai-ollama@2.91.0
+  - @memberjunction/ai-openai@2.91.0
+  - @memberjunction/ai-openrouter@2.91.0
+  - @memberjunction/global@2.91.0
+
 ## 2.90.0
 
 ### Patch Changes

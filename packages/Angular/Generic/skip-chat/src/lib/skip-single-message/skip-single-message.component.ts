@@ -163,7 +163,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     private static _detailHtml: any = {};
 
 
-    private _loadTime: number = 0;
+    private _loadTime: number = Date.now(); // Initialize with current time to avoid 0
     public get ElapsedTimeSinceLoad(): number {
       return Date.now() - this._loadTime;
     }
@@ -180,19 +180,26 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * Starts the elapsed time updater interval
      */
     private startElapsedTimeUpdater(): void {
-      // Initialize the formatted time immediately
-      this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+      // Defer the initial setting to avoid change detection issues
+      Promise.resolve().then(() => {
+        this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+        this.cdRef.detectChanges();
+      });
       
       // Start the interval to update every second
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
           this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
-          this.cdRef.markForCheck();
+          // Use Promise.resolve().then() to schedule change detection in the next microtask
+          // This prevents ExpressionChangedAfterItHasBeenCheckedError
+          Promise.resolve().then(() => {
+            this.cdRef.detectChanges();
+          });
         }, 1000);
       }
     }
 
-    private _elapsedTimeFormatted: string = "";
+    private _elapsedTimeFormatted: string = "(0:00 elapsed)"; // Initialize with a default value
     private _elapsedTimeInterval: any = null;
     protected FormatElapsedTime(elapsedTime: number): string {
       let seconds = Math.floor(elapsedTime / 1000);

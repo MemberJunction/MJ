@@ -23,7 +23,28 @@ import { RegisterClass } from '@memberjunction/global';
  * 
  * You can sub-class this class to create custom schema generation logic.
  */
-export class DBSchemaGeneratorBase { 
+export class DBSchemaGeneratorBase {
+    /**
+     * Properly escapes a string for JSON output, handling all control characters
+     * @param str The string to escape
+     * @returns The escaped string safe for JSON
+     */
+    protected escapeJsonString(str: string | null | undefined): string {
+        if (!str) return '';
+        
+        return str
+            .replace(/\\/g, '\\\\')  // Backslash
+            .replace(/"/g, '\\"')    // Double quote
+            .replace(/\n/g, '\\n')   // Newline
+            .replace(/\r/g, '\\r')   // Carriage return
+            .replace(/\t/g, '\\t')   // Tab
+            .replace(/\f/g, '\\f')   // Form feed
+            .replace(/\b/g, '\\b')   // Backspace
+            .replace(/[\x00-\x1F\x7F]/g, (char) => {
+                // Escape any other control characters
+                return '\\u' + ('0000' + char.charCodeAt(0).toString(16)).slice(-4);
+            });
+    } 
     /**
      * Main entry point for generating database schema JSON files.
      * Creates multiple output formats for different consumption needs:
@@ -40,8 +61,8 @@ export class DBSchemaGeneratorBase {
             if (!fs.existsSync(outputDir))
                 fs.mkdirSync(outputDir, { recursive: true }); // create the directory if it doesn't exist
         
-            const excludeSchemas: string[] = configInfo.dbSchemaJSONOutput.excludeSchemas;
-            const excludeEntities: string[] = configInfo.dbSchemaJSONOutput.excludeEntities;
+            const excludeSchemas: string[] = configInfo.dbSchemaJSONOutput?.excludeSchemas || [];
+            const excludeEntities: string[] = configInfo.dbSchemaJSONOutput?.excludeEntities || [];
             
             // first, get a list of all of the distinct schemas within the entities array
             const schemas: string[] = [];
@@ -97,10 +118,11 @@ export class DBSchemaGeneratorBase {
             fs.writeFileSync(path.join(outputDir, `__ALL.simple.min.json`), allSchemasSimpleMin);
         
             // finally, process bundles
-            configInfo.dbSchemaJSONOutput.bundles.forEach(b => {
+            const bundles = configInfo.dbSchemaJSONOutput?.bundles || [];
+            bundles.forEach(b => {
                 if (!b.schemas || b.schemas.length === 0) {
                     // use the EXCLUDE list and create the schema list
-                    b.schemas = schemas.filter(s => !b.excludeSchemas.includes(s));
+                    b.schemas = schemas.filter(s => !(b.excludeSchemas || []).includes(s));
                 }
                 // now we have the schemas we want to process in the b.schemas property
                 let json: string = '[';
@@ -109,8 +131,8 @@ export class DBSchemaGeneratorBase {
                     // grab the JSON for the schema in question and incorporate it into an output string
                     const schemaName = b.schemas[x];
                     const schemaEntities = entities.filter(e => e.SchemaName === schemaName);
-                    json += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities, schemaName, false)
-                    simpleJson += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities, schemaName, true);
+                    json += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, false)
+                    simpleJson += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, true);
                 }
                 json += ']';
                 simpleJson += ']';
@@ -140,7 +162,7 @@ export class DBSchemaGeneratorBase {
      */
     public generateDBSchemaJSON(entities: EntityInfo[], excludeEntities: string[], schemaName: string, simpleVersion: boolean): string {
         let sOutput: string = `{
-        "schemaName": "${schemaName}", 
+        "schemaName": "${this.escapeJsonString(schemaName)}", 
         "entities": [`;
     
         // first create a copy of the entities array and sort it by name
@@ -168,18 +190,20 @@ export class DBSchemaGeneratorBase {
      * @returns JSON string representing the entity
      */
     protected generateEntityJSON(entity: EntityInfo, simpleVersion: boolean) : string {
-        const jsonEscapedDescription = entity.Description ? entity.Description.replace(/"/g, '\\"') : '';
+        const jsonEscapedDescription = this.escapeJsonString(entity.Description);
+        const jsonEscapedName = this.escapeJsonString(entity.Name);
+        const jsonEscapedBaseView = this.escapeJsonString(entity.BaseView);
         let sOutput: string = `
         { 
-            "Name": "${entity.Name}",
+            "Name": "${jsonEscapedName}",
             "Description": "${jsonEscapedDescription}",
-            "BaseView": "${entity.BaseView}", 
+            "BaseView": "${jsonEscapedBaseView}", 
             "Fields": [`;
     
         if (simpleVersion) {
             // just create a comma delim string of the field names
             const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
-            sOutput += `"${sortedFields.map(f => f.Name).join('","')}"]`;
+            sOutput += `"${sortedFields.map(f => this.escapeJsonString(f.Name)).join('","')}"]`;
         }
         else {
             const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
@@ -204,14 +228,16 @@ export class DBSchemaGeneratorBase {
      * @returns JSON string representing the field with type, relationships, and constraints
      */
     protected generateFieldJSON(field: EntityFieldInfo, simpleVersion: boolean) : string {
-        const relEntity = field.RelatedEntity && field.RelatedEntity.length > 0 ? `\n                "RelatedEntity": "${field.RelatedEntity}",` : ''
-        const relField = relEntity && field.RelatedEntityFieldName && field.RelatedEntityFieldName.length > 0 ? `\n                "RelatedEntityFieldName": "${field.RelatedEntityFieldName}",` : ''
-        const jsonEscapedDescription = field.Description ? field.Description.replace(/"/g, '\\"') : '';
+        const relEntity = field.RelatedEntity && field.RelatedEntity.length > 0 ? `\n                "RelatedEntity": "${this.escapeJsonString(field.RelatedEntity)}",` : ''
+        const relField = relEntity && field.RelatedEntityFieldName && field.RelatedEntityFieldName.length > 0 ? `\n                "RelatedEntityFieldName": "${this.escapeJsonString(field.RelatedEntityFieldName)}",` : ''
+        const jsonEscapedDescription = this.escapeJsonString(field.Description);
+        const jsonEscapedName = this.escapeJsonString(field.Name);
+        const jsonEscapedType = this.escapeJsonString(field.Type);
         let sOutput: string = `         
                 {
-                    "Name": "${field.Name}", 
+                    "Name": "${jsonEscapedName}", 
                     "Description": "${jsonEscapedDescription}",  
-                    "Type": "${field.Type}",${relEntity}${relField}
+                    "Type": "${jsonEscapedType}",${relEntity}${relField}
                     "AllowsNull": ${field.AllowsNull} 
                 }`
         return sOutput;
