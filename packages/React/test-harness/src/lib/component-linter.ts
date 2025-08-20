@@ -3548,20 +3548,54 @@ export class ComponentLinter {
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Valid properties for RunQueryResult
+        // Valid properties for RunQueryResult based on MJCore type definition
         const validRunQueryResultProps = new Set([
-          'QueryID', 'QueryName', 'Success', 'Results', 'RowCount', 
-          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+          'QueryID',           // string
+          'QueryName',         // string
+          'Success',           // boolean
+          'Results',           // any[]
+          'RowCount',          // number
+          'TotalRowCount',     // number
+          'ExecutionTime',     // number
+          'ErrorMessage',      // string
+          'AppliedParameters', // Record<string, any> (optional)
+          'CacheHit',          // boolean (optional)
+          'CacheKey',          // string (optional)
+          'CacheTTLRemaining'  // number (optional)
         ]);
         
-        // Valid properties for RunViewResult
+        // Valid properties for RunViewResult based on MJCore type definition
         const validRunViewResultProps = new Set([
-          'Success', 'Results', 'UserViewRunID', 'RowCount', 
-          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+          'Success',           // boolean
+          'Results',           // Array<T>
+          'UserViewRunID',     // string (optional)
+          'RowCount',          // number
+          'TotalRowCount',     // number
+          'ExecutionTime',     // number
+          'ErrorMessage'       // string
         ]);
         
-        // Common incorrect patterns
-        const invalidResultPatterns = new Set(['data', 'rows', 'records', 'items', 'values']);
+        // Map of common incorrect properties to the correct property
+        const incorrectToCorrectMap: Record<string, string> = {
+          'data': 'Results',
+          'Data': 'Results',
+          'rows': 'Results',
+          'Rows': 'Results',
+          'records': 'Results',
+          'Records': 'Results',
+          'items': 'Results',
+          'Items': 'Results',
+          'values': 'Results',
+          'Values': 'Results',
+          'result': 'Results',
+          'Result': 'Results',
+          'resultSet': 'Results',
+          'ResultSet': 'Results',
+          'dataset': 'Results',
+          'Dataset': 'Results',
+          'response': 'Results',
+          'Response': 'Results'
+        };
         
         traverse(ast, {
           MemberExpression(path: NodePath<t.MemberExpression>) {
@@ -3571,47 +3605,92 @@ export class ComponentLinter {
               const propName = path.node.property.name;
               
               // Check if the object name suggests it's a query or view result
-              const isLikelyQueryResult = /result|response|res|data|output/i.test(objName);
+              const isLikelyQueryResult = /result|response|res|data|output|query|view/i.test(objName);
               const isFromRunQuery = path.scope.hasBinding(objName) && 
                                     ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
               const isFromRunView = path.scope.hasBinding(objName) && 
                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
               
               if (isLikelyQueryResult || isFromRunQuery || isFromRunView) {
-                // Check for common incorrect patterns
-                if (invalidResultPatterns.has(propName)) {
-                  violations.push({
-                    rule: 'runquery-runview-result-structure',
-                    severity: 'high',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Incorrect property access "${objName}.${propName}". RunQuery/RunView results use ".Results" for data array, not ".${propName}". Change to "${objName}.Results"`,
-                    code: `${objName}.${propName}`
-                  });
-                } else if (propName === 'data') {
-                  // Special case for .data - very common mistake
-                  violations.push({
-                    rule: 'runquery-runview-result-structure',
-                    severity: 'critical',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `RunQuery/RunView results don't have a ".data" property. Use ".Results" to access the array of returned rows. Change "${objName}.data" to "${objName}.Results"`,
-                    code: `${objName}.${propName}`
-                  });
+                // WHITELIST APPROACH: Check if the property is valid for the result type
+                const isValidQueryProp = validRunQueryResultProps.has(propName);
+                const isValidViewProp = validRunViewResultProps.has(propName);
+                
+                // If we can't determine which type, check both
+                const isValidProp = isValidQueryProp || isValidViewProp;
+                
+                // If it's specifically from RunQuery or RunView, be more specific
+                if (isFromRunQuery && !isValidQueryProp) {
+                  // Property is not valid for RunQueryResult
+                  const suggestion = incorrectToCorrectMap[propName];
+                  if (suggestion) {
+                    violations.push({
+                      rule: 'runquery-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
+                      code: `${objName}.${propName}`
+                    });
+                  } else {
+                    violations.push({
+                      rule: 'runquery-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Invalid property "${propName}" on RunQuery result. Valid properties are: ${Array.from(validRunQueryResultProps).join(', ')}`,
+                      code: `${objName}.${propName}`
+                    });
+                  }
+                } else if (isFromRunView && !isValidViewProp) {
+                  // Property is not valid for RunViewResult
+                  const suggestion = incorrectToCorrectMap[propName];
+                  if (suggestion) {
+                    violations.push({
+                      rule: 'runview-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
+                      code: `${objName}.${propName}`
+                    });
+                  } else {
+                    violations.push({
+                      rule: 'runview-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Invalid property "${propName}" on RunView result. Valid properties are: ${Array.from(validRunViewResultProps).join(', ')}`,
+                      code: `${objName}.${propName}`
+                    });
+                  }
+                } else if (isLikelyQueryResult && !isValidProp) {
+                  // It looks like a result object but property isn't valid for either type
+                  const suggestion = incorrectToCorrectMap[propName];
+                  if (suggestion) {
+                    violations.push({
+                      rule: 'runquery-runview-result-structure',
+                      severity: 'high',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Likely incorrect property access "${objName}.${propName}". RunQuery/RunView results use ".${suggestion}" not ".${propName}". Change to "${objName}.${suggestion}"`,
+                      code: `${objName}.${propName}`
+                    });
+                  }
                 }
                 
-                // Check for nested incorrect access like result.data.entities
+                // Check for nested incorrect access like result.data.entities or result.Data.entities
                 if (t.isMemberExpression(path.parent) && 
                     t.isIdentifier(path.parent.property) && 
-                    propName === 'data') {
+                    (propName === 'data' || propName === 'Data')) {
                   const nestedProp = path.parent.property.name;
                   violations.push({
                     rule: 'runquery-runview-result-structure',
                     severity: 'critical',
                     line: path.parent.loc?.start.line || 0,
                     column: path.parent.loc?.start.column || 0,
-                    message: `Incorrect nested property access "${objName}.data.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
-                    code: `${objName}.data.${nestedProp}`
+                    message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+                    code: `${objName}.${propName}.${nestedProp}`
                   });
                 }
               }
@@ -3625,30 +3704,57 @@ export class ComponentLinter {
               const sourceName = path.node.init.name;
               
               // Check if this looks like destructuring from a query/view result
-              if (/result|response|res/i.test(sourceName)) {
+              const isLikelyResult = /result|response|res|query|view|data/i.test(sourceName);
+              const isFromRunQuery = path.scope.hasBinding(sourceName) && 
+                                    ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(sourceName) && 
+                                   ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunView');
+              
+              if (isLikelyResult || isFromRunQuery || isFromRunView) {
                 for (const prop of path.node.id.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
                     
-                    // Check for incorrect destructuring
-                    if (propName === 'data') {
+                    // WHITELIST APPROACH: Check if property is valid
+                    const isValidQueryProp = validRunQueryResultProps.has(propName);
+                    const isValidViewProp = validRunViewResultProps.has(propName);
+                    
+                    if (isFromRunQuery && !isValidQueryProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
                       violations.push({
-                        rule: 'runquery-runview-result-structure',
+                        rule: 'runquery-result-invalid-destructuring',
                         severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
-                        message: `Destructuring "data" from RunQuery/RunView result. The property is named "Results", not "data". Change "const { data } = ${sourceName}" to "const { Results } = ${sourceName}"`,
-                        code: `{ data }`
-                      });
-                    } else if (invalidResultPatterns.has(propName) && propName !== 'data') {
-                      violations.push({
-                        rule: 'runquery-runview-result-structure',
-                        severity: 'medium',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: `Destructuring "${propName}" from what appears to be a RunQuery/RunView result. Did you mean "Results"?`,
+                        message: suggestion 
+                          ? `Destructuring invalid property "${propName}" from RunQuery result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunQuery result. Valid properties: ${Array.from(validRunQueryResultProps).join(', ')}`,
                         code: `{ ${propName} }`
                       });
+                    } else if (isFromRunView && !isValidViewProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
+                      violations.push({
+                        rule: 'runview-result-invalid-destructuring',
+                        severity: 'critical',
+                        line: prop.loc?.start.line || 0,
+                        column: prop.loc?.start.column || 0,
+                        message: suggestion
+                          ? `Destructuring invalid property "${propName}" from RunView result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${Array.from(validRunViewResultProps).join(', ')}`,
+                        code: `{ ${propName} }`
+                      });
+                    } else if (isLikelyResult && !isValidQueryProp && !isValidViewProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
+                      if (suggestion) {
+                        violations.push({
+                          rule: 'runquery-runview-result-structure',
+                          severity: 'high',
+                          line: prop.loc?.start.line || 0,
+                          column: prop.loc?.start.column || 0,
+                          message: `Likely destructuring invalid property "${propName}" from query/view result. Did you mean "${suggestion}"?`,
+                          code: `{ ${propName} }`
+                        });
+                      }
                     }
                   }
                 }
