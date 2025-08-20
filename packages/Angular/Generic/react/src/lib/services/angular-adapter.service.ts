@@ -12,12 +12,12 @@ import {
   createReactRuntime,
   CompileOptions,
   RuntimeContext,
-  ComponentStyles,
   ExternalLibraryConfig,
   LibraryConfiguration
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
 import { DEFAULT_STYLES } from '../default-styles';
+import { ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
  * Angular-specific adapter for the React runtime.
@@ -121,28 +121,13 @@ export class AngularAdapterService {
     return this.runtimeContext;
   }
 
-  /**
-   * Convert SkipComponentStyles to ComponentStyles
-   * @param skipStyles - Skip component styles
-   * @returns Component styles for React runtime
-   */
-  private convertStyles(skipStyles?: any): ComponentStyles | undefined {
-    if (!skipStyles) return undefined;
-    
-    // Extract CSS-compatible properties
-    return {
-      className: skipStyles.className,
-      style: skipStyles.style,
-      globalCss: skipStyles.globalCss
-    };
-  }
 
   /**
    * Compile a component with Angular-specific defaults
    * @param options - Compilation options
    * @returns Promise resolving to compilation result
    */
-  async compileComponent(options: CompileOptions & { styles?: any }) {
+  async compileComponent(options: CompileOptions) {
     // Validate options before initialization
     if (!options) {
       throw new Error(

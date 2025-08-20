@@ -15,6 +15,10 @@
       [items]="navigationConfig"
       (itemClick)="onNavigationChange($event)"
       class="actions-navigation">
+      <ng-template kendoBottomNavigationItemTemplate let-item>
+        <i [class]="item.faIcon"></i>
+        <span class="k-bottom-nav-item-text">{{ item.text }}</span>
+      </ng-template>
     </kendo-bottomnavigation>
 
     <!-- Tab Content -->
@@ -66,10 +70,10 @@
         <div class="sub-view-container">
           <div class="sub-view-header">
             <button kendoButton 
-              [icon]="'chevron-left'" 
               [fillMode]="'flat'"
               (click)="onBackToOverview()"
               class="back-button">
+              <i class="fa-solid fa-chevron-left"></i>
               Back to {{ getCurrentTabLabel() }}
             </button>
           </div>

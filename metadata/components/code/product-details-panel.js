@@ -93,6 +93,4 @@ const ProductDetailsPanel = ({ data, isOpen, onClose, utilities, styles, compone
       </div>
     </div>
   );
-};
-
-return ProductDetailsPanel;
+}

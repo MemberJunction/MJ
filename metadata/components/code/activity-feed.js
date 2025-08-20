@@ -46,6 +46,4 @@ const ActivityFeed = ({ items, onItemClick, utilities, styles, components, callb
       )}
     </div>
   );
-};
-
-return ActivityFeed;
+}

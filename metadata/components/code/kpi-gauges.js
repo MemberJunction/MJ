@@ -113,6 +113,4 @@ const KPIGauges = ({ kpis, utilities, styles, components, callbacks, savedUserSe
       ))}
     </div>
   );
-};
-
-return KPIGauges;
+}

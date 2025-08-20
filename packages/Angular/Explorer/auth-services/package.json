@@ -24,10 +24,12 @@
     "@angular/forms": "18.0.2",
     "@angular/router": "18.0.2",
     "@auth0/auth0-angular": "^2.2.1",
-    "@azure/msal-angular": "^3.0.11"
+    "@azure/msal-angular": "^3.0.11",
+    "@okta/okta-auth-js": "^7.0.0"
   },
   "dependencies": {
     "@memberjunction/core": "2.90.0",
+    "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

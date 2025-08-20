@@ -1,5 +1,5 @@
 <div class="mj-code-editor-wrapper">
-  @if (toolbar?.enabled) {
+  @if (toolbar.enabled) {
     <div 
       class="mj-code-editor-toolbar" 
       [class]="toolbar.customClass"
@@ -35,7 +35,7 @@
   <div 
     class="mj-code-editor-content" 
     #editorContent
-    [class.has-toolbar-top]="toolbar?.enabled && toolbar?.position !== 'bottom'"
-    [class.has-toolbar-bottom]="toolbar?.enabled && toolbar?.position === 'bottom'">
+    [class.has-toolbar-top]="toolbar.enabled && toolbar.position !== 'bottom'"
+    [class.has-toolbar-bottom]="toolbar.enabled && toolbar.position === 'bottom'">
   </div>
 </div>

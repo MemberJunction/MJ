@@ -82,6 +82,4 @@ const RevenueTreemap = ({ data, onProductClick, utilities, styles, components, c
       }}
     />
   );
-};
-
-return RevenueTreemap;
+}

@@ -195,6 +195,4 @@ const StageDetailsPanel = ({ stage, deals, isOpen, onClose, utilities, styles, c
       </div>
     </div>
   );
-};
-
-return StageDetailsPanel;
+}

@@ -23,6 +23,7 @@
           [data]="statusOptions"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedStatus$.value"
           (valueChange)="onStatusFilterChange($event)">
         </kendo-dropdownlist>
@@ -31,20 +32,95 @@
           [data]="typeOptions"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedType$.value"
           (valueChange)="onTypeFilterChange($event)">
         </kendo-dropdownlist>
         
-        <kendo-dropdownlist 
-          [data]="categoryOptions"
-          textField="text"
-          valueField="value"
-          [value]="selectedCategory$.value"
-          (valueChange)="onCategoryFilterChange($event)">
-        </kendo-dropdownlist>
+        <button kendoButton
+          [fillMode]="'outline'"
+          (click)="toggleCategoryTree()"
+          class="category-filter-button">
+          <i class="fa-solid fa-folder-tree"></i>
+          @if (selectedCategory$.value === 'all') {
+            All Categories
+          } @else {
+            {{ getCategoryName(selectedCategory$.value) }}
+          }
+          <span class="badge">{{ getCategoryActionCount(selectedCategory$.value) }}</span>
+        </button>
       </div>
     </div>
   </div>
+  
+  <!-- Category Tree View Panel -->
+  @if (showCategoryTree) {
+    <div class="category-tree-panel">
+      <div class="tree-header">
+        <h3>Select Category</h3>
+        <button kendoButton
+          [fillMode]="'flat'"
+          [size]="'small'"
+          (click)="toggleCategoryTree()">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="tree-actions">
+        <button kendoButton
+          [fillMode]="'flat'"
+          [size]="'small'"
+          (click)="selectCategory('all')"
+          [class.selected]="selectedCategory$.value === 'all'">
+          <i class="fa-solid fa-folder-open"></i>
+          All Categories
+          <span class="badge">{{ actions.length }}</span>
+        </button>
+      </div>
+      
+      <div class="tree-content">
+        <ng-container *ngTemplateOutlet="categoryTreeTemplate; context: { nodes: categoryTree }"></ng-container>
+      </div>
+      
+      <ng-template #categoryTreeTemplate let-nodes="nodes">
+        @for (node of nodes; track node.category.ID) {
+          <div class="tree-node" [style.padding-left.px]="node.level * 20">
+            <button kendoButton
+              [fillMode]="'flat'"
+              [size]="'small'"
+              class="tree-node-button"
+              [class.selected]="selectedCategory$.value === node.category.ID"
+              (click)="selectCategory(node.category.ID)">
+              
+              @if (node.children.length > 0) {
+                <button kendoButton
+                  [fillMode]="'flat'"
+                  [size]="'small'"
+                  class="expand-button"
+                  (click)="toggleCategoryExpanded(node.category.ID); $event.stopPropagation()">
+                  @if (isCategoryExpanded(node.category.ID)) {
+                    <i class="fa-solid fa-chevron-down"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-right"></i>
+                  }
+                </button>
+              } @else {
+                <span class="no-expand"></span>
+              }
+              
+              <i class="fa-solid fa-folder"></i>
+              {{ node.category.Name }}
+              <span class="badge">{{ getCategoryActionCount(node.category.ID) }}</span>
+            </button>
+            
+            @if (node.children.length > 0 && isCategoryExpanded(node.category.ID)) {
+              <ng-container *ngTemplateOutlet="categoryTreeTemplate; context: { nodes: node.children }"></ng-container>
+            }
+          </div>
+        }
+      </ng-template>
+    </div>
+  }
 
   <!-- Actions List -->
   <div class="actions-list">
@@ -100,9 +176,9 @@
           
           <div class="action-actions">
             <button kendoButton 
-              [fillMode]="'flat'" 
-              [icon]="'more-vertical'"
+              [fillMode]="'flat'"
               (click)="$event.stopPropagation()">
+              <i class="fa-solid fa-ellipsis-vertical"></i>
             </button>
           </div>
         </div>

@@ -25,6 +25,7 @@
           [data]="timeRangeOptions"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedTimeRange$.value"
           (valueChange)="onTimeRangeChange($event)">
         </kendo-dropdownlist>
@@ -33,6 +34,7 @@
           [data]="resultOptions"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedResult$.value"
           (valueChange)="onResultFilterChange($event)">
         </kendo-dropdownlist>
@@ -41,6 +43,7 @@
           [data]="actionOptions"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedAction$.value"
           (valueChange)="onActionFilterChange($event)">
         </kendo-dropdownlist>

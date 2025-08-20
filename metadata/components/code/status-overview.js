@@ -132,6 +132,4 @@ const StatusOverview = ({ statusData, utilities, styles, components, callbacks, 
       ))}
     </div>
   );
-};
-
-return StatusOverview;
+}

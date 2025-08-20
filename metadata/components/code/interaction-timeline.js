@@ -102,5 +102,3 @@ const InteractionTimeline = ({ interactions, dateRange, utilities, styles, compo
     </div>
   );
 };
-
-return InteractionTimeline;
