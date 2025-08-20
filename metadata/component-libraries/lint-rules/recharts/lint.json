@@ -1,0 +1,24 @@
+{
+  "initialization": {
+    "factoryMethod": null,
+    "elementType": "div",
+    "requiresNew": false
+  },
+  "lifecycle": {
+    "requiredMethods": [],
+    "cleanupMethods": [],
+    "updateMethods": []
+  },
+  "validators": {
+    "checkResponsiveContainer": {
+      "description": "Check ResponsiveContainer has proper parent dimensions",
+      "severity": "critical",
+      "validate": "@file:check-responsive-container.js"
+    },
+    "checkDataProp": {
+      "description": "Ensure chart components have data prop",
+      "severity": "high",
+      "validate": "@file:check-data-prop.js"
+    }
+  }
+}

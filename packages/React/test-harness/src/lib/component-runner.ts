@@ -60,13 +60,15 @@ export class ComponentRunner {
     componentCode: string, 
     componentName: string,
     componentSpec?: any,
-    isRootComponent?: boolean
+    isRootComponent?: boolean,
+    contextUser?: UserInfo
   ): Promise<{ violations: Violation[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentName,
       componentSpec,
-      isRootComponent
+      isRootComponent,
+      contextUser
     );
 
     const hasErrors = lintResult.violations.some(v => v.severity === 'critical' || v.severity === 'high');

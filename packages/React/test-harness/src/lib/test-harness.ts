@@ -70,7 +70,8 @@ export class ReactTestHarness {
         spec.code,
         spec.name,
         spec,
-        options.isRootComponent
+        options.isRootComponent,
+        options.contextUser
       );
 
       if (lintResult.hasErrors) {

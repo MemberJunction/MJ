@@ -46,7 +46,8 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/d3@7.8.5/dist/d3.min.js",
       "CDNCssUrl": null,
-      "Description": "Data visualization library for creating custom charts"
+      "Description": "Data visualization library for creating custom charts",
+      "LintRules": "@file:lint-rules/d3/lint.json"
     },
     "primaryKey": {
       "ID": "12416186-FBBD-4973-A7F4-D030FD84994B"
@@ -65,7 +66,8 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
       "CDNCssUrl": null,
-      "Description": "Simple yet flexible JavaScript charting library"
+      "Description": "Simple yet flexible JavaScript charting library",
+      "LintRules": "@file:lint-rules/chart-js/lint.json"
     },
     "primaryKey": {
       "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
@@ -85,7 +87,8 @@
       "Status": "Disabled",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js",
       "CDNCssUrl": null,
-      "Description": "React charting library built on D3"
+      "Description": "React charting library built on D3",
+      "LintRules": "@file:lint-rules/recharts/lint.json"
     },
     "primaryKey": {
       "ID": "5A8C6518-889B-4868-BA20-4E50531309C6"
@@ -123,7 +126,8 @@
       "Category": "Charting",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js",
       "CDNCssUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css",
-      "Description": "Modern interactive JavaScript charts library"
+      "Description": "Modern interactive JavaScript charts library",
+      "LintRules": "@file:lint-rules/apexcharts/lint.json"
     },
     "primaryKey": {
       "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"

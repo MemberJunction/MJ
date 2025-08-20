@@ -1,0 +1,30 @@
+{
+  "initialization": {
+    "constructorName": "ApexCharts",
+    "requiresNew": true,
+    "elementType": "div",
+    "requiredConfig": ["chart", "series"]
+  },
+  "lifecycle": {
+    "requiredMethods": ["render"],
+    "cleanupMethods": ["destroy"],
+    "updateMethods": ["updateOptions", "updateSeries", "appendSeries"]
+  },
+  "validators": {
+    "checkRenderCall": {
+      "description": "Ensure ApexCharts instances call render() after creation",
+      "severity": "critical",
+      "validate": "@file:check-render-call.js"
+    },
+    "checkDestroyInCleanup": {
+      "description": "Ensure ApexCharts instances are destroyed in cleanup",
+      "severity": "critical",
+      "validate": "@file:check-destroy-cleanup.js"
+    },
+    "checkOptionsStructure": {
+      "description": "Validate ApexCharts options structure",
+      "severity": "high",
+      "validate": "@file:check-options-structure.js"
+    }
+  }
+}
