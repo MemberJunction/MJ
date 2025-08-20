@@ -1,14 +1,51 @@
 import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
-import { pipeline, env } from '@xenova/transformers';
 
-// Configure Transformers.js settings
-env.allowLocalModels = true;
-// Note: localURL might not be available in all versions of transformers.js
-if ('localURL' in env) {
-    (env as any).localURL = process.env.TRANSFORMERS_LOCAL_URL || '';
+// Dynamic import for ESM-only package
+// TypeScript types for @xenova/transformers (since we can't import them directly)
+interface TransformersEnv {
+    allowLocalModels: boolean;
+    cacheDir: string;
+    localURL?: string;
 }
-env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
+
+interface TransformersModule {
+    pipeline: (task: string, model: string, options?: Record<string, unknown>) => Promise<unknown>;
+    env: TransformersEnv;
+}
+
+let pipeline: TransformersModule['pipeline'] | null = null;
+let env: TransformersEnv | null = null;
+let transformersLoaded = false;
+let pendingSettings: Record<string, unknown> = {};
+
+async function loadTransformers(): Promise<void> {
+    if (!transformersLoaded) {
+        // Use dynamic import to load ESM module in CommonJS context
+        // This approach is cleaner than Function constructor and TypeScript-friendly
+        const transformers = await (eval('import("@xenova/transformers")') as Promise<TransformersModule>);
+        pipeline = transformers.pipeline;
+        env = transformers.env;
+        
+        // Configure Transformers.js settings
+        env.allowLocalModels = true;
+        // Note: localURL might not be available in all versions of transformers.js
+        if ('localURL' in env) {
+            env.localURL = process.env.TRANSFORMERS_LOCAL_URL || '';
+        }
+        env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
+        
+        // Apply any pending settings that were set before transformers was loaded
+        if (pendingSettings.cacheDir) {
+            env.cacheDir = pendingSettings.cacheDir as string;
+        }
+        if (pendingSettings.localURL && 'localURL' in env) {
+            env.localURL = pendingSettings.localURL as string;
+        }
+        
+        transformersLoaded = true;
+    }
+}
 
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
 export class LocalEmbedding extends BaseEmbeddings {
@@ -24,6 +61,8 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Get or create a pipeline for the specified model
      */
     private async getPipeline(modelName: string): Promise<any> {
+        // Ensure transformers is loaded
+        await loadTransformers();
         // Check if pipeline already exists
         if (LocalEmbedding.pipelines.has(modelName)) {
             return LocalEmbedding.pipelines.get(modelName)!;
@@ -55,8 +94,11 @@ export class LocalEmbedding extends BaseEmbeddings {
     /**
      * Load a pipeline for the specified model
      */
-    private async loadPipeline(modelId: string): Promise<any> {
+    private async loadPipeline(modelId: string): Promise<unknown> {
         try {
+            if (!pipeline) {
+                throw new Error('Transformers module not loaded');
+            }
             // Create feature extraction pipeline
             const pipe = await pipeline('feature-extraction', modelId, {
                 quantized: true, // Use quantized models for better performance
@@ -204,14 +246,12 @@ export class LocalEmbedding extends BaseEmbeddings {
     public override SetAdditionalSettings(settings: Record<string, any>): void {
         super.SetAdditionalSettings(settings);
         
-        // Handle cache directory setting
+        // Store settings in pendingSettings to be applied when transformers loads
         if (settings.cacheDir) {
-            env.cacheDir = settings.cacheDir;
+            pendingSettings.cacheDir = settings.cacheDir;
         }
-        
-        // Handle local model URL
-        if (settings.localURL && 'localURL' in env) {
-            (env as any).localURL = settings.localURL;
+        if (settings.localURL) {
+            pendingSettings.localURL = settings.localURL;
         }
         
         // Handle quantized model preference
