@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.91.0
+
+### Patch Changes
+
+- d670e2c: Fixed critical issues in Skip Chat component including orphaned artifact cleanup and UI update problems. When deleting conversation messages,
+  associated ConversationArtifact and ConversationArtifactVersion records are now properly deleted to prevent orphaned database records. Fixed UI not
+  updating immediately after message deletion by adding proper change detection. Resolved ExpressionChangedAfterItHasBeenCheckedError in elapsed time
+  display by initializing values correctly and deferring updates to the next microtask.
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ng-code-editor@2.91.0
+  - @memberjunction/ng-react@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/ng-base-types@2.91.0
+  - @memberjunction/ng-container-directives@2.91.0
+  - @memberjunction/ng-data-context@2.91.0
+  - @memberjunction/ng-notifications@2.91.0
+  - @memberjunction/ng-resource-permissions@2.91.0
+  - @memberjunction/graphql-dataprovider@2.91.0
+  - @memberjunction/interactive-component-types@2.91.0
+  - @memberjunction/data-context@2.91.0
+  - @memberjunction/skip-types@2.91.0
+  - @memberjunction/global@2.91.0
+
 ## 2.90.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @memberjunction/ng-react
 
+## 2.91.0
+
+### Minor Changes
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/react-runtime@2.91.0
+  - @memberjunction/interactive-component-types@2.91.0
+
 ## 2.90.0
 
 ### Minor Changes
