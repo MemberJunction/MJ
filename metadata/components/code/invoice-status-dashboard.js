@@ -80,19 +80,16 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
         {
           EntityName: 'Invoices',
           ExtraFilter: dateFilter,
-          OrderBy: 'DueDate ASC',
-          ResultType: 'entity_object'
+          OrderBy: 'DueDate ASC'
         },
         {
           EntityName: 'Payments',
           OrderBy: 'PaymentDate DESC',
-          MaxRows: 500,
-          ResultType: 'entity_object'
+          MaxRows: 500
         },
         {
           EntityName: 'Accounts',
-          OrderBy: 'AccountName ASC',
-          ResultType: 'entity_object'
+          OrderBy: 'AccountName ASC'
         }
       ]);
 

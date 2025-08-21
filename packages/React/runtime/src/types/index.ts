@@ -43,6 +43,9 @@ export interface CompileOptions {
 
   /** Library dependencies that the component requires */
   libraries?: ComponentLibraryDependency[];
+  
+  /** Child component dependencies that the component requires */
+  dependencies?: Array<{ name: string; code?: string }>;
 
   /**
    * Required, metadata for all possible libraries allowed by the system

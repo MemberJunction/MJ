@@ -46,14 +46,15 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/d3@7.8.5/dist/d3.min.js",
       "CDNCssUrl": null,
-      "Description": "Data visualization library for creating custom charts"
+      "Description": "Data visualization library for creating custom charts",
+      "LintRules": "@file:lint-rules/d3/lint.json"
     },
     "primaryKey": {
       "ID": "12416186-FBBD-4973-A7F4-D030FD84994B"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.354Z",
-      "checksum": "6af198d6ed4cb003192b94b90c7e03b30d0b4be4c4b2efc798542cb683d55ead"
+      "lastModified": "2025-08-21T18:20:26.526Z",
+      "checksum": "397f8490201407f021bd9f298b07073b2f56ba18d976775e3dfe561904ba4791"
     }
   },
   {
@@ -65,14 +66,15 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
       "CDNCssUrl": null,
-      "Description": "Simple yet flexible JavaScript charting library"
+      "Description": "Simple yet flexible JavaScript charting library",
+      "LintRules": "@file:lint-rules/chart-js/lint.json"
     },
     "primaryKey": {
       "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.362Z",
-      "checksum": "8ecbdf227c8e0393661e8d5129555b21cfeeb906ca61ab8e190db1f96cd6e7d7"
+      "lastModified": "2025-08-21T18:20:26.540Z",
+      "checksum": "649c15b9e2bf6f28aa3e4b467fb8dd597d8527b5615fb4661e4286eb9735c58a"
     }
   },
   {
@@ -85,14 +87,15 @@
       "Status": "Disabled",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js",
       "CDNCssUrl": null,
-      "Description": "React charting library built on D3"
+      "Description": "React charting library built on D3",
+      "LintRules": "@file:lint-rules/recharts/lint.json"
     },
     "primaryKey": {
       "ID": "5A8C6518-889B-4868-BA20-4E50531309C6"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.718Z",
-      "checksum": "0c4d5e41bef291ce7bbbb5160ed7ee4d554be14a59f0d03cd9c7e61b7bd65790"
+      "lastModified": "2025-08-21T18:20:26.553Z",
+      "checksum": "82a158b1b3fc4782d2dce374b43ea0f7daa9baba4a7260942bcfdceff5cabc49"
     }
   },
   {
@@ -123,14 +126,15 @@
       "Category": "Charting",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js",
       "CDNCssUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css",
-      "Description": "Modern interactive JavaScript charts library"
+      "Description": "Modern interactive JavaScript charts library",
+      "LintRules": "@file:lint-rules/apexcharts/lint.json"
     },
     "primaryKey": {
       "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.285Z",
-      "checksum": "fc77985b54981b2f90db2945ebfcff66cdd095c7d3ed8c537226a1e0d12f9110"
+      "lastModified": "2025-08-21T18:20:26.566Z",
+      "checksum": "801658cb3c81b3266e67e3f5e2807dfe4dd688f3f4a83543466e0656806ac56f"
     }
   },
   {
@@ -245,7 +249,7 @@
       "ID": "94552655-B996-4791-9008-A2D6AAC526AC"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.803Z",
+      "lastModified": "2025-08-21T18:23:28.662Z",
       "checksum": "b60735a8e9ca825504faac0e8d788bcaf7f3b9cb7955e4b92b34210135c2a555"
     }
   },
@@ -322,7 +326,7 @@
       "ID": "8086FB43-A9A6-4CB4-B0BA-64DF478429F7"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.813Z",
+      "lastModified": "2025-08-21T18:23:28.684Z",
       "checksum": "d7986fbea3e73883514e44c9b5d3dc273859e58f2f06e0038a6095635f968ec3"
     }
   },
@@ -494,7 +498,7 @@
       "ID": "BBABE030-7C12-4080-8DFD-ECB634C8615E"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.887Z",
+      "lastModified": "2025-08-21T18:23:28.761Z",
       "checksum": "3f8c386ffc094c0bf308983c34d96cbc3f32787beb8aa1f11080dd3d3162a2fe"
     }
   },
@@ -552,7 +556,7 @@
       "ID": "DB3D64C3-0D00-4D40-9AA7-99243916CF38"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.897Z",
+      "lastModified": "2025-08-21T18:23:28.781Z",
       "checksum": "fe5eec1b81d5754a0c0a313477dd16042e9bc9640e893c1180df8eb017f82c35"
     }
   },
@@ -648,7 +652,7 @@
       "ID": "3B520A11-731D-4C7B-9699-18906BB4CA53"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.966Z",
+      "lastModified": "2025-08-21T18:23:28.848Z",
       "checksum": "d0f044f83cf858ba12192e8d448a3e3ae77f6b5de60d8272b61eab8b9442b506"
     }
   },

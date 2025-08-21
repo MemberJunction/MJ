@@ -36,8 +36,7 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
       const result = await utilities.rv.RunView({
         EntityName: 'Deals',
         ExtraFilter: dateFilter,
-        OrderBy: 'CloseDate DESC',
-        ResultType: 'entity_object'
+        OrderBy: 'CloseDate DESC'
       });
 
       if (result.Success) {

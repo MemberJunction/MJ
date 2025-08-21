@@ -3,6 +3,9 @@ import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 import type { RunQueryResult, RunViewResult } from '@memberjunction/core';
+import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import { LibraryLintCache } from './library-lint-cache';
 
 export interface LintResult {
   success: boolean;
@@ -12,6 +15,10 @@ export interface LintResult {
   highCount?: number;
   mediumCount?: number;
   lowCount?: number;
+}
+
+export interface LintOptions {
+  debugMode?: boolean;
 }
 
 export interface Violation {
@@ -107,6 +114,26 @@ const runViewResultProps: readonly string[] = [
 ] as const satisfies readonly (keyof RunViewResult)[];
 
 export class ComponentLinter {
+  // Helper method to check if a statement contains a return
+  private static containsReturn(node: t.Node): boolean {
+    let hasReturn = false;
+    
+    // Create a mini AST to traverse
+    const file = t.file(t.program([t.expressionStatement(node as any)]));
+    
+    traverse(file, {
+      ReturnStatement(path) {
+        // Don't count returns in nested functions
+        const parent = path.getFunctionParent();
+        if (!parent || parent.node === node) {
+          hasReturn = true;
+        }
+      }
+    });
+    
+    return hasReturn;
+  }
+  
   // Helper method to check if a variable comes from RunQuery or RunView
   private static isVariableFromRunQueryOrView(path: NodePath<any>, varName: string, methodName: string): boolean {
     let isFromMethod = false;
@@ -363,6 +390,228 @@ export class ComponentLinter {
     },
     
     {
+      name: 'component-name-mismatch',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // The expected component name from the spec
+        const expectedName = componentSpec?.name || componentName;
+        
+        // Find the main function declaration
+        let foundMainFunction = false;
+        let actualFunctionName: string | null = null;
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            // Only check top-level function declarations
+            if (path.parent === ast.program && path.node.id) {
+              const funcName = path.node.id.name;
+              
+              // Check if this looks like the main component function
+              // (starts with capital letter and has the typical props parameter)
+              if (/^[A-Z]/.test(funcName)) {
+                foundMainFunction = true;
+                actualFunctionName = funcName;
+                
+                // Check if the function name matches the spec name
+                if (funcName !== expectedName) {
+                  violations.push({
+                    rule: 'component-name-mismatch',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component function name "${funcName}" does not match the spec name "${expectedName}". The function must be named exactly as specified in the component spec. Rename the function to: function ${expectedName}(...)`,
+                    code: `function ${funcName}(...)`
+                  });
+                }
+                
+                // Also check that the first letter case matches
+                const expectedFirstChar = expectedName.charAt(0);
+                const actualFirstChar = funcName.charAt(0);
+                if (expectedFirstChar !== actualFirstChar && 
+                    expectedName.toLowerCase() === funcName.toLowerCase()) {
+                  violations.push({
+                    rule: 'component-name-mismatch',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component function name "${funcName}" has incorrect capitalization. Expected "${expectedName}" (note the case of the first letter). The function name must match exactly, including capitalization: function ${expectedName}(...)`,
+                    code: `function ${funcName}(...)`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        // If we didn't find a main function with the expected name
+        if (!foundMainFunction && componentSpec?.name) {
+          violations.push({
+            rule: 'component-name-mismatch',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `No function declaration found with the expected name "${expectedName}". The main component function must be named exactly as specified in the spec. Add a function declaration: function ${expectedName}({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) { ... }`
+          });
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'dependency-shadowing',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Get all dependency component names
+        const dependencyNames = new Set<string>();
+        if (componentSpec?.dependencies) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep.location === 'embedded' && dep.name) {
+              dependencyNames.add(dep.name);
+            }
+          }
+        }
+        
+        // If no dependencies, nothing to check
+        if (dependencyNames.size === 0) {
+          return violations;
+        }
+        
+        // Find the main component function
+        let mainComponentPath: NodePath<t.FunctionDeclaration> | null = null;
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            // Check if this is the main component function
+            if (path.parent === ast.program && 
+                path.node.id && 
+                path.node.id.name === componentName) {
+              mainComponentPath = path;
+              path.stop();
+            }
+          }
+        });
+        
+        if (!mainComponentPath) {
+          return violations;
+        }
+        
+        // Now traverse inside the main component to find shadowing definitions
+        (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
+          // Check for const/let/var ComponentName = ...
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id)) {
+              const varName = path.node.id.name;
+              
+              // Check if this shadows a dependency
+              if (dependencyNames.has(varName)) {
+                // Check if it's a function (component)
+                const init = path.node.init;
+                if (init && (
+                  t.isArrowFunctionExpression(init) ||
+                  t.isFunctionExpression(init)
+                )) {
+                  violations.push({
+                    rule: 'dependency-shadowing',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' is already available from dependencies (auto-destructured), but this code is creating a new definition which overrides it.`,
+                    code: `const ${varName} = ...`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for function ComponentName() { ... }
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id) {
+              const funcName = path.node.id.name;
+              
+              // Check if this shadows a dependency
+              if (dependencyNames.has(funcName)) {
+                violations.push({
+                  rule: 'dependency-shadowing',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' is already available from dependencies (auto-destructured), but this code is creating a new function which overrides it.`,
+                  code: `function ${funcName}(...)`
+                });
+              }
+            }
+          }
+        });
+        
+        // Components are now auto-destructured in the wrapper, so we don't need to check for manual destructuring
+        // We just need to check if they're being used directly
+        let hasComponentsUsage = false;
+        const usedDependencies = new Set<string>();
+        
+        (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
+          // Look for direct usage of dependency components
+          Identifier(path: NodePath<t.Identifier>) {
+            const name = path.node.name;
+            if (dependencyNames.has(name)) {
+              // Check if this is actually being used (not just in a declaration)
+              if (path.isBindingIdentifier()) {
+                return;
+              }
+              usedDependencies.add(name);
+              hasComponentsUsage = true;
+            }
+          },
+          
+          // Still support legacy components.ComponentName usage
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            if (t.isIdentifier(path.node.object) && 
+                path.node.object.name === 'components' &&
+                t.isIdentifier(path.node.property)) {
+              const name = path.node.property.name;
+              if (dependencyNames.has(name)) {
+                usedDependencies.add(name);
+                hasComponentsUsage = true;
+              }
+            }
+          },
+          
+          // Also look in JSX elements
+          JSXMemberExpression(path: NodePath<t.JSXMemberExpression>) {
+            if (t.isJSXIdentifier(path.node.object) && 
+                path.node.object.name === 'components' &&
+                t.isJSXIdentifier(path.node.property)) {
+              const name = path.node.property.name;
+              if (dependencyNames.has(name)) {
+                usedDependencies.add(name);
+                hasComponentsUsage = true; // Mark as properly accessed
+              }
+            }
+          }
+        });
+        
+        // Components are now auto-destructured, so just check for unused dependencies
+        if (dependencyNames.size > 0 && usedDependencies.size === 0) {
+          const depList = Array.from(dependencyNames).join(', ');
+          violations.push({
+            rule: 'dependency-shadowing',
+            severity: 'low',
+            line: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.line || 0,
+            column: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.column || 0,
+            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components are available for use.`,
+            code: `// Available: ${depList}`
+          });
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'no-window-access',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -607,10 +856,10 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                     violations.push({
                       rule: 'no-data-prop',
-                      severity: 'medium',  // It's a pattern issue, not critical
+                      severity: 'low',  // Opinion-based style preference, not a functional issue
                       line: prop.loc?.start.line || 0,
                       column: prop.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                      message: `Component "${componentName}" accepts generic 'data' prop. Consider using more specific prop names like 'items', 'customers', etc. for clarity.`,
                       code: 'data prop in component signature'
                     });
                   }
@@ -630,10 +879,10 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'data') {
                       violations.push({
                         rule: 'no-data-prop',
-                        severity: 'critical',
+                        severity: 'low',  // Opinion-based style preference, not a functional issue
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
-                        message: `Component "${componentName}" accepts generic 'data' prop. Use specific props like 'items', 'customers', etc. instead.`,
+                        message: `Component "${componentName}" accepts generic 'data' prop. Consider using more specific prop names like 'items', 'customers', etc. for clarity.`,
                         code: 'data prop in component signature'
                       });
                     }
@@ -953,94 +1202,96 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'unsafe-array-access',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          MemberExpression(path: NodePath<t.MemberExpression>) {
-            // Check for array[index] patterns
-            if (t.isNumericLiteral(path.node.property) || 
-                (t.isIdentifier(path.node.property) && path.node.computed && /^\d+$/.test(path.node.property.name))) {
-              
-              // Look for patterns like: someArray[0].method()
-              const parent = path.parent;
-              if (t.isMemberExpression(parent) && parent.object === path.node) {
-                const code = path.toString();
-                
-                // Check if it's an array access followed by a method call
-                if (/\[\d+\]\.\w+/.test(code)) {
-                  violations.push({
-                    rule: 'unsafe-array-access',
-                    severity: 'critical',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
-                    code: code
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Consolidated into unsafe-array-operations rule
+    // {
+    //   name: 'unsafe-array-access',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       MemberExpression(path: NodePath<t.MemberExpression>) {
+    //         // Check for array[index] patterns
+    //         if (t.isNumericLiteral(path.node.property) || 
+    //             (t.isIdentifier(path.node.property) && path.node.computed && /^\d+$/.test(path.node.property.name))) {
+    //           
+    //           // Look for patterns like: someArray[0].method()
+    //           const parent = path.parent;
+    //           if (t.isMemberExpression(parent) && parent.object === path.node) {
+    //             const code = path.toString();
+    //             
+    //             // Check if it's an array access followed by a method call
+    //             if (/\[\d+\]\.\w+/.test(code)) {
+    //               violations.push({
+    //                 rule: 'unsafe-array-access',
+    //                 severity: 'critical',
+    //                 line: path.node.loc?.start.line || 0,
+    //                 column: path.node.loc?.start.column || 0,
+    //                 message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
+    //                 code: code
+    //               });
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
 
-    {
-      name: 'array-reduce-safety',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            // Check for .reduce() calls
-            if (t.isMemberExpression(path.node.callee) && 
-                t.isIdentifier(path.node.callee.property) && 
-                path.node.callee.property.name === 'reduce') {
-              
-              // Check if the array might be empty
-              const arrayExpression = path.node.callee.object;
-              const code = path.toString();
-              
-              // Look for patterns that suggest no safety check
-              const hasInitialValue = path.node.arguments.length > 1;
-              
-              if (!hasInitialValue) {
-                violations.push({
-                  rule: 'array-reduce-safety',
-                  severity: 'low',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `reduce() without initial value may fail on empty arrays: ${code}`,
-                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
-                });
-              }
-              
-              // Check for reduce on array access like arr[0].reduce()
-              if (t.isMemberExpression(arrayExpression) && 
-                  (t.isNumericLiteral(arrayExpression.property) || 
-                   (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
-                violations.push({
-                  rule: 'array-reduce-safety',
-                  severity: 'critical',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `reduce() on array element access is unsafe: ${code}`,
-                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
-                });
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Consolidated into unsafe-array-operations rule
+    // {
+    //   name: 'array-reduce-safety',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         // Check for .reduce() calls
+    //         if (t.isMemberExpression(path.node.callee) && 
+    //             t.isIdentifier(path.node.callee.property) && 
+    //             path.node.callee.property.name === 'reduce') {
+    //           
+    //           // Check if the array might be empty
+    //           const arrayExpression = path.node.callee.object;
+    //           const code = path.toString();
+    //           
+    //           // Look for patterns that suggest no safety check
+    //           const hasInitialValue = path.node.arguments.length > 1;
+    //           
+    //           if (!hasInitialValue) {
+    //             violations.push({
+    //               rule: 'array-reduce-safety',
+    //               severity: 'low',
+    //               line: path.node.loc?.start.line || 0,
+    //               column: path.node.loc?.start.column || 0,
+    //               message: `reduce() without initial value may fail on empty arrays: ${code}`,
+    //               code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+    //             });
+    //           }
+    //           
+    //           // Check for reduce on array access like arr[0].reduce()
+    //           if (t.isMemberExpression(arrayExpression) && 
+    //               (t.isNumericLiteral(arrayExpression.property) || 
+    //                (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
+    //             violations.push({
+    //               rule: 'array-reduce-safety',
+    //               severity: 'critical',
+    //               line: path.node.loc?.start.line || 0,
+    //               column: path.node.loc?.start.column || 0,
+    //               message: `reduce() on array element access is unsafe: ${code}`,
+    //               code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+    //             });
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
     
     // {
     //   name: 'parent-event-callback-usage',
@@ -1407,84 +1658,258 @@ export class ComponentLinter {
       }
     },
     
+    // DISABLED: Too aggressive - not all array operations need memoization
+    // {
+    //   name: 'performance-memoization',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     const memoizedValues = new Set<string>();
+    //     
+    //     // Collect memoized values
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useMemo') {
+    //           // Find the variable being assigned
+    //           if (t.isVariableDeclarator(path.parent) && t.isIdentifier(path.parent.id)) {
+    //             memoizedValues.add(path.parent.id.name);
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     // Check for expensive operations without memoization
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property)) {
+    //           const method = path.node.callee.property.name;
+    //           
+    //           // Check for expensive array operations
+    //           if (['filter', 'sort', 'map', 'reduce'].includes(method)) {
+    //             // Check if this is inside a variable declaration
+    //             let parentPath: NodePath | null = path.parentPath;
+    //             while (parentPath && !t.isVariableDeclarator(parentPath.node)) {
+    //               parentPath = parentPath.parentPath;
+    //             }
+    //             
+    //             if (parentPath && t.isVariableDeclarator(parentPath.node) && t.isIdentifier(parentPath.node.id)) {
+    //               const varName = parentPath.node.id.name;
+    //               
+    //               // Check if it's not memoized
+    //               if (!memoizedValues.has(varName)) {
+    //                 // Check if it's in the render method (not in event handlers)
+    //                 let funcParent = path.getFunctionParent();
+    //                 if (funcParent) {
+    //                   const funcName = ComponentLinter.getFunctionName(funcParent);
+    //                   if (!funcName || funcName === componentName) {
+    //                     violations.push({
+    //                       rule: 'performance-memoization',
+    //                       severity: 'low',  // Just a suggestion, not mandatory
+    //                       line: path.node.loc?.start.line || 0,
+    //                       column: path.node.loc?.start.column || 0,
+    //                       message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
+    //                       code: `const ${varName} = ...${method}(...)`
+    //                     });
+    //                   }
+    //                 }
+    //               }
+    //             }
+    //           }
+    //         }
+    //       },
+    //       
+    //       // Check for static arrays/objects
+    //       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+    //         if (t.isIdentifier(path.node.id) && 
+    //             (t.isArrayExpression(path.node.init) || t.isObjectExpression(path.node.init))) {
+    //           
+    //           const varName = path.node.id.name;
+    //           if (!memoizedValues.has(varName)) {
+    //             // Check if it looks static (no variables referenced)
+    //             const hasVariables = path.node.init.toString().match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
+    //             if (!hasVariables || hasVariables.length < 3) { // Allow some property names
+    //               violations.push({
+    //                 rule: 'performance-memoization',
+    //                 severity: 'low',  // Just a suggestion
+    //                 line: path.node.loc?.start.line || 0,
+    //                 column: path.node.loc?.start.column || 0,
+    //                 message: 'Static array/object recreated on every render. Consider using useMemo.',
+    //                 code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
+    //               });
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
+    
     {
-      name: 'performance-memoization',
+      name: 'react-hooks-rules',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
-        const memoizedValues = new Set<string>();
+        const hooks = ['useState', 'useEffect', 'useMemo', 'useCallback', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect'];
         
-        // Collect memoized values
         traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useMemo') {
-              // Find the variable being assigned
-              if (t.isVariableDeclarator(path.parent) && t.isIdentifier(path.parent.id)) {
-                memoizedValues.add(path.parent.id.name);
-              }
-            }
-          }
-        });
-        
-        // Check for expensive operations without memoization
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property)) {
-              const method = path.node.callee.property.name;
+            if (t.isIdentifier(path.node.callee) && hooks.includes(path.node.callee.name)) {
+              const hookName = path.node.callee.name;
               
-              // Check for expensive array operations
-              if (['filter', 'sort', 'map', 'reduce'].includes(method)) {
-                // Check if this is inside a variable declaration
-                let parentPath: NodePath | null = path.parentPath;
-                while (parentPath && !t.isVariableDeclarator(parentPath.node)) {
-                  parentPath = parentPath.parentPath;
+              // Rule 1: Check if hook is inside the main component function or custom hook
+              let funcParent = path.getFunctionParent();
+              
+              if (funcParent) {
+                const funcName = ComponentLinter.getFunctionName(funcParent);
+                
+                // Violation: Hook not in component or custom hook
+                if (funcName && funcName !== componentName && !funcName.startsWith('use')) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" cannot be called inside function "${funcName}". Hooks can only be called at the top level of React components or custom hooks.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  return; // Skip further checks for this hook
+                }
+              }
+              
+              // Rule 2: Check if hook is inside a conditional (if statement)
+              let parent: NodePath | null = path.parentPath;
+              while (parent) {
+                // Check if we've reached the component function - stop looking
+                if (t.isFunctionDeclaration(parent.node) || 
+                    t.isFunctionExpression(parent.node) || 
+                    t.isArrowFunctionExpression(parent.node)) {
+                  const parentFuncName = ComponentLinter.getFunctionName(parent as any);
+                  if (parentFuncName === componentName || parentFuncName?.startsWith('use')) {
+                    break; // We've reached the component/hook boundary
+                  }
                 }
                 
-                if (parentPath && t.isVariableDeclarator(parentPath.node) && t.isIdentifier(parentPath.node.id)) {
-                  const varName = parentPath.node.id.name;
+                // Check for conditional statements
+                if (t.isIfStatement(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally. Hooks must be called in the exact same order in every component render.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for ternary expressions
+                if (t.isConditionalExpression(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally in a ternary expression. Hooks must be called unconditionally.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for logical expressions (&&, ||)
+                if (t.isLogicalExpression(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called conditionally in a logical expression. Hooks must be called unconditionally.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Check for switch statements
+                if (t.isSwitchStatement(parent.node) || t.isSwitchCase(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called inside a switch statement. Hooks must be called at the top level.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 3: Check for loops
+                if (t.isForStatement(parent.node) || 
+                    t.isForInStatement(parent.node) || 
+                    t.isForOfStatement(parent.node) ||
+                    t.isWhileStatement(parent.node) ||
+                    t.isDoWhileStatement(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" may not be called inside a loop. This can lead to hooks being called in different order between renders.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 4: Check for try/catch blocks
+                if (t.isTryStatement(parent.node) || t.isCatchClause(parent.node)) {
+                  violations.push({
+                    rule: 'react-hooks-rules',
+                    severity: 'high', // Less severe as it might be intentional
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `React Hook "${hookName}" is called inside a try/catch block. While not strictly forbidden, this can lead to issues if the hook throws.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                  break;
+                }
+                
+                // Rule 5: Check for early returns before this hook
+                // This is complex and would need to track control flow, so we'll do a simpler check
+                if (t.isBlockStatement(parent.node)) {
+                  const statements = parent.node.body;
+                  const hookIndex = statements.findIndex(stmt => stmt === path.parentPath?.node);
                   
-                  // Check if it's not memoized
-                  if (!memoizedValues.has(varName)) {
-                    // Check if it's in the render method (not in event handlers)
-                    let funcParent = path.getFunctionParent();
-                    if (funcParent) {
-                      const funcName = ComponentLinter.getFunctionName(funcParent);
-                      if (!funcName || funcName === componentName) {
-                        violations.push({
-                          rule: 'performance-memoization',
-                          severity: 'low',  // Just a suggestion, not mandatory
-                          line: path.node.loc?.start.line || 0,
-                          column: path.node.loc?.start.column || 0,
-                          message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
-                          code: `const ${varName} = ...${method}(...)`
-                        });
-                      }
+                  // Check if there's a return statement before this hook
+                  for (let i = 0; i < hookIndex; i++) {
+                    const stmt = statements[i];
+                    if (t.isReturnStatement(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a conditional early return. All hooks must be called before any conditional returns.`,
+                        code: path.toString().substring(0, 100)
+                      });
+                      break;
+                    }
+                    
+                    // Check for conditional returns
+                    if (t.isIfStatement(stmt) && ComponentLinter.containsReturn(stmt)) {
+                      violations.push({
+                        rule: 'react-hooks-rules',
+                        severity: 'critical',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `React Hook "${hookName}" is called after a possible early return. Move this hook before any conditional logic.`,
+                        code: path.toString().substring(0, 100)
+                      });
+                      break;
                     }
                   }
                 }
-              }
-            }
-          },
-          
-          // Check for static arrays/objects
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isIdentifier(path.node.id) && 
-                (t.isArrayExpression(path.node.init) || t.isObjectExpression(path.node.init))) {
-              
-              const varName = path.node.id.name;
-              if (!memoizedValues.has(varName)) {
-                // Check if it looks static (no variables referenced)
-                const hasVariables = path.node.init.toString().match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
-                if (!hasVariables || hasVariables.length < 3) { // Allow some property names
-                  violations.push({
-                    rule: 'performance-memoization',
-                    severity: 'low',  // Just a suggestion
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: 'Static array/object recreated on every render. Consider using useMemo.',
-                    code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
-                  });
-                }
+                
+                parent = parent.parentPath;
               }
             }
           }
@@ -1494,49 +1919,50 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'child-state-management',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useState') {
-              // Check if the state name suggests child component state
-              if (t.isVariableDeclarator(path.parent) && t.isArrayPattern(path.parent.id)) {
-                const stateNameNode = path.parent.id.elements[0];
-                if (t.isIdentifier(stateNameNode)) {
-                  const stateName = stateNameNode.name;
-                  
-                  // Check for patterns suggesting child state management
-                  const childPatterns = [
-                    /^child/i,
-                    /Table\w*State/,
-                    /Panel\w*State/,
-                    /Modal\w*State/,
-                    /\w+Component\w*/
-                  ];
-                  
-                  if (childPatterns.some(pattern => pattern.test(stateName))) {
-                    violations.push({
-                      rule: 'child-state-management',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
-                      code: `const [${stateName}, ...] = useState(...)`
-                    });
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Too aggressive - flags legitimate state based on naming patterns
+    // {
+    //   name: 'child-state-management',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useState') {
+    //           // Check if the state name suggests child component state
+    //           if (t.isVariableDeclarator(path.parent) && t.isArrayPattern(path.parent.id)) {
+    //             const stateNameNode = path.parent.id.elements[0];
+    //             if (t.isIdentifier(stateNameNode)) {
+    //               const stateName = stateNameNode.name;
+    //               
+    //               // Check for patterns suggesting child state management
+    //               const childPatterns = [
+    //                 /^child/i,
+    //                 /Table\w*State/,
+    //                 /Panel\w*State/,
+    //                 /Modal\w*State/,
+    //                 /\w+Component\w*/
+    //               ];
+    //               
+    //               if (childPatterns.some(pattern => pattern.test(stateName))) {
+    //                 violations.push({
+    //                   rule: 'child-state-management',
+    //                   severity: 'critical',
+    //                   line: path.node.loc?.start.line || 0,
+    //                   column: path.node.loc?.start.column || 0,
+    //                   message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
+    //                   code: `const [${stateName}, ...] = useState(...)`
+    //                 });
+    //               }
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
     
     {
       name: 'server-reload-on-client-operation',
@@ -1822,17 +2248,593 @@ export class ComponentLinter {
         return violations;
       }
     },
+
+    {
+      name: 'runquery-parameters-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for utilities.rq.RunQuery
+            if (t.isMemberExpression(callee) && 
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) && 
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) && 
+                callee.object.property.name === 'rq' &&
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'RunQuery') {
+              
+              // Get the first argument (RunQuery params object)
+              const runQueryParams = path.node.arguments[0];
+              if (!t.isObjectExpression(runQueryParams)) return;
+              
+              // Find QueryName or QueryID to identify the query
+              let queryName: string | null = null;
+              let parametersNode: t.ObjectProperty | null = null;
+              
+              for (const prop of runQueryParams.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  if (prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
+                    queryName = prop.value.value;
+                  } else if (prop.key.name === 'Parameters') {
+                    parametersNode = prop;
+                  }
+                }
+              }
+              
+              // Skip if no Parameters property
+              if (!parametersNode) return;
+              
+              // Find the query in componentSpec if available
+              let specQuery: ComponentQueryDataRequirement | undefined;
+              if (componentSpec?.dataRequirements?.queries && queryName) {
+                specQuery = componentSpec.dataRequirements.queries.find(q => q.name === queryName);
+              }
+              
+              // Validate Parameters structure
+              const paramValue = parametersNode.value;
+              
+              // Case 1: Parameters is an array (incorrect format)
+              if (t.isArrayExpression(paramValue)) {
+                const arrayElements = paramValue.elements.filter((e): e is t.ObjectExpression => 
+                  t.isObjectExpression(e)
+                );
+                
+                // Check if it's an array of {Name/FieldName, Value} objects
+                const paramPairs: { name: string; value: any }[] = [];
+                let isNameValueFormat = true;
+                
+                for (const elem of arrayElements) {
+                  let name: string | null = null;
+                  let value: any = null;
+                  
+                  for (const prop of elem.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      const propName = prop.key.name.toLowerCase();
+                      if (propName === 'name' || propName === 'fieldname') {
+                        if (t.isStringLiteral(prop.value)) {
+                          name = prop.value.value;
+                        } else if (t.isIdentifier(prop.value)) {
+                          name = prop.value.name;
+                        }
+                      } else if (propName === 'value') {
+                        // Get the actual value (could be string, number, boolean, etc.)
+                        if (t.isStringLiteral(prop.value)) {
+                          value = `'${prop.value.value}'`;
+                        } else if (t.isNumericLiteral(prop.value)) {
+                          value = prop.value.value;
+                        } else if (t.isBooleanLiteral(prop.value)) {
+                          value = prop.value.value;
+                        } else if (t.isIdentifier(prop.value)) {
+                          value = prop.value.name;
+                        } else {
+                          value = '/* value */';
+                        }
+                      }
+                    }
+                  }
+                  
+                  if (name && value !== null) {
+                    paramPairs.push({ name, value });
+                  } else {
+                    isNameValueFormat = false;
+                    break;
+                  }
+                }
+                
+                // Generate fix suggestion
+                let fixMessage: string;
+                let fixCode: string;
+                
+                if (isNameValueFormat && paramPairs.length > 0) {
+                  // Convert array format to object
+                  const objProps = paramPairs.map(p => `  ${p.name}: ${p.value}`).join(',\n');
+                  fixCode = `Parameters: {\n${objProps}\n}`;
+                  
+                  // Check against spec if available
+                  if (specQuery?.parameters) {
+                    const specParamNames = specQuery.parameters.map(p => p.name);
+                    const providedNames = paramPairs.map(p => p.name);
+                    const missing = specParamNames.filter(n => !providedNames.includes(n));
+                    const extra = providedNames.filter(n => !specParamNames.includes(n));
+                    
+                    if (missing.length > 0 || extra.length > 0) {
+                      fixMessage = `RunQuery Parameters must be object, not array. `;
+                      if (missing.length > 0) {
+                        fixMessage += `Missing required: ${missing.join(', ')}. `;
+                      }
+                      if (extra.length > 0) {
+                        fixMessage += `Unknown params: ${extra.join(', ')}. `;
+                      }
+                      fixMessage += `Expected params from spec: ${specParamNames.join(', ')}`;
+                    } else {
+                      fixMessage = `RunQuery Parameters must be object with key-value pairs, not array. Auto-fix: convert [{Name,Value}] to object format`;
+                    }
+                  } else {
+                    fixMessage = `RunQuery Parameters must be object with key-value pairs, not array of {Name/Value} objects`;
+                  }
+                } else {
+                  // Invalid array format - provide example
+                  if (specQuery?.parameters && specQuery.parameters.length > 0) {
+                    const exampleParams = specQuery.parameters
+                      .slice(0, 3)
+                      .map(p => `  ${p.name}: '${p.testValue || 'value'}'`)
+                      .join(',\n');
+                    fixCode = `Parameters: {\n${exampleParams}\n}`;
+                    fixMessage = `RunQuery Parameters must be object. Expected params: ${specQuery.parameters.map(p => p.name).join(', ')}`;
+                  } else {
+                    fixCode = `Parameters: {\n  paramName1: 'value1',\n  paramName2: 'value2'\n}`;
+                    fixMessage = `RunQuery Parameters must be object with key-value pairs, not array`;
+                  }
+                }
+                
+                violations.push({
+                  rule: 'runquery-parameters-validation',
+                  severity: 'critical',
+                  line: parametersNode.loc?.start.line || 0,
+                  column: parametersNode.loc?.start.column || 0,
+                  message: fixMessage,
+                  code: fixCode
+                });
+              }
+              // Case 2: Parameters is an object (correct format, but validate against spec)
+              else if (t.isObjectExpression(paramValue) && specQuery?.parameters) {
+                // Create maps for case-insensitive comparison
+                const providedParamsMap = new Map<string, string>(); // lowercase -> original
+                
+                for (const prop of paramValue.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    providedParamsMap.set(prop.key.name.toLowerCase(), prop.key.name);
+                  }
+                }
+                
+                const specParamNames = specQuery.parameters.map(p => p.name);
+                const specParamNamesLower = specParamNames.map(n => n.toLowerCase());
+                
+                // Find missing parameters (case-insensitive)
+                const missing = specParamNames.filter(n => !providedParamsMap.has(n.toLowerCase()));
+                
+                // Find extra parameters (not matching any spec param case-insensitively)
+                const extra = Array.from(providedParamsMap.values()).filter(
+                  providedName => !specParamNamesLower.includes(providedName.toLowerCase())
+                );
+                
+                if (missing.length > 0 || extra.length > 0) {
+                  let message = `Query '${queryName}' parameter mismatch. `;
+                  if (missing.length > 0) {
+                    message += `Missing: ${missing.join(', ')}. `;
+                  }
+                  if (extra.length > 0) {
+                    message += `Unknown: ${extra.join(', ')}. `;
+                  }
+                  
+                  // Generate correct parameters object
+                  const correctParams = specQuery.parameters
+                    .map(p => {
+                      // Check if we have this param (case-insensitive)
+                      const providedName = providedParamsMap.get(p.name.toLowerCase());
+                      if (providedName) {
+                        // Keep existing value, find the property with case-insensitive match
+                        const existingProp = paramValue.properties.find(
+                          prop => t.isObjectProperty(prop) && 
+                                  t.isIdentifier(prop.key) && 
+                                  prop.key.name.toLowerCase() === p.name.toLowerCase()
+                        ) as t.ObjectProperty | undefined;
+                        
+                        if (existingProp && t.isStringLiteral(existingProp.value)) {
+                          return `  ${p.name}: '${existingProp.value.value}'`;
+                        } else if (existingProp && t.isNumericLiteral(existingProp.value)) {
+                          return `  ${p.name}: ${existingProp.value.value}`;
+                        } else if (existingProp && t.isIdentifier(existingProp.value)) {
+                          return `  ${p.name}: ${existingProp.value.name}`;
+                        }
+                      }
+                      // Add missing with test value
+                      return `  ${p.name}: '${p.testValue || 'value'}'`;
+                    })
+                    .join(',\n');
+                  
+                  violations.push({
+                    rule: 'runquery-parameters-validation',
+                    severity: 'high',
+                    line: parametersNode.loc?.start.line || 0,
+                    column: parametersNode.loc?.start.column || 0,
+                    message: message + `Expected: {${specParamNames.join(', ')}}`,
+                    code: `Parameters: {\n${correctParams}\n}`
+                  });
+                }
+              }
+              // Case 3: Parameters is neither array nor object
+              else if (!t.isObjectExpression(paramValue)) {
+                let fixCode: string;
+                let message: string;
+                
+                if (specQuery?.parameters && specQuery.parameters.length > 0) {
+                  const exampleParams = specQuery.parameters
+                    .map(p => `  ${p.name}: '${p.testValue || 'value'}'`)
+                    .join(',\n');
+                  fixCode = `Parameters: {\n${exampleParams}\n}`;
+                  message = `RunQuery Parameters must be object. Expected params from spec: ${specQuery.parameters.map(p => p.name).join(', ')}`;
+                } else {
+                  fixCode = `Parameters: {\n  paramName: 'value'\n}`;
+                  message = `RunQuery Parameters must be object with key-value pairs`;
+                }
+                
+                violations.push({
+                  rule: 'runquery-parameters-validation',
+                  severity: 'critical',
+                  line: parametersNode.loc?.start.line || 0,
+                  column: parametersNode.loc?.start.column || 0,
+                  message,
+                  code: fixCode
+                });
+              }
+              
+              // Additional check: Validate against spec queries list
+              if (queryName && componentSpec?.dataRequirements?.queries) {
+                const queryExists = componentSpec.dataRequirements.queries.some(q => q.name === queryName);
+                if (!queryExists) {
+                  const availableQueries = componentSpec.dataRequirements.queries.map(q => q.name).join(', ');
+                  violations.push({
+                    rule: 'runquery-parameters-validation',
+                    severity: 'high',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Query '${queryName}' not found in component spec. Available queries: ${availableQueries || 'none'}`,
+                    code: `QueryName: '${componentSpec.dataRequirements.queries[0]?.name || 'QueryNameFromSpec'}'`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'runview-entity-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for utilities.rv.RunView or RunViews
+            if (t.isMemberExpression(callee) && 
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) && 
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) && 
+                callee.object.property.name === 'rv' &&
+                t.isIdentifier(callee.property)) {
+              
+              const methodName = callee.property.name;
+              if (methodName !== 'RunView' && methodName !== 'RunViews') return;
+              
+              // Get the configs
+              let configs: t.ObjectExpression[] = [];
+              
+              if (methodName === 'RunViews' && t.isArrayExpression(path.node.arguments[0])) {
+                configs = path.node.arguments[0].elements
+                  .filter((e): e is t.ObjectExpression => t.isObjectExpression(e));
+              } else if (methodName === 'RunView' && t.isObjectExpression(path.node.arguments[0])) {
+                configs = [path.node.arguments[0]];
+              }
+              
+              // Check each config against spec
+              if (componentSpec?.dataRequirements?.entities) {
+                const specEntityNames = componentSpec.dataRequirements.entities.map(e => e.name);
+                
+                for (const config of configs) {
+                  let entityName: string | null = null;
+                  
+                  for (const prop of config.properties) {
+                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                      if (prop.key.name === 'EntityName' && t.isStringLiteral(prop.value)) {
+                        entityName = prop.value.value;
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (entityName && specEntityNames.length > 0 && !specEntityNames.includes(entityName)) {
+                    violations.push({
+                      rule: 'runview-entity-validation',
+                      severity: 'medium',
+                      line: config.loc?.start.line || 0,
+                      column: config.loc?.start.column || 0,
+                      message: `Entity '${entityName}' not in component spec. Available entities: ${specEntityNames.join(', ')}`,
+                      code: `EntityName: '${specEntityNames[0] || 'EntityFromSpec'}'`
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'react-component-naming',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName) {
+              // Check if it's the main component function
+              const funcName = path.node.id.name;
+              
+              // Check if function has component-like parameters (props structure)
+              const firstParam = path.node.params[0];
+              const hasComponentProps = firstParam && (
+                t.isObjectPattern(firstParam) || 
+                t.isIdentifier(firstParam)
+              );
+              
+              if (hasComponentProps && funcName[0] !== funcName[0].toUpperCase()) {
+                violations.push({
+                  rule: 'react-component-naming',
+                  severity: 'critical',
+                  line: path.node.id.loc?.start.line || 0,
+                  column: path.node.id.loc?.start.column || 0,
+                  message: `React component "${funcName}" must start with uppercase. JSX treats lowercase as HTML elements.`,
+                  code: `function ${funcName[0].toUpperCase()}${funcName.slice(1)}`
+                });
+              }
+            }
+            
+            // Also check for any other component-like functions
+            if (path.node.id && path.node.params[0]) {
+              const funcName = path.node.id.name;
+              const firstParam = path.node.params[0];
+              
+              // Check if it looks like a component (has props parameter and returns JSX)
+              let returnsJSX = false;
+              path.traverse({
+                ReturnStatement(returnPath: NodePath<t.ReturnStatement>) {
+                  if (returnPath.node.argument && t.isJSXElement(returnPath.node.argument)) {
+                    returnsJSX = true;
+                  }
+                }
+              });
+              
+              if (returnsJSX && t.isObjectPattern(firstParam)) {
+                // Check if any props match component prop pattern
+                const propNames = firstParam.properties
+                  .filter((p): p is t.ObjectProperty => t.isObjectProperty(p))
+                  .filter(p => t.isIdentifier(p.key))
+                  .map(p => (p.key as t.Identifier).name);
+                
+                const hasComponentLikeProps = propNames.some(name => 
+                  ['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings', 
+                   'data', 'userState', 'onStateChanged'].includes(name)
+                );
+                
+                if (hasComponentLikeProps && funcName[0] !== funcName[0].toUpperCase()) {
+                  violations.push({
+                    rule: 'react-component-naming',
+                    severity: 'critical',
+                    line: path.node.id.loc?.start.line || 0,
+                    column: path.node.id.loc?.start.column || 0,
+                    message: `Function "${funcName}" appears to be a React component and must start with uppercase.`,
+                    code: `function ${funcName[0].toUpperCase()}${funcName.slice(1)}`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'string-template-validation', 
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          // Check for malformed template literals
+          TemplateLiteral(path: NodePath<t.TemplateLiteral>) {
+            // Template literals are parsed correctly by Babel, so if we're here it's valid
+            // But we can check for common issues like empty expressions
+            path.node.expressions.forEach((expr, index) => {
+              if (t.isIdentifier(expr) && expr.name === 'undefined') {
+                violations.push({
+                  rule: 'string-template-validation',
+                  severity: 'high',
+                  line: expr.loc?.start.line || 0,
+                  column: expr.loc?.start.column || 0,
+                  message: 'Template literal contains undefined expression',
+                  code: '${/* value */}'
+                });
+              }
+            });
+          },
+          
+          // Check for string concatenation issues
+          BinaryExpression(path: NodePath<t.BinaryExpression>) {
+            if (path.node.operator === '+') {
+              const left = path.node.left;
+              const right = path.node.right;
+              
+              // Check for incomplete string concatenation patterns
+              // e.g., 'text' + without right side, or + 'text' without left
+              if (t.isStringLiteral(left) && t.isIdentifier(right) && right.name === 'undefined') {
+                violations.push({
+                  rule: 'string-template-validation',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: 'String concatenation with undefined',
+                  code: `'${(left as t.StringLiteral).value}'`
+                });
+              }
+            }
+          },
+          
+          // Check for malformed return statements with strings
+          ReturnStatement(path: NodePath<t.ReturnStatement>) {
+            const arg = path.node.argument;
+            
+            // Look for patterns like: return ' + value (missing opening quote)
+            if (t.isBinaryExpression(arg) && arg.operator === '+') {
+              const left = arg.left;
+              
+              // Check if it starts with just a quote (malformed)
+              if (t.isStringLiteral(left) && left.value === '') {
+                const code = path.toString();
+                // Check for patterns that suggest missing quotes
+                if (code.includes("' +") || code.includes('" +')) {
+                  violations.push({
+                    rule: 'string-template-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: 'Malformed string concatenation - possible missing quote',
+                    code: 'Check string quotes and concatenation'
+                  });
+                }
+              }
+            }
+            
+            // Detect pattern like: return ' + y.toFixed(4)
+            // This is checking for a literal string that starts with space and plus
+            if (t.isCallExpression(arg)) {
+              const code = path.toString();
+              if (code.match(/return\s+['"`]\s*\+/)) {
+                violations.push({
+                  rule: 'string-template-validation',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: 'Malformed string template - missing opening quote or backtick',
+                  code: `return \`$\{value}\``
+                });
+              }
+            }
+          },
+          
+          // Check inside function bodies for malformed strings
+          StringLiteral(path: NodePath<t.StringLiteral>) {
+            const value = path.node.value;
+            
+            // Check for strings that look like incomplete templates
+            // e.g., a string that starts with $ but isn't in a template
+            // Check if this string literal is not inside a template literal
+            let isInTemplate = false;
+            let currentPath: NodePath<t.Node> | null = path.parentPath;
+            while (currentPath) {
+              if (t.isTemplateLiteral(currentPath.node)) {
+                isInTemplate = true;
+                break;
+              }
+              currentPath = currentPath.parentPath;
+            }
+            
+            if (value.includes('${') && !isInTemplate) {
+              violations.push({
+                rule: 'string-template-validation',
+                severity: 'high',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: 'String contains template syntax but is not a template literal',
+                code: `\`${value}\``
+              });
+            }
+          }
+        });
+        
+        // Additional check for specific malformed patterns in raw code
+        const code = ast.toString ? ast.toString() : '';
+        const lines = code.split('\n');
+        
+        lines.forEach((line, index) => {
+          // Pattern: return ' + something or return " + something
+          const malformedReturn = line.match(/return\s+['"`]\s*\+\s*[\w.()]/);
+          if (malformedReturn) {
+            violations.push({
+              rule: 'string-template-validation',
+              severity: 'critical',
+              line: index + 1,
+              column: malformedReturn.index || 0,
+              message: 'Malformed string return - missing opening quote',
+              code: 'return `${value}`'
+            });
+          }
+          
+          // Pattern: unclosed template literal
+          const templateStart = line.match(/`[^`]*\$\{[^}]*$/);
+          if (templateStart && !line.includes('`', templateStart.index! + 1)) {
+            violations.push({
+              rule: 'string-template-validation',
+              severity: 'critical',
+              line: index + 1,
+              column: templateStart.index || 0,
+              message: 'Unclosed template literal',
+              code: 'Close template with backtick'
+            });
+          }
+        });
+        
+        return violations;
+      }
+    },
     
     {
-      name: 'root-component-props-restriction',
-      appliesTo: 'root',
+      name: 'component-props-validation',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
         
-        // This rule applies when testing root components
-        // We can identify this by checking if the component spec indicates it's a root component
-        // For now, we'll apply this rule universally and let the caller decide when to use it
+        // Build set of allowed props: standard props + componentSpec properties
+        const allowedProps = new Set(standardProps);
+        
+        // Add props from componentSpec.properties if they exist
+        if (componentSpec?.properties) {
+          for (const prop of componentSpec.properties) {
+            if (prop.name) {
+              allowedProps.add(prop.name);
+            }
+          }
+        }
         
         traverse(ast, {
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
@@ -1846,21 +2848,24 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
                     allProps.push(propName);
-                    if (!standardProps.has(propName)) {
+                    if (!allowedProps.has(propName)) {
                       invalidProps.push(propName);
                     }
                   }
                 }
                 
-                // Only report if there are non-standard props
-                // This allows the rule to be selectively applied to root components
+                // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
+                  const customPropsMessage = componentSpec?.properties?.length 
+                    ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
+                    : '';
+                  
                   violations.push({
-                    rule: 'root-component-props-restriction',
+                    rule: 'component-props-validation',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                   });
                 }
               }
@@ -1881,19 +2886,23 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
                       allProps.push(propName);
-                      if (!standardProps.has(propName)) {
+                      if (!allowedProps.has(propName)) {
                         invalidProps.push(propName);
                       }
                     }
                   }
                   
                   if (invalidProps.length > 0) {
+                    const customPropsMessage = componentSpec?.properties?.length 
+                      ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
+                      : '';
+                    
                     violations.push({
-                      rule: 'root-component-props-restriction',
+                      rule: 'component-props-validation',
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                     });
                   }
                 }
@@ -1938,7 +2947,7 @@ export class ComponentLinter {
           }
         }
         
-        // Check for invalid destructuring from components
+        // Check for manual destructuring from components (now optional since auto-destructuring is in place)
         traverse(ast, {
           VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
             // Look for: const { Something } = components;
@@ -1972,6 +2981,16 @@ export class ComponentLinter {
                         code: `const { ${destructuredName} } = components;`
                       });
                     }
+                  } else {
+                    // Valid component, but manual destructuring is now redundant
+                    violations.push({
+                      rule: 'invalid-components-destructuring',
+                      severity: 'low',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Manual destructuring of "${destructuredName}" from components prop is redundant. Components are now auto-destructured and available directly.`,
+                      code: `const { ${destructuredName} } = components; // Can be removed`
+                    });
                   }
                 }
               }
@@ -2024,11 +3043,30 @@ export class ComponentLinter {
             }
           },
           
-          // Check for unsafe array operations
+          // Check for direct array access patterns like arr[0]
           MemberExpression(path: NodePath<t.MemberExpression>) {
-            const { object, property } = path.node;
+            const { object, property, computed } = path.node;
             
-            // Check for array methods that will crash on undefined
+            // Check for array[index] patterns
+            if (computed && (t.isNumericLiteral(property) || 
+                (t.isIdentifier(property) && /^\d+$/.test(property.name)))) {
+              
+              const code = path.toString();
+              
+              // Check if there's optional chaining
+              if (!path.node.optional) {
+                violations.push({
+                  rule: 'unsafe-array-operations',
+                  severity: 'low',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Direct array access "${code}" may be undefined. Consider using optional chaining: ${code.replace('[', '?.[')} or check array bounds first.`,
+                  code: code.substring(0, 50)
+                });
+              }
+            }
+            
+            // Check for array methods that could fail on undefined
             const unsafeArrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'length'];
             
             if (t.isIdentifier(property) && unsafeArrayMethods.includes(property.name)) {
@@ -2131,18 +3169,39 @@ export class ComponentLinter {
                   
                   if (!hasGuard) {
                     const methodName = property.name;
-                    const severity = methodName === 'length' ? 'high' : 'high';
                     
                     violations.push({
                       rule: 'unsafe-array-operations',
-                      severity,
+                      severity: 'low',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Unsafe operation "${object.name}.${methodName}" on prop that may be undefined. Props from queries/RunView can be null/undefined on initial render. Add a guard: if (!${object.name} || !Array.isArray(${object.name})) return <div>Loading...</div>; OR use: ${object.name}?.${methodName} or (${object.name} || []).${methodName}`,
+                      message: `Potentially unsafe operation "${object.name}.${methodName}" on prop that may be undefined. Consider using optional chaining: ${object.name}?.${methodName} or provide a default: (${object.name} || []).${methodName}`,
                       code: `${object.name}.${methodName}`
                     });
                   }
                 }
+              }
+            }
+          },
+          
+          // Check for reduce without initial value
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isMemberExpression(path.node.callee) && 
+                t.isIdentifier(path.node.callee.property) && 
+                path.node.callee.property.name === 'reduce') {
+              
+              const hasInitialValue = path.node.arguments.length > 1;
+              
+              if (!hasInitialValue) {
+                const code = path.toString();
+                violations.push({
+                  rule: 'unsafe-array-operations',
+                  severity: 'low',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `reduce() without initial value may fail on empty arrays. Consider providing an initial value as the second argument.`,
+                  code: code.substring(0, 100)
+                });
               }
             }
           }
@@ -2152,7 +3211,9 @@ export class ComponentLinter {
       }
     },
 
-    {
+    // DISABLED: Too many false positives - needs better dependency/library checking
+    // Re-enable after improving to check dependencies before assuming library components
+    /* {
       name: 'undefined-jsx-component',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -2188,11 +3249,13 @@ export class ComponentLinter {
           }
         }
         
-        // Track what's destructured from components
+        // Track dependency components (these are now auto-destructured in the wrapper)
         if (componentSpec?.dependencies) {
           for (const dep of componentSpec.dependencies) {
             if (dep.name) {
               componentsFromProp.add(dep.name);
+              // Mark as available since they're auto-destructured
+              availableIdentifiers.add(dep.name);
             }
           }
         }
@@ -2359,13 +3422,14 @@ export class ComponentLinter {
                     });
                   }
                   } else if (componentsFromProp.has(tagName)) {
-                    // It's a component from the components prop
+                    // This shouldn't happen since dependency components are auto-destructured
+                    // But keep as a fallback check
                     violations.push({
                       rule: 'undefined-jsx-component',
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is in dependencies but not destructured from components prop. Add: const { ${tagName} } = components;`,
+                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. There may be an issue with component registration.`,
                       code: `<${tagName} ... />`
                     });
                   } else {
@@ -2388,6 +3452,160 @@ export class ComponentLinter {
                     column: openingElement.loc?.start.column || 0,
                     message: `JSX element "${tagName}" is not recognized as a valid HTML element or React component. Check the spelling or ensure it's properly defined.`,
                     code: `<${tagName} ... />`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    }, */
+    
+    {
+      name: 'runquery-runview-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Extract declared queries and entities from dataRequirements
+        const declaredQueries = new Set<string>();
+        const declaredEntities = new Set<string>();
+        
+        if (componentSpec?.dataRequirements) {
+          // Handle queries in different possible locations
+          if (Array.isArray(componentSpec.dataRequirements)) {
+            // If it's an array directly
+            componentSpec.dataRequirements.forEach((req: any) => {
+              if (req.type === 'query' && req.name) {
+                declaredQueries.add(req.name.toLowerCase());
+              }
+              if (req.type === 'entity' && req.name) {
+                declaredEntities.add(req.name.toLowerCase());
+              }
+            });
+          } else if (typeof componentSpec.dataRequirements === 'object') {
+            // If it's an object with queries/entities properties
+            if (componentSpec.dataRequirements.queries) {
+              componentSpec.dataRequirements.queries.forEach((q: any) => {
+                if (q.name) declaredQueries.add(q.name.toLowerCase());
+              });
+            }
+            if (componentSpec.dataRequirements.entities) {
+              componentSpec.dataRequirements.entities.forEach((e: any) => {
+                if (e.name) declaredEntities.add(e.name.toLowerCase());
+              });
+            }
+          }
+        }
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for RunQuery calls
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'RunQuery') {
+              
+              const args = path.node.arguments;
+              if (args.length > 0 && t.isObjectExpression(args[0])) {
+                const props = args[0].properties;
+                
+                // Find QueryName property
+                const queryNameProp = props.find(p => 
+                  t.isObjectProperty(p) && 
+                  t.isIdentifier(p.key) && 
+                  p.key.name === 'QueryName'
+                );
+                
+                if (queryNameProp && t.isObjectProperty(queryNameProp)) {
+                  const value = queryNameProp.value;
+                  
+                  // Check if it's a string literal
+                  if (t.isStringLiteral(value)) {
+                    const queryName = value.value;
+                    
+                    // Check if it looks like SQL (contains SELECT, FROM, etc.)
+                    const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'JOIN'];
+                    const upperQuery = queryName.toUpperCase();
+                    const looksLikeSQL = sqlKeywords.some(keyword => upperQuery.includes(keyword));
+                    
+                    if (looksLikeSQL) {
+                      violations.push({
+                        rule: 'runquery-runview-validation',
+                        severity: 'critical',
+                        line: value.loc?.start.line || 0,
+                        column: value.loc?.start.column || 0,
+                        message: `RunQuery cannot accept SQL statements. QueryName must be a registered query name, not SQL: "${queryName.substring(0, 50)}..."`,
+                        code: value.value.substring(0, 100)
+                      });
+                    } else if (declaredQueries.size > 0 && !declaredQueries.has(queryName.toLowerCase())) {
+                      // Only validate if we have declared queries
+                      violations.push({
+                        rule: 'runquery-runview-validation',
+                        severity: 'high',
+                        line: value.loc?.start.line || 0,
+                        column: value.loc?.start.column || 0,
+                        message: `Query "${queryName}" is not declared in dataRequirements.queries. Available queries: ${Array.from(declaredQueries).join(', ')}`,
+                        code: path.toString().substring(0, 100)
+                      });
+                    }
+                  } else if (t.isIdentifier(value) || t.isTemplateLiteral(value)) {
+                    // Dynamic query name - check if it might be SQL
+                    violations.push({
+                      rule: 'runquery-runview-validation',
+                      severity: 'medium',
+                      line: value.loc?.start.line || 0,
+                      column: value.loc?.start.column || 0,
+                      message: `Dynamic QueryName detected. Ensure this is a query name, not a SQL statement.`,
+                      code: path.toString().substring(0, 100)
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Check for RunView calls
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.property) && 
+                (callee.property.name === 'RunView' || callee.property.name === 'RunViews')) {
+              
+              const args = path.node.arguments;
+              
+              // Handle both single object and array of objects
+              const checkEntityName = (objExpr: t.ObjectExpression) => {
+                const entityNameProp = objExpr.properties.find(p => 
+                  t.isObjectProperty(p) && 
+                  t.isIdentifier(p.key) && 
+                  p.key.name === 'EntityName'
+                );
+                
+                if (entityNameProp && t.isObjectProperty(entityNameProp) && t.isStringLiteral(entityNameProp.value)) {
+                  const entityName = entityNameProp.value.value;
+                  
+                  if (declaredEntities.size > 0 && !declaredEntities.has(entityName.toLowerCase())) {
+                    violations.push({
+                      rule: 'runquery-runview-validation',
+                      severity: 'high',
+                      line: entityNameProp.value.loc?.start.line || 0,
+                      column: entityNameProp.value.loc?.start.column || 0,
+                      message: `Entity "${entityName}" is not declared in dataRequirements.entities. Available entities: ${Array.from(declaredEntities).join(', ')}`,
+                      code: path.toString().substring(0, 100)
+                    });
+                  }
+                }
+              };
+              
+              if (args.length > 0) {
+                if (t.isObjectExpression(args[0])) {
+                  checkEntityName(args[0]);
+                } else if (t.isArrayExpression(args[0])) {
+                  args[0].elements.forEach(elem => {
+                    if (t.isObjectExpression(elem)) {
+                      checkEntityName(elem);
+                    }
                   });
                 }
               }
@@ -2555,20 +3773,54 @@ export class ComponentLinter {
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Valid properties for RunQueryResult
+        // Valid properties for RunQueryResult based on MJCore type definition
         const validRunQueryResultProps = new Set([
-          'QueryID', 'QueryName', 'Success', 'Results', 'RowCount', 
-          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+          'QueryID',           // string
+          'QueryName',         // string
+          'Success',           // boolean
+          'Results',           // any[]
+          'RowCount',          // number
+          'TotalRowCount',     // number
+          'ExecutionTime',     // number
+          'ErrorMessage',      // string
+          'AppliedParameters', // Record<string, any> (optional)
+          'CacheHit',          // boolean (optional)
+          'CacheKey',          // string (optional)
+          'CacheTTLRemaining'  // number (optional)
         ]);
         
-        // Valid properties for RunViewResult
+        // Valid properties for RunViewResult based on MJCore type definition
         const validRunViewResultProps = new Set([
-          'Success', 'Results', 'UserViewRunID', 'RowCount', 
-          'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+          'Success',           // boolean
+          'Results',           // Array<T>
+          'UserViewRunID',     // string (optional)
+          'RowCount',          // number
+          'TotalRowCount',     // number
+          'ExecutionTime',     // number
+          'ErrorMessage'       // string
         ]);
         
-        // Common incorrect patterns
-        const invalidResultPatterns = new Set(['data', 'rows', 'records', 'items', 'values']);
+        // Map of common incorrect properties to the correct property
+        const incorrectToCorrectMap: Record<string, string> = {
+          'data': 'Results',
+          'Data': 'Results',
+          'rows': 'Results',
+          'Rows': 'Results',
+          'records': 'Results',
+          'Records': 'Results',
+          'items': 'Results',
+          'Items': 'Results',
+          'values': 'Results',
+          'Values': 'Results',
+          'result': 'Results',
+          'Result': 'Results',
+          'resultSet': 'Results',
+          'ResultSet': 'Results',
+          'dataset': 'Results',
+          'Dataset': 'Results',
+          'response': 'Results',
+          'Response': 'Results'
+        };
         
         traverse(ast, {
           MemberExpression(path: NodePath<t.MemberExpression>) {
@@ -2577,48 +3829,77 @@ export class ComponentLinter {
               const objName = path.node.object.name;
               const propName = path.node.property.name;
               
-              // Check if the object name suggests it's a query or view result
-              const isLikelyQueryResult = /result|response|res|data|output/i.test(objName);
+              // Only check if we can definitively trace this to RunQuery or RunView
               const isFromRunQuery = path.scope.hasBinding(objName) && 
                                     ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
               const isFromRunView = path.scope.hasBinding(objName) && 
                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
               
-              if (isLikelyQueryResult || isFromRunQuery || isFromRunView) {
-                // Check for common incorrect patterns
-                if (invalidResultPatterns.has(propName)) {
-                  violations.push({
-                    rule: 'runquery-runview-result-structure',
-                    severity: 'high',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Incorrect property access "${objName}.${propName}". RunQuery/RunView results use ".Results" for data array, not ".${propName}". Change to "${objName}.Results"`,
-                    code: `${objName}.${propName}`
-                  });
-                } else if (propName === 'data') {
-                  // Special case for .data - very common mistake
-                  violations.push({
-                    rule: 'runquery-runview-result-structure',
-                    severity: 'critical',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `RunQuery/RunView results don't have a ".data" property. Use ".Results" to access the array of returned rows. Change "${objName}.data" to "${objName}.Results"`,
-                    code: `${objName}.${propName}`
-                  });
+              // Only validate if we're CERTAIN it's from RunQuery or RunView
+              if (isFromRunQuery || isFromRunView) {
+                // WHITELIST APPROACH: Check if the property is valid for the result type
+                const isValidQueryProp = validRunQueryResultProps.has(propName);
+                const isValidViewProp = validRunViewResultProps.has(propName);
+                
+                // If it's specifically from RunQuery or RunView, be more specific
+                if (isFromRunQuery && !isValidQueryProp) {
+                  // Property is not valid for RunQueryResult
+                  const suggestion = incorrectToCorrectMap[propName];
+                  if (suggestion) {
+                    violations.push({
+                      rule: 'runquery-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `RunQuery results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
+                      code: `${objName}.${propName}`
+                    });
+                  } else {
+                    violations.push({
+                      rule: 'runquery-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Invalid property "${propName}" on RunQuery result. Valid properties are: ${Array.from(validRunQueryResultProps).join(', ')}`,
+                      code: `${objName}.${propName}`
+                    });
+                  }
+                } else if (isFromRunView && !isValidViewProp) {
+                  // Property is not valid for RunViewResult
+                  const suggestion = incorrectToCorrectMap[propName];
+                  if (suggestion) {
+                    violations.push({
+                      rule: 'runview-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`,
+                      code: `${objName}.${propName}`
+                    });
+                  } else {
+                    violations.push({
+                      rule: 'runview-result-invalid-property',
+                      severity: 'critical',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Invalid property "${propName}" on RunView result. Valid properties are: ${Array.from(validRunViewResultProps).join(', ')}`,
+                      code: `${objName}.${propName}`
+                    });
+                  }
                 }
                 
-                // Check for nested incorrect access like result.data.entities
+                // Check for nested incorrect access like result.data.entities or result.Data.entities
                 if (t.isMemberExpression(path.parent) && 
                     t.isIdentifier(path.parent.property) && 
-                    propName === 'data') {
+                    (propName === 'data' || propName === 'Data')) {
                   const nestedProp = path.parent.property.name;
                   violations.push({
                     rule: 'runquery-runview-result-structure',
                     severity: 'critical',
                     line: path.parent.loc?.start.line || 0,
                     column: path.parent.loc?.start.column || 0,
-                    message: `Incorrect nested property access "${objName}.data.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
-                    code: `${objName}.data.${nestedProp}`
+                    message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+                    code: `${objName}.${propName}.${nestedProp}`
                   });
                 }
               }
@@ -2631,29 +3912,44 @@ export class ComponentLinter {
             if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
               const sourceName = path.node.init.name;
               
-              // Check if this looks like destructuring from a query/view result
-              if (/result|response|res/i.test(sourceName)) {
+              // Only check if we can definitively trace this to RunQuery or RunView
+              const isFromRunQuery = path.scope.hasBinding(sourceName) && 
+                                    ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
+              const isFromRunView = path.scope.hasBinding(sourceName) && 
+                                   ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunView');
+              
+              // Only validate if we're CERTAIN it's from RunQuery or RunView
+              if (isFromRunQuery || isFromRunView) {
                 for (const prop of path.node.id.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
                     
-                    // Check for incorrect destructuring
-                    if (propName === 'data') {
+                    // WHITELIST APPROACH: Check if property is valid
+                    const isValidQueryProp = validRunQueryResultProps.has(propName);
+                    const isValidViewProp = validRunViewResultProps.has(propName);
+                    
+                    if (isFromRunQuery && !isValidQueryProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
                       violations.push({
-                        rule: 'runquery-runview-result-structure',
+                        rule: 'runquery-result-invalid-destructuring',
                         severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
-                        message: `Destructuring "data" from RunQuery/RunView result. The property is named "Results", not "data". Change "const { data } = ${sourceName}" to "const { Results } = ${sourceName}"`,
-                        code: `{ data }`
+                        message: suggestion 
+                          ? `Destructuring invalid property "${propName}" from RunQuery result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunQuery result. Valid properties: ${Array.from(validRunQueryResultProps).join(', ')}`,
+                        code: `{ ${propName} }`
                       });
-                    } else if (invalidResultPatterns.has(propName) && propName !== 'data') {
+                    } else if (isFromRunView && !isValidViewProp) {
+                      const suggestion = incorrectToCorrectMap[propName];
                       violations.push({
-                        rule: 'runquery-runview-result-structure',
-                        severity: 'medium',
+                        rule: 'runview-result-invalid-destructuring',
+                        severity: 'critical',
                         line: prop.loc?.start.line || 0,
                         column: prop.loc?.start.column || 0,
-                        message: `Destructuring "${propName}" from what appears to be a RunQuery/RunView result. Did you mean "Results"?`,
+                        message: suggestion
+                          ? `Destructuring invalid property "${propName}" from RunView result. Use "${suggestion}" instead. Change "const { ${propName} } = ${sourceName}" to "const { ${suggestion} } = ${sourceName}"`
+                          : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${Array.from(validRunViewResultProps).join(', ')}`,
                         code: `{ ${propName} }`
                       });
                     }
@@ -2896,7 +4192,9 @@ export class ComponentLinter {
     code: string,
     componentName: string,
     componentSpec?: ComponentSpec,
-    isRootComponent?: boolean
+    isRootComponent?: boolean,
+    contextUser?: UserInfo,
+    debugMode?: boolean
   ): Promise<LintResult> {
     try {
       const ast = parser.parse(code, {
@@ -2931,6 +4229,12 @@ export class ComponentLinter {
         violations.push(...dataViolations);
       }
       
+      // Apply library-specific lint rules if available
+      if (componentSpec?.libraries && contextUser) {
+        const libraryViolations = await this.applyLibraryLintRules(ast, componentSpec, contextUser, debugMode);
+        violations.push(...libraryViolations);
+      }
+      
       // Deduplicate violations - keep only unique rule+message combinations
       const uniqueViolations = this.deduplicateViolations(violations);
       
@@ -2939,6 +4243,35 @@ export class ComponentLinter {
       const highCount = uniqueViolations.filter(v => v.severity === 'high').length;
       const mediumCount = uniqueViolations.filter(v => v.severity === 'medium').length;
       const lowCount = uniqueViolations.filter(v => v.severity === 'low').length;
+      
+      // Debug mode summary
+      if (debugMode && uniqueViolations.length > 0) {
+        console.log('\n' + '='.repeat(60));
+        console.log('📊 LINT SUMMARY:');
+        console.log('='.repeat(60));
+        if (criticalCount > 0) console.log(`  🔴 Critical: ${criticalCount}`);
+        if (highCount > 0) console.log(`  🟠 High: ${highCount}`);
+        if (mediumCount > 0) console.log(`  🟡 Medium: ${mediumCount}`);
+        if (lowCount > 0) console.log(`  🟢 Low: ${lowCount}`);
+        console.log('='.repeat(60));
+        
+        // Group violations by library
+        const libraryViolations = uniqueViolations.filter(v => v.rule.includes('-validator'));
+        if (libraryViolations.length > 0) {
+          console.log('\n📚 Library-Specific Issues:');
+          const byLibrary = new Map<string, Violation[]>();
+          libraryViolations.forEach(v => {
+            const lib = v.rule.replace('-validator', '');
+            if (!byLibrary.has(lib)) byLibrary.set(lib, []);
+            byLibrary.get(lib)!.push(v);
+          });
+          
+          byLibrary.forEach((violations, library) => {
+            console.log(`  • ${library}: ${violations.length} issue${violations.length > 1 ? 's' : ''}`);
+          });
+        }
+        console.log('');
+      }
       
       // Generate fix suggestions
       const suggestions = this.generateFixSuggestions(uniqueViolations);
@@ -4313,10 +5646,10 @@ await utilities.rq.RunQuery({
           });
           break;
           
-        case 'root-component-props-restriction':
+        case 'component-props-validation':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Root components can only accept standard props. Load data internally.',
+            suggestion: 'Components can only accept standard props or props defined in spec. Load data internally.',
             example: `// ❌ WRONG - Root component with additional props:
 function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
   // Additional props will break hosting environment
@@ -4407,4 +5740,522 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
     
     return suggestions;
   }
+
+  /**
+   * Apply library-specific lint rules based on ComponentLibrary LintRules field
+   */
+  private static async applyLibraryLintRules(
+    ast: t.File,
+    componentSpec: ComponentSpec,
+    contextUser?: UserInfo,
+    debugMode?: boolean
+  ): Promise<Violation[]> {
+    const violations: Violation[] = [];
+    
+    try {
+      // Use the cached and compiled library rules
+      const cache = LibraryLintCache.getInstance();
+      await cache.loadLibraryRules(contextUser);
+      
+      // Check each library that this component uses
+      if (componentSpec.libraries) {
+        // Run library checks in parallel for performance
+        const libraryPromises = componentSpec.libraries.map(async (lib) => {
+          const libraryViolations: Violation[] = [];
+          
+          // Get the cached and compiled rules for this library
+          const compiledRules = cache.getLibraryRules(lib.name);
+          
+          if (compiledRules) {
+            const library = compiledRules.library;
+            const libraryName = library.Name || lib.name;
+            
+            // Apply initialization rules
+            if (compiledRules.initialization) {
+              const initViolations = this.checkLibraryInitialization(
+                ast, 
+                libraryName,
+                compiledRules.initialization
+              );
+              
+              // Debug logging for library violations
+              if (debugMode && initViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Initialization Violations Found:`);
+                initViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...initViolations);
+            }
+            
+            // Apply lifecycle rules
+            if (compiledRules.lifecycle) {
+              const lifecycleViolations = this.checkLibraryLifecycle(
+                ast,
+                libraryName,
+                compiledRules.lifecycle
+              );
+              
+              // Debug logging for library violations
+              if (debugMode && lifecycleViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Lifecycle Violations Found:`);
+                lifecycleViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...lifecycleViolations);
+            }
+            
+            // Apply options validation
+            if (compiledRules.options) {
+              const optionsViolations = this.checkLibraryOptions(
+                ast,
+                libraryName,
+                compiledRules.options
+              );
+              
+              // Debug logging for library violations
+              if (debugMode && optionsViolations.length > 0) {
+                console.log(`\n🔍 ${libraryName} Options Violations Found:`);
+                optionsViolations.forEach(v => {
+                  const icon = v.severity === 'critical' ? '🔴' : 
+                               v.severity === 'high' ? '🟠' :
+                               v.severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                });
+              }
+              
+              libraryViolations.push(...optionsViolations);
+            }
+            
+            // Apply compiled validators (already compiled in cache)
+            if (compiledRules.validators) {
+              const validatorViolations = this.executeCompiledValidators(
+                ast,
+                libraryName,
+                library.GlobalVariable || '',
+                compiledRules.validators,
+                debugMode
+              );
+              libraryViolations.push(...validatorViolations);
+            }
+          }
+          
+          return libraryViolations;
+        });
+        
+        // Wait for all library checks to complete
+        const allLibraryViolations = await Promise.all(libraryPromises);
+        
+        // Flatten the results
+        allLibraryViolations.forEach(libViolations => {
+          violations.push(...libViolations);
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to apply library lint rules:', error);
+    }
+    
+    return violations;
+  }
+  
+  /**
+   * Check library initialization patterns (constructor, element type, etc.)
+   */
+  private static checkLibraryInitialization(
+    ast: t.File,
+    libraryName: string,
+    rules: any
+  ): Violation[] {
+    const violations: Violation[] = [];
+    
+    traverse(ast, {
+      // Check for new ConstructorName() patterns
+      NewExpression(path: NodePath<t.NewExpression>) {
+        if (t.isIdentifier(path.node.callee) && 
+            path.node.callee.name === rules.constructorName) {
+          
+          // Check if it requires 'new' keyword
+          if (rules.requiresNew === false) {
+            violations.push({
+              rule: 'library-initialization',
+              severity: 'critical',
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
+              message: `${libraryName}: ${rules.constructorName} should not use 'new' keyword`,
+              code: `${rules.constructorName}(...) // without new`
+            });
+          }
+          
+          // Check element type if first argument is a ref
+          if (rules.elementType && path.node.arguments[0]) {
+            const firstArg = path.node.arguments[0];
+            
+            // Check if it's chartRef.current or similar
+            if (t.isMemberExpression(firstArg) && 
+                t.isIdentifier(firstArg.property) && 
+                firstArg.property.name === 'current') {
+              
+              // Try to find what element the ref is attached to
+              const refName = t.isIdentifier(firstArg.object) ? firstArg.object.name : null;
+              if (refName) {
+                ComponentLinter.checkRefElementType(ast, refName, rules.elementType, libraryName, violations);
+              }
+            }
+          }
+        }
+      },
+      
+      // Check for function calls without new (if requiresNew is true)
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (t.isIdentifier(path.node.callee) && 
+            path.node.callee.name === rules.constructorName &&
+            rules.requiresNew === true) {
+          
+          violations.push({
+            rule: 'library-initialization',
+            severity: 'critical',
+            line: path.node.loc?.start.line || 0,
+            column: path.node.loc?.start.column || 0,
+            message: `${libraryName}: ${rules.constructorName} requires 'new' keyword`,
+            code: `new ${rules.constructorName}(...)`
+          });
+        }
+      }
+    });
+    
+    return violations;
+  }
+  
+  /**
+   * Check if a ref is attached to the correct element type
+   */
+  private static checkRefElementType(
+    ast: t.File,
+    refName: string,
+    expectedType: string,
+    libraryName: string,
+    violations: Violation[]
+  ): void {
+    traverse(ast, {
+      JSXElement(path: NodePath<t.JSXElement>) {
+        const openingElement = path.node.openingElement;
+        
+        // Check if this element has a ref attribute
+        const refAttr = openingElement.attributes.find(attr => 
+          t.isJSXAttribute(attr) && 
+          t.isJSXIdentifier(attr.name) && 
+          attr.name.name === 'ref'
+        );
+        
+        if (refAttr && t.isJSXAttribute(refAttr)) {
+          // Check if the ref value matches our refName
+          const refValue = refAttr.value;
+          if (t.isJSXExpressionContainer(refValue) && 
+              t.isIdentifier(refValue.expression) && 
+              refValue.expression.name === refName) {
+            
+            // Check element type
+            const elementName = t.isJSXIdentifier(openingElement.name) 
+              ? openingElement.name.name 
+              : '';
+            
+            if (elementName.toLowerCase() !== expectedType.toLowerCase()) {
+              violations.push({
+                rule: 'library-element-type',
+                severity: 'critical',
+                line: openingElement.loc?.start.line || 0,
+                column: openingElement.loc?.start.column || 0,
+                message: `${libraryName} requires a <${expectedType}> element, not <${elementName}>`,
+                code: `<${expectedType} ref={${refName}}>`
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * Check library lifecycle methods (render, destroy, etc.)
+   */
+  private static checkLibraryLifecycle(
+    ast: t.File,
+    libraryName: string,
+    rules: any
+  ): Violation[] {
+    const violations: Violation[] = [];
+    
+    // Track which methods are called
+    const calledMethods = new Set<string>();
+    const instanceVariables = new Set<string>();
+    
+    traverse(ast, {
+      // Track instance variables
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+        if (t.isNewExpression(path.node.init) && 
+            t.isIdentifier(path.node.init.callee)) {
+          if (t.isIdentifier(path.node.id)) {
+            instanceVariables.add(path.node.id.name);
+          }
+        }
+      },
+      
+      // Track method calls
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (t.isMemberExpression(path.node.callee)) {
+          const callee = path.node.callee as t.MemberExpression;
+          
+          if (t.isIdentifier(callee.property)) {
+            const methodName = callee.property.name;
+            const objectName = t.isIdentifier(callee.object) 
+              ? callee.object.name 
+              : null;
+          
+            if (objectName && instanceVariables.has(objectName)) {
+              calledMethods.add(methodName);
+            }
+          }
+        }
+      }
+    });
+    
+    // Check required methods
+    if (rules.requiredMethods) {
+      for (const method of rules.requiredMethods) {
+        if (!calledMethods.has(method)) {
+          violations.push({
+            rule: 'library-lifecycle',
+            severity: 'high',
+            line: 0,
+            column: 0,
+            message: `${libraryName}: Missing required method call '${method}()' after initialization`,
+            code: `instance.${method}()`
+          });
+        }
+      }
+    }
+    
+    // Check cleanup in useEffect
+    if (rules.cleanupMethods && rules.cleanupMethods.length > 0) {
+      let hasCleanup = false;
+      
+      traverse(ast, {
+        CallExpression(path: NodePath<t.CallExpression>) {
+          if (t.isIdentifier(path.node.callee) && 
+              path.node.callee.name === 'useEffect') {
+            
+            const firstArg = path.node.arguments[0];
+            if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
+              // Check if it returns a cleanup function
+              traverse(firstArg, {
+                ReturnStatement(returnPath: NodePath<t.ReturnStatement>) {
+                  if (t.isArrowFunctionExpression(returnPath.node.argument) || 
+                      t.isFunctionExpression(returnPath.node.argument)) {
+                    
+                    // Check if cleanup function calls destroy
+                    traverse(returnPath.node.argument, {
+                      CallExpression(cleanupPath: NodePath<t.CallExpression>) {
+                        if (t.isMemberExpression(cleanupPath.node.callee)) {
+                          const callee = cleanupPath.node.callee as t.MemberExpression;
+                          
+                          if (t.isIdentifier(callee.property) && 
+                              rules.cleanupMethods.includes(callee.property.name)) {
+                            hasCleanup = true;
+                          }
+                        }
+                      }
+                    }, returnPath.scope, returnPath.state, returnPath);
+                  }
+                }
+              }, path.scope, path.state, path);
+            }
+          }
+        }
+      });
+      
+      if (!hasCleanup) {
+        violations.push({
+          rule: 'library-cleanup',
+          severity: 'medium',
+          line: 0,
+          column: 0,
+          message: `${libraryName}: Missing cleanup in useEffect. Call ${rules.cleanupMethods.join(' or ')} in cleanup function`,
+          code: `useEffect(() => {\n  // ... initialization\n  return () => {\n    instance.${rules.cleanupMethods[0]}();\n  };\n}, []);`
+        });
+      }
+    }
+    
+    return violations;
+  }
+  
+  /**
+   * Check library options and configuration
+   */
+  private static checkLibraryOptions(
+    ast: t.File,
+    libraryName: string,
+    rules: any
+  ): Violation[] {
+    const violations: Violation[] = [];
+    
+    traverse(ast, {
+      ObjectExpression(path: NodePath<t.ObjectExpression>) {
+        // Check if this might be a config object for the library
+        const properties = path.node.properties
+          .filter((p): p is t.ObjectProperty => t.isObjectProperty(p));
+        const propNames = properties
+          .filter(p => t.isIdentifier(p.key))
+          .map(p => (p.key as t.Identifier).name);
+        
+        // Check for required properties
+        if (rules.requiredProperties) {
+          const hasChartType = propNames.some(name => 
+            rules.requiredProperties.includes(name)
+          );
+          
+          if (hasChartType) {
+            // This looks like a config object, check all required props
+            for (const required of rules.requiredProperties) {
+              if (!propNames.includes(required)) {
+                violations.push({
+                  rule: 'library-options',
+                  severity: 'high',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `${libraryName}: Missing required option '${required}'`,
+                  code: `${required}: /* value */`
+                });
+              }
+            }
+          }
+        }
+        
+        // Check property types
+        if (rules.propertyTypes) {
+          for (const prop of properties) {
+            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+              const propName = prop.key.name;
+              const expectedType = rules.propertyTypes[propName];
+              
+              if (expectedType) {
+                // Check if the value matches expected type
+                if (expectedType.includes('array') && !t.isArrayExpression(prop.value)) {
+                  violations.push({
+                    rule: 'library-options',
+                    severity: 'medium',
+                    line: prop.loc?.start.line || 0,
+                    column: prop.loc?.start.column || 0,
+                    message: `${libraryName}: Option '${propName}' should be an array`,
+                    code: `${propName}: []`
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    return violations;
+  }
+
+  /**
+   * Execute pre-compiled validators from cache
+   */
+  private static executeCompiledValidators(
+    ast: t.File,
+    libraryName: string,
+    globalVariable: string,
+    validators: Record<string, any>,
+    debugMode?: boolean
+  ): Violation[] {
+    const violations: Violation[] = [];
+    
+    // Create context object for validators
+    const context: any = {
+      libraryName,
+      globalVariable,
+      instanceVariables: new Set<string>(),
+      violations: [] // Validators push violations here
+    };
+    
+    // First pass: identify library instance variables
+    traverse(ast, {
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+        if (t.isNewExpression(path.node.init) &&
+            t.isIdentifier(path.node.init.callee)) {
+          // Check if it's a library constructor
+          if (path.node.init.callee.name === globalVariable) {
+            if (t.isIdentifier(path.node.id)) {
+              context.instanceVariables.add(path.node.id.name);
+            }
+          }
+        }
+      }
+    });
+    
+    // Execute each compiled validator
+    for (const [validatorName, validator] of Object.entries(validators)) {
+      if (validator && validator.validateFn) {
+        const beforeCount = context.violations.length;
+        
+        // Traverse AST and apply validator
+        traverse(ast, {
+          enter(path: NodePath) {
+            try {
+              // Validators don't return violations, they push to context.violations
+              validator.validateFn(ast, path, t, context);
+            } catch (error) {
+              // Validator execution error - log but don't crash
+              console.warn(`Validator ${validatorName} failed:`, error);
+            }
+          }
+        });
+        
+        // Debug logging for this specific validator
+        const newViolations = context.violations.length - beforeCount;
+        if (debugMode && newViolations > 0) {
+          console.log(`\n📋 ${libraryName} - ${validatorName}:`);
+          console.log(`  📊 ${validator.description || 'No description'}`);
+          console.log(`  ⚠️  Found ${newViolations} violation${newViolations > 1 ? 's' : ''}`);
+          
+          // Show the violations from this validator
+          const validatorViolations = context.violations.slice(beforeCount);
+          validatorViolations.forEach((v: any) => {
+            const icon = v.type === 'error' || v.severity === 'critical' ? '🔴' : 
+                         v.type === 'warning' || v.severity === 'high' ? '🟠' :
+                         v.severity === 'medium' ? '🟡' : '🟢';
+            console.log(`    ${icon} Line ${v.line || 'unknown'}: ${v.message}`);
+            if (v.suggestion) {
+              console.log(`       💡 ${v.suggestion}`);
+            }
+          });
+        }
+      }
+    }
+    
+    // Convert context violations to standard format
+    const standardViolations = context.violations.map((v: any) => ({
+      rule: `${libraryName.toLowerCase()}-validator`,
+      severity: v.severity || (v.type === 'error' ? 'critical' : v.type === 'warning' ? 'high' : 'medium'),
+      line: v.line || 0,
+      column: v.column || 0,
+      message: v.message,
+      code: v.code
+    }));
+    
+    violations.push(...standardViolations);
+    
+    return violations;
+  }
+
 }
