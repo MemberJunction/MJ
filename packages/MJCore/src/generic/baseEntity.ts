@@ -194,6 +194,18 @@ export class EntityField {
                     return oldNum !== newNum;
                 }
 
+                // for string types where the comparisons are not both strings
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.String) {
+                    if (typeof oldCompare === 'object') {
+                        // need to convert the object to a string for comparison
+                        oldCompare = JSON.stringify(oldCompare);
+                    }
+                    if (typeof newCompare === 'object') {
+                        // need to convert the object to a string for comparison
+                        newCompare = JSON.stringify(newCompare);
+                    }
+                }
+
                 return oldCompare !== newCompare;
             }
         }
