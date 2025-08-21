@@ -2537,6 +2537,12 @@ export class SQLServerDataProvider
         if (typeof val === 'string') {
           val = val.replace(/'/g, "''");
         }
+        else if (typeof val === 'object' && val !== null) {
+          // stringify the value
+          val = JSON.stringify(val);
+          // escape it
+          val = val.replace(/'/g, "''");
+        }
         return `${f.UnicodePrefix}'${val}'`;
         
       case EntityFieldTSType.Date:
