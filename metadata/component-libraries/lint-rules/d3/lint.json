@@ -12,7 +12,7 @@
   "validators": {
     "checkSelectionCleanup": {
       "description": "Ensure D3 selections are properly cleaned up",
-      "severity": "medium",
+      "severity": "high",
       "validate": "@file:check-selection-cleanup.js"
     },
     "checkJoinPattern": {

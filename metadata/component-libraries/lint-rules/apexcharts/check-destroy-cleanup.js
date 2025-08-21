@@ -39,7 +39,7 @@
           if (!hasCleanup) {
             return {
               rule: 'apexcharts-missing-cleanup',
-              severity: 'medium',
+              severity: 'high',
               message: 'ApexCharts instances must be destroyed in useEffect cleanup',
               line: path.node.loc?.start.line || 0,
               column: path.node.loc?.start.column || 0,
