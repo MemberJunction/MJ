@@ -27,19 +27,16 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
         utilities.rv.RunView({
           EntityName: 'Invoices',
           ExtraFilter: dateFilter ? `InvoiceDate >= '${dateFilter}'` : '',
-          OrderBy: 'InvoiceDate DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'InvoiceDate DESC'
         }),
         utilities.rv.RunView({
           EntityName: 'Deals',
           ExtraFilter: dateFilter ? `CloseDate >= '${dateFilter}'` : '',
-          OrderBy: 'CloseDate DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'CloseDate DESC'
         }),
         utilities.rv.RunView({
           EntityName: 'Products',
-          OrderBy: 'ProductName ASC',
-          ResultType: 'entity_object'
+          OrderBy: 'ProductName ASC'
         })
       ]);
 

@@ -36,8 +36,7 @@ function AccountsByIndustry (props) {
       const result = await utilities.rv.RunView({
         EntityName: 'Accounts',
         ExtraFilter: 'IsActive = 1',
-        OrderBy: 'AccountName',
-        ResultType: 'entity_object'
+        OrderBy: 'AccountName'
       });
       
       if (result.Success && result.Results) {

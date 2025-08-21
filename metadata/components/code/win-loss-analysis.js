@@ -27,8 +27,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
       const result = await utilities.rv.RunView({
         EntityName: 'Deals',
         ExtraFilter: dateFilter ? `CloseDate >= '${dateFilter}' AND Stage IN ('Closed Won', 'Closed Lost')` : `Stage IN ('Closed Won', 'Closed Lost')`,
-        OrderBy: 'CloseDate DESC',
-        ResultType: 'entity_object'
+        OrderBy: 'CloseDate DESC'
       });
 
       if (result.Success) {

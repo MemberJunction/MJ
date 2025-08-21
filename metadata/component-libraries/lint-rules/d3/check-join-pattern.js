@@ -15,7 +15,7 @@
     
     // Check if followed by append
     if (t.isMemberExpression(path.parent) &&
-        path.parent.object === path.node &&
+        path.parent.object === path.node && 
         t.isCallExpression(path.parent.parent) &&
         t.isIdentifier(path.parent.property) &&
         path.parent.property.name === 'append') {

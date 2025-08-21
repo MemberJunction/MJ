@@ -42,8 +42,7 @@ function RecentDealsList({ utilities, styles, components, callbacks, savedUserSe
         EntityName: 'Deals',
         OrderBy: `${sortBy} ${sortDirection}`,
         MaxRows: maxRows,
-        ExtraFilter: extraFilter,
-        ResultType: 'entity_object'
+        ExtraFilter: extraFilter
       });
 
       if (result.Success) {

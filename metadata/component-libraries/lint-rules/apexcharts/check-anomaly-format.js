@@ -11,7 +11,7 @@
       const pointsProp = value.properties.find(p => 
         t.isObjectProperty(p) && 
         t.isIdentifier(p.key) && 
-        p.key.name === 'points'
+        p.key.name === 'points' 
       );
       
       if (pointsProp) {

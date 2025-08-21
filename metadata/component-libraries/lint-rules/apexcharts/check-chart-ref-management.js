@@ -15,7 +15,7 @@
       
       // Now check if this variable is attached to a ref
       const scope = path.scope;
-      const binding = scope.getBinding(varName);
+      const binding = scope.getBinding(varName); 
       if (binding) {
         let isAttachedToRef = false;
         

@@ -97,15 +97,13 @@ function SalesPipelineDashboard({ utilities, styles, components, callbacks, save
         utilities.rv.RunView({
           EntityName: 'Deals',
           ExtraFilter: dateFilter,
-          OrderBy: 'CloseDate DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'CloseDate DESC'
         }),
         utilities.rv.RunView({
           EntityName: 'Activities',
           ExtraFilter: `CreatedAt >= '${dayjs().subtract(30, 'day').format('YYYY-MM-DD')}'`,
           OrderBy: 'CreatedAt DESC',
-          MaxRows: 100,
-          ResultType: 'entity_object'
+          MaxRows: 100
         })
       ]);
 

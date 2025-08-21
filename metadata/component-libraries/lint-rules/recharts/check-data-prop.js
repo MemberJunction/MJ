@@ -15,7 +15,7 @@
       chartComponents.includes(path.node.openingElement.name.name)) {
     
     const attributes = path.node.openingElement.attributes;
-    let hasData = false;
+    let hasData = false; 
     
     attributes.forEach(attr => {
       if (t.isJSXAttribute(attr) &&
