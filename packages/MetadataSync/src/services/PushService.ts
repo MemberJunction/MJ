@@ -14,7 +14,8 @@ import { JsonPreprocessor } from '../lib/json-preprocessor';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 // Configuration for parallel processing
-const PARALLEL_BATCH_SIZE = 10; // Number of records to process in parallel at each dependency level
+const PARALLEL_BATCH_SIZE = 1; // Number of records to process in parallel at each dependency level
+/// TEMPORARILY DISABLED PARALLEL BY SETTING TO 1 as we were having some issues
 
 export interface PushOptions {
   dir?: string;
@@ -736,7 +737,8 @@ export class PushService {
       return `"${value}"`;
     }
     if (typeof value === 'object') {
-      return JSON.stringify(value);
+      const str = JSON.stringify(value);
+      return str.length > 50 ? `"${str.substring(0, 47)}..."` : `"${str}"`;
     }
     return String(value);
   }
