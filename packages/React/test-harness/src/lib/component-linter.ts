@@ -2818,15 +2818,23 @@ export class ComponentLinter {
     },
     
     {
-      name: 'root-component-props-restriction',
-      appliesTo: 'root',
+      name: 'component-props-validation',
+      appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
         
-        // This rule applies when testing root components
-        // We can identify this by checking if the component spec indicates it's a root component
-        // For now, we'll apply this rule universally and let the caller decide when to use it
+        // Build set of allowed props: standard props + componentSpec properties
+        const allowedProps = new Set(standardProps);
+        
+        // Add props from componentSpec.properties if they exist
+        if (componentSpec?.properties) {
+          for (const prop of componentSpec.properties) {
+            if (prop.name) {
+              allowedProps.add(prop.name);
+            }
+          }
+        }
         
         traverse(ast, {
           FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
@@ -2840,21 +2848,24 @@ export class ComponentLinter {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
                     allProps.push(propName);
-                    if (!standardProps.has(propName)) {
+                    if (!allowedProps.has(propName)) {
                       invalidProps.push(propName);
                     }
                   }
                 }
                 
-                // Only report if there are non-standard props
-                // This allows the rule to be selectively applied to root components
+                // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
+                  const customPropsMessage = componentSpec?.properties?.length 
+                    ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
+                    : '';
+                  
                   violations.push({
-                    rule: 'root-component-props-restriction',
+                    rule: 'component-props-validation',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                   });
                 }
               }
@@ -2875,19 +2886,23 @@ export class ComponentLinter {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
                       allProps.push(propName);
-                      if (!standardProps.has(propName)) {
+                      if (!allowedProps.has(propName)) {
                         invalidProps.push(propName);
                       }
                     }
                   }
                   
                   if (invalidProps.length > 0) {
+                    const customPropsMessage = componentSpec?.properties?.length 
+                      ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
+                      : '';
+                    
                     violations.push({
-                      rule: 'root-component-props-restriction',
+                      rule: 'component-props-validation',
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts non-standard props: ${invalidProps.join(', ')}. Root components can only accept standard props: ${Array.from(standardProps).join(', ')}. Load data internally using utilities.rv.RunView().`
+                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                     });
                   }
                 }
@@ -5631,10 +5646,10 @@ await utilities.rq.RunQuery({
           });
           break;
           
-        case 'root-component-props-restriction':
+        case 'component-props-validation':
           suggestions.push({
             violation: violation.rule,
-            suggestion: 'Root components can only accept standard props. Load data internally.',
+            suggestion: 'Components can only accept standard props or props defined in spec. Load data internally.',
             example: `// ❌ WRONG - Root component with additional props:
 function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
   // Additional props will break hosting environment
