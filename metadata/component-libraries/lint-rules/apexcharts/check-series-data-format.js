@@ -28,7 +28,7 @@
       if (arg && t.isIdentifier(arg)) {
         // Flag for validation - series data should be array of objects with name and data
         context.violations.push({
-          type: 'warning',
+          severity: 'medium',
           message: `Verify that '${arg.name}' is formatted as ApexCharts series: [{name: string, data: [{x, y}]}]`,
           line: path.node.loc?.start.line,
           column: path.node.loc?.start.column,
@@ -58,7 +58,7 @@
       while (parent && depth < 5) {
         if (t.isJSXAttribute(parent) && parent.name?.name === 'seriesData') {
           context.violations.push({
-            type: 'error',
+            severity: 'critical',
             message: 'Data structure {date, duration, cost} needs transformation to ApexCharts series format',
             line: path.node.loc?.start.line,
             column: path.node.loc?.start.column,

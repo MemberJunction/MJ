@@ -18,7 +18,7 @@
     },
     "checkDestroyInCleanup": {
       "description": "Ensure ApexCharts instances are destroyed in cleanup",
-      "severity": "medium",
+      "severity": "high",
       "validate": "@file:check-destroy-cleanup.js"
     },
     "checkOptionsStructure": {
@@ -33,7 +33,7 @@
     },
     "checkChartRefManagement": {
       "description": "Ensure chart instances are properly stored in refs for exports",
-      "severity": "high",
+      "severity": "low",
       "validate": "@file:check-chart-ref-management.js"
     },
     "checkAnomalyFormat": {

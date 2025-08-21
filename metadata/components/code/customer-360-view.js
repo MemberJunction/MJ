@@ -30,8 +30,7 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
         const accountsResult = await utilities.rv.RunView({
           EntityName: 'Accounts',
           MaxRows: 1,
-          OrderBy: 'AnnualRevenue DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'AnnualRevenue DESC'
         });
         
         if (accountsResult.Success && accountsResult.Results?.length > 0) {
@@ -51,21 +50,18 @@ function Customer360View({ utilities, styles, components, callbacks, savedUserSe
         utilities.rv.RunView({
           EntityName: 'Contacts',
           ExtraFilter: `AccountID='${targetAccountId}'`,
-          OrderBy: 'LastName ASC',
-          ResultType: 'entity_object'
+          OrderBy: 'LastName ASC'
         }),
         utilities.rv.RunView({
           EntityName: 'Deals',
           ExtraFilter: `AccountID='${targetAccountId}'`,
-          OrderBy: 'CloseDate DESC',
-          ResultType: 'entity_object'
+          OrderBy: 'CloseDate DESC'
         }),
         utilities.rv.RunView({
           EntityName: 'Activities',
           ExtraFilter: `AccountID='${targetAccountId}'`,
           OrderBy: 'CreatedAt DESC',
-          MaxRows: 100,
-          ResultType: 'entity_object'
+          MaxRows: 100
         })
       ]);
 

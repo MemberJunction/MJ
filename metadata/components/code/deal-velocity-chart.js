@@ -62,8 +62,7 @@ function DealVelocityChart({ utilities, styles, components, callbacks, savedUser
       const result = await utilities.rv.RunView({
         EntityName: 'Deals',
         ExtraFilter: `__mj_CreatedAt >= '${formatDate(startDate)}' OR (CloseDate >= '${formatDate(startDate)}' AND CloseDate <= '${formatDate(endDate)}')`,
-        OrderBy: '__mj_CreatedAt ASC',
-        ResultType: 'entity_object'
+        OrderBy: '__mj_CreatedAt ASC'
       });
 
       if (result.Success) {

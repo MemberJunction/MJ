@@ -32,21 +32,18 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       const results = await utilities.rv.RunViews([
         {
           EntityName: 'Products',
-          OrderBy: 'ProductName ASC',
-          ResultType: 'entity_object'
+          OrderBy: 'ProductName ASC'
         },
         {
           EntityName: 'Invoice Line Items',
           OrderBy: 'TotalPrice DESC',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
+          MaxRows: 1000
         },
         {
           EntityName: 'Invoices',
           ExtraFilter: dateFilter,
           OrderBy: 'InvoiceDate DESC',
-          MaxRows: 500,
-          ResultType: 'entity_object'
+          MaxRows: 500
         }
       ]);
 

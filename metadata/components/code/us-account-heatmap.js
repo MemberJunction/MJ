@@ -46,8 +46,7 @@ function USAccountHeatmap({ utilities, styles, components, callbacks, savedUserS
     try {
       const result = await utilities.rv.RunView({
         EntityName: 'Accounts',
-        OrderBy: 'AccountName ASC',
-        ResultType: 'entity_object'
+        OrderBy: 'AccountName ASC'
       });
 
       if (result.Success) {

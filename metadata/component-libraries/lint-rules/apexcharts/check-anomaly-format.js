@@ -11,7 +11,7 @@
       const pointsProp = value.properties.find(p => 
         t.isObjectProperty(p) && 
         t.isIdentifier(p.key) && 
-        p.key.name === 'points'
+        p.key.name === 'points' 
       );
       
       if (pointsProp) {
@@ -44,7 +44,7 @@
                   
                   if (hasDate && !hasX) {
                     context.violations.push({
-                      type: 'error',
+                      severity: 'critical',
                       message: 'Anomaly annotations should use "x" property with timestamp, not "date"',
                       line: obj.loc?.start.line,
                       column: obj.loc?.start.column,
@@ -87,7 +87,7 @@
         
         if (hasDate && !hasX) {
           context.violations.push({
-            type: 'warning',
+            severity: 'medium',
             message: 'Anomaly data should include "x" property for ApexCharts compatibility',
             line: firstElement.loc?.start.line,
             column: firstElement.loc?.start.column,

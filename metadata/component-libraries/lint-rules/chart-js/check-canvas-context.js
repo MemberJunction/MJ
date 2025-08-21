@@ -17,7 +17,7 @@
     // Check if it's a getContext('2d') call
     if (t.isCallExpression(firstArg) &&
         t.isMemberExpression(firstArg.callee) &&
-        t.isIdentifier(firstArg.callee.property) &&
+        t.isIdentifier(firstArg.callee.property) && 
         firstArg.callee.property.name === 'getContext') {
       
       const contextArg = firstArg.arguments[0];

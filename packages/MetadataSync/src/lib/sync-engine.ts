@@ -110,11 +110,13 @@ export class SyncEngine {
     if (depth > MAX_RECURSION_DEPTH) {
       throw new Error(`Maximum recursion depth (${MAX_RECURSION_DEPTH}) exceeded while processing field value: ${value}`);
     }
-    // Handle arrays and objects by converting them to JSON strings
+    // Handle arrays and objects that are directly defined in metadata files
+    // Note: Objects loaded from @file references are returned as-is to preserve proper escaping
     if (value !== null && typeof value === 'object') {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
-        // Convert to pretty-printed JSON string
+        // Convert to pretty-printed JSON string for inline metadata objects
+        // Objects from @file references will be handled by BaseEntity during save
         return JSON.stringify(value, null, 2);
       }
     }
@@ -181,8 +183,10 @@ export class SyncEngine {
             const fileDir = path.dirname(fullPath);
             processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
             
-            // Return as JSON string since @file references typically expect string content
-            return JSON.stringify(processedJson, null, 2);
+            // Return the processed JSON object directly without stringifying
+            // Let BaseEntity handle serialization when saving to database
+            // This ensures proper escaping of embedded code/scripts
+            return processedJson;
           } catch (jsonError) {
             // Not valid JSON or error processing, fall back to text file handling
             const fileContent = await fs.readFile(fullPath, 'utf-8');

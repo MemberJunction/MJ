@@ -82,8 +82,7 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
       const dealsResult = await utilities.rv.RunView({
         EntityName: 'Deals',
         ExtraFilter: dateFilter,
-        OrderBy: '__mj_CreatedAt DESC',
-        ResultType: 'entity_object'
+        OrderBy: '__mj_CreatedAt DESC'
       });
 
       if (dealsResult.Success) {

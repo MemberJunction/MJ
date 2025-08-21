@@ -44,8 +44,7 @@ function DealsByStageBoard({ utilities, styles, components, callbacks, savedUser
       const result = await utilities.rv.RunView({
         EntityName: 'Deals',
         OrderBy: 'CloseDate ASC',
-        ExtraFilter: extraFilter,
-        ResultType: 'entity_object'
+        ExtraFilter: extraFilter
       });
 
       if (result.Success) {

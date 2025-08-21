@@ -44,7 +44,7 @@
       if (!hasCleanup) {
         return {
           rule: 'chart-missing-cleanup',
-          severity: 'medium',
+          severity: 'high',
           message: 'Chart.js instances must be destroyed in useEffect cleanup to prevent memory leaks',
           line: path.node.loc?.start.line || 0,
           column: path.node.loc?.start.column || 0,
