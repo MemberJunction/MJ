@@ -3154,7 +3154,9 @@ export class ComponentLinter {
       }
     },
 
-    {
+    // DISABLED: Too many false positives - needs better dependency/library checking
+    // Re-enable after improving to check dependencies before assuming library components
+    /* {
       name: 'undefined-jsx-component',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -3402,7 +3404,7 @@ export class ComponentLinter {
         
         return violations;
       }
-    },
+    }, */
     
     {
       name: 'runquery-runview-validation',
