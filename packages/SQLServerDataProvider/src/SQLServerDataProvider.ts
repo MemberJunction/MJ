@@ -107,6 +107,15 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * Represents a single field change in the DiffObjects comparison result
+ */
+export type FieldChange = {
+  field: string;
+  oldValue: any;
+  newValue: any;
+};
+
+/**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
  * without creating circular dependencies or forcing everything to be static
@@ -2707,32 +2716,112 @@ export class SQLServerDataProvider
     return value;
   }
 
+  /**
+   * Recursively escapes quotes in all string properties of an object or array.
+   * This method traverses through nested objects and arrays, escaping the specified
+   * quote character in all string values to prevent SQL injection and syntax errors.
+   * 
+   * @param obj - The object, array, or primitive value to process
+   * @param quoteToEscape - The quote character to escape (typically single quote "'")
+   * @returns A new object/array with all string values having quotes properly escaped.
+   *          Non-string values are preserved as-is.
+   * 
+   * @example
+   * // Escaping single quotes in a nested object
+   * const input = {
+   *   name: "John's Company",
+   *   details: {
+   *     description: "It's the best",
+   *     tags: ["Won't fail", "Can't stop"]
+   *   }
+   * };
+   * const escaped = this.escapeQuotesInProperties(input, "'");
+   * // Result: {
+   * //   name: "John''s Company",
+   * //   details: {
+   * //     description: "It''s the best",
+   * //     tags: ["Won''t fail", "Can''t stop"]
+   * //   }
+   * // }
+   * 
+   * @remarks
+   * This method is essential for preparing data to be embedded in SQL strings.
+   * It handles:
+   * - Nested objects of any depth
+   * - Arrays (including arrays of objects)
+   * - Mixed-type objects with strings, numbers, booleans, null values
+   * - Circular references are NOT handled and will cause stack overflow
+   */
   protected escapeQuotesInProperties(obj: any, quoteToEscape: string): any {
-    const sRet: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        const element = obj[key];
-        if (typeof element === 'string') {
-          const reg = new RegExp(quoteToEscape, 'g');
-          sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
-        } else sRet[key] = element;
-      }
+    // Handle null/undefined
+    if (obj === null || obj === undefined) {
+      return obj;
     }
-    return sRet;
+    
+    // Handle arrays recursively
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
+    }
+    
+    // Handle objects recursively
+    if (typeof obj === 'object') {
+      const sRet: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const element = obj[key];
+          if (typeof element === 'string') {
+            const reg = new RegExp(quoteToEscape, 'g');
+            sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
+          } else if (typeof element === 'object') {
+            // Recursively escape nested objects and arrays
+            sRet[key] = this.escapeQuotesInProperties(element, quoteToEscape);
+          } else {
+            // Keep primitive values as-is (numbers, booleans, etc.)
+            sRet[key] = element;
+          }
+        }
+      }
+      return sRet;
+    }
+    
+    // For non-object types (shouldn't normally happen), return as-is
+    return obj;
   }
 
   /**
-   * This method will create a changes object by comparing two javascript objects. Each property of the object will be named by the
-   * field name in the newData/oldData and will have a sub-object with the following properties:
-   *  * field: the field name
-   *  * oldValue: the old value
-   *  * newValue: the new value
-   * This is used to generate the object that will be saved into the ChangesJSON field in the Record Changes entity.
+   * Creates a changes object by comparing two javascript objects, identifying fields that have different values.
+   * Each property in the returned object represents a changed field, with the field name as the key.
+   * 
+   * @param oldData - The original data object to compare from
+   * @param newData - The new data object to compare to
+   * @param entityInfo - Entity metadata used to validate fields and determine comparison logic
+   * @param quoteToEscape - The quote character to escape in string values (typically "'")
+   * @returns A Record mapping field names to FieldChange objects containing the field name, old value, and new value.
+   *          Returns null if either oldData or newData is null/undefined.
+   *          Only includes fields that have actually changed and are not read-only.
+   * 
+   * @remarks
+   * - Read-only fields are never considered changed
+   * - null and undefined are treated as equivalent
+   * - Date fields are compared by timestamp
+   * - String and object values have quotes properly escaped for SQL
+   * - Objects/arrays are recursively escaped using escapeQuotesInProperties
+   * 
+   * @example
+   * ```typescript
+   * const changes = provider.DiffObjects(
+   *   { name: "John's Co", revenue: 1000 },
+   *   { name: "John's Co", revenue: 2000 },
+   *   entityInfo,
+   *   "'"
+   * );
+   * // Returns: { revenue: { field: "revenue", oldValue: 1000, newValue: 2000 } }
+   * ```
    */
-  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
+  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): Record<string, FieldChange> | null {
     if (!oldData || !newData) return null;
     else {
-      const changes: any = {};
+      const changes: Record<string, FieldChange> = {};
       for (const key in newData) {
         const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
         if (!f) {
@@ -2760,9 +2849,26 @@ export class SQLServerDataProvider
         }
         if (bDiff) {
           // make sure we escape things properly
-          const r = new RegExp(quoteToEscape, 'g');
-          const o = oldData[key] && typeof oldData[key] === 'string' ? oldData[key].replace(r, quoteToEscape + quoteToEscape) : oldData[key];
-          const n = newData[key] && typeof newData[key] === 'string' ? newData[key].replace(r, quoteToEscape + quoteToEscape) : newData[key];
+          let o = oldData[key];
+          let n = newData[key];
+          
+          if (typeof o === 'string') {
+            // Escape strings directly
+            const r = new RegExp(quoteToEscape, 'g');
+            o = o.replace(r, quoteToEscape + quoteToEscape);
+          } else if (typeof o === 'object' && o !== null) {
+            // For objects/arrays, recursively escape all string properties
+            o = this.escapeQuotesInProperties(o, quoteToEscape);
+          }
+          
+          if (typeof n === 'string') {
+            // Escape strings directly
+            const r = new RegExp(quoteToEscape, 'g');
+            n = n.replace(r, quoteToEscape + quoteToEscape);
+          } else if (typeof n === 'object' && n !== null) {
+            // For objects/arrays, recursively escape all string properties
+            n = this.escapeQuotesInProperties(n, quoteToEscape);
+          }
 
           changes[key] = {
             field: key,
