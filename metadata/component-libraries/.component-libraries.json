@@ -46,14 +46,15 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/d3@7.8.5/dist/d3.min.js",
       "CDNCssUrl": null,
-      "Description": "Data visualization library for creating custom charts"
+      "Description": "Data visualization library for creating custom charts",
+      "LintRules": "@file:lint-rules/d3/lint.json"
     },
     "primaryKey": {
       "ID": "12416186-FBBD-4973-A7F4-D030FD84994B"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.354Z",
-      "checksum": "6af198d6ed4cb003192b94b90c7e03b30d0b4be4c4b2efc798542cb683d55ead"
+      "lastModified": "2025-08-20T22:49:07.415Z",
+      "checksum": "93decf69c96c83dd343b2dca2d2729198c26da3dd5feaf9f7af9f2380d7d452b"
     }
   },
   {
@@ -65,14 +66,15 @@
       "Category": "Charting",
       "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
       "CDNCssUrl": null,
-      "Description": "Simple yet flexible JavaScript charting library"
+      "Description": "Simple yet flexible JavaScript charting library",
+      "LintRules": "@file:lint-rules/chart-js/lint.json"
     },
     "primaryKey": {
       "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.362Z",
-      "checksum": "8ecbdf227c8e0393661e8d5129555b21cfeeb906ca61ab8e190db1f96cd6e7d7"
+      "lastModified": "2025-08-20T22:49:07.432Z",
+      "checksum": "aa4438dea9bbd49bdf4c83868978b5012571ecf4c862c111e60f16094b3f4d0b"
     }
   },
   {
@@ -85,14 +87,15 @@
       "Status": "Disabled",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js",
       "CDNCssUrl": null,
-      "Description": "React charting library built on D3"
+      "Description": "React charting library built on D3",
+      "LintRules": "@file:lint-rules/recharts/lint.json"
     },
     "primaryKey": {
       "ID": "5A8C6518-889B-4868-BA20-4E50531309C6"
     },
     "sync": {
-      "lastModified": "2025-08-19T19:02:06.718Z",
-      "checksum": "0c4d5e41bef291ce7bbbb5160ed7ee4d554be14a59f0d03cd9c7e61b7bd65790"
+      "lastModified": "2025-08-20T14:17:29.452Z",
+      "checksum": "82a158b1b3fc4782d2dce374b43ea0f7daa9baba4a7260942bcfdceff5cabc49"
     }
   },
   {
@@ -123,14 +126,15 @@
       "Category": "Charting",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js",
       "CDNCssUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css",
-      "Description": "Modern interactive JavaScript charts library"
+      "Description": "Modern interactive JavaScript charts library",
+      "LintRules": "@file:lint-rules/apexcharts/lint.json"
     },
     "primaryKey": {
       "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.285Z",
-      "checksum": "fc77985b54981b2f90db2945ebfcff66cdd095c7d3ed8c537226a1e0d12f9110"
+      "lastModified": "2025-08-20T22:49:07.449Z",
+      "checksum": "68e9818fa54334014e0d82034112ddd83abc77e674a15eff042354eace600a32"
     }
   },
   {

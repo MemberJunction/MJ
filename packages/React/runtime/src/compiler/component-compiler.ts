@@ -144,7 +144,7 @@ export class ComponentCompiler {
       throw new Error('Babel instance not set. Call setBabelInstance() first.');
     }
 
-    const wrappedCode = this.wrapComponentCode(code, componentName, options.libraries);
+    const wrappedCode = this.wrapComponentCode(code, componentName, options.libraries, options.dependencies);
 
     try {
       const result = this.babelInstance.transform(wrappedCode, {
@@ -166,9 +166,10 @@ export class ComponentCompiler {
    * @param componentCode - Raw component code
    * @param componentName - Name of the component
    * @param libraries - Optional library dependencies
+   * @param dependencies - Optional child component dependencies
    * @returns Wrapped component code
    */
-  private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[]): string {
+  private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[], dependencies?: Array<{ name: string }>): string {
     // Generate library declarations if libraries are provided
     const libraryDeclarations = libraries && libraries.length > 0
       ? libraries
@@ -176,14 +177,21 @@ export class ComponentCompiler {
           .map(lib => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
           .join('\n        ')
       : '';
+    
+    // Generate component declarations if dependencies are provided
+    const componentDeclarations = dependencies && dependencies.length > 0
+      ? dependencies
+          .map(dep => `const ${dep.name} = components['${dep.name}'];`)
+          .join('\n        ')
+      : '';
 
     return `
       function createComponent(
         React, ReactDOM, 
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
-        libraries, styles, console
+        libraries, styles, console, components
       ) {
-        ${libraryDeclarations ? libraryDeclarations + '\n        ' : ''}${componentCode}
+        ${libraryDeclarations ? libraryDeclarations + '\n        ' : ''}${componentDeclarations ? componentDeclarations + '\n        ' : ''}${componentCode}
         
         // Ensure the component exists
         if (typeof ${componentName} === 'undefined') {
@@ -424,12 +432,12 @@ export class ComponentCompiler {
       const factoryCreator = new Function(
         'React', 'ReactDOM',
         'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
-        'libraries', 'styles', 'console',
+        'libraries', 'styles', 'console', 'components',
         `${transpiledCode}; return createComponent;`
       );
 
       // Return a function that executes the factory with runtime context
-      return (context: RuntimeContext, styles: any = {}) => {
+      return (context: RuntimeContext, styles: any = {}, components: Record<string, any> = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
         
         // Merge loaded libraries with context libraries
@@ -452,7 +460,8 @@ export class ComponentCompiler {
           React.useLayoutEffect,
           mergedLibraries,
           styles,
-          console
+          console,
+          components
         );
 
         // Call createComponent to get the actual component
@@ -469,7 +478,8 @@ export class ComponentCompiler {
           React.useLayoutEffect,
           mergedLibraries,
           styles,
-          console
+          console,
+          components
         );
 
         // Return the component directly

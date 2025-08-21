@@ -9586,6 +9586,11 @@ export const ComponentLibrarySchema = z.object({
     *   * Deprecated
     *   * Disabled
         * * Description: Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used`),
+    LintRules: z.string().nullable().describe(`
+        * * Field Name: LintRules
+        * * Display Name: Lint Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for library-specific lint rules that are applied during component validation. This field contains structured rules that define how components using this library should be validated, including DOM element requirements, initialization patterns, lifecycle methods, and common error patterns. Example structure: {"initialization": {"constructorName": "Chart", "elementType": "canvas"}, "lifecycle": {"requiredMethods": ["render"], "cleanupMethods": ["destroy"]}}. The linter dynamically applies these rules based on the libraries referenced in a component spec, enabling extensible validation without hardcoding library-specific logic.`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -39134,6 +39139,19 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     }
     set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: LintRules
+    * * Display Name: Lint Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for library-specific lint rules that are applied during component validation. This field contains structured rules that define how components using this library should be validated, including DOM element requirements, initialization patterns, lifecycle methods, and common error patterns. Example structure: {"initialization": {"constructorName": "Chart", "elementType": "canvas"}, "lifecycle": {"requiredMethods": ["render"], "cleanupMethods": ["destroy"]}}. The linter dynamically applies these rules based on the libraries referenced in a component spec, enabling extensible validation without hardcoding library-specific logic.
+    */
+    get LintRules(): string | null {
+        return this.Get('LintRules');
+    }
+    set LintRules(value: string | null) {
+        this.Set('LintRules', value);
     }
 }
 

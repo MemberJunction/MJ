@@ -104,4 +104,51 @@ export class ComponentSpec {
      * 3rd party lib dependencies, if any
      */
     libraries?: ComponentLibraryDependency[];
+
+    /**
+     * Relevant examples of components intended to inspire this component's creation
+     */
+    relevantExamples?: Array<ComponentExample[]>;
+};
+
+/**
+ * Type that defines an example component used to inspire the creation
+ * of a new component. By definition these examples are located in a registry
+ * and can be found via the combination of their name and namespace. The optional
+ * properties can be used at runtime to store additional information as required
+ * for generation/inference needs
+ */
+export type ComponentExample = {
+    name: string;
+    namespace: string;
+    version?: string;
+    description: string;
+    functionalRequirements: string;
+    technicalDesign: string;
+
+    /**
+     * Tracks a 0-1 number that indicates the relevance of this example to the containing ComponentSpec, can be used
+     * for ranking examples by importance/relevance
+     */
+    relevance: number;
+
+    code?: string;
+
+    /**
+     * Optional runtime embedding vector calculated for description
+     */
+    descriptionVector?: number[];
+    /**
+     * Optional runtime embedding vector calculated for functional requirements
+     */
+    functionalRequirementsVector?: number[];
+    /**
+     * Optional runtime embedding vector calculated for technical design
+     */
+    technicalDesignVector?: number[];
+
+    /**
+     * Bag to hold any number of other runtime attributes
+     */
+    other?: any;
 };
