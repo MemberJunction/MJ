@@ -1202,94 +1202,96 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'unsafe-array-access',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          MemberExpression(path: NodePath<t.MemberExpression>) {
-            // Check for array[index] patterns
-            if (t.isNumericLiteral(path.node.property) || 
-                (t.isIdentifier(path.node.property) && path.node.computed && /^\d+$/.test(path.node.property.name))) {
-              
-              // Look for patterns like: someArray[0].method()
-              const parent = path.parent;
-              if (t.isMemberExpression(parent) && parent.object === path.node) {
-                const code = path.toString();
-                
-                // Check if it's an array access followed by a method call
-                if (/\[\d+\]\.\w+/.test(code)) {
-                  violations.push({
-                    rule: 'unsafe-array-access',
-                    severity: 'critical',
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
-                    code: code
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Consolidated into unsafe-array-operations rule
+    // {
+    //   name: 'unsafe-array-access',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       MemberExpression(path: NodePath<t.MemberExpression>) {
+    //         // Check for array[index] patterns
+    //         if (t.isNumericLiteral(path.node.property) || 
+    //             (t.isIdentifier(path.node.property) && path.node.computed && /^\d+$/.test(path.node.property.name))) {
+    //           
+    //           // Look for patterns like: someArray[0].method()
+    //           const parent = path.parent;
+    //           if (t.isMemberExpression(parent) && parent.object === path.node) {
+    //             const code = path.toString();
+    //             
+    //             // Check if it's an array access followed by a method call
+    //             if (/\[\d+\]\.\w+/.test(code)) {
+    //               violations.push({
+    //                 rule: 'unsafe-array-access',
+    //                 severity: 'critical',
+    //                 line: path.node.loc?.start.line || 0,
+    //                 column: path.node.loc?.start.column || 0,
+    //                 message: `Unsafe array access: ${code}. Check array bounds before accessing elements.`,
+    //                 code: code
+    //               });
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
 
-    {
-      name: 'array-reduce-safety',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            // Check for .reduce() calls
-            if (t.isMemberExpression(path.node.callee) && 
-                t.isIdentifier(path.node.callee.property) && 
-                path.node.callee.property.name === 'reduce') {
-              
-              // Check if the array might be empty
-              const arrayExpression = path.node.callee.object;
-              const code = path.toString();
-              
-              // Look for patterns that suggest no safety check
-              const hasInitialValue = path.node.arguments.length > 1;
-              
-              if (!hasInitialValue) {
-                violations.push({
-                  rule: 'array-reduce-safety',
-                  severity: 'low',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `reduce() without initial value may fail on empty arrays: ${code}`,
-                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
-                });
-              }
-              
-              // Check for reduce on array access like arr[0].reduce()
-              if (t.isMemberExpression(arrayExpression) && 
-                  (t.isNumericLiteral(arrayExpression.property) || 
-                   (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
-                violations.push({
-                  rule: 'array-reduce-safety',
-                  severity: 'critical',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `reduce() on array element access is unsafe: ${code}`,
-                  code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
-                });
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Consolidated into unsafe-array-operations rule
+    // {
+    //   name: 'array-reduce-safety',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         // Check for .reduce() calls
+    //         if (t.isMemberExpression(path.node.callee) && 
+    //             t.isIdentifier(path.node.callee.property) && 
+    //             path.node.callee.property.name === 'reduce') {
+    //           
+    //           // Check if the array might be empty
+    //           const arrayExpression = path.node.callee.object;
+    //           const code = path.toString();
+    //           
+    //           // Look for patterns that suggest no safety check
+    //           const hasInitialValue = path.node.arguments.length > 1;
+    //           
+    //           if (!hasInitialValue) {
+    //             violations.push({
+    //               rule: 'array-reduce-safety',
+    //               severity: 'low',
+    //               line: path.node.loc?.start.line || 0,
+    //               column: path.node.loc?.start.column || 0,
+    //               message: `reduce() without initial value may fail on empty arrays: ${code}`,
+    //               code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+    //             });
+    //           }
+    //           
+    //           // Check for reduce on array access like arr[0].reduce()
+    //           if (t.isMemberExpression(arrayExpression) && 
+    //               (t.isNumericLiteral(arrayExpression.property) || 
+    //                (t.isIdentifier(arrayExpression.property) && arrayExpression.computed))) {
+    //             violations.push({
+    //               rule: 'array-reduce-safety',
+    //               severity: 'critical',
+    //               line: path.node.loc?.start.line || 0,
+    //               column: path.node.loc?.start.column || 0,
+    //               message: `reduce() on array element access is unsafe: ${code}`,
+    //               code: code.substring(0, 100) + (code.length > 100 ? '...' : '')
+    //             });
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
     
     // {
     //   name: 'parent-event-callback-usage',
@@ -3026,11 +3028,30 @@ export class ComponentLinter {
             }
           },
           
-          // Check for unsafe array operations
+          // Check for direct array access patterns like arr[0]
           MemberExpression(path: NodePath<t.MemberExpression>) {
-            const { object, property } = path.node;
+            const { object, property, computed } = path.node;
             
-            // Check for array methods that will crash on undefined
+            // Check for array[index] patterns
+            if (computed && (t.isNumericLiteral(property) || 
+                (t.isIdentifier(property) && /^\d+$/.test(property.name)))) {
+              
+              const code = path.toString();
+              
+              // Check if there's optional chaining
+              if (!path.node.optional) {
+                violations.push({
+                  rule: 'unsafe-array-operations',
+                  severity: 'low',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Direct array access "${code}" may be undefined. Consider using optional chaining: ${code.replace('[', '?.[')} or check array bounds first.`,
+                  code: code.substring(0, 50)
+                });
+              }
+            }
+            
+            // Check for array methods that could fail on undefined
             const unsafeArrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'length'];
             
             if (t.isIdentifier(property) && unsafeArrayMethods.includes(property.name)) {
@@ -3133,18 +3154,39 @@ export class ComponentLinter {
                   
                   if (!hasGuard) {
                     const methodName = property.name;
-                    const severity = methodName === 'length' ? 'high' : 'high';
                     
                     violations.push({
                       rule: 'unsafe-array-operations',
-                      severity,
+                      severity: 'low',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Unsafe operation "${object.name}.${methodName}" on prop that may be undefined. Props from queries/RunView can be null/undefined on initial render. Add a guard: if (!${object.name} || !Array.isArray(${object.name})) return <div>Loading...</div>; OR use: ${object.name}?.${methodName} or (${object.name} || []).${methodName}`,
+                      message: `Potentially unsafe operation "${object.name}.${methodName}" on prop that may be undefined. Consider using optional chaining: ${object.name}?.${methodName} or provide a default: (${object.name} || []).${methodName}`,
                       code: `${object.name}.${methodName}`
                     });
                   }
                 }
+              }
+            }
+          },
+          
+          // Check for reduce without initial value
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isMemberExpression(path.node.callee) && 
+                t.isIdentifier(path.node.callee.property) && 
+                path.node.callee.property.name === 'reduce') {
+              
+              const hasInitialValue = path.node.arguments.length > 1;
+              
+              if (!hasInitialValue) {
+                const code = path.toString();
+                violations.push({
+                  rule: 'unsafe-array-operations',
+                  severity: 'low',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `reduce() without initial value may fail on empty arrays. Consider providing an initial value as the second argument.`,
+                  code: code.substring(0, 100)
+                });
               }
             }
           }
