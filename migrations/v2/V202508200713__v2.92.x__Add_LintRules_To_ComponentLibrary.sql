@@ -6,6 +6,223 @@
 -- Date: 2025-08-20
 -- =====================================================================================================================
 
+
+
+
+
+
+
+
+-- Save MJ: Component Libraries (core SP call only)
+DECLARE @ID_d12a25ea UNIQUEIDENTIFIER,
+@Name_d12a25ea NVARCHAR(500),
+@DisplayName_d12a25ea NVARCHAR(500),
+@Version_d12a25ea NVARCHAR(100),
+@GlobalVariable_d12a25ea NVARCHAR(255),
+@Category_d12a25ea NVARCHAR(100),
+@CDNUrl_d12a25ea NVARCHAR(1000),
+@CDNCssUrl_d12a25ea NVARCHAR(1000),
+@Description_d12a25ea NVARCHAR(MAX),
+@Status_d12a25ea NVARCHAR(20)
+SET
+  @ID_d12a25ea = '94552655-B996-4791-9008-A2D6AAC526AC'
+SET
+  @Name_d12a25ea = N'date-fns'
+SET
+  @DisplayName_d12a25ea = N'date-fns'
+SET
+  @Version_d12a25ea = N'3.0.6'
+SET
+  @GlobalVariable_d12a25ea = N'dateFns'
+SET
+  @Category_d12a25ea = N'Utility'
+SET
+  @CDNUrl_d12a25ea = N'https://cdn.jsdelivr.net/npm/date-fns@3.0.6/cdn.min.js'
+SET
+  @Description_d12a25ea = N'Modern JavaScript date utility library'
+SET
+  @Status_d12a25ea = N'Deprecated'
+EXEC [${flyway:defaultSchema}].spCreateComponentLibrary @ID = @ID_d12a25ea,
+  @Name = @Name_d12a25ea,
+  @DisplayName = @DisplayName_d12a25ea,
+  @Version = @Version_d12a25ea,
+  @GlobalVariable = @GlobalVariable_d12a25ea,
+  @Category = @Category_d12a25ea,
+  @CDNUrl = @CDNUrl_d12a25ea,
+  @CDNCssUrl = @CDNCssUrl_d12a25ea,
+  @Description = @Description_d12a25ea,
+  @Status = @Status_d12a25ea;
+
+-- Save MJ: Component Libraries (core SP call only)
+DECLARE @ID_215dcbf8 UNIQUEIDENTIFIER,
+@Name_215dcbf8 NVARCHAR(500),
+@DisplayName_215dcbf8 NVARCHAR(500),
+@Version_215dcbf8 NVARCHAR(100),
+@GlobalVariable_215dcbf8 NVARCHAR(255),
+@Category_215dcbf8 NVARCHAR(100),
+@CDNUrl_215dcbf8 NVARCHAR(1000),
+@CDNCssUrl_215dcbf8 NVARCHAR(1000),
+@Description_215dcbf8 NVARCHAR(MAX),
+@Status_215dcbf8 NVARCHAR(20)
+SET
+  @ID_215dcbf8 = '8086FB43-A9A6-4CB4-B0BA-64DF478429F7'
+SET
+  @Name_215dcbf8 = N'classnames'
+SET
+  @DisplayName_215dcbf8 = N'Classnames'
+SET
+  @Version_215dcbf8 = N'2.5.1'
+SET
+  @GlobalVariable_215dcbf8 = N'classNames'
+SET
+  @Category_215dcbf8 = N'Utility'
+SET
+  @CDNUrl_215dcbf8 = N'https://cdn.jsdelivr.net/npm/classnames@2.5.1/index.min.js'
+SET
+  @Description_215dcbf8 = N'Utility for conditionally joining classNames together'
+SET
+  @Status_215dcbf8 = N'Deprecated'
+EXEC [${flyway:defaultSchema}].spCreateComponentLibrary @ID = @ID_215dcbf8,
+  @Name = @Name_215dcbf8,
+  @DisplayName = @DisplayName_215dcbf8,
+  @Version = @Version_215dcbf8,
+  @GlobalVariable = @GlobalVariable_215dcbf8,
+  @Category = @Category_215dcbf8,
+  @CDNUrl = @CDNUrl_215dcbf8,
+  @CDNCssUrl = @CDNCssUrl_215dcbf8,
+  @Description = @Description_215dcbf8,
+  @Status = @Status_215dcbf8;
+
+-- Save MJ: Component Libraries (core SP call only)
+DECLARE @ID_6e09df4a UNIQUEIDENTIFIER,
+@Name_6e09df4a NVARCHAR(500),
+@DisplayName_6e09df4a NVARCHAR(500),
+@Version_6e09df4a NVARCHAR(100),
+@GlobalVariable_6e09df4a NVARCHAR(255),
+@Category_6e09df4a NVARCHAR(100),
+@CDNUrl_6e09df4a NVARCHAR(1000),
+@CDNCssUrl_6e09df4a NVARCHAR(1000),
+@Description_6e09df4a NVARCHAR(MAX),
+@Status_6e09df4a NVARCHAR(20)
+SET
+  @ID_6e09df4a = 'BBABE030-7C12-4080-8DFD-ECB634C8615E'
+SET
+  @Name_6e09df4a = N'material-table'
+SET
+  @DisplayName_6e09df4a = N'Material Table'
+SET
+  @Version_6e09df4a = N'2.0.5'
+SET
+  @GlobalVariable_6e09df4a = N'MaterialTable'
+SET
+  @Category_6e09df4a = N'UI'
+SET
+  @CDNUrl_6e09df4a = N'https://cdn.jsdelivr.net/npm/material-table@2.0.5/dist/material-table.min.js'
+SET
+  @Description_6e09df4a = N'Datatable for React based on Material-UI'
+SET
+  @Status_6e09df4a = N'Disabled'
+EXEC [${flyway:defaultSchema}].spCreateComponentLibrary @ID = @ID_6e09df4a,
+  @Name = @Name_6e09df4a,
+  @DisplayName = @DisplayName_6e09df4a,
+  @Version = @Version_6e09df4a,
+  @GlobalVariable = @GlobalVariable_6e09df4a,
+  @Category = @Category_6e09df4a,
+  @CDNUrl = @CDNUrl_6e09df4a,
+  @CDNCssUrl = @CDNCssUrl_6e09df4a,
+  @Description = @Description_6e09df4a,
+  @Status = @Status_6e09df4a;
+
+-- Save MJ: Component Libraries (core SP call only)
+DECLARE @ID_4991344c UNIQUEIDENTIFIER,
+@Name_4991344c NVARCHAR(500),
+@DisplayName_4991344c NVARCHAR(500),
+@Version_4991344c NVARCHAR(100),
+@GlobalVariable_4991344c NVARCHAR(255),
+@Category_4991344c NVARCHAR(100),
+@CDNUrl_4991344c NVARCHAR(1000),
+@CDNCssUrl_4991344c NVARCHAR(1000),
+@Description_4991344c NVARCHAR(MAX),
+@Status_4991344c NVARCHAR(20)
+SET
+  @ID_4991344c = 'DB3D64C3-0D00-4D40-9AA7-99243916CF38'
+SET
+  @Name_4991344c = N'framer-motion'
+SET
+  @DisplayName_4991344c = N'Framer Motion'
+SET
+  @Version_4991344c = N'10.16.16'
+SET
+  @GlobalVariable_4991344c = N'FramerMotion'
+SET
+  @Category_4991344c = N'UI'
+SET
+  @CDNUrl_4991344c = N'https://cdn.jsdelivr.net/npm/framer-motion@10.16.16/dist/framer-motion.js'
+SET
+  @Description_4991344c = N'Production-ready motion library for React'
+SET
+  @Status_4991344c = N'Disabled'
+EXEC [${flyway:defaultSchema}].spCreateComponentLibrary @ID = @ID_4991344c,
+  @Name = @Name_4991344c,
+  @DisplayName = @DisplayName_4991344c,
+  @Version = @Version_4991344c,
+  @GlobalVariable = @GlobalVariable_4991344c,
+  @Category = @Category_4991344c,
+  @CDNUrl = @CDNUrl_4991344c,
+  @CDNCssUrl = @CDNCssUrl_4991344c,
+  @Description = @Description_4991344c,
+  @Status = @Status_4991344c;
+
+-- Save MJ: Component Libraries (core SP call only)
+DECLARE @ID_96a69407 UNIQUEIDENTIFIER,
+@Name_96a69407 NVARCHAR(500),
+@DisplayName_96a69407 NVARCHAR(500),
+@Version_96a69407 NVARCHAR(100),
+@GlobalVariable_96a69407 NVARCHAR(255),
+@Category_96a69407 NVARCHAR(100),
+@CDNUrl_96a69407 NVARCHAR(1000),
+@CDNCssUrl_96a69407 NVARCHAR(1000),
+@Description_96a69407 NVARCHAR(MAX),
+@Status_96a69407 NVARCHAR(20)
+SET
+  @ID_96a69407 = '3B520A11-731D-4C7B-9699-18906BB4CA53'
+SET
+  @Name_96a69407 = N'react-select'
+SET
+  @DisplayName_96a69407 = N'React Select'
+SET
+  @Version_96a69407 = N'2.1.2'
+SET
+  @GlobalVariable_96a69407 = N'ReactSelect'
+SET
+  @Category_96a69407 = N'UI'
+SET
+  @CDNUrl_96a69407 = N'https://unpkg.com/react-select@2.1.2/dist/react-select.min.js'
+SET
+  @Description_96a69407 = N'Flexible and customizable Select Input control for React'
+SET
+  @Status_96a69407 = N'Disabled'
+EXEC [${flyway:defaultSchema}].spCreateComponentLibrary @ID = @ID_96a69407,
+  @Name = @Name_96a69407,
+  @DisplayName = @DisplayName_96a69407,
+  @Version = @Version_96a69407,
+  @GlobalVariable = @GlobalVariable_96a69407,
+  @Category = @Category_96a69407,
+  @CDNUrl = @CDNUrl_96a69407,
+  @CDNCssUrl = @CDNCssUrl_96a69407,
+  @Description = @Description_96a69407,
+  @Status = @Status_96a69407;
+
+
+
+
+
+
+
+
+
+
+
 -- Add LintRules column to ComponentLibrary table
 ALTER TABLE ${flyway:defaultSchema}.ComponentLibrary
 ADD LintRules NVARCHAR(MAX) NULL;
