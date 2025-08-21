@@ -1656,92 +1656,93 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'performance-memoization',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        const memoizedValues = new Set<string>();
-        
-        // Collect memoized values
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useMemo') {
-              // Find the variable being assigned
-              if (t.isVariableDeclarator(path.parent) && t.isIdentifier(path.parent.id)) {
-                memoizedValues.add(path.parent.id.name);
-              }
-            }
-          }
-        });
-        
-        // Check for expensive operations without memoization
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property)) {
-              const method = path.node.callee.property.name;
-              
-              // Check for expensive array operations
-              if (['filter', 'sort', 'map', 'reduce'].includes(method)) {
-                // Check if this is inside a variable declaration
-                let parentPath: NodePath | null = path.parentPath;
-                while (parentPath && !t.isVariableDeclarator(parentPath.node)) {
-                  parentPath = parentPath.parentPath;
-                }
-                
-                if (parentPath && t.isVariableDeclarator(parentPath.node) && t.isIdentifier(parentPath.node.id)) {
-                  const varName = parentPath.node.id.name;
-                  
-                  // Check if it's not memoized
-                  if (!memoizedValues.has(varName)) {
-                    // Check if it's in the render method (not in event handlers)
-                    let funcParent = path.getFunctionParent();
-                    if (funcParent) {
-                      const funcName = ComponentLinter.getFunctionName(funcParent);
-                      if (!funcName || funcName === componentName) {
-                        violations.push({
-                          rule: 'performance-memoization',
-                          severity: 'low',  // Just a suggestion, not mandatory
-                          line: path.node.loc?.start.line || 0,
-                          column: path.node.loc?.start.column || 0,
-                          message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
-                          code: `const ${varName} = ...${method}(...)`
-                        });
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          
-          // Check for static arrays/objects
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isIdentifier(path.node.id) && 
-                (t.isArrayExpression(path.node.init) || t.isObjectExpression(path.node.init))) {
-              
-              const varName = path.node.id.name;
-              if (!memoizedValues.has(varName)) {
-                // Check if it looks static (no variables referenced)
-                const hasVariables = path.node.init.toString().match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
-                if (!hasVariables || hasVariables.length < 3) { // Allow some property names
-                  violations.push({
-                    rule: 'performance-memoization',
-                    severity: 'low',  // Just a suggestion
-                    line: path.node.loc?.start.line || 0,
-                    column: path.node.loc?.start.column || 0,
-                    message: 'Static array/object recreated on every render. Consider using useMemo.',
-                    code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Too aggressive - not all array operations need memoization
+    // {
+    //   name: 'performance-memoization',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     const memoizedValues = new Set<string>();
+    //     
+    //     // Collect memoized values
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useMemo') {
+    //           // Find the variable being assigned
+    //           if (t.isVariableDeclarator(path.parent) && t.isIdentifier(path.parent.id)) {
+    //             memoizedValues.add(path.parent.id.name);
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     // Check for expensive operations without memoization
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property)) {
+    //           const method = path.node.callee.property.name;
+    //           
+    //           // Check for expensive array operations
+    //           if (['filter', 'sort', 'map', 'reduce'].includes(method)) {
+    //             // Check if this is inside a variable declaration
+    //             let parentPath: NodePath | null = path.parentPath;
+    //             while (parentPath && !t.isVariableDeclarator(parentPath.node)) {
+    //               parentPath = parentPath.parentPath;
+    //             }
+    //             
+    //             if (parentPath && t.isVariableDeclarator(parentPath.node) && t.isIdentifier(parentPath.node.id)) {
+    //               const varName = parentPath.node.id.name;
+    //               
+    //               // Check if it's not memoized
+    //               if (!memoizedValues.has(varName)) {
+    //                 // Check if it's in the render method (not in event handlers)
+    //                 let funcParent = path.getFunctionParent();
+    //                 if (funcParent) {
+    //                   const funcName = ComponentLinter.getFunctionName(funcParent);
+    //                   if (!funcName || funcName === componentName) {
+    //                     violations.push({
+    //                       rule: 'performance-memoization',
+    //                       severity: 'low',  // Just a suggestion, not mandatory
+    //                       line: path.node.loc?.start.line || 0,
+    //                       column: path.node.loc?.start.column || 0,
+    //                       message: `Expensive ${method} operation without memoization. Consider using useMemo.`,
+    //                       code: `const ${varName} = ...${method}(...)`
+    //                     });
+    //                   }
+    //                 }
+    //               }
+    //             }
+    //           }
+    //         }
+    //       },
+    //       
+    //       // Check for static arrays/objects
+    //       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+    //         if (t.isIdentifier(path.node.id) && 
+    //             (t.isArrayExpression(path.node.init) || t.isObjectExpression(path.node.init))) {
+    //           
+    //           const varName = path.node.id.name;
+    //           if (!memoizedValues.has(varName)) {
+    //             // Check if it looks static (no variables referenced)
+    //             const hasVariables = path.node.init.toString().match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g);
+    //             if (!hasVariables || hasVariables.length < 3) { // Allow some property names
+    //               violations.push({
+    //                 rule: 'performance-memoization',
+    //                 severity: 'low',  // Just a suggestion
+    //                 line: path.node.loc?.start.line || 0,
+    //                 column: path.node.loc?.start.column || 0,
+    //                 message: 'Static array/object recreated on every render. Consider using useMemo.',
+    //                 code: `const ${varName} = ${path.node.init.type === 'ArrayExpression' ? '[...]' : '{...}'}`
+    //               });
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
     
     {
       name: 'react-hooks-rules',
@@ -1916,49 +1917,50 @@ export class ComponentLinter {
       }
     },
     
-    {
-      name: 'child-state-management',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        traverse(ast, {
-          CallExpression(path: NodePath<t.CallExpression>) {
-            if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useState') {
-              // Check if the state name suggests child component state
-              if (t.isVariableDeclarator(path.parent) && t.isArrayPattern(path.parent.id)) {
-                const stateNameNode = path.parent.id.elements[0];
-                if (t.isIdentifier(stateNameNode)) {
-                  const stateName = stateNameNode.name;
-                  
-                  // Check for patterns suggesting child state management
-                  const childPatterns = [
-                    /^child/i,
-                    /Table\w*State/,
-                    /Panel\w*State/,
-                    /Modal\w*State/,
-                    /\w+Component\w*/
-                  ];
-                  
-                  if (childPatterns.some(pattern => pattern.test(stateName))) {
-                    violations.push({
-                      rule: 'child-state-management',
-                      severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
-                      code: `const [${stateName}, ...] = useState(...)`
-                    });
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
+    // DISABLED: Too aggressive - flags legitimate state based on naming patterns
+    // {
+    //   name: 'child-state-management',
+    //   appliesTo: 'all',
+    //   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+    //     const violations: Violation[] = [];
+    //     
+    //     traverse(ast, {
+    //       CallExpression(path: NodePath<t.CallExpression>) {
+    //         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useState') {
+    //           // Check if the state name suggests child component state
+    //           if (t.isVariableDeclarator(path.parent) && t.isArrayPattern(path.parent.id)) {
+    //             const stateNameNode = path.parent.id.elements[0];
+    //             if (t.isIdentifier(stateNameNode)) {
+    //               const stateName = stateNameNode.name;
+    //               
+    //               // Check for patterns suggesting child state management
+    //               const childPatterns = [
+    //                 /^child/i,
+    //                 /Table\w*State/,
+    //                 /Panel\w*State/,
+    //                 /Modal\w*State/,
+    //                 /\w+Component\w*/
+    //               ];
+    //               
+    //               if (childPatterns.some(pattern => pattern.test(stateName))) {
+    //                 violations.push({
+    //                   rule: 'child-state-management',
+    //                   severity: 'critical',
+    //                   line: path.node.loc?.start.line || 0,
+    //                   column: path.node.loc?.start.column || 0,
+    //                   message: `Component trying to manage child component state: ${stateName}. Child components manage their own state!`,
+    //                   code: `const [${stateName}, ...] = useState(...)`
+    //                 });
+    //               }
+    //             }
+    //           }
+    //         }
+    //       }
+    //     });
+    //     
+    //     return violations;
+    //   }
+    // },
     
     {
       name: 'server-reload-on-client-operation',
@@ -3768,20 +3770,17 @@ export class ComponentLinter {
               const objName = path.node.object.name;
               const propName = path.node.property.name;
               
-              // Check if the object name suggests it's a query or view result
-              const isLikelyQueryResult = /result|response|res|data|output|query|view/i.test(objName);
+              // Only check if we can definitively trace this to RunQuery or RunView
               const isFromRunQuery = path.scope.hasBinding(objName) && 
                                     ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
               const isFromRunView = path.scope.hasBinding(objName) && 
                                    ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
               
-              if (isLikelyQueryResult || isFromRunQuery || isFromRunView) {
+              // Only validate if we're CERTAIN it's from RunQuery or RunView
+              if (isFromRunQuery || isFromRunView) {
                 // WHITELIST APPROACH: Check if the property is valid for the result type
                 const isValidQueryProp = validRunQueryResultProps.has(propName);
                 const isValidViewProp = validRunViewResultProps.has(propName);
-                
-                // If we can't determine which type, check both
-                const isValidProp = isValidQueryProp || isValidViewProp;
                 
                 // If it's specifically from RunQuery or RunView, be more specific
                 if (isFromRunQuery && !isValidQueryProp) {
@@ -3828,19 +3827,6 @@ export class ComponentLinter {
                       code: `${objName}.${propName}`
                     });
                   }
-                } else if (isLikelyQueryResult && !isValidProp) {
-                  // It looks like a result object but property isn't valid for either type
-                  const suggestion = incorrectToCorrectMap[propName];
-                  if (suggestion) {
-                    violations.push({
-                      rule: 'runquery-runview-result-structure',
-                      severity: 'high',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
-                      message: `Likely incorrect property access "${objName}.${propName}". RunQuery/RunView results use ".${suggestion}" not ".${propName}". Change to "${objName}.${suggestion}"`,
-                      code: `${objName}.${propName}`
-                    });
-                  }
                 }
                 
                 // Check for nested incorrect access like result.data.entities or result.Data.entities
@@ -3867,14 +3853,14 @@ export class ComponentLinter {
             if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
               const sourceName = path.node.init.name;
               
-              // Check if this looks like destructuring from a query/view result
-              const isLikelyResult = /result|response|res|query|view|data/i.test(sourceName);
+              // Only check if we can definitively trace this to RunQuery or RunView
               const isFromRunQuery = path.scope.hasBinding(sourceName) && 
                                     ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
               const isFromRunView = path.scope.hasBinding(sourceName) && 
                                    ComponentLinter.isVariableFromRunQueryOrView(path, sourceName, 'RunView');
               
-              if (isLikelyResult || isFromRunQuery || isFromRunView) {
+              // Only validate if we're CERTAIN it's from RunQuery or RunView
+              if (isFromRunQuery || isFromRunView) {
                 for (const prop of path.node.id.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
@@ -3907,18 +3893,6 @@ export class ComponentLinter {
                           : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${Array.from(validRunViewResultProps).join(', ')}`,
                         code: `{ ${propName} }`
                       });
-                    } else if (isLikelyResult && !isValidQueryProp && !isValidViewProp) {
-                      const suggestion = incorrectToCorrectMap[propName];
-                      if (suggestion) {
-                        violations.push({
-                          rule: 'runquery-runview-result-structure',
-                          severity: 'high',
-                          line: prop.loc?.start.line || 0,
-                          column: prop.loc?.start.column || 0,
-                          message: `Likely destructuring invalid property "${propName}" from query/view result. Did you mean "${suggestion}"?`,
-                          code: `{ ${propName} }`
-                        });
-                      }
                     }
                   }
                 }
