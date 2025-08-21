@@ -520,7 +520,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component '${varName}' shadows a dependency component. Use 'components.${varName}' instead of redefining it inline. The component spec defines '${varName}' as an embedded dependency, but this code is creating a new inline definition which overrides it.`,
+                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' is already available from dependencies (auto-destructured), but this code is creating a new definition which overrides it.`,
                     code: `const ${varName} = ...`
                   });
                 }
@@ -540,7 +540,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component '${funcName}' shadows a dependency component. Use 'components.${funcName}' instead of redefining it inline. The component spec defines '${funcName}' as an embedded dependency, but this code is creating a new inline definition which overrides it.`,
+                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' is already available from dependencies (auto-destructured), but this code is creating a new function which overrides it.`,
                   code: `function ${funcName}(...)`
                 });
               }
@@ -548,31 +548,26 @@ export class ComponentLinter {
           }
         });
         
-        // Also check if components are being properly destructured
-        let hasComponentsDestructuring = false;
+        // Components are now auto-destructured in the wrapper, so we don't need to check for manual destructuring
+        // We just need to check if they're being used directly
+        let hasComponentsUsage = false;
         const usedDependencies = new Set<string>();
         
         (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
-          // Look for destructuring from components prop
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            if (t.isObjectPattern(path.node.id) && 
-                t.isIdentifier(path.node.init) &&
-                path.node.init.name === 'components') {
-              hasComponentsDestructuring = true;
-              
-              // Track which dependencies are being destructured
-              path.node.id.properties.forEach(prop => {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  const name = prop.key.name;
-                  if (dependencyNames.has(name)) {
-                    usedDependencies.add(name);
-                  }
-                }
-              });
+          // Look for direct usage of dependency components
+          Identifier(path: NodePath<t.Identifier>) {
+            const name = path.node.name;
+            if (dependencyNames.has(name)) {
+              // Check if this is actually being used (not just in a declaration)
+              if (path.isBindingIdentifier()) {
+                return;
+              }
+              usedDependencies.add(name);
+              hasComponentsUsage = true;
             }
           },
           
-          // Look for direct usage like components.ComponentName or <components.ComponentName>
+          // Still support legacy components.ComponentName usage
           MemberExpression(path: NodePath<t.MemberExpression>) {
             if (t.isIdentifier(path.node.object) && 
                 path.node.object.name === 'components' &&
@@ -580,7 +575,7 @@ export class ComponentLinter {
               const name = path.node.property.name;
               if (dependencyNames.has(name)) {
                 usedDependencies.add(name);
-                hasComponentsDestructuring = true; // Mark as properly accessed
+                hasComponentsUsage = true;
               }
             }
           },
@@ -593,22 +588,22 @@ export class ComponentLinter {
               const name = path.node.property.name;
               if (dependencyNames.has(name)) {
                 usedDependencies.add(name);
-                hasComponentsDestructuring = true; // Mark as properly accessed
+                hasComponentsUsage = true; // Mark as properly accessed
               }
             }
           }
         });
         
-        // If dependencies exist but aren't being accessed via components prop, add a warning
-        if (dependencyNames.size > 0 && !hasComponentsDestructuring && usedDependencies.size === 0) {
+        // Components are now auto-destructured, so just check for unused dependencies
+        if (dependencyNames.size > 0 && usedDependencies.size === 0) {
           const depList = Array.from(dependencyNames).join(', ');
           violations.push({
             rule: 'dependency-shadowing',
-            severity: 'high',
+            severity: 'low',
             line: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.line || 0,
             column: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.column || 0,
-            message: `Component has embedded dependencies [${depList}] but isn't accessing them via the 'components' prop. Add: const { ${depList} } = components; or use components.${Array.from(dependencyNames)[0]} directly.`,
-            code: `const { ${depList} } = components;`
+            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components are available for use.`,
+            code: `// Available: ${depList}`
           });
         }
         
@@ -2933,7 +2928,7 @@ export class ComponentLinter {
           }
         }
         
-        // Check for invalid destructuring from components
+        // Check for manual destructuring from components (now optional since auto-destructuring is in place)
         traverse(ast, {
           VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
             // Look for: const { Something } = components;
@@ -2967,6 +2962,16 @@ export class ComponentLinter {
                         code: `const { ${destructuredName} } = components;`
                       });
                     }
+                  } else {
+                    // Valid component, but manual destructuring is now redundant
+                    violations.push({
+                      rule: 'invalid-components-destructuring',
+                      severity: 'low',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Manual destructuring of "${destructuredName}" from components prop is redundant. Components are now auto-destructured and available directly.`,
+                      code: `const { ${destructuredName} } = components; // Can be removed`
+                    });
                   }
                 }
               }
@@ -3183,11 +3188,13 @@ export class ComponentLinter {
           }
         }
         
-        // Track what's destructured from components
+        // Track dependency components (these are now auto-destructured in the wrapper)
         if (componentSpec?.dependencies) {
           for (const dep of componentSpec.dependencies) {
             if (dep.name) {
               componentsFromProp.add(dep.name);
+              // Mark as available since they're auto-destructured
+              availableIdentifiers.add(dep.name);
             }
           }
         }
@@ -3354,13 +3361,14 @@ export class ComponentLinter {
                     });
                   }
                   } else if (componentsFromProp.has(tagName)) {
-                    // It's a component from the components prop
+                    // This shouldn't happen since dependency components are auto-destructured
+                    // But keep as a fallback check
                     violations.push({
                       rule: 'undefined-jsx-component',
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is in dependencies but not destructured from components prop. Add: const { ${tagName} } = components;`,
+                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. There may be an issue with component registration.`,
                       code: `<${tagName} ... />`
                     });
                   } else {

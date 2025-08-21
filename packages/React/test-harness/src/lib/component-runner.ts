@@ -49,7 +49,10 @@ export class ComponentRunner {
     /too many re-renders/i,
   ];
 
-  private static readonly MAX_RENDER_COUNT = 1000;
+  // Note: This counts React.createElement calls, not component re-renders
+  // A complex dashboard can easily have 5000+ createElement calls on initial mount
+  // Only flag if it's likely an infinite loop (10000+ is suspicious)
+  private static readonly MAX_RENDER_COUNT = 10000;
 
   constructor(private browserManager: BrowserManager) {}
 
@@ -235,7 +238,7 @@ export class ComponentRunner {
                 if (libraryValue) {
                   loadedLibraries[libDef.GlobalVariable] = libraryValue;
                   if (debug) {
-                    console.log(`✅ Added ${libDef.Name} to runtime context as ${libDef.GlobalVariable}`);
+                    console.log(`📦 Added ${libDef.Name} to runtime context as ${libDef.GlobalVariable}`);
                   }
                 } else {
                   console.warn(`⚠️ Library ${libDef.Name} not found as window.${libDef.GlobalVariable}`);
@@ -263,7 +266,7 @@ export class ComponentRunner {
             // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
             await LibraryRegistry.Config(false, componentLibraries || []);
             if (debug) {
-              console.log('✅ Configured LibraryRegistry with', componentLibraries?.length || 0, 'libraries');
+              console.log('⚙️ Configured LibraryRegistry with', componentLibraries?.length || 0, 'libraries');
             }
           }
 
@@ -313,7 +316,7 @@ export class ComponentRunner {
             }
           }
           
-          // Register the component hierarchy
+          // Register the component hierarchy with error capture
           // IMPORTANT: Pass component libraries for library loading to work
           if (debug) {
             console.log('📚 Registering component with', componentLibraries?.length || 0, 'libraries');
@@ -321,12 +324,29 @@ export class ComponentRunner {
               console.log('  Passing libraries to registrar:', componentLibraries.slice(0, 2).map((l: any) => l.Name));
             }
           }
-          const registrationResult = await registrar.registerHierarchy(spec, {
-            styles,
-            namespace: 'Global',
-            version: 'v1', // Use v1 to match the registry defaults
-            allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
-          });
+          
+          let registrationResult;
+          try {
+            registrationResult = await registrar.registerHierarchy(spec, {
+              styles,
+              namespace: 'Global',
+              version: 'v1', // Use v1 to match the registry defaults
+              allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
+            });
+          } catch (registrationError: any) {
+            // Capture the actual error before it gets obscured
+            console.error('🔴 Component registration error:', registrationError);
+            (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+            (window as any).__testHarnessRuntimeErrors.push({
+              message: `Component registration failed: ${registrationError.message || registrationError}`,
+              stack: registrationError.stack,
+              type: 'registration-error',
+              phase: 'component-compilation'
+            });
+            (window as any).__testHarnessTestFailed = true;
+            throw registrationError; // Re-throw for outer handler
+          }
+          
           if (debug && !registrationResult.success) {
             console.log('❌ Registration failed:', registrationResult.errors);
           }
@@ -336,7 +356,7 @@ export class ComponentRunner {
           }
 
           if (debug) {
-            console.log('✅ Registered components:', registrationResult.registeredComponents);
+            console.log('📝 Registered components:', registrationResult.registeredComponents);
             // Note: ComponentRegistry doesn't expose internal components Map directly
             // We can see what was registered through the registrationResult
           }
@@ -361,7 +381,7 @@ export class ComponentRunner {
               // If the library exports an object with multiple components, spread them
               Object.assign(components, libraryValue);
               if (debug) {
-                console.log(`✅ Added ${globalVar} exports to components object`);
+                console.log(`📦 Added ${globalVar} exports to components object`);
               }
             }
           }
@@ -374,8 +394,10 @@ export class ComponentRunner {
 
           const root = (window as any).ReactDOM.createRoot(rootElement);
           
-          // Set up render count protection (Recommendation #5)
-          const MAX_RENDERS_ALLOWED = 500; // Reasonable limit for complex components
+          // Set up render count protection
+          // This is for detecting infinite loops during execution
+          // Note: counts createElement calls, not re-renders
+          const MAX_RENDERS_ALLOWED = 10000; // Complex dashboards can have many createElement calls
           
           if (typeof window !== 'undefined') {
             renderCheckInterval = setInterval(() => {
@@ -386,7 +408,7 @@ export class ComponentRunner {
                 (window as any).__testHarnessTestFailed = true;
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
-                  message: `Excessive re-renders detected: ${currentRenderCount} renders (max: ${MAX_RENDERS_ALLOWED})`,
+                  message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
                   type: 'render-loop'
                 });
                 // Try to unmount to stop the madness
@@ -395,7 +417,7 @@ export class ComponentRunner {
                 } catch (e) {
                   console.error('Failed to unmount after render loop:', e);
                 }
-                throw new Error(`Excessive re-renders: ${currentRenderCount} renders detected`);
+                throw new Error(`Likely infinite render loop: ${currentRenderCount} createElement calls detected`);
               }
             }, 100); // Check every 100ms
           }
@@ -424,26 +446,38 @@ export class ComponentRunner {
             }
             
             static getDerivedStateFromError(error: any) {
+              // Capture the actual error message IMMEDIATELY
+              (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+              (window as any).__testHarnessRuntimeErrors.push({
+                message: error.message || error.toString(),
+                stack: error.stack,
+                type: 'react-render-error',
+                phase: 'component-render'
+              });
               (window as any).__testHarnessTestFailed = true;
               return { hasError: true, error };
             }
             
             componentDidCatch(error: any, errorInfo: any) {
               console.error('React Error Boundary caught:', error, errorInfo);
-              (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
-              (window as any).__testHarnessRuntimeErrors.push({
-                message: error.message,
-                stack: error.stack,
-                componentStack: errorInfo.componentStack,
-                type: 'react-error-boundary'
-              });
-              (window as any).__testHarnessTestFailed = true;
+              // Update the last error with component stack info
+              const errors = (window as any).__testHarnessRuntimeErrors || [];
+              if (errors.length > 0) {
+                const lastError = errors[errors.length - 1];
+                if (lastError.type === 'react-render-error') {
+                  lastError.componentStack = errorInfo.componentStack;
+                }
+              }
             }
             
             render() {
               if (this.state.hasError) {
-                // Re-throw to fail hard
-                throw this.state.error;
+                // DON'T re-throw - this causes "Script error"
+                // Instead, render an error message
+                return (window as any).React.createElement('div', 
+                  { style: { color: 'red', padding: '20px' } },
+                  'Component failed to render: ' + (this.state.error?.message || 'Unknown error')
+                );
               }
               return this.props.children;
             }
@@ -573,7 +607,7 @@ export class ComponentRunner {
                      executionResult.success;
 
       if (renderCount > ComponentRunner.MAX_RENDER_COUNT) {
-        errors.push(`Excessive render count: ${renderCount} renders detected`);
+        errors.push(`Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`);
       }
 
       // Combine runtime errors with data errors
@@ -773,7 +807,7 @@ export class ComponentRunner {
           if (cssUrl) {
             await page.addStyleTag({ url: cssUrl });
             if (debug) {
-              console.log(`  ✅ Loaded CSS: ${cssUrl}`);
+              console.log(`  🎨 Loaded CSS: ${cssUrl}`);
             }
           }
         }
@@ -797,7 +831,7 @@ export class ComponentRunner {
 
           if (isLoaded) {
             if (debug) {
-              console.log(`  ✅ Loaded ${specLib.name} as window.${libDef.GlobalVariable}`);
+              console.log(`  📦 Loaded ${specLib.name} as window.${libDef.GlobalVariable}`);
             }
           } else {
             console.error(`  ❌ Failed to load ${specLib.name} - global variable ${libDef.GlobalVariable} not found`);
@@ -935,7 +969,9 @@ export class ComponentRunner {
     }
 
     errorData.runtimeErrors.forEach((error: any) => {
-      const errorMsg = `${error.type} error: ${error.message}`;
+      // Include phase information if available to help identify where the error occurred
+      const phase = error.phase ? ` (during ${error.phase})` : '';
+      const errorMsg = `${error.type} error: ${error.message}${phase}`;
       if (!errors.includes(errorMsg)) {
         errors.push(errorMsg);
       }
@@ -1111,7 +1147,7 @@ export class ComponentRunner {
         // Debug logging for successful calls
         if (debug) {
           const rowCount = result.Results?.length || 0;
-          console.log(`✅ RunView SUCCESS: Entity="${params.EntityName}" Rows=${rowCount}`);
+          console.log(`💾 RunView SUCCESS: Entity="${params.EntityName}" Rows=${rowCount}`);
           if (params.ExtraFilter) {
             console.log(`   Filter: ${params.ExtraFilter}`);
           }
@@ -1143,7 +1179,7 @@ export class ComponentRunner {
         
         // Debug logging for successful calls
         if (debug) {
-          console.log(`✅ RunViews SUCCESS: ${params.length} queries executed`);
+          console.log(`💾 RunViews SUCCESS: ${params.length} queries executed`);
           params.forEach((p, i) => {
             const rowCount = results[i]?.Results?.length || 0;
             console.log(`   [${i+1}] Entity="${p.EntityName}" Rows=${rowCount}`);
@@ -1179,7 +1215,7 @@ export class ComponentRunner {
         if (debug) {
           const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
           const rowCount = result.Results?.length || 0;
-          console.log(`✅ RunQuery SUCCESS: Query="${queryIdentifier}" Rows=${rowCount}`);
+          console.log(`💾 RunQuery SUCCESS: Query="${queryIdentifier}" Rows=${rowCount}`);
           if (params.Parameters && Object.keys(params.Parameters).length > 0) {
             console.log(`   Parameters:`, params.Parameters);
           }

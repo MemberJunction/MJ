@@ -175,6 +175,7 @@ export class ComponentHierarchyRegistrar {
         componentCode: spec.code,
         styles,
         libraries: spec.libraries, // Pass along library dependencies from the spec
+        dependencies: spec.dependencies, // Pass along child component dependencies
         allLibraries: options.allLibraries
       };
 
