@@ -1,9 +1,18 @@
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery } from '@memberjunction/core';
-import type { RunViewParams, RunQueryParams, UserInfo } from '@memberjunction/core';
+import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+
+
+export interface SimpleMJUtilities {
+    RunView: (params: RunViewParams, contextUser: UserInfo) => Promise<RunViewResult>;
+    RunViews: (params: RunViewParams[], contextUser: UserInfo) => Promise<RunViewResult[]>;
+    RunQuery: (params: RunQueryParams, contextUser: UserInfo) => Promise<RunQueryResult>;
+    Entities: EntityInfo[],
+    GetEntityObject: (entityName: string, contextUser: UserInfo) => Promise<BaseEntity>;
+}
 
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
@@ -17,6 +26,7 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
+  utilities?: SimpleMJUtilities
 }
 
 export interface ComponentExecutionResult {
@@ -172,7 +182,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options.contextUser, dataErrors, debug)
+      await this.exposeMJUtilities(page, options, dataErrors, debug)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -1046,30 +1056,42 @@ export class ComponentRunner {
     });
   }
 
+  private buildLocalMJUtilities(): SimpleMJUtilities {
+    console.log("   Building local MJ utilities");
+    const rv = new RunView();
+    const rq = new RunQuery();
+    const md = new Metadata();
+    return {
+      RunView: rv.RunView,
+      RunQuery: rq.RunQuery,
+      RunViews: rv.RunViews,
+      GetEntityObject: md.GetEntityObject, // return the function
+      Entities: md.Entities // return the function
+    }
+  }
+
   /**
    * Expose MJ utilities to the browser context
    */
-  private async exposeMJUtilities(page: any, contextUser: UserInfo, dataErrors: string[], debug: boolean = false): Promise<void> {
+  private async exposeMJUtilities(page: any, options: ComponentExecutionOptions, dataErrors: string[], debug: boolean = false): Promise<void> {
     // Don't check if already exposed - we always start fresh after goto('about:blank')
     // The page.exposeFunction calls need to be made for each new page instance
 
     // Serialize contextUser to pass to the browser context
     // UserInfo is a simple object that can be serialized
-    const serializedContextUser = JSON.parse(JSON.stringify(contextUser));
+    const serializedContextUser = JSON.parse(JSON.stringify(options.contextUser));
     
-    // Create instances in Node.js context
-    const metadata = new Metadata();
-    const runView = new RunView();
-    const runQuery = new RunQuery();
-    
+    // utilities - favor the one passed in by the caller, or fall back to the local ones
+    const util: SimpleMJUtilities = options.utilities || this.buildLocalMJUtilities();
+
     // Create a lightweight mock metadata object with serializable data
     // This avoids authentication/provider issues in the browser context
     let entitiesData: any[] = [];
     try {
       // Try to get entities if available, otherwise use empty array
-      if (metadata.Entities) {
+      if (util.Entities) {
         // Serialize the entities data (remove functions, keep data)
-        entitiesData = JSON.parse(JSON.stringify(metadata.Entities));
+        entitiesData = JSON.parse(JSON.stringify(util.Entities));
         // Serialized entities for browser context
       } else {
         // Metadata.Entities not available, using empty array
@@ -1126,7 +1148,7 @@ export class ComponentRunner {
     // Expose functions
     await page.exposeFunction('__mjGetEntityObject', async (entityName: string) => {
       try {
-        const entity = await metadata.GetEntityObject(entityName, contextUser);
+        const entity = await util.GetEntityObject(entityName, options.contextUser);
         return entity;
       } catch (error) {
         console.error('Error in __mjGetEntityObject:', error);
@@ -1146,7 +1168,7 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
       try {
-        const result = await runView.RunView(params, contextUser);
+        const result = await util.RunView(params, options.contextUser);
         
         // Debug logging for successful calls
         if (debug) {
@@ -1179,7 +1201,7 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
       try {
-        const results = await runView.RunViews(params, contextUser);
+        const results = await util.RunViews(params, options.contextUser);
         
         // Debug logging for successful calls
         if (debug) {
@@ -1213,7 +1235,7 @@ export class ComponentRunner {
 
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
       try {
-        const result = await runQuery.RunQuery(params, contextUser);
+        const result = await util.RunQuery(params, options.contextUser);
         
         // Debug logging for successful calls
         if (debug) {
