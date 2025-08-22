@@ -103,20 +103,19 @@ export class ReportResolverExtended {
       const title = skipData.title ? skipData.title : skipData.reportTitle ? skipData.reportTitle : 'Untitled Report';
       report.Name = title;
       report.Description = skipData.userExplanation ? skipData.userExplanation : '';
-      report.ConversationID = result[0].ConversationID;
+      report.ConversationID = result.recordset[0].ConversationID;
       report.ConversationDetailID = ConversationDetailID;
 
       const dc: DataContext = new DataContext();
-      await dc.LoadMetadata(result[0].DataContextID, u);
+      await dc.LoadMetadata(result.recordset[0].DataContextID, u);
       const newDataContext = await DataContext.Clone(dc, false, u);
       if (!newDataContext) throw new Error('Error cloning data context');
       report.DataContextID = newDataContext.ID;
 
       // next, strip out the messags from the SkipData object to put them into our Report Configuration as we dont need to store that information as we have a
-      // link back to the conversation and conversation detail
-      const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(JSON.stringify(skipData));
-      newSkipData.messages = [];
-      report.Configuration = JSON.stringify(newSkipData);
+      // link back to the conversation and conversation detail, skipData can be modified as it is a copy of the data doesn't affect the original source
+      skipData.messages = [];
+      report.Configuration = JSON.stringify(skipData);
 
       report.SharingScope = 'None';
       report.UserID = u.ID;

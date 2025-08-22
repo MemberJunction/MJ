@@ -23,9 +23,11 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @Input() ShowPrintReport: boolean = true;
     @Input() ShowReportOptionsToggle: boolean = true;
     @Input() ShowCreateReportButton: boolean = false;
+    @Input() ShowOpenSavedReportButton: boolean = true;
     @Input() matchingReportID: string | null = null;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
     @Output() CreateReportRequested = new EventEmitter<number>();
+    @Output() NavigateToMatchingReportRequested = new EventEmitter<number>();
 
     @ViewChildren(MJReactComponent) reactComponents!: QueryList<MJReactComponent>;
 
@@ -249,6 +251,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         this.CreateReportRequested.emit(optionIndex);
     }
     
+    public openReportForOption(optionIndex: number): void {
+        this.NavigateToMatchingReportRequested.emit(optionIndex);
+    }
+
     /**
      * Get the component type name for display
      */

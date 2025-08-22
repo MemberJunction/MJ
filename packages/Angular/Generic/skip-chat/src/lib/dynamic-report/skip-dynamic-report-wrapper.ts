@@ -23,6 +23,7 @@ import { DrillDownInfo } from '../drill-down-info';
         [ConversationDetailID]="ConversationDetailID"
         [DataContext]="DataContext"
         [ShowCreateReportButton]="true"
+        [ShowOpenReportButton]="ShowOpenReportButton"
         [ExpandAll]="true"
         [Provider]="Provider"
         (NavigateToMatchingReport)="bubbleNavigateToMatchingReport($event)"
@@ -40,6 +41,7 @@ export class SkipDynamicReportWrapperComponent {
     @Input() DataContext!: DataContext;
     @Input() AllowDrillDown: boolean = true;
     @Input() Provider: IMetadataProvider | null = null;
+    @Input() ShowOpenReportButton: boolean = true;
 
     /**
      * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
