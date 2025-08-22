@@ -1111,7 +1111,7 @@ export class SQLServerDataProvider
           // if we don't have viewEntity, that means it is a dynamic view, so we need EntityName at a minimum
           if (!params.EntityName || params.EntityName.length === 0) throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
 
-          entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
+          entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
           if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
         } else {
           entityInfo = this.Entities.find((e) => e.ID === viewEntity.EntityID);
