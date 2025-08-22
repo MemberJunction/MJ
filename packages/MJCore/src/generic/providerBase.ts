@@ -178,7 +178,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser 
      */
     protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
-        this.EntityStatusCheck(params, 'PreProcessRunView');
+        await this.EntityStatusCheck(params, 'PreProcessRunView');
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
