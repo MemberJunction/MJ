@@ -1,5 +1,18 @@
 # @memberjunction/react-test-harness
 
+## 2.92.0
+
+### Minor Changes
+
+- b303b84: migrations
+
+### Patch Changes
+
+- 3f61d1a: linter rule changes
+- Updated dependencies [b303b84]
+  - @memberjunction/interactive-component-types@2.92.0
+  - @memberjunction/react-runtime@2.92.0
+
 ## 2.91.0
 
 ### Minor Changes

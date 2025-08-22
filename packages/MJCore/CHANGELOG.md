@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 2.92.0
+
+### Minor Changes
+
+- 8fb03df: migrations
+- 5817bac: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.92.0
+
 ## 2.91.0
 
 ### Patch Changes
