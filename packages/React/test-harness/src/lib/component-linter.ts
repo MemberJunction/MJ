@@ -4185,6 +4185,235 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+
+    {
+      name: 'utilities-valid-properties',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validProperties = new Set(['rv', 'rq', 'md']);
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check for utilities.* access
+            if (t.isIdentifier(path.node.object) && path.node.object.name === 'utilities') {
+              if (t.isIdentifier(path.node.property)) {
+                const propName = path.node.property.name;
+                
+                // Check if it's a valid property
+                if (!validProperties.has(propName)) {
+                  violations.push({
+                    rule: 'utilities-valid-properties',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid utilities property '${propName}'. Valid properties are: rv (RunView), rq (RunQuery), md (Metadata)`,
+                    code: `utilities.${propName}`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-runview-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunView', 'RunViews']);
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rv.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.rv.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'rv' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-runview-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.rv. Valid methods are: RunView, RunViews`,
+                    code: `utilities.rv.${methodName}()`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-runquery-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunQuery']);
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rq.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.rq.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'rq' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-runquery-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.rq. Valid method is: RunQuery`,
+                    code: `utilities.rq.${methodName}()`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-metadata-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['GetEntityObject']);
+        const validProperties = new Set(['Entities']);
+        
+        traverse(ast, {
+          // Check for method calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.md.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.md.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'md' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-metadata-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                    code: `utilities.md.${methodName}()`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for property access (non-call expressions)
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Skip if this is part of a call expression (handled above)
+            if (t.isCallExpression(path.parent) && path.parent.callee === path.node) {
+              return;
+            }
+            
+            // Check if it's utilities.md.propertyName
+            if (t.isMemberExpression(path.node.object) &&
+                t.isIdentifier(path.node.object.object) && 
+                path.node.object.object.name === 'utilities' &&
+                t.isIdentifier(path.node.object.property) && 
+                path.node.object.property.name === 'md' &&
+                t.isIdentifier(path.node.property)) {
+              
+              const propName = path.node.property.name;
+              
+              // Check if it's accessing a valid property or trying to access an invalid one
+              if (!validProperties.has(propName) && !validMethods.has(propName)) {
+                violations.push({
+                  rule: 'utilities-metadata-methods',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Invalid property '${propName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                  code: `utilities.md.${propName}`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-no-direct-instantiation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const restrictedClasses = new Map([
+          ['RunView', 'utilities.rv'],
+          ['RunQuery', 'utilities.rq'],
+          ['Metadata', 'utilities.md']
+        ]);
+        
+        traverse(ast, {
+          NewExpression(path: NodePath<t.NewExpression>) {
+            // Check if instantiating a restricted class
+            if (t.isIdentifier(path.node.callee)) {
+              const className = path.node.callee.name;
+              
+              if (restrictedClasses.has(className)) {
+                const utilityPath = restrictedClasses.get(className);
+                violations.push({
+                  rule: 'utilities-no-direct-instantiation',
+                  severity: 'high',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Don't instantiate ${className} directly. Use ${utilityPath} instead which is provided in the component's utilities parameter.`,
+                  code: `new ${className}()`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
