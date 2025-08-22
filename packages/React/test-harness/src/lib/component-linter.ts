@@ -2,10 +2,11 @@ import * as parser from '@babel/parser';
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
-import type { RunQueryResult, RunViewResult } from '@memberjunction/core';
+import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
+import { ComponentExecutionOptions } from './component-runner';
 
 export interface LintResult {
   success: boolean;
@@ -39,7 +40,7 @@ export interface FixSuggestion {
 interface Rule {
   name: string;
   appliesTo: 'all' | 'child' | 'root';
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => Violation[];
+  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => Violation[];
 }
 
 // Standard HTML elements (lowercase)
@@ -4185,6 +4186,451 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+
+    {
+      name: 'utilities-valid-properties',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validProperties = new Set(['rv', 'rq', 'md']);
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check for utilities.* access
+            if (t.isIdentifier(path.node.object) && path.node.object.name === 'utilities') {
+              if (t.isIdentifier(path.node.property)) {
+                const propName = path.node.property.name;
+                
+                // Check if it's a valid property
+                if (!validProperties.has(propName)) {
+                  violations.push({
+                    rule: 'utilities-valid-properties',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid utilities property '${propName}'. Valid properties are: rv (RunView), rq (RunQuery), md (Metadata)`,
+                    code: `utilities.${propName}`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-runview-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunView', 'RunViews']);
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rv.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.rv.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'rv' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-runview-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.rv. Valid methods are: RunView, RunViews`,
+                    code: `utilities.rv.${methodName}()`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-runquery-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['RunQuery']);
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rq.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.rq.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'rq' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-runquery-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.rq. Valid method is: RunQuery`,
+                    code: `utilities.rq.${methodName}()`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-metadata-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['GetEntityObject']);
+        const validProperties = new Set(['Entities']);
+        
+        traverse(ast, {
+          // Check for method calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.md.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.md.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'md' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-metadata-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                    code: `utilities.md.${methodName}()`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for property access (non-call expressions)
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Skip if this is part of a call expression (handled above)
+            if (t.isCallExpression(path.parent) && path.parent.callee === path.node) {
+              return;
+            }
+            
+            // Check if it's utilities.md.propertyName
+            if (t.isMemberExpression(path.node.object) &&
+                t.isIdentifier(path.node.object.object) && 
+                path.node.object.object.name === 'utilities' &&
+                t.isIdentifier(path.node.object.property) && 
+                path.node.object.property.name === 'md' &&
+                t.isIdentifier(path.node.property)) {
+              
+              const propName = path.node.property.name;
+              
+              // Check if it's accessing a valid property or trying to access an invalid one
+              if (!validProperties.has(propName) && !validMethods.has(propName)) {
+                violations.push({
+                  rule: 'utilities-metadata-methods',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Invalid property '${propName}' on utilities.md. Valid methods are: GetEntityObject. Valid properties are: Entities`,
+                  code: `utilities.md.${propName}`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'utilities-no-direct-instantiation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const restrictedClasses = new Map([
+          ['RunView', 'utilities.rv'],
+          ['RunQuery', 'utilities.rq'],
+          ['Metadata', 'utilities.md']
+        ]);
+        
+        traverse(ast, {
+          NewExpression(path: NodePath<t.NewExpression>) {
+            // Check if instantiating a restricted class
+            if (t.isIdentifier(path.node.callee)) {
+              const className = path.node.callee.name;
+              
+              if (restrictedClasses.has(className)) {
+                const utilityPath = restrictedClasses.get(className);
+                violations.push({
+                  rule: 'utilities-no-direct-instantiation',
+                  severity: 'high',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Don't instantiate ${className} directly. Use ${utilityPath} instead which is provided in the component's utilities parameter.`,
+                  code: `new ${className}()`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'unsafe-formatting-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => {
+        const violations: Violation[] = [];
+        
+        // Common formatting methods that can fail on null/undefined
+        const formattingMethods = new Set([
+          // Number methods
+          'toFixed', 'toPrecision', 'toExponential',
+          // Conversion methods
+          'toLocaleString', 'toString',
+          // String methods
+          'toLowerCase', 'toUpperCase', 'trim',
+          'split', 'slice', 'substring', 'substr',
+          'charAt', 'charCodeAt', 'indexOf', 'lastIndexOf',
+          'padStart', 'padEnd', 'repeat', 'replace'
+        ]);
+        
+        // Helper to check if a field is nullable in entity metadata
+        interface FieldNullabilityResult {
+          found: boolean;
+          nullable: boolean;
+          entityName?: string;
+          fieldName?: string;
+        }
+        
+        const checkFieldNullability = (propertyName: string): FieldNullabilityResult => {
+          // Step 1: Check if componentSpec has data requirements and utilities are available
+          if (!componentSpec?.dataRequirements?.entities || !options?.utilities?.Entities) {
+            return { found: false, nullable: false };
+          }
+          
+          try {
+            // Step 2: Iterate through only the entities defined in dataRequirements
+            for (const dataReqEntity of componentSpec.dataRequirements.entities) {
+              const entityName = dataReqEntity.name; // e.g., "AI Prompt Runs"
+              
+              // Step 3: Find this entity in the full metadata (case insensitive)
+              // Use proper typing - we know Entities is an array of EntityInfo objects
+              const fullEntity = options.utilities.Entities.find((e: EntityInfo) => 
+                e.Name && e.Name.toLowerCase() === entityName.toLowerCase()
+              );
+              
+              if (fullEntity && fullEntity.Fields && Array.isArray(fullEntity.Fields)) {
+                // Step 4: Look for the field in this specific entity (case insensitive)
+                const field = fullEntity.Fields.find((f: EntityFieldInfo) => 
+                  f.Name && f.Name.trim().toLowerCase() === propertyName.trim().toLowerCase()
+                );
+                
+                if (field) {
+                  // Field found - check if it's nullable
+                  // In MJ, AllowsNull is a boolean property
+                  return { 
+                    found: true, 
+                    nullable: field.AllowsNull,
+                    entityName: fullEntity.Name,
+                    fieldName: field.Name
+                  };
+                }
+              }
+            }
+          } catch (error) {
+            // If there's any error accessing metadata, fail gracefully
+            console.warn('Error checking field nullability:', error);
+          }
+          
+          return { found: false, nullable: false };
+        };
+        
+        traverse(ast, {
+          // Check JSX expressions
+          JSXExpressionContainer(path: NodePath<t.JSXExpressionContainer>) {
+            const expr = path.node.expression;
+            
+            // Look for object.property.method() pattern
+            if (t.isCallExpression(expr) && 
+                t.isMemberExpression(expr.callee) &&
+                t.isIdentifier(expr.callee.property)) {
+              
+              const methodName = expr.callee.property.name;
+              
+              // Check if it's a formatting method
+              if (formattingMethods.has(methodName)) {
+                const callee = expr.callee;
+                
+                // Check if the object being called on is also a member expression (x.y pattern)
+                if (t.isMemberExpression(callee.object) && 
+                    t.isIdentifier(callee.object.property)) {
+                  
+                  const propertyName = callee.object.property.name;
+                  
+                  // Check if optional chaining is already used
+                  const hasOptionalChaining = callee.object.optional || callee.optional;
+                  
+                  // Check if there's a fallback (looking in parent for || or ??)
+                  let hasFallback = false;
+                  const parent = path.parent;
+                  const grandParent = path.parentPath?.parent;
+                  
+                  // Check if parent is a logical expression with fallback
+                  if (grandParent && t.isLogicalExpression(grandParent) && 
+                      (grandParent.operator === '||' || grandParent.operator === '??')) {
+                    hasFallback = true;
+                  }
+                  
+                  // Also check conditional expressions
+                  if (grandParent && t.isConditionalExpression(grandParent)) {
+                    hasFallback = true;
+                  }
+                  
+                  if (!hasOptionalChaining && !hasFallback) {
+                    // Check entity metadata for this field
+                    const fieldInfo = checkFieldNullability(propertyName);
+                    
+                    // Determine severity based on metadata
+                    let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+                    let message = `Unsafe formatting method '${methodName}()' called on '${propertyName}'. Consider using optional chaining.`;
+                    
+                    if (fieldInfo.found) {
+                      if (fieldInfo.nullable) {
+                        severity = 'high';
+                        message = `Field '${fieldInfo.fieldName}' from entity '${fieldInfo.entityName}' is nullable. Use optional chaining to prevent runtime errors when calling '${methodName}()'.`;
+                      } else {
+                        // Keep medium severity but note it's non-nullable
+                        message = `Field '${fieldInfo.fieldName}' from entity '${fieldInfo.entityName}' appears to be non-nullable, but consider using optional chaining for safety when calling '${methodName}()'.`;
+                      }
+                    }
+                    
+                    // Get the object name for better error message
+                    let objectName = '';
+                    if (t.isIdentifier(callee.object.object)) {
+                      objectName = callee.object.object.name;
+                    }
+                    
+                    violations.push({
+                      rule: 'unsafe-formatting-methods',
+                      severity: severity,
+                      line: expr.loc?.start.line || 0,
+                      column: expr.loc?.start.column || 0,
+                      message: message,
+                      code: `${objectName}.${propertyName}.${methodName}() → ${objectName}.${propertyName}?.${methodName}() ?? defaultValue`
+                    });
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check template literals
+          TemplateLiteral(path: NodePath<t.TemplateLiteral>) {
+            for (const expr of path.node.expressions) {
+              // Look for object.property.method() pattern in template expressions
+              if (t.isCallExpression(expr) && 
+                  t.isMemberExpression(expr.callee) &&
+                  t.isIdentifier(expr.callee.property)) {
+                
+                const methodName = expr.callee.property.name;
+                
+                // Check if it's a formatting method
+                if (formattingMethods.has(methodName)) {
+                  const callee = expr.callee;
+                  
+                  // Check if the object being called on is also a member expression (x.y pattern)
+                  if (t.isMemberExpression(callee.object) && 
+                      t.isIdentifier(callee.object.property)) {
+                    
+                    const propertyName = callee.object.property.name;
+                    
+                    // Check if optional chaining is already used
+                    const hasOptionalChaining = callee.object.optional || callee.optional;
+                    
+                    if (!hasOptionalChaining) {
+                      // Check entity metadata for this field
+                      const fieldInfo = checkFieldNullability(propertyName);
+                      
+                      // Determine severity based on metadata
+                      let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+                      let message = `Unsafe formatting method '${methodName}()' called on '${propertyName}' in template literal. Consider using optional chaining.`;
+                      
+                      if (fieldInfo.found) {
+                        if (fieldInfo.nullable) {
+                          severity = 'high';
+                          message = `Field '${propertyName}' is nullable in entity metadata. Use optional chaining to prevent runtime errors when calling '${methodName}()' in template literal.`;
+                        } else {
+                          // Keep medium severity but note it's non-nullable
+                          message = `Field '${propertyName}' appears to be non-nullable, but consider using optional chaining for safety when calling '${methodName}()' in template literal.`;
+                        }
+                      }
+                      
+                      // Get the object name for better error message
+                      let objectName = '';
+                      if (t.isIdentifier(callee.object.object)) {
+                        objectName = callee.object.object.name;
+                      }
+                      
+                      violations.push({
+                        rule: 'unsafe-formatting-methods',
+                        severity: severity,
+                        line: expr.loc?.start.line || 0,
+                        column: expr.loc?.start.column || 0,
+                        message: message,
+                        code: `\${${objectName}.${propertyName}.${methodName}()} → \${${objectName}.${propertyName}?.${methodName}() ?? defaultValue}`
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -4194,7 +4640,8 @@ export class ComponentLinter {
     componentSpec?: ComponentSpec,
     isRootComponent?: boolean,
     contextUser?: UserInfo,
-    debugMode?: boolean
+    debugMode?: boolean,
+    options?: ComponentExecutionOptions
   ): Promise<LintResult> {
     try {
       const ast = parser.parse(code, {
@@ -4219,7 +4666,7 @@ export class ComponentLinter {
       
       // Run each rule
       for (const rule of rules) {
-        const ruleViolations = rule.test(ast, componentName, componentSpec);
+        const ruleViolations = rule.test(ast, componentName, componentSpec, options);
         violations.push(...ruleViolations);
       }
       
