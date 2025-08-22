@@ -59,8 +59,14 @@
                         *ngIf="ShowCreateReportButton && !matchingReportID"
                         (click)="createReportForOption(i)"
                         [disabled]="isCreatingReport">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>Create {{ getComponentTypeName(option) }}</span>
+                  <i class="fa-solid fa-save"></i>
+                  <span>Save Report</span>
+                </button>
+                <button class="tab-action-button create-button" 
+                        *ngIf="ShowOpenSavedReportButton && matchingReportID"
+                        (click)="openReportForOption(i)">
+                  <i class="fa-solid fa-folder-open"></i>
+                  <span>Open Saved Report</span>
                 </button>
                 <button class="tab-action-button print-button" 
                         *ngIf="ShowPrintReport" 
@@ -298,8 +304,14 @@
                 *ngIf="ShowCreateReportButton && !matchingReportID"
                 (click)="createReportForOption(0)"
                 [disabled]="isCreatingReport">
-          <i class="fa-solid fa-plus"></i>
-          <span>Create {{ firstOptionComponentTypeName }}</span>
+          <i class="fa-solid fa-save"></i>
+          <span>Create Report</span>
+        </button>
+        <button class="tab-action-button create-button" 
+                *ngIf="ShowOpenSavedReportButton && matchingReportID"
+                (click)="openReportForOption(0)">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>Open Saved Report</span>
         </button>
         <button class="tab-action-button print-button" 
                 *ngIf="ShowPrintReport" 

@@ -1,11 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, Input, Output, EventEmitter } from '@angular/core';
-import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, MJAPISkipResult } from '@memberjunction/skip-types';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { OutputDeliveryTypeEntity, ReportEntity } from '@memberjunction/core-entities';
-import { DataContext } from '@memberjunction/data-context';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { ConvertMarkdownStringToHtmlList } from '@memberjunction/global';
+import { ChangeDetectorRef, Component, Input } from '@angular/core';
 import { SkipDynamicReportBase } from './base-report';
 
 /**
@@ -43,9 +36,10 @@ export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
     }
   }
 
-  public closeCreateReport(action: 'yes' | 'no') {
+  public async closeCreateReport(action: 'yes' | 'no') {
     if (action === 'yes') {
-      this.DoCreateReport();
+      await this.DoCreateReport();
+      this.cdRef.detectChanges(); // ensure our refresh happens as the MatchingReportID could have been updated
     }
     this.confirmCreateReportDialogOpen = false;
   }
