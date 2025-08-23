@@ -6,6 +6,29 @@ import { LogError } from '@memberjunction/core';
 export type DistanceMetric = 'cosine' | 'euclidean' | 'manhattan' | 'dotproduct' | 'jaccard' | 'hamming';
 
 /**
+ * Result of clustering operations
+ */
+export interface ClusterResult<TMetadata = Record<string, unknown>> {
+  /** Map of cluster ID to array of vector keys in that cluster */
+  clusters: Map<number, string[]>;
+  /** Map of cluster ID to centroid vector (for K-means) */
+  centroids?: Map<number, number[]>;
+  /** Array of vector keys identified as outliers (for DBSCAN) */
+  outliers?: string[];
+  /** Metadata about the clustering operation */
+  metadata?: {
+    /** Distance metric used */
+    metric: DistanceMetric;
+    /** Number of iterations until convergence */
+    iterations?: number;
+    /** Sum of squared distances to centroids (for K-means) */
+    inertia?: number;
+    /** Silhouette score (-1 to 1, higher is better) */
+    silhouetteScore?: number;
+  };
+}
+
+/**
  * Represents a vector entry with a unique key and associated embedding
  */
 export interface VectorEntry<TMetadata = Record<string, unknown>> {
@@ -911,5 +934,692 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'cosine'
   ): VectorSearchResult<TMetadata>[] {
     return this.FindNearest(queryVector, this.vectors.size, threshold, metric);
+  }
+
+  // ============================================================================
+  // PHASE 2: CLUSTERING ALGORITHMS
+  // ============================================================================
+
+  /**
+   * Performs K-Means clustering on the loaded vectors.
+   * Uses K-Means++ initialization for better starting centroids.
+   * 
+   * ## What is K-Means Clustering?
+   * K-Means divides vectors into K clusters by minimizing within-cluster variance.
+   * Each vector is assigned to the nearest centroid, and centroids are iteratively updated.
+   * 
+   * ## Business Use Cases:
+   * - **Customer Segmentation**: Group customers by behavior patterns
+   * - **Product Categorization**: Organize products into natural groups
+   * - **Market Segmentation**: Identify distinct market segments
+   * - **Anomaly Detection**: Identify unusual patterns (far from all centroids)
+   * - **Document Organization**: Group similar documents together
+   * 
+   * ## When to Use:
+   * ✅ Known or estimated number of clusters
+   * ✅ Spherical, well-separated clusters
+   * ✅ Similar cluster sizes
+   * ✅ Need interpretable centroids
+   * ❌ Non-spherical clusters
+   * ❌ Varying cluster densities
+   * ❌ Unknown number of clusters
+   * 
+   * @param {number} k - Number of clusters
+   * @param {number} [maxIterations=100] - Maximum iterations before stopping
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @param {number} [tolerance=0.0001] - Convergence tolerance
+   * @returns {ClusterResult<TMetadata>} Clustering results with assignments and centroids
+   * 
+   * @example
+   * ```typescript
+   * const result = service.KMeansCluster(3, 100, 'euclidean');
+   * result.clusters.forEach((members, clusterId) => {
+   *   console.log(`Cluster ${clusterId}: ${members.length} members`);
+   * });
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public KMeansCluster(
+    k: number,
+    maxIterations: number = 100,
+    metric: DistanceMetric = 'euclidean',
+    tolerance: number = 0.0001
+  ): ClusterResult<TMetadata> {
+    if (k <= 0 || k > this.vectors.size) {
+      throw new Error(`Invalid k: ${k}. Must be between 1 and ${this.vectors.size}`);
+    }
+
+    const entries = Array.from(this.vectors.values());
+    if (entries.length === 0) {
+      throw new Error('No vectors loaded for clustering');
+    }
+
+    // Initialize centroids using K-Means++
+    const centroids = this.initializeKMeansPlusPlus(entries, k, metric);
+    let assignments = new Map<string, number>();
+    let iterations = 0;
+    let converged = false;
+
+    while (iterations < maxIterations && !converged) {
+      // Assignment step: assign each point to nearest centroid
+      const newAssignments = new Map<string, number>();
+      entries.forEach(entry => {
+        let minDistance = Infinity;
+        let assignedCluster = 0;
+        
+        centroids.forEach((centroid, clusterId) => {
+          const distance = 1 - this.CalculateDistance(entry.vector, centroid, metric);
+          if (distance < minDistance) {
+            minDistance = distance;
+            assignedCluster = clusterId;
+          }
+        });
+        
+        newAssignments.set(entry.key, assignedCluster);
+      });
+
+      // Check for convergence
+      converged = this.checkConvergence(assignments, newAssignments);
+      assignments = newAssignments;
+
+      if (!converged) {
+        // Update step: recalculate centroids
+        const newCentroids = new Map<number, number[]>();
+        
+        for (let clusterId = 0; clusterId < k; clusterId++) {
+          const clusterMembers = entries.filter(e => assignments.get(e.key) === clusterId);
+          if (clusterMembers.length > 0) {
+            newCentroids.set(clusterId, this.FindCentroid(clusterMembers.map(m => m.vector)));
+          } else {
+            // Empty cluster - keep old centroid
+            newCentroids.set(clusterId, centroids.get(clusterId)!);
+          }
+        }
+
+        // Check if centroids moved significantly
+        let maxCentroidMovement = 0;
+        newCentroids.forEach((newCentroid, clusterId) => {
+          const oldCentroid = centroids.get(clusterId)!;
+          const movement = 1 - this.CalculateDistance(oldCentroid, newCentroid, 'euclidean');
+          maxCentroidMovement = Math.max(maxCentroidMovement, movement);
+        });
+
+        if (maxCentroidMovement < tolerance) {
+          converged = true;
+        }
+
+        centroids.clear();
+        newCentroids.forEach((centroid, id) => centroids.set(id, centroid));
+      }
+
+      iterations++;
+    }
+
+    // Build result
+    const clusters = new Map<number, string[]>();
+    for (let i = 0; i < k; i++) {
+      clusters.set(i, []);
+    }
+    
+    assignments.forEach((clusterId, key) => {
+      clusters.get(clusterId)!.push(key);
+    });
+
+    // Calculate inertia (sum of squared distances to centroids)
+    let inertia = 0;
+    entries.forEach(entry => {
+      const clusterId = assignments.get(entry.key)!;
+      const centroid = centroids.get(clusterId)!;
+      const distance = 1 - this.CalculateDistance(entry.vector, centroid, metric);
+      inertia += distance * distance;
+    });
+
+    return {
+      clusters,
+      centroids,
+      metadata: {
+        metric,
+        iterations,
+        inertia,
+        silhouetteScore: this.SilhouetteScore({ clusters, centroids }, metric)
+      }
+    };
+  }
+
+  /**
+   * K-Means++ initialization for better starting centroids.
+   * Chooses initial centroids that are far apart from each other.
+   * 
+   * @private
+   */
+  private initializeKMeansPlusPlus(
+    entries: VectorEntry<TMetadata>[],
+    k: number,
+    metric: DistanceMetric
+  ): Map<number, number[]> {
+    const centroids = new Map<number, number[]>();
+    
+    // Choose first centroid randomly
+    const firstIdx = Math.floor(Math.random() * entries.length);
+    centroids.set(0, [...entries[firstIdx].vector]);
+
+    // Choose remaining centroids
+    for (let i = 1; i < k; i++) {
+      const distances = entries.map(entry => {
+        let minDist = Infinity;
+        centroids.forEach(centroid => {
+          const dist = 1 - this.CalculateDistance(entry.vector, centroid, metric);
+          minDist = Math.min(minDist, dist);
+        });
+        return minDist;
+      });
+
+      // Choose next centroid with probability proportional to squared distance
+      const sumSquaredDist = distances.reduce((sum, d) => sum + d * d, 0);
+      let threshold = Math.random() * sumSquaredDist;
+      let cumSum = 0;
+      
+      for (let j = 0; j < entries.length; j++) {
+        cumSum += distances[j] * distances[j];
+        if (cumSum >= threshold) {
+          centroids.set(i, [...entries[j].vector]);
+          break;
+        }
+      }
+    }
+
+    return centroids;
+  }
+
+  /**
+   * Check if cluster assignments have converged
+   * @private
+   */
+  private checkConvergence(
+    oldAssignments: Map<string, number>,
+    newAssignments: Map<string, number>
+  ): boolean {
+    if (oldAssignments.size !== newAssignments.size) return false;
+    
+    for (const [key, clusterId] of newAssignments) {
+      if (oldAssignments.get(key) !== clusterId) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  /**
+   * Performs DBSCAN (Density-Based Spatial Clustering of Applications with Noise) clustering.
+   * 
+   * ## What is DBSCAN?
+   * DBSCAN groups together points that are closely packed together (high density),
+   * marking points in low-density regions as outliers. Unlike K-Means, it doesn't require
+   * specifying the number of clusters beforehand.
+   * 
+   * ## Business Use Cases:
+   * - **Fraud Detection**: Identify unusual transaction patterns
+   * - **Anomaly Detection**: Find outliers in any dataset
+   * - **Customer Behavior**: Find natural groupings without preconceptions
+   * - **Geographic Clustering**: Find areas of high activity
+   * - **Quality Control**: Identify defective products
+   * 
+   * ## When to Use:
+   * ✅ Unknown number of clusters
+   * ✅ Non-spherical clusters
+   * ✅ Varying cluster densities
+   * ✅ Need to identify outliers
+   * ✅ Noise in the data
+   * ❌ High-dimensional sparse data
+   * ❌ Clusters of vastly different densities
+   * 
+   * @param {number} epsilon - Maximum distance between two vectors to be considered neighbors
+   * @param {number} minPoints - Minimum number of points to form a dense region
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @returns {ClusterResult<TMetadata>} Clustering results with outliers identified
+   * 
+   * @example
+   * ```typescript
+   * // epsilon=0.3 means similarity must be > 0.7
+   * const result = service.DBSCANCluster(0.3, 3, 'cosine');
+   * console.log(`Found ${result.clusters.size} clusters`);
+   * console.log(`Outliers: ${result.outliers?.length || 0}`);
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public DBSCANCluster(
+    epsilon: number,
+    minPoints: number,
+    metric: DistanceMetric = 'euclidean'
+  ): ClusterResult<TMetadata> {
+    if (epsilon <= 0 || epsilon >= 1) {
+      throw new Error('Epsilon must be between 0 and 1 (exclusive)');
+    }
+    if (minPoints <= 0) {
+      throw new Error('MinPoints must be positive');
+    }
+
+    const entries = Array.from(this.vectors.values());
+    const visited = new Set<string>();
+    const clustered = new Set<string>();
+    const clusters = new Map<number, string[]>();
+    const outliers: string[] = [];
+    let clusterId = 0;
+
+    // Build neighborhood map for efficiency
+    const neighborhoods = new Map<string, string[]>();
+    entries.forEach(entry => {
+      const neighbors = this.FindNearest(
+        entry.vector, 
+        this.vectors.size, 
+        1 - epsilon, // Convert epsilon to similarity threshold
+        metric
+      ).map(r => r.key);
+      neighborhoods.set(entry.key, neighbors);
+    });
+
+    // DBSCAN algorithm
+    entries.forEach(entry => {
+      if (visited.has(entry.key)) return;
+      
+      visited.add(entry.key);
+      const neighbors = neighborhoods.get(entry.key)!;
+      
+      if (neighbors.length < minPoints) {
+        // Mark as noise (may later be added to a cluster)
+        outliers.push(entry.key);
+      } else {
+        // Start a new cluster
+        const cluster: string[] = [];
+        clusters.set(clusterId, cluster);
+        
+        this.expandCluster(
+          entry.key,
+          neighbors,
+          cluster,
+          visited,
+          clustered,
+          neighborhoods,
+          minPoints,
+          outliers
+        );
+        
+        clusterId++;
+      }
+    });
+
+    // Remove outliers that were later added to clusters
+    const finalOutliers = outliers.filter(key => !clustered.has(key));
+
+    return {
+      clusters,
+      outliers: finalOutliers,
+      metadata: {
+        metric,
+        silhouetteScore: clusters.size > 0 ? 
+          this.SilhouetteScore({ clusters, outliers: finalOutliers }, metric) : 
+          undefined
+      }
+    };
+  }
+
+  /**
+   * Expand a cluster in DBSCAN
+   * @private
+   */
+  private expandCluster(
+    key: string,
+    neighbors: string[],
+    cluster: string[],
+    visited: Set<string>,
+    clustered: Set<string>,
+    neighborhoods: Map<string, string[]>,
+    minPoints: number,
+    outliers: string[]
+  ): void {
+    cluster.push(key);
+    clustered.add(key);
+    
+    const queue = [...neighbors];
+    
+    while (queue.length > 0) {
+      const neighborKey = queue.shift()!;
+      
+      if (!visited.has(neighborKey)) {
+        visited.add(neighborKey);
+        const neighborNeighbors = neighborhoods.get(neighborKey)!;
+        
+        if (neighborNeighbors.length >= minPoints) {
+          // Add unprocessed neighbors to queue
+          neighborNeighbors.forEach(nn => {
+            if (!visited.has(nn)) {
+              queue.push(nn);
+            }
+          });
+        }
+      }
+      
+      if (!clustered.has(neighborKey)) {
+        cluster.push(neighborKey);
+        clustered.add(neighborKey);
+        
+        // Remove from outliers if it was there
+        const outlierIdx = outliers.indexOf(neighborKey);
+        if (outlierIdx !== -1) {
+          outliers.splice(outlierIdx, 1);
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  // PHASE 3: UTILITY METHODS
+  // ============================================================================
+
+  /**
+   * Finds the centroid (mean) of a set of vectors.
+   * 
+   * ## What is a Centroid?
+   * A centroid is the mean position of all vectors in a group.
+   * It represents the "center" of the cluster in vector space.
+   * 
+   * ## Business Use Cases:
+   * - **Representative Selection**: Find the average customer profile
+   * - **Summarization**: Create a summary vector for a group
+   * - **Cluster Analysis**: Understand cluster characteristics
+   * - **Trend Analysis**: Find the average trend across time periods
+   * 
+   * @param {number[][]} vectors - Array of vectors to find centroid of
+   * @returns {number[]} The centroid vector
+   * 
+   * @example
+   * ```typescript
+   * const vectors = [[1, 2], [3, 4], [5, 6]];
+   * const centroid = service.FindCentroid(vectors);
+   * // Returns [3, 4] (mean of each dimension)
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public FindCentroid(vectors: number[][]): number[] {
+    if (vectors.length === 0) {
+      throw new Error('Cannot find centroid of empty vector set');
+    }
+
+    const dimensions = vectors[0].length;
+    const centroid = new Array(dimensions).fill(0);
+
+    vectors.forEach(vector => {
+      if (vector.length !== dimensions) {
+        throw new Error('All vectors must have the same dimensions');
+      }
+      for (let i = 0; i < dimensions; i++) {
+        centroid[i] += vector[i];
+      }
+    });
+
+    // Calculate mean
+    for (let i = 0; i < dimensions; i++) {
+      centroid[i] /= vectors.length;
+    }
+
+    return centroid;
+  }
+
+  /**
+   * Calculates the average within-cluster distance for a clustering result.
+   * Lower values indicate tighter, more cohesive clusters.
+   * 
+   * ## What is Within-Cluster Distance?
+   * Measures how close points are to other points in the same cluster.
+   * Also known as cluster cohesion or compactness.
+   * 
+   * ## Business Interpretation:
+   * - **Low value**: Tight, well-defined groups (good)
+   * - **High value**: Loose, scattered groups (may need more clusters)
+   * 
+   * @param {ClusterResult<TMetadata>} clusterResult - The clustering result
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @returns {number} Average within-cluster distance (0-1, lower is better)
+   * 
+   * @example
+   * ```typescript
+   * const result = service.KMeansCluster(3);
+   * const cohesion = service.WithinClusterDistance(result);
+   * console.log(`Cluster cohesion: ${cohesion.toFixed(3)}`);
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public WithinClusterDistance(
+    clusterResult: ClusterResult<TMetadata>,
+    metric: DistanceMetric = 'euclidean'
+  ): number {
+    let totalDistance = 0;
+    let totalPairs = 0;
+
+    clusterResult.clusters.forEach((members) => {
+      // Calculate pairwise distances within cluster
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          const vec1 = this.vectors.get(members[i])?.vector;
+          const vec2 = this.vectors.get(members[j])?.vector;
+          
+          if (vec1 && vec2) {
+            // Convert similarity to distance
+            totalDistance += 1 - this.CalculateDistance(vec1, vec2, metric);
+            totalPairs++;
+          }
+        }
+      }
+    });
+
+    return totalPairs > 0 ? totalDistance / totalPairs : 0;
+  }
+
+  /**
+   * Calculates the average between-cluster distance for a clustering result.
+   * Higher values indicate better cluster separation.
+   * 
+   * ## What is Between-Cluster Distance?
+   * Measures how far apart different clusters are from each other.
+   * Also known as cluster separation.
+   * 
+   * ## Business Interpretation:
+   * - **High value**: Well-separated groups (good)
+   * - **Low value**: Overlapping groups (may have too many clusters)
+   * 
+   * @param {ClusterResult<TMetadata>} clusterResult - The clustering result
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @returns {number} Average between-cluster distance (0-1, higher is better)
+   * 
+   * @example
+   * ```typescript
+   * const result = service.KMeansCluster(3);
+   * const separation = service.BetweenClusterDistance(result);
+   * console.log(`Cluster separation: ${separation.toFixed(3)}`);
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public BetweenClusterDistance(
+    clusterResult: ClusterResult<TMetadata>,
+    metric: DistanceMetric = 'euclidean'
+  ): number {
+    const clusterIds = Array.from(clusterResult.clusters.keys());
+    
+    if (clusterIds.length < 2) {
+      return 0; // No between-cluster distance with single cluster
+    }
+
+    let totalDistance = 0;
+    let totalPairs = 0;
+
+    // Calculate distances between all pairs of clusters
+    for (let i = 0; i < clusterIds.length; i++) {
+      for (let j = i + 1; j < clusterIds.length; j++) {
+        const cluster1 = clusterResult.clusters.get(clusterIds[i])!;
+        const cluster2 = clusterResult.clusters.get(clusterIds[j])!;
+        
+        // Calculate average distance between all pairs across clusters
+        cluster1.forEach(key1 => {
+          cluster2.forEach(key2 => {
+            const vec1 = this.vectors.get(key1)?.vector;
+            const vec2 = this.vectors.get(key2)?.vector;
+            
+            if (vec1 && vec2) {
+              totalDistance += 1 - this.CalculateDistance(vec1, vec2, metric);
+              totalPairs++;
+            }
+          });
+        });
+      }
+    }
+
+    return totalPairs > 0 ? totalDistance / totalPairs : 0;
+  }
+
+  /**
+   * Calculates the Silhouette Score for a clustering result.
+   * Measures how similar a point is to its own cluster compared to other clusters.
+   * 
+   * ## What is Silhouette Score?
+   * A measure of how appropriate the clustering is, combining both cohesion and separation.
+   * Ranges from -1 to 1, where:
+   * - **1**: Perfect clustering (tight, well-separated clusters)
+   * - **0**: Overlapping clusters
+   * - **-1**: Wrong clustering (points assigned to wrong clusters)
+   * 
+   * ## Business Interpretation:
+   * - **0.7-1.0**: Strong clustering structure
+   * - **0.5-0.7**: Reasonable structure
+   * - **0.25-0.5**: Weak structure
+   * - **< 0.25**: No meaningful structure
+   * 
+   * @param {ClusterResult<TMetadata>} clusterResult - The clustering result
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @returns {number} Silhouette score (-1 to 1, higher is better)
+   * 
+   * @example
+   * ```typescript
+   * const result = service.KMeansCluster(3);
+   * const score = service.SilhouetteScore(result);
+   * if (score > 0.7) {
+   *   console.log('Excellent clustering!');
+   * }
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public SilhouetteScore(
+    clusterResult: ClusterResult<TMetadata>,
+    metric: DistanceMetric = 'euclidean'
+  ): number {
+    const scores: number[] = [];
+    
+    clusterResult.clusters.forEach((members, clusterId) => {
+      members.forEach(key => {
+        const vector = this.vectors.get(key)?.vector;
+        if (!vector) return;
+        
+        // Calculate a(i): average distance to other points in same cluster
+        let a = 0;
+        if (members.length > 1) {
+          const sameClusterDistances = members
+            .filter(k => k !== key)
+            .map(k => {
+              const otherVec = this.vectors.get(k)?.vector;
+              return otherVec ? 1 - this.CalculateDistance(vector, otherVec, metric) : 0;
+            });
+          a = sameClusterDistances.reduce((sum, d) => sum + d, 0) / sameClusterDistances.length;
+        }
+        
+        // Calculate b(i): minimum average distance to points in other clusters
+        let b = Infinity;
+        clusterResult.clusters.forEach((otherMembers, otherClusterId) => {
+          if (otherClusterId === clusterId) return;
+          
+          const otherClusterDistances = otherMembers.map(k => {
+            const otherVec = this.vectors.get(k)?.vector;
+            return otherVec ? 1 - this.CalculateDistance(vector, otherVec, metric) : 0;
+          });
+          
+          if (otherClusterDistances.length > 0) {
+            const avgDist = otherClusterDistances.reduce((sum, d) => sum + d, 0) / otherClusterDistances.length;
+            b = Math.min(b, avgDist);
+          }
+        });
+        
+        // Calculate silhouette coefficient for this point
+        if (b !== Infinity) {
+          const s = (b - a) / Math.max(a, b);
+          scores.push(s);
+        }
+      });
+    });
+    
+    // Return average silhouette score
+    return scores.length > 0 ? 
+      scores.reduce((sum, s) => sum + s, 0) / scores.length : 
+      0;
+  }
+
+  /**
+   * Finds the optimal number of clusters using the elbow method.
+   * Tests different values of k and returns their inertias.
+   * 
+   * ## What is the Elbow Method?
+   * A technique to find the optimal number of clusters by plotting inertia vs k.
+   * The "elbow" point where inertia stops decreasing rapidly suggests the optimal k.
+   * 
+   * ## How to Use:
+   * 1. Run this method with a range of k values
+   * 2. Plot inertia (y-axis) vs k (x-axis)
+   * 3. Look for the "elbow" where the curve flattens
+   * 4. Choose k at the elbow point
+   * 
+   * @param {number} minK - Minimum number of clusters to test
+   * @param {number} maxK - Maximum number of clusters to test
+   * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @returns {Map<number, number>} Map of k values to inertias
+   * 
+   * @example
+   * ```typescript
+   * const elbowData = service.ElbowMethod(2, 10);
+   * elbowData.forEach((inertia, k) => {
+   *   console.log(`k=${k}: inertia=${inertia.toFixed(2)}`);
+   * });
+   * // Look for the "elbow" in the results
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public ElbowMethod(
+    minK: number,
+    maxK: number,
+    metric: DistanceMetric = 'euclidean'
+  ): Map<number, number> {
+    if (minK < 1 || maxK > this.vectors.size || minK > maxK) {
+      throw new Error('Invalid k range');
+    }
+
+    const results = new Map<number, number>();
+    
+    for (let k = minK; k <= maxK; k++) {
+      const clusterResult = this.KMeansCluster(k, 100, metric);
+      results.set(k, clusterResult.metadata?.inertia || 0);
+    }
+    
+    return results;
   }
 }

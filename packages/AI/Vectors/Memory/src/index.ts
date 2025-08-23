@@ -7,5 +7,6 @@ export {
   SimpleVectorService,
   VectorEntry,
   VectorSearchResult,
-  DistanceMetric
+  DistanceMetric,
+  ClusterResult
 } from './models/SimpleVectorService';
