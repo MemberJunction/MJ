@@ -1,5 +1,5 @@
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
-import { BaseEntity, EntityInfo, RunQueryParams, RunQueryResult, RunViewParams, RunViewResult } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, RunQueryParams, RunQueryResult, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 
 /**
  * This is a simple data context object that is passed into the ComponentInitFunction containing any required `static` data. This object is empty when the mode is `dynamic`  
@@ -20,7 +20,7 @@ export interface SimpleMetadata {
      * Retrieves a single BaseEntity derived class for the specified entity
      * @param entityName 
      */
-    GetEntityObject(entityName: string): Promise<BaseEntity>;
+    GetEntityObject(entityName: string, contextUser?: UserInfo): Promise<BaseEntity>;
 }
 
 /**
@@ -32,13 +32,13 @@ export interface SimpleRunView {
      * @param params 
      * @returns 
      */
-    RunView: (params: RunViewParams) => Promise<RunViewResult>
+    RunView: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult>
     /**
      * Runs multiple views and returns the results. This is efficient for running views in **parallel**.
      * @param params 
      * @returns 
      */
-    RunViews: (params: RunViewParams[]) => Promise<RunViewResult[]>
+    RunViews: (params: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>
 }
 
 /**
@@ -50,7 +50,7 @@ export interface SimpleRunQuery {
      * @param params 
      * @returns 
      */
-    RunQuery: (params: RunQueryParams) => Promise<RunQueryResult>
+    RunQuery: (params: RunQueryParams, contextUser?: UserInfo) => Promise<RunQueryResult>
 }
 
 
@@ -70,7 +70,12 @@ export interface SimpleExecutePromptParams {
      * An ordered array of model names that are preferred for this prompt. This is not guaranteed but the preferences
      * are taken into account
      */
-    preferredModels?: string[]
+    preferredModels?: string[],
+
+    /**
+     * Optional context user information
+     */
+    contextUser?: UserInfo
 }
 
 /**
@@ -101,7 +106,8 @@ export interface SimpleEmbedTextParams {
      * Either a single string or an array of strings to calculate embeddings for
      */
     textToEmbed: string | string[];
-    modelSize: 'small' | 'medium'
+    modelSize: 'small' | 'medium';
+    contextUser?: UserInfo;
 }
 
 /**
