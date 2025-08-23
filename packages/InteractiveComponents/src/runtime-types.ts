@@ -1,5 +1,5 @@
 import { CompositeKey } from "@memberjunction/core";
-import { SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
+import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -191,5 +191,10 @@ export interface ComponentObject {
 export interface ComponentUtilities {
     md: SimpleMetadata,
     rv: SimpleRunView,
-    rq: SimpleRunQuery
+    rq: SimpleRunQuery,
+    /**
+     * Access to AI tools. This will not always be available in all environments and security contexts, ensure
+     * component code has fallbacks when this property is undefined
+     */
+    ai?: SimpleAITools
 }
