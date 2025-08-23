@@ -3,25 +3,25 @@ import { LogError } from '@memberjunction/core';
 /**
  * Represents a vector entry with a unique key and associated embedding
  */
-export interface VectorEntry {
+export interface VectorEntry<TMetadata = Record<string, unknown>> {
   /** User-defined unique identifier for the vector */
   key: string;
   /** The embedding/vector as an array of numbers */
   vector: number[];
   /** Optional metadata associated with the vector */
-  metadata?: any;
+  metadata?: TMetadata;
 }
 
 /**
  * Search result returned from vector similarity operations
  */
-export interface VectorSearchResult {
+export interface VectorSearchResult<TMetadata = Record<string, unknown>> {
   /** The unique key of the matched vector */
   key: string;
   /** Similarity score (0-1 for cosine similarity, where 1 is most similar) */
   score: number;
   /** Optional metadata associated with the matched vector */
-  metadata?: any;
+  metadata?: TMetadata;
 }
 
 /**
@@ -47,14 +47,15 @@ export interface VectorSearchResult {
  * @class
  * @public
  */
-export class SimpleVectorService {
-  private vectors: Map<string, VectorEntry> = new Map();
+export class SimpleVectorService<TMetadata = Record<string, unknown>> {
+  private vectors: Map<string, VectorEntry<TMetadata>> = new Map();
+  private expectedDimensions: number | null = null;
   
   /**
    * Loads vectors into memory. Can accept either an array of VectorEntry objects
    * or a Map where keys are identifiers and values are vector arrays.
    * 
-   * @param {VectorEntry[] | Map<string, number[]>} entries - The vectors to load
+   * @param {VectorEntry<TMetadata>[] | Map<string, number[]>} entries - The vectors to load
    * @throws {Error} If entries is null or undefined
    * 
    * @example
@@ -75,17 +76,19 @@ export class SimpleVectorService {
    * @public
    * @method
    */
-  public LoadVectors(entries: VectorEntry[] | Map<string, number[]>): void {
+  public LoadVectors(entries: VectorEntry<TMetadata>[] | Map<string, number[]>): void {
     if (!entries) {
       throw new Error('Entries cannot be null or undefined');
     }
 
     if (entries instanceof Map) {
       entries.forEach((vector, key) => {
-        this.vectors.set(key, { key, vector });
+        this.validateAndSetDimensions(vector);
+        this.vectors.set(key, { key, vector } as VectorEntry<TMetadata>);
       });
     } else {
       entries.forEach(entry => {
+        this.validateAndSetDimensions(entry.vector);
         this.vectors.set(entry.key, entry);
       });
     }
@@ -94,25 +97,23 @@ export class SimpleVectorService {
   /**
    * Adds or updates a single vector in the service
    * 
-   * @param {VectorEntry} entry - The vector entry containing key, vector, and optional metadata
-   * @throws {Error} If entry is null/undefined, or if key or vector is invalid
+   * @param {string} key - The unique identifier for the vector
+   * @param {number[]} vector - The vector/embedding array
+   * @param {TMetadata} metadata - Optional metadata to associate with the vector
+   * @throws {Error} If key is null/undefined, or if vector is invalid
    * 
    * @example
    * ```typescript
-   * service.AddVector({
-   *   key: 'product123',
-   *   vector: [0.1, 0.2, 0.3],
-   *   metadata: {
-   *     name: 'Product Name',
-   *     category: 'Electronics'
-   *   }
+   * service.AddVector('product123', [0.1, 0.2, 0.3], {
+   *   name: 'Product Name',
+   *   category: 'Electronics'
    * });
    * ```
    * 
    * @public
    * @method
    */
-  public AddVector(key: string, vector: number[], metadata?: any): void {
+  public AddVector(key: string, vector: number[], metadata?: TMetadata): void {
     if (!key) {
       throw new Error('Key cannot be null or undefined');
     }
@@ -120,6 +121,7 @@ export class SimpleVectorService {
       throw new Error('Vector cannot be null, undefined, or empty');
     }
 
+    this.validateAndSetDimensions(vector);
     this.vectors.set(key, { key, vector, metadata });
   }
   
@@ -128,7 +130,8 @@ export class SimpleVectorService {
    * 
    * @param {number[]} queryVector - The vector to search for similar items
    * @param {number} [topK=10] - Number of nearest neighbors to return
-   * @returns {VectorSearchResult[]} Array of search results sorted by similarity (highest first)
+   * @param {number} [threshold] - Optional minimum similarity threshold (0-1)
+   * @returns {VectorSearchResult<TMetadata>[]} Array of search results sorted by similarity (highest first)
    * @throws {Error} If queryVector is null/undefined or empty
    * 
    * @example
@@ -138,12 +141,15 @@ export class SimpleVectorService {
    * nearestItems.forEach(item => {
    *   console.log(`${item.key}: ${item.score}`);
    * });
+   * 
+   * // With threshold - only return items with similarity > 0.7
+   * const similarItems = service.FindNearest(queryEmbedding, 10, 0.7);
    * ```
    * 
    * @public
    * @method
    */
-  public FindNearest(queryVector: number[], topK: number = 10): VectorSearchResult[] {
+  public FindNearest(queryVector: number[], topK: number = 10, threshold?: number): VectorSearchResult<TMetadata>[] {
     if (!queryVector || queryVector.length === 0) {
       throw new Error('Query vector cannot be null, undefined, or empty');
     }
@@ -163,8 +169,9 @@ export class SimpleVectorService {
         }
       })
       .filter(result => result !== null)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK);
+      .filter(result => threshold == null || result!.score >= threshold)
+      .sort((a, b) => b!.score - a!.score)
+      .slice(0, topK) as VectorSearchResult<TMetadata>[];
     
     return results;
   }
@@ -175,26 +182,30 @@ export class SimpleVectorService {
    * 
    * @param {string} key - The key of the source vector
    * @param {number} [topK=10] - Number of similar vectors to return
-   * @returns {VectorSearchResult[]} Array of similar vectors sorted by similarity
+   * @param {number} [threshold] - Optional minimum similarity threshold (0-1)
+   * @returns {VectorSearchResult<TMetadata>[]} Array of similar vectors sorted by similarity
    * @throws {Error} If the key doesn't exist in the service
    * 
    * @example
    * ```typescript
    * // Find items similar to 'product123'
    * const similarProducts = service.FindSimilar('product123', 5);
+   * 
+   * // Find highly similar items (similarity > 0.8)
+   * const verySimilar = service.FindSimilar('product123', 10, 0.8);
    * ```
    * 
    * @public
    * @method
    */
-  public FindSimilar(key: string, topK: number = 10): VectorSearchResult[] {
+  public FindSimilar(key: string, topK: number = 10, threshold?: number): VectorSearchResult<TMetadata>[] {
     const sourceVector = this.vectors.get(key);
     if (!sourceVector) {
       throw new Error(`Vector with key "${key}" not found`);
     }
     
     // Get topK + 1 to account for excluding self
-    return this.FindNearest(sourceVector.vector, topK + 1)
+    return this.FindNearest(sourceVector.vector, topK + 1, threshold)
       .filter(result => result.key !== key)  // Exclude self
       .slice(0, topK);
   }
@@ -396,7 +407,7 @@ export class SimpleVectorService {
    * Retrieves the metadata associated with a specific vector
    * 
    * @param {string} key - The key of the vector
-   * @returns {any | undefined} The metadata, or undefined if not found
+   * @returns {TMetadata | undefined} The metadata, or undefined if not found
    * 
    * @example
    * ```typescript
@@ -409,7 +420,7 @@ export class SimpleVectorService {
    * @public
    * @method
    */
-  public GetMetadata(key: string): any | undefined {
+  public GetMetadata(key: string): TMetadata | undefined {
     return this.vectors.get(key)?.metadata;
   }
 
@@ -455,7 +466,7 @@ export class SimpleVectorService {
    * Exports all vectors as an array of VectorEntry objects.
    * Useful for persistence or transferring data.
    * 
-   * @returns {VectorEntry[]} Array of all vector entries
+   * @returns {VectorEntry<TMetadata>[]} Array of all vector entries
    * 
    * @example
    * ```typescript
@@ -467,7 +478,61 @@ export class SimpleVectorService {
    * @public
    * @method
    */
-  public ExportVectors(): VectorEntry[] {
+  public ExportVectors(): VectorEntry<TMetadata>[] {
     return Array.from(this.vectors.values());
+  }
+
+  /**
+   * Validates vector dimensions and sets expected dimensions if not yet set.
+   * Ensures all vectors have consistent dimensions for valid similarity calculations.
+   * 
+   * @param {number[]} vector - The vector to validate
+   * @throws {Error} If vector dimensions don't match expected dimensions
+   * 
+   * @private
+   * @method
+   */
+  private validateAndSetDimensions(vector: number[]): void {
+    if (this.expectedDimensions === null) {
+      // First vector sets the expected dimensions
+      this.expectedDimensions = vector.length;
+    } else if (vector.length !== this.expectedDimensions) {
+      throw new Error(
+        `Vector dimension mismatch. Expected ${this.expectedDimensions} dimensions, got ${vector.length}. ` +
+        `All vectors must have the same number of dimensions for similarity calculations to work.`
+      );
+    }
+  }
+
+  /**
+   * Gets the expected vector dimensions for this service instance
+   * 
+   * @returns {number | null} The expected dimensions, or null if no vectors loaded yet
+   * 
+   * @public
+   * @readonly
+   */
+  public get ExpectedDimensions(): number | null {
+    return this.expectedDimensions;
+  }
+
+  /**
+   * Finds all vectors with similarity above a threshold
+   * 
+   * @param {number[]} queryVector - The vector to search for similar items
+   * @param {number} threshold - Minimum similarity threshold (0-1)
+   * @returns {VectorSearchResult<TMetadata>[]} Array of search results sorted by similarity
+   * 
+   * @example
+   * ```typescript
+   * // Find all highly similar items (similarity > 0.8)
+   * const similar = service.FindAboveThreshold(queryVector, 0.8);
+   * ```
+   * 
+   * @public
+   * @method
+   */
+  public FindAboveThreshold(queryVector: number[], threshold: number): VectorSearchResult<TMetadata>[] {
+    return this.FindNearest(queryVector, this.vectors.size, threshold);
   }
 }
