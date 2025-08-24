@@ -29,6 +29,7 @@ function AIPromptsCluster({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [highlightCluster, setHighlightCluster] = useState(null);
+  const [clusterNames, setClusterNames] = useState({});
 
   // Load AI Prompts data on mount
   useEffect(() => {
@@ -180,8 +181,104 @@ function AIPromptsCluster({
       
       setClusters(clusteredPrompts);
       
+      // Generate names for clusters
+      generateClusterNames(clusteredPrompts);
+      
     } catch (err) {
       setError(`Error performing clustering: ${err.message}`);
+    }
+  };
+  
+  // Generate AI-powered names for clusters
+  const generateClusterNames = async (clusteredPrompts) => {
+    try {
+      // Group prompts by cluster
+      const clusterGroups = {};
+      clusteredPrompts.forEach(prompt => {
+        if (!clusterGroups[prompt.cluster]) {
+          clusterGroups[prompt.cluster] = [];
+        }
+        clusterGroups[prompt.cluster].push(prompt);
+      });
+      
+      // Prepare cluster summaries for AI
+      const clusterSummaries = {};
+      Object.entries(clusterGroups).forEach(([clusterId, prompts]) => {
+        // Get unique categories and types
+        const categories = [...new Set(prompts.map(p => p.Category).filter(Boolean))];
+        const types = [...new Set(prompts.map(p => p.Type).filter(Boolean))];
+        
+        // Sample prompt names (up to 5)
+        const sampleNames = prompts.slice(0, 5).map(p => p.Name);
+        
+        // Sample template texts (first 150 chars, up to 3 prompts)
+        const templateSamples = prompts
+          .slice(0, 3)
+          .map(p => p.TemplateText ? p.TemplateText.substring(0, 150) + '...' : '')
+          .filter(Boolean);
+        
+        clusterSummaries[clusterId] = {
+          promptCount: prompts.length,
+          sampleNames,
+          categories,
+          types,
+          templateSamples
+        };
+      });
+      
+      // Create a single prompt for all clusters
+      const namingPrompt = `Analyze these clusters of AI prompts and generate concise, descriptive names (2-4 words) for each cluster based on their common themes or purposes.
+
+${Object.entries(clusterSummaries).map(([id, summary]) => `
+Cluster ${parseInt(id) + 1}:
+- ${summary.promptCount} prompts total
+- Sample names: ${summary.sampleNames.join(', ')}
+- Categories: ${summary.categories.length > 0 ? summary.categories.join(', ') : 'Various'}
+- Types: ${summary.types.length > 0 ? summary.types.join(', ') : 'Various'}
+- Template samples: ${summary.templateSamples.length > 0 ? summary.templateSamples[0].substring(0, 100) : 'N/A'}
+`).join('\n')}
+
+Return a JSON object with cluster numbers as keys and descriptive names as values. Example format:
+{
+  "0": "Data Analysis Tools",
+  "1": "User Communication",
+  "2": "System Administration"
+}
+
+Only return the JSON object, nothing else.`;
+      
+      // Call AI to generate names using ExecutePrompt
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: namingPrompt,
+        modelPower: 'lowest' // This is a simple task, use the cheapest/fastest model
+      });
+      
+      if (result && result.success && result.result) {
+        try {
+          // Parse the JSON response - ExecutePrompt may already parse it for us
+          const names = result.resultObject || JSON.parse(result.result);
+          setClusterNames(names);
+          
+          // Optionally save to user settings
+          if (onSaveUserSettings) {
+            onSaveUserSettings({
+              ...savedUserSettings,
+              clusterNames: names
+            });
+          }
+        } catch (parseErr) {
+          console.error('Failed to parse cluster names:', parseErr);
+          // Fall back to numbered clusters
+          const fallbackNames = {};
+          Object.keys(clusterSummaries).forEach(id => {
+            fallbackNames[id] = `Cluster ${parseInt(id) + 1}`;
+          });
+          setClusterNames(fallbackNames);
+        }
+      }
+    } catch (err) {
+      console.error('Error generating cluster names:', err);
+      // Don't let this break the clustering - just use numbers
     }
   };
 
@@ -436,6 +533,7 @@ function AIPromptsCluster({
             <ClusterGraph
               prompts={clusters}
               clusters={clusters}
+              clusterNames={clusterNames}
               selectedPromptId={selectedPrompt?.ID}
               similarityThreshold={similarityThreshold}
               highlightCluster={highlightCluster}

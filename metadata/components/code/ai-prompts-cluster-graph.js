@@ -1,6 +1,7 @@
 function AIPromptsClusterGraph({
   prompts,
   clusters,
+  clusterNames = {},
   selectedPromptId,
   similarityThreshold = 0.7,
   highlightCluster,
@@ -15,10 +16,23 @@ function AIPromptsClusterGraph({
   onSaveUserSettings
 }) {
   const svgRef = useRef(null);
+  const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState(null);
   const currentTransform = useRef(null);
+  
+  // Initialize zoom behavior once, outside useEffect
   const zoomBehavior = useRef(null);
+  if (!zoomBehavior.current && typeof d3 !== 'undefined') {
+    zoomBehavior.current = d3.zoom()
+      .scaleExtent([0.1, 10])
+      .on('zoom', (event) => {
+        currentTransform.current = event.transform;
+        if (containerRef.current) {
+          containerRef.current.attr('transform', event.transform);
+        }
+      });
+  }
   
   // Modern gradient color palette for clusters
   const clusterColors = [
@@ -64,25 +78,26 @@ function AIPromptsClusterGraph({
     const width = dimensions.width;
     const height = dimensions.height;
 
-    // Create or update zoom behavior
-    if (!zoomBehavior.current) {
-      zoomBehavior.current = d3.zoom()
-        .scaleExtent([0.1, 10])
-        .on('zoom', (event) => {
-          currentTransform.current = event.transform;
-          container.attr('transform', event.transform);
-        });
+    // Create container for zoom/pan first
+    const container = svg.append('g');
+    containerRef.current = container;
+    
+    // Apply zoom behavior to svg (it's already initialized in component)
+    if (zoomBehavior.current) {
+      // Update the zoom handler to use the new container
+      zoomBehavior.current.on('zoom', (event) => {
+        currentTransform.current = event.transform;
+        container.attr('transform', event.transform);
+      });
+      
+      svg.call(zoomBehavior.current);
     }
-
-    svg.call(zoomBehavior.current);
     
     // Apply saved transform if it exists
     if (currentTransform.current) {
       svg.call(zoomBehavior.current.transform, currentTransform.current);
+      container.attr('transform', currentTransform.current);
     }
-
-    // Create container for zoom/pan
-    const container = svg.append('g');
     
     // Add gradient definitions
     const defs = svg.append('defs');
@@ -425,41 +440,56 @@ function AIPromptsClusterGraph({
     };
   }, [prompts, clusters, selectedPromptId, similarityThreshold, highlightCluster, dimensions]);
 
+  // Zoom control functions - don't use useCallback to ensure we have current refs
+  const handleZoomIn = () => {
+    if (!svgRef.current || !zoomBehavior.current) {
+      console.warn('Zoom in - refs not ready');
+      return;
+    }
+    
+    const svg = d3.select(svgRef.current);
+    const currentZoom = currentTransform.current ? currentTransform.current.k : 1;
+    const newZoom = Math.min(currentZoom * 1.5, 10);
+    
+    svg.transition()
+      .duration(300)
+      .call(zoomBehavior.current.scaleTo, newZoom);
+  };
+  
+  const handleZoomOut = () => {
+    if (!svgRef.current || !zoomBehavior.current) {
+      console.warn('Zoom out - refs not ready');
+      return;
+    }
+    
+    const svg = d3.select(svgRef.current);
+    const currentZoom = currentTransform.current ? currentTransform.current.k : 1;
+    const newZoom = Math.max(currentZoom / 1.5, 0.1);
+    
+    svg.transition()
+      .duration(300)
+      .call(zoomBehavior.current.scaleTo, newZoom);
+  };
+  
+  const handleResetZoom = () => {
+    if (!svgRef.current || !zoomBehavior.current) {
+      console.warn('Reset zoom - refs not ready');
+      return;
+    }
+    
+    const svg = d3.select(svgRef.current);
+    svg.transition()
+      .duration(300)
+      .call(zoomBehavior.current.transform, d3.zoomIdentity);
+    currentTransform.current = d3.zoomIdentity;
+  };
+  
   // Cluster legend
   const uniqueClusters = useMemo(() => {
     if (!clusters || clusters.length === 0) return [];
     const clusterSet = new Set(clusters.map(p => p.cluster));
     return Array.from(clusterSet).sort((a, b) => a - b);
   }, [clusters]);
-  
-  // Zoom control functions
-  const handleZoomIn = () => {
-    if (svgRef.current && zoomBehavior.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomBehavior.current.scaleBy, 1.3);
-    }
-  };
-  
-  const handleZoomOut = () => {
-    if (svgRef.current && zoomBehavior.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomBehavior.current.scaleBy, 0.7);
-    }
-  };
-  
-  const handleResetZoom = () => {
-    if (svgRef.current && zoomBehavior.current) {
-      d3.select(svgRef.current)
-        .transition()
-        .duration(300)
-        .call(zoomBehavior.current.transform, d3.zoomIdentity);
-      currentTransform.current = null;
-    }
-  };
 
   return (
     <div style={{ 
@@ -581,40 +611,51 @@ function AIPromptsClusterGraph({
         }}>
           Clusters
         </div>
-        {uniqueClusters.map(cluster => (
-          <div
-            key={cluster}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              marginBottom: '8px',
-              cursor: 'pointer',
-              opacity: highlightCluster !== null && highlightCluster !== cluster ? 0.4 : 1,
-              transition: 'all 0.2s ease',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              backgroundColor: highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'
-            }}
-            onClick={() => onClusterSelect(cluster)}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = `${solidColors[cluster % solidColors.length]}10`}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'}
-          >
+        {uniqueClusters.map(cluster => {
+          const clusterName = clusterNames[cluster] || `Cluster ${cluster + 1}`;
+          return (
             <div
+              key={cluster}
               style={{
-                width: '16px',
-                height: '16px',
-                background: `linear-gradient(135deg, ${solidColors[cluster % solidColors.length]} 0%, ${d3.color(solidColors[cluster % solidColors.length]).darker(0.3)} 100%)`,
-                marginRight: '10px',
-                borderRadius: '50%',
-                border: '2px solid white',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '8px',
+                cursor: 'pointer',
+                opacity: highlightCluster !== null && highlightCluster !== cluster ? 0.4 : 1,
+                transition: 'all 0.2s ease',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                backgroundColor: highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'
               }}
-            />
-            <span style={{ color: '#4a5568', fontWeight: '500' }}>
-              Cluster {cluster + 1}
-            </span>
-          </div>
-        ))}
+              onClick={() => onClusterSelect(cluster)}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = `${solidColors[cluster % solidColors.length]}10`}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'}
+              title={clusterName}
+            >
+              <div
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  background: `linear-gradient(135deg, ${solidColors[cluster % solidColors.length]} 0%, ${d3.color(solidColors[cluster % solidColors.length]).darker(0.3)} 100%)`,
+                  marginRight: '10px',
+                  borderRadius: '50%',
+                  border: '2px solid white',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              />
+              <span style={{ 
+                color: '#4a5568', 
+                fontWeight: '500',
+                maxWidth: '140px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {clusterName}
+              </span>
+            </div>
+          );
+        })}
       </div>
       
       {/* Modern Instructions */}
