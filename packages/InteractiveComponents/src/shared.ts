@@ -71,7 +71,13 @@ export interface SimpleExecutePromptParams {
      * are taken into account
      */
     preferredModels?: string[],
-
+    /**
+     * Optional power level for model selection when preferredModels is not provided.
+     * 'lowest' = least powerful/cheapest model
+     * 'medium' = balanced power/cost (default)
+     * 'highest' = most powerful model
+     */
+    modelPower?: 'lowest' | 'medium' | 'highest';
     /**
      * Optional context user information
      */

@@ -1,9 +1,19 @@
 import { BrowserManager } from './browser-context';
-import { Metadata, RunView, RunQuery } from '@memberjunction/core';
+import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
-import { ComponentSpec, ComponentUtilities } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { 
+  ComponentSpec, 
+  ComponentUtilities, 
+  SimpleAITools,
+  SimpleExecutePromptParams,
+  SimpleExecutePromptResult,
+  SimpleEmbedTextParams,
+  SimpleEmbedTextResult
+} from '@memberjunction/interactive-component-types';
+import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
+import { AIEngine } from '@memberjunction/aiengine';
  
 
 export interface ComponentExecutionOptions {
@@ -1051,7 +1061,7 @@ export class ComponentRunner {
     });
   }
 
-  private buildLocalMJUtilities(): ComponentUtilities {
+  private async buildLocalMJUtilities(contextUser: UserInfo): Promise<ComponentUtilities> {
     console.log("   Building local MJ utilities");
     const rv = new RunView();
     const rq = new RunQuery();
@@ -1067,28 +1077,164 @@ export class ComponentRunner {
       md: {
         GetEntityObject: md.GetEntityObject, // return the function
         Entities: md.Entities // return the function
-      }
+      },
+      ai: await this.BuildLocalSimpleAITools(contextUser)
     }
-//       ai: {
-// ExecutePrompt: (params: SimpleExecutePromptParams) => Promise<SimpleExecutePromptResult>
+  }
 
-//     /**
-//      * Used to calculate vector embeddings for one or more strings. Uses very fast small/medium sized
-//      * local models so the embeddings can be rapidly calculated for hundreds or even thousands of pieces of text.
-//      * This allows interactive components to dynamically compute similarity/distance between any kinds of data
-//      * and generate very interesting interactive experiences for users
-//      * @param params 
-//      * @returns 
-//      */
-//     EmbedText: (params: SimpleEmbedTextParams) => Promise<SimpleEmbedTextResult>
+  protected async BuildLocalSimpleAITools(contextUser: UserInfo): Promise<SimpleAITools> {
+    // Use AIEngine directly since we're in Node.js with full MJ backend
+    const aiEngine = AIEngine.Instance;
+    await aiEngine.Config(false, contextUser);
 
-//     /**
-//      * Instance of the SimpleVectorService that can be used by Interactive Components
-//      * @see SimpleVectorService for more details on this. This object can perform a wide array
-//      * of vector data operations such as KNN, Similarity Scoring, and more.
-//      */
-//     VectorService: SimpleVectorService      }
-//     }
+    return {
+      ExecutePrompt: async (params: SimpleExecutePromptParams): Promise<SimpleExecutePromptResult> => {
+        try {
+          // Get the appropriate model based on power level or preferences
+          let model: AIModelEntityExtended | undefined;
+          
+          if (params.preferredModels && params.preferredModels.length > 0) {
+            // Try to find one of the preferred models
+            await aiEngine.Config(false, params.contextUser);
+            const models = aiEngine.Models;
+            for (const preferredModel of params.preferredModels) {
+              model = models.find((m: AIModelEntityExtended) => 
+                m.Name === preferredModel && 
+                m.IsActive === true
+              );
+              if (model) break;
+            }
+          }
+          
+          // If no preferred model found, use power level selection
+          if (!model) {
+            if (params.modelPower === 'lowest') {
+              // Get lowest power model by sorting in reverse
+              await aiEngine.Config(false, params.contextUser);
+              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+                m.AIModelType === 'LLM' && 
+                m.IsActive === true
+              );
+              model = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+            } else if (params.modelPower === 'highest') {
+              model = await aiEngine.GetHighestPowerLLM(undefined, params.contextUser);
+            } else {
+              // Default to medium - get a model in the middle range
+              await aiEngine.Config(false, params.contextUser);
+              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+                m.AIModelType === 'LLM' && 
+                m.IsActive === true
+              );
+              const sortedModels = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0));
+              const midIndex = Math.floor(sortedModels.length / 2);
+              model = sortedModels[midIndex] || sortedModels[0];
+            }
+          }
+          
+          // Build full conversation from messages if provided
+          let fullUserPrompt = '';
+          if (params.messages && params.messages.length > 0) {
+            fullUserPrompt = params.messages
+              .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.message}`)
+              .join('\n');
+          }
+          
+          // Execute the prompt using AIEngine
+          const result = await aiEngine.SimpleLLMCompletion(
+            fullUserPrompt || '',
+            params.contextUser || {} as any, // Provide empty object if no context user
+            params.systemPrompt,
+            model
+          );
+          
+          // Try to parse JSON if present
+          let resultObject: any;
+          try {
+            // Look for JSON in the response
+            const jsonMatch = result.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+            if (jsonMatch) {
+              resultObject = JSON.parse(jsonMatch[0]);
+            }
+          } catch (e) {
+            // Not JSON or failed to parse, that's ok
+          }
+          
+          return {
+            success: true,
+            result: result,
+            resultObject,
+            modelName: model?.Name || 'Unknown'
+          };
+        } catch (error) {
+          LogError(error);
+          return {
+            success: false,
+            result: 'Failed to execute prompt: ' + (error instanceof Error ? error.message : String(error)),
+            modelName: ''
+          };
+        }
+      },
+      
+      EmbedText: async (params: SimpleEmbedTextParams): Promise<SimpleEmbedTextResult> => {
+        try {
+          // Handle both single string and array of strings
+          const texts = Array.isArray(params.textToEmbed) 
+            ? params.textToEmbed 
+            : [params.textToEmbed];
+          
+          // Use appropriate embedding model based on size
+          await aiEngine.Config(false, params.contextUser);
+          
+          // Get embedding models and filter by size preference
+          const embeddingModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+            m.AIModelType === 'Embeddings' && 
+            m.IsActive === true
+          );
+          
+          // Select model based on size preference
+          let model: AIModelEntityExtended;
+          if (params.modelSize === 'small') {
+            // Prefer local/smaller models for 'small'
+            model = embeddingModels.find((m: AIModelEntityExtended) => m.Vendor === 'LocalEmbeddings') ||
+                    embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+          } else {
+            // Use more powerful models for 'medium'
+            model = embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0))[0];
+          }
+          
+          if (!model) {
+            throw new Error('No embedding model available');
+          }
+          
+          // Generate embeddings for all texts
+          const embeddings: number[][] = [];
+          for (const text of texts) {
+            const result = await aiEngine.EmbedText(model, text);
+            if (result && result.vector) {
+              embeddings.push(result.vector);
+            } else {
+              throw new Error('Failed to generate embedding for text');
+            }
+          }
+          
+          // Return single embedding or array based on input
+          const returnEmbeddings = Array.isArray(params.textToEmbed)
+            ? embeddings
+            : embeddings[0];
+          
+          return {
+            result: returnEmbeddings,
+            modelName: model.Name,
+            vectorDimensions: embeddings[0]?.length || 0
+          };
+        } catch (error) {
+          LogError(error);
+          throw error; // Re-throw for embeddings as they're critical
+        }
+      },
+      
+      VectorService: new SimpleVectorService()
+    };
   }
 
   /**
@@ -1103,7 +1249,7 @@ export class ComponentRunner {
     const serializedContextUser = JSON.parse(JSON.stringify(options.contextUser));
     
     // utilities - favor the one passed in by the caller, or fall back to the local ones
-    const util: ComponentUtilities = options.utilities || this.buildLocalMJUtilities();
+    const util: ComponentUtilities = options.utilities || await this.buildLocalMJUtilities(options.contextUser);
 
     // Create a lightweight mock metadata object with serializable data
     // This avoids authentication/provider issues in the browser context
@@ -1289,10 +1435,79 @@ export class ComponentRunner {
       }
     });
 
+    // Expose AI tools
+    await page.exposeFunction('__mjExecutePrompt', async (params: SimpleExecutePromptParams) => {
+      try {
+        if (!util.ai) {
+          throw new Error('AI tools not available');
+        }
+        // Add contextUser to params if not provided
+        const paramsWithUser = { ...params, contextUser: options.contextUser };
+        const result = await util.ai.ExecutePrompt(paramsWithUser);
+        
+        if (debug && result.success) {
+          console.log(`🤖 ExecutePrompt SUCCESS: Model="${result.modelName}"`);
+        }
+        
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (debug) {
+          console.log(`❌ ExecutePrompt FAILED: ${errorMessage}`);
+        }
+        
+        dataErrors.push(`AI ExecutePrompt error: ${errorMessage}`);
+        
+        return {
+          success: false,
+          result: errorMessage,
+          modelName: ''
+        };
+      }
+    });
+
+    await page.exposeFunction('__mjEmbedText', async (params: SimpleEmbedTextParams) => {
+      try {
+        if (!util.ai) {
+          throw new Error('AI tools not available');
+        }
+        // Add contextUser to params if not provided
+        const paramsWithUser = { ...params, contextUser: options.contextUser };
+        const result = await util.ai.EmbedText(paramsWithUser);
+        
+        if (debug) {
+          const count = Array.isArray(result.result) 
+            ? (Array.isArray(result.result[0]) ? result.result.length : 1)
+            : 1;
+          console.log(`🤖 EmbedText SUCCESS: Model="${result.modelName}" Count=${count} Dims=${result.vectorDimensions}`);
+        }
+        
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (debug) {
+          console.log(`❌ EmbedText FAILED: ${errorMessage}`);
+        }
+        
+        dataErrors.push(`AI EmbedText error: ${errorMessage}`);
+        throw error; // Re-throw for embeddings as they're critical
+      }
+    });
+
     // Make them available in utilities with the mock metadata
     await page.evaluate(() => {
       // Use the mock metadata for synchronous access
       const mockMd = (window as any).__mjMockMetadata || { Entities: [], CurrentUser: null };
+      
+      // Import SimpleVectorService for use in browser
+      // Note: This will be available as part of the runtime bundle
+      const VectorService = (window as any).MJReactRuntime?.SimpleVectorService || 
+                           class { 
+                             // Stub implementation if not available
+                             cosineSimilarity(_a: number[], _b: number[]): number { return 0; }
+                           };
       
       (window as any).__mjUtilities = {
         md: {
@@ -1313,6 +1528,11 @@ export class ComponentRunner {
         },
         rq: {
           RunQuery: async (params: any) => await (window as any).__mjRunQuery(params)
+        },
+        ai: {
+          ExecutePrompt: async (params: any) => await (window as any).__mjExecutePrompt(params),
+          EmbedText: async (params: any) => await (window as any).__mjEmbedText(params),
+          VectorService: new VectorService()
         }
       };
       

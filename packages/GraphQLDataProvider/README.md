@@ -29,6 +29,8 @@ npm install @memberjunction/graphql-dataprovider
 - **Session Management**: Persistent session IDs with automatic storage
 - **System User Client**: Specialized client for server-to-server communication
 - **Duplicate Detection**: Built-in support for finding and merging duplicate records
+- **AI Operations**: Execute AI prompts and generate embeddings through GraphQL
+- **Simple Prompts**: Run ad-hoc AI prompts without stored configurations
 
 ## Usage
 
@@ -352,6 +354,108 @@ function subscribeToRecordChanges() {
 }
 ```
 
+### AI Operations
+
+The GraphQL provider includes a comprehensive AI client for executing prompts and generating embeddings.
+
+```typescript
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+const dataProvider = new GraphQLDataProvider();
+const aiClient = dataProvider.AI; // Access the AI client
+
+// Execute a stored AI prompt
+async function runAIPrompt() {
+  const result = await aiClient.RunAIPrompt({
+    promptId: 'prompt-123',
+    data: { context: 'user specific data' },
+    temperature: 0.7,
+    topP: 0.9,
+    responseFormat: 'json'
+  });
+  
+  if (result.success) {
+    console.log('AI Response:', result.output);
+    console.log('Parsed Result:', result.parsedResult);
+    console.log('Tokens Used:', result.tokensUsed);
+  }
+  return result;
+}
+
+// Execute a simple prompt without stored configuration
+async function runSimplePrompt() {
+  const result = await aiClient.ExecuteSimplePrompt({
+    systemPrompt: 'You are a helpful data analyst',
+    messages: [
+      { message: 'What are the key trends?', role: 'user' },
+      { message: 'Based on the data...', role: 'assistant' },
+      { message: 'Can you elaborate?', role: 'user' }
+    ],
+    preferredModels: ['gpt-4', 'claude-3'],
+    modelPower: 'medium', // 'lowest', 'medium', or 'highest'
+    responseFormat: 'json'
+  });
+  
+  if (result.success) {
+    console.log('Response:', result.result);
+    console.log('Model Used:', result.modelName);
+    
+    // If response contains JSON
+    if (result.resultObject) {
+      console.log('Parsed JSON:', result.resultObject);
+    }
+  }
+  return result;
+}
+
+// Generate text embeddings
+async function generateEmbeddings() {
+  // Single text embedding
+  const single = await aiClient.EmbedText({
+    textToEmbed: 'This is a sample text',
+    modelSize: 'small' // 'small' or 'medium'
+  });
+  
+  console.log('Embedding:', single.embeddings); // number[]
+  console.log('Dimensions:', single.vectorDimensions);
+  
+  // Multiple text embeddings (batch)
+  const batch = await aiClient.EmbedText({
+    textToEmbed: [
+      'First text to embed',
+      'Second text to embed',
+      'Third text to embed'
+    ],
+    modelSize: 'medium'
+  });
+  
+  console.log('Embeddings:', batch.embeddings); // number[][]
+  console.log('Model:', batch.modelName);
+  
+  return batch;
+}
+
+// Run an AI agent for conversational interactions
+async function runAIAgent() {
+  const result = await aiClient.RunAIAgent({
+    agentId: 'agent-456',
+    messages: [
+      { role: 'user', content: 'Hello, I need help with data analysis' },
+      { role: 'assistant', content: 'I can help you analyze your data' },
+      { role: 'user', content: 'What patterns do you see?' }
+    ],
+    sessionId: 'session-789',
+    data: { contextData: 'relevant information' }
+  });
+  
+  if (result.success) {
+    console.log('Agent Response:', result.payload);
+    console.log('Execution Time:', result.executionTimeMs, 'ms');
+  }
+  return result;
+}
+```
+
 ### System User Client
 
 ```typescript
@@ -380,6 +484,43 @@ if (result.Success) {
   console.log('Query results:', result.Results);
 }
 
+// AI Operations with system privileges
+async function systemAIOperations() {
+  // Run AI prompt as system user
+  const promptResult = await systemClient.RunAIPrompt({
+    promptId: 'system-prompt-123',
+    skipValidation: true,
+    data: { systemContext: 'internal data' }
+  });
+  
+  // Execute simple prompt as system user
+  const simpleResult = await systemClient.ExecuteSimplePrompt({
+    systemPrompt: 'Analyze system performance',
+    modelPower: 'highest'
+  });
+  
+  // Generate embeddings as system user
+  const embeddings = await systemClient.EmbedText({
+    textToEmbed: ['System log entry 1', 'System log entry 2'],
+    modelSize: 'medium'
+  });
+  
+  return { promptResult, simpleResult, embeddings };
+}
+
+// Run AI agent as system user
+async function systemAgentOperation() {
+  const result = await systemClient.RunAIAgent({
+    agentId: 'system-agent-123',
+    messages: [
+      { role: 'system', content: 'Process batch data' }
+    ],
+    sessionId: 'system-session-456'
+  });
+  
+  return result;
+}
+
 // Sync roles and users
 const syncResult = await systemClient.SyncRolesAndUsers({
   Roles: [
@@ -406,6 +547,7 @@ const syncResult = await systemClient.SyncRolesAndUsers({
 | `GraphQLDataProvider` | Main class implementing IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces |
 | `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details |
 | `GraphQLActionClient` | Client for executing actions and entity actions through GraphQL |
+| `GraphQLAIClient` | Client for AI operations including prompts, agents, and embeddings |
 | `GraphQLSystemUserClient` | Specialized client for server-to-server communication using API keys |
 | `GraphQLTransactionGroup` | Manages complex multi-entity transactions with variable support |
 | `FieldMapper` | Handles automatic field name mapping between client and server |
@@ -439,6 +581,12 @@ const syncResult = await systemClient.SyncRolesAndUsers({
 - `GetEntityRecordName(entityName: string, compositeKey: CompositeKey)` - Get display name for a record
 - `GetEntityRecordNames(info: EntityRecordNameInput[])` - Get display names for multiple records
 - `GetEntityDependencies(entityName: string, compositeKey: CompositeKey)` - Get record dependencies
+
+#### AI Operations (via GraphQLAIClient)
+- `RunAIPrompt(params: RunAIPromptParams)` - Execute a stored AI prompt with parameters
+- `RunAIAgent(params: RunAIAgentParams)` - Run an AI agent for conversational interactions
+- `ExecuteSimplePrompt(params: ExecuteSimplePromptParams)` - Execute ad-hoc prompts without stored configuration
+- `EmbedText(params: EmbedTextParams)` - Generate text embeddings using local models
 
 ## Dependencies
 
