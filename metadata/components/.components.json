@@ -1890,5 +1890,93 @@
       "lastModified": "2025-08-21T18:23:32.006Z",
       "checksum": "0b889273e25d8baf8a6597ff6a158875645638f682fa08463fa94f9a5ca37d3a"
     }
+  },
+  {
+    "fields": {
+      "Name": "AIPromptsCluster",
+      "Namespace": "AI/Analytics",
+      "Description": "Interactive clustering visualization of AI prompts using semantic embeddings to discover patterns and relationships",
+      "Title": "AI Prompts Cluster Visualization",
+      "Type": "Dashboard",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/ai-prompts-cluster.spec.json",
+      "FunctionalRequirements": "Load all AI prompts, generate embeddings from TemplateText, perform clustering analysis, visualize clusters in interactive graph, show prompt details on selection, provide filtering and search capabilities",
+      "TechnicalDesign": "Main orchestrator that loads AI prompts data, manages embeddings generation and caching, coordinates sub-components for visualization and interaction, uses D3.js for graph rendering and SimpleVectorService for clustering"
+    },
+    "primaryKey": {
+      "ID": "913FC220-BE2B-4EE6-AFF5-8DD9B4C6C7E4"
+    },
+    "sync": {
+      "lastModified": "2025-08-24T02:45:08.514Z",
+      "checksum": "a9f5a5b5dd3186cf00efb3e157f38372ba63b968ee4852e1de45d78a316b1426"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIPromptsClusterGraph",
+      "Namespace": "AI/Analytics",
+      "Description": "D3.js force-directed graph visualization showing prompt clusters based on semantic similarity",
+      "Title": "AI Prompts Cluster Graph",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/ai-prompts-cluster-graph.spec.json",
+      "FunctionalRequirements": "Render interactive force-directed graph with prompts as nodes, display clusters with different colors, show similarity connections between prompts, support zoom/pan navigation, highlight on hover, animate transitions",
+      "TechnicalDesign": "Uses D3.js force simulation for node positioning, implements clustering visualization with color coding, draws edges based on similarity threshold, handles mouse interactions for selection and tooltips"
+    },
+    "primaryKey": {
+      "ID": "33E6440F-7E2E-42C0-88F2-470E93CC951E"
+    },
+    "sync": {
+      "lastModified": "2025-08-24T02:45:08.437Z",
+      "checksum": "98efb3b6e97c4c9a51f42cba8d102179136059d93bb05bf9cca8e571d5a95dc3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIPromptsClusterControls",
+      "Namespace": "AI/Analytics",
+      "Description": "Control panel for filtering, searching, and adjusting clustering parameters",
+      "Title": "AI Prompts Cluster Controls",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/ai-prompts-cluster-controls.spec.json",
+      "FunctionalRequirements": "Provide search input for finding prompts, filter by category/type/status, adjust clustering parameters, control similarity threshold, toggle view options, export cluster assignments",
+      "TechnicalDesign": "React component with controlled inputs for various filters and parameters, emits change events to parent component for re-clustering or re-filtering"
+    },
+    "primaryKey": {
+      "ID": "5A7544EC-42D7-46F2-898A-D7A39601EC50"
+    },
+    "sync": {
+      "lastModified": "2025-08-24T02:45:08.492Z",
+      "checksum": "6c288d5d7944193f6e0f346a081cd496dfcfb0117bf6ab427fd33654d4628c94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AIPromptsClusterDetails",
+      "Namespace": "AI/Analytics",
+      "Description": "Detail panel showing selected prompt information and similar prompts",
+      "Title": "AI Prompts Cluster Details",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/ai-prompts-cluster-details.spec.json",
+      "FunctionalRequirements": "Display selected prompt details including name, description, template text, show similar prompts based on vector similarity, display cluster membership info, provide navigation to prompt editor",
+      "TechnicalDesign": "React component that displays prompt entity details, calculates and shows top similar prompts using vector service, formats template text with syntax highlighting"
+    },
+    "primaryKey": {
+      "ID": "7E51E1BF-E118-4EA3-8B71-E2098F5CF11E"
+    },
+    "sync": {
+      "lastModified": "2025-08-24T02:45:08.466Z",
+      "checksum": "e5880be67edf42d078d134aa04a4ddb88678d907d10b3d804ee8a928352ae5b4"
+    }
   }
 ]

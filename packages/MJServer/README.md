@@ -13,7 +13,7 @@ The `@memberjunction/server` library provides a comprehensive API server for Mem
 - **Real-time Support**: WebSocket subscriptions for GraphQL
 - **Compression**: Built-in response compression for better performance
 - **Extensible Architecture**: Support for custom resolvers and entity subclasses
-- **AI Integration**: Built-in support for AI operations and learning cycle scheduling
+- **AI Integration**: Built-in support for AI operations, prompts, agents, and embeddings
 - **Security Features**: Entity-level and schema-level access control for REST API
 - **SQL Logging**: Runtime SQL logging configuration and session management for debugging
 
@@ -336,7 +336,45 @@ scheduler.start(60); // Run every 60 minutes
 
 ### AI Resolvers
 
-- `RunAIPromptResolver`: Execute AI prompts
+The server includes comprehensive AI resolvers for various AI operations:
+
+#### RunAIPromptResolver
+Handles AI prompt execution with multiple methods:
+
+- `RunAIPrompt`: Execute stored AI prompts with full parameter support
+  - Supports temperature, topP, topK, and other model parameters
+  - Handles conversation messages and system prompt overrides
+  - Returns parsed results, token usage, and execution metadata
+
+- `ExecuteSimplePrompt`: Execute ad-hoc prompts without stored configuration
+  - Direct system prompt and message execution
+  - Smart model selection based on preferences or power level
+  - Automatic JSON extraction from responses
+  - Available for both regular users and system users
+
+- `EmbedText`: Generate text embeddings using local models
+  - Batch processing support for multiple texts
+  - Model size selection (small/medium)
+  - Returns vector dimensions and model information
+  - Available for both regular users and system users
+
+#### RunAIAgentResolver
+- `RunAIAgent`: Execute AI agents for conversational interactions
+  - Session management for conversation context
+  - Streaming support for real-time responses
+  - Progress tracking and partial results
+  - Available for both regular users and system users
+
+#### System User Variants
+All AI operations have system user variants (queries) that use the `@RequireSystemUser` decorator:
+- `RunAIPromptSystemUser`
+- `ExecuteSimplePromptSystemUser`
+- `EmbedTextSystemUser`
+- `RunAIAgentSystemUser`
+
+These allow server-to-server operations with elevated privileges.
+
+#### AskSkipResolver
 - `AskSkipResolver`: Handle Skip AI queries
 
 ### SQL Logging Resolver

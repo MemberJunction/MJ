@@ -9,11 +9,25 @@ import {
   RunQuery, 
   RunViewParams, 
   RunQueryParams,
-  LogError
+  LogError,
+  BaseEntity,
+  IEntityDataProvider
 } from '@memberjunction/core';
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { ComponentUtilities, SimpleMetadata, SimpleRunQuery, SimpleRunView } from '@memberjunction/interactive-component-types';
+import { 
+  ComponentUtilities, 
+  SimpleAITools, 
+  SimpleMetadata, 
+  SimpleRunQuery, 
+  SimpleRunView,
+  SimpleExecutePromptParams,
+  SimpleExecutePromptResult,
+  SimpleEmbedTextParams,
+  SimpleEmbedTextResult
+} from '@memberjunction/interactive-component-types';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 
 /**
  * Base class for providing runtime utilities to React components in Angular.
@@ -40,9 +54,75 @@ export class RuntimeUtilities {
     const u: ComponentUtilities = {
       md: this.CreateSimpleMetadata(md),
       rv: this.CreateSimpleRunView(rv),
-      rq: this.CreateSimpleRunQuery(rq)
+      rq: this.CreateSimpleRunQuery(rq),
+      ai: this.CreateSimpleAITools()
     };            
     return u;
+  }
+
+  private CreateSimpleAITools(): SimpleAITools {
+    // Get the GraphQL provider - it's the same as the BaseEntity provider
+    const provider = BaseEntity.Provider;
+    
+    // Check if it's a GraphQLDataProvider
+    if (!(provider instanceof GraphQLDataProvider)) {
+      throw new Error('Current data provider is not a GraphQLDataProvider. AI tools require GraphQL provider.');
+    }
+
+    const graphQLProvider = provider as GraphQLDataProvider;
+    
+    return {
+      ExecutePrompt: async (params: SimpleExecutePromptParams): Promise<SimpleExecutePromptResult> => {
+        try {
+          // Use the AI client from GraphQLDataProvider to execute simple prompt
+          const result = await graphQLProvider.AI.ExecuteSimplePrompt({
+            systemPrompt: params.systemPrompt,
+            messages: params.messages,
+            preferredModels: params.preferredModels,
+            modelPower: params.modelPower
+          });
+          
+          return {
+            success: result.success,
+            result: result.result || '',
+            resultObject: result.resultObject,
+            modelName: result.modelName || ''
+          };
+        } catch (error) {
+          LogError(error);
+          return {
+            success: false,
+            result: 'Failed to execute prompt: ' + (error instanceof Error ? error.message : String(error)),
+            modelName: ''
+          };
+        }
+      },
+      
+      EmbedText: async (params: SimpleEmbedTextParams): Promise<SimpleEmbedTextResult> => {
+        try {
+          // Use the AI client from GraphQLDataProvider to generate embeddings
+          const result = await graphQLProvider.AI.EmbedText({
+            textToEmbed: params.textToEmbed,
+            modelSize: params.modelSize
+          });
+          
+          if (result.error) {
+            throw new Error(result.error || 'Failed to generate embeddings');
+          }
+          
+          return {
+            result: result.embeddings,
+            modelName: result.modelName,
+            vectorDimensions: result.vectorDimensions
+          };
+        } catch (error) {
+          LogError(error);
+          throw error; // Re-throw for embeddings as they're critical
+        }
+      },
+      
+      VectorService: new SimpleVectorService()
+    };
   }
 
   private CreateSimpleMetadata(md: Metadata): SimpleMetadata {

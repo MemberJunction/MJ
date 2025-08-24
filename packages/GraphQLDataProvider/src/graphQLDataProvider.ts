@@ -23,6 +23,7 @@ import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
+import { GraphQLAIClient } from "./graphQLAIClient";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -119,9 +120,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _client: GraphQLClient;
     private _configData: GraphQLProviderConfigData;
     private _sessionId: string;
+    private _aiClient: GraphQLAIClient;
 
     public get ConfigData(): GraphQLProviderConfigData { 
         return this._configData; 
+    }
+
+    /**
+     * Gets the AI client for executing AI operations through GraphQL.
+     * The client is lazily initialized on first access.
+     * @returns The GraphQLAIClient instance
+     */
+    public get AI(): GraphQLAIClient {
+        if (!this._aiClient) {
+            this._aiClient = new GraphQLAIClient(this);
+        }
+        return this._aiClient;
     }
 
     /**

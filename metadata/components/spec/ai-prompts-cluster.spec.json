@@ -1,0 +1,55 @@
+{
+  "name": "AIPromptsCluster",
+  "title": "AI Prompts Cluster Visualization",
+  "description": "Interactive clustering visualization of AI prompts using semantic embeddings to discover patterns and relationships",
+  "type": "dashboard",
+  "location": "embedded",
+  "code": "@file:../code/ai-prompts-cluster.js",
+  "functionalRequirements": "Load all AI prompts, generate embeddings from TemplateText, perform clustering analysis, visualize clusters in interactive graph, show prompt details on selection, provide filtering and search capabilities",
+  "technicalDesign": "Main orchestrator that loads AI prompts data, manages embeddings generation and caching, coordinates sub-components for visualization and interaction, uses D3.js for graph rendering and SimpleVectorService for clustering",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
+  "properties": [],
+  "events": [
+    {
+      "name": "onPromptSelect",
+      "description": "Fired when a prompt is selected in the visualization",
+      "parameters": [
+        {
+          "name": "prompt",
+          "type": "object",
+          "description": "The selected AI prompt entity"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    "@include:ai-prompts-cluster-graph.spec.json",
+    "@include:ai-prompts-cluster-controls.spec.json",
+    "@include:ai-prompts-cluster-details.spec.json"
+  ],
+  "libraries": [
+    {
+      "name": "d3",
+      "version": "7.8.5",
+      "globalVariable": "d3"
+    },
+    {
+      "name": "lodash",
+      "version": "4.17.21",
+      "globalVariable": "_"
+    }
+  ],
+  "usageExample": "<AIPromptsCluster />",
+  "version": "1.0.0"
+}

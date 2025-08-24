@@ -2,6 +2,16 @@ import { CompositeKey, LogError } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
+import { 
+    RunAIPromptParams, 
+    RunAIPromptResult, 
+    RunAIAgentParams, 
+    RunAIAgentResult,
+    ExecuteSimplePromptParams,
+    SimplePromptResult,
+    EmbedTextParams,
+    EmbedTextResult
+} from './graphQLAIClient';
 
 /**
  * Specialized client that is designed to be used exclusively on the server side
@@ -753,6 +763,509 @@ export class GraphQLSystemUserClient {
             return {
                 Success: false,
                 ErrorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Run an AI prompt with system user privileges.
+     * This method allows system-level execution of AI prompts without user authentication.
+     * 
+     * @param params The parameters for running the AI prompt
+     * @returns A Promise that resolves to a RunAIPromptResult object
+     * 
+     * @example
+     * ```typescript
+     * const result = await systemClient.RunAIPrompt({
+     *   promptId: "prompt-id",
+     *   data: { systemData: "value" },
+     *   skipValidation: true
+     * });
+     * ```
+     */
+    public async RunAIPrompt(params: RunAIPromptParams): Promise<RunAIPromptResult> {
+        try {
+            // Build the query for system user
+            const query = gql`
+                query RunAIPromptSystemUser(
+                    $promptId: String!,
+                    $data: String,
+                    $overrideModelId: String,
+                    $overrideVendorId: String,
+                    $configurationId: String,
+                    $skipValidation: Boolean,
+                    $templateData: String,
+                    $responseFormat: String,
+                    $temperature: Float,
+                    $topP: Float,
+                    $topK: Int,
+                    $minP: Float,
+                    $frequencyPenalty: Float,
+                    $presencePenalty: Float,
+                    $seed: Int,
+                    $stopSequences: [String!],
+                    $includeLogProbs: Boolean,
+                    $topLogProbs: Int,
+                    $messages: String,
+                    $rerunFromPromptRunID: String,
+                    $systemPromptOverride: String
+                ) {
+                    RunAIPromptSystemUser(
+                        promptId: $promptId,
+                        data: $data,
+                        overrideModelId: $overrideModelId,
+                        overrideVendorId: $overrideVendorId,
+                        configurationId: $configurationId,
+                        skipValidation: $skipValidation,
+                        templateData: $templateData,
+                        responseFormat: $responseFormat,
+                        temperature: $temperature,
+                        topP: $topP,
+                        topK: $topK,
+                        minP: $minP,
+                        frequencyPenalty: $frequencyPenalty,
+                        presencePenalty: $presencePenalty,
+                        seed: $seed,
+                        stopSequences: $stopSequences,
+                        includeLogProbs: $includeLogProbs,
+                        topLogProbs: $topLogProbs,
+                        messages: $messages,
+                        rerunFromPromptRunID: $rerunFromPromptRunID,
+                        systemPromptOverride: $systemPromptOverride
+                    ) {
+                        success
+                        output
+                        parsedResult
+                        error
+                        executionTimeMs
+                        tokensUsed
+                        promptRunId
+                        rawResult
+                        validationResult
+                        chatResult
+                    }
+                }
+            `;
+
+            // Prepare variables
+            const variables = this.preparePromptVariables(params);
+
+            // Execute the query
+            const result = await this.Client.request(query, variables) as { RunAIPromptSystemUser: any };
+
+            // Process and return the result
+            if (result && result.RunAIPromptSystemUser) {
+                return this.processPromptResult(result.RunAIPromptSystemUser);
+            } else {
+                return {
+                    success: false,
+                    error: 'Failed to execute AI prompt as system user'
+                };
+            }
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::RunAIPrompt - Error running AI prompt - ${e}`);
+            return {
+                success: false,
+                error: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Run an AI agent with system user privileges.
+     * This method allows system-level execution of AI agents without user authentication.
+     * 
+     * @param params The parameters for running the AI agent
+     * @returns A Promise that resolves to a RunAIAgentResult object
+     * 
+     * @example
+     * ```typescript
+     * const result = await systemClient.RunAIAgent({
+     *   agentId: "agent-id",
+     *   messages: [{ role: "system", content: "Process data" }],
+     *   sessionId: "system-session"
+     * });
+     * ```
+     */
+    public async RunAIAgent(params: RunAIAgentParams): Promise<RunAIAgentResult> {
+        try {
+            // Build the query for system user
+            const query = gql`
+                query RunAIAgentSystemUser(
+                    $agentId: String!,
+                    $messages: String!,
+                    $sessionId: String!,
+                    $data: String,
+                    $templateData: String,
+                    $lastRunId: String,
+                    $autoPopulateLastRunPayload: Boolean,
+                    $configurationId: String
+                ) {
+                    RunAIAgentSystemUser(
+                        agentId: $agentId,
+                        messages: $messages,
+                        sessionId: $sessionId,
+                        data: $data,
+                        templateData: $templateData,
+                        lastRunId: $lastRunId,
+                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                        configurationId: $configurationId
+                    ) {
+                        success
+                        errorMessage
+                        executionTimeMs
+                        payload
+                    }
+                }
+            `;
+
+            // Prepare variables
+            const variables = this.prepareAgentVariables(params);
+
+            // Execute the query
+            const result = await this.Client.request(query, variables) as { RunAIAgentSystemUser: any };
+
+            // Process and return the result
+            if (result && result.RunAIAgentSystemUser) {
+                return this.processAgentResult(result.RunAIAgentSystemUser);
+            } else {
+                return {
+                    success: false,
+                    errorMessage: 'Failed to execute AI agent as system user'
+                };
+            }
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::RunAIAgent - Error running AI agent - ${e}`);
+            return {
+                success: false,
+                errorMessage: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Helper method to prepare prompt variables for GraphQL
+     * @private
+     */
+    private preparePromptVariables(params: RunAIPromptParams): Record<string, any> {
+        const variables: Record<string, any> = {
+            promptId: params.promptId
+        };
+
+        // Serialize complex objects to JSON strings
+        if (params.data !== undefined) {
+            variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
+        }
+        if (params.templateData !== undefined) {
+            variables.templateData = typeof params.templateData === 'object' ? JSON.stringify(params.templateData) : params.templateData;
+        }
+        if (params.messages !== undefined) {
+            variables.messages = JSON.stringify(params.messages);
+        }
+
+        // Add optional scalar parameters
+        if (params.overrideModelId !== undefined) variables.overrideModelId = params.overrideModelId;
+        if (params.overrideVendorId !== undefined) variables.overrideVendorId = params.overrideVendorId;
+        if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.skipValidation !== undefined) variables.skipValidation = params.skipValidation;
+        if (params.responseFormat !== undefined) variables.responseFormat = params.responseFormat;
+        if (params.temperature !== undefined) variables.temperature = params.temperature;
+        if (params.topP !== undefined) variables.topP = params.topP;
+        if (params.topK !== undefined) variables.topK = params.topK;
+        if (params.minP !== undefined) variables.minP = params.minP;
+        if (params.frequencyPenalty !== undefined) variables.frequencyPenalty = params.frequencyPenalty;
+        if (params.presencePenalty !== undefined) variables.presencePenalty = params.presencePenalty;
+        if (params.seed !== undefined) variables.seed = params.seed;
+        if (params.stopSequences !== undefined) variables.stopSequences = params.stopSequences;
+        if (params.includeLogProbs !== undefined) variables.includeLogProbs = params.includeLogProbs;
+        if (params.topLogProbs !== undefined) variables.topLogProbs = params.topLogProbs;
+        if (params.rerunFromPromptRunID !== undefined) variables.rerunFromPromptRunID = params.rerunFromPromptRunID;
+        if (params.systemPromptOverride !== undefined) variables.systemPromptOverride = params.systemPromptOverride;
+
+        return variables;
+    }
+
+    /**
+     * Helper method to prepare agent variables for GraphQL
+     * @private
+     */
+    private prepareAgentVariables(params: RunAIAgentParams): Record<string, any> {
+        const variables: Record<string, any> = {
+            agentId: params.agentId,
+            messages: JSON.stringify(params.messages),
+            sessionId: params.sessionId
+        };
+
+        // Serialize optional complex objects to JSON strings
+        if (params.data !== undefined) {
+            variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
+        }
+        if (params.templateData !== undefined) {
+            variables.templateData = typeof params.templateData === 'object' ? JSON.stringify(params.templateData) : params.templateData;
+        }
+
+        // Add optional scalar parameters
+        if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
+        if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
+        if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+
+        return variables;
+    }
+
+    /**
+     * Helper method to process prompt results
+     * @private
+     */
+    private processPromptResult(promptResult: any): RunAIPromptResult {
+        // Parse JSON results if they exist
+        let parsedResult: any;
+        let validationResult: any;
+        let chatResult: any;
+
+        try {
+            if (promptResult.parsedResult) {
+                parsedResult = JSON.parse(promptResult.parsedResult);
+            }
+        } catch (e) {
+            parsedResult = promptResult.parsedResult;
+        }
+
+        try {
+            if (promptResult.validationResult) {
+                validationResult = JSON.parse(promptResult.validationResult);
+            }
+        } catch (e) {
+            validationResult = promptResult.validationResult;
+        }
+
+        try {
+            if (promptResult.chatResult) {
+                chatResult = JSON.parse(promptResult.chatResult);
+            }
+        } catch (e) {
+            chatResult = promptResult.chatResult;
+        }
+
+        return {
+            success: promptResult.success,
+            output: promptResult.output,
+            parsedResult,
+            error: promptResult.error,
+            executionTimeMs: promptResult.executionTimeMs,
+            tokensUsed: promptResult.tokensUsed,
+            promptRunId: promptResult.promptRunId,
+            rawResult: promptResult.rawResult,
+            validationResult,
+            chatResult
+        };
+    }
+
+    /**
+     * Helper method to process agent results
+     * @private
+     */
+    private processAgentResult(agentResult: any): RunAIAgentResult {
+        // Parse the payload if it's a JSON string
+        let payload: any;
+        try {
+            if (agentResult.payload) {
+                payload = JSON.parse(agentResult.payload);
+            }
+        } catch (e) {
+            payload = agentResult.payload;
+        }
+
+        return {
+            success: agentResult.success,
+            errorMessage: agentResult.errorMessage,
+            executionTimeMs: agentResult.executionTimeMs,
+            payload
+        };
+    }
+
+    /**
+     * Execute a simple prompt without requiring a stored AI Prompt entity.
+     * This method allows system-level execution of simple prompts.
+     * 
+     * @param params The parameters for the simple prompt execution
+     * @returns A Promise that resolves to a SimplePromptResult object
+     * 
+     * @example
+     * ```typescript
+     * const result = await systemClient.ExecuteSimplePrompt({
+     *   systemPrompt: "You are a data analyst",
+     *   modelPower: "medium"
+     * });
+     * ```
+     */
+    public async ExecuteSimplePrompt(params: ExecuteSimplePromptParams): Promise<SimplePromptResult> {
+        try {
+            const query = gql`
+                query ExecuteSimplePromptSystemUser(
+                    $systemPrompt: String!,
+                    $messages: String,
+                    $preferredModels: [String!],
+                    $modelPower: String,
+                    $responseFormat: String
+                ) {
+                    ExecuteSimplePromptSystemUser(
+                        systemPrompt: $systemPrompt,
+                        messages: $messages,
+                        preferredModels: $preferredModels,
+                        modelPower: $modelPower,
+                        responseFormat: $responseFormat
+                    ) {
+                        success
+                        result
+                        resultObject
+                        modelName
+                        error
+                        executionTimeMs
+                    }
+                }
+            `;
+
+            // Prepare variables
+            const variables: Record<string, any> = {
+                systemPrompt: params.systemPrompt
+            };
+
+            // Convert messages array to JSON string if provided
+            if (params.messages && params.messages.length > 0) {
+                variables.messages = JSON.stringify(params.messages);
+            }
+
+            if (params.preferredModels) {
+                variables.preferredModels = params.preferredModels;
+            }
+
+            if (params.modelPower) {
+                variables.modelPower = params.modelPower;
+            }
+
+            if (params.responseFormat) {
+                variables.responseFormat = params.responseFormat;
+            }
+
+            // Execute the query
+            const result = await this.Client.request(query, variables) as { ExecuteSimplePromptSystemUser: any };
+
+            if (!result?.ExecuteSimplePromptSystemUser) {
+                return {
+                    success: false,
+                    modelName: 'Unknown',
+                    error: 'Failed to execute simple prompt as system user'
+                };
+            }
+
+            const promptResult = result.ExecuteSimplePromptSystemUser;
+
+            // Parse resultObject if it exists
+            let resultObject: any;
+            if (promptResult.resultObject) {
+                try {
+                    resultObject = JSON.parse(promptResult.resultObject);
+                } catch (e) {
+                    resultObject = promptResult.resultObject;
+                }
+            }
+
+            return {
+                success: promptResult.success,
+                result: promptResult.result,
+                resultObject,
+                modelName: promptResult.modelName,
+                error: promptResult.error,
+                executionTimeMs: promptResult.executionTimeMs
+            };
+
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::ExecuteSimplePrompt - Error executing simple prompt - ${e}`);
+            return {
+                success: false,
+                modelName: 'Unknown',
+                error: e.toString()
+            };
+        }
+    }
+
+    /**
+     * Generate embeddings using local embedding models.
+     * This method allows system-level generation of text embeddings.
+     * 
+     * @param params The parameters for embedding generation
+     * @returns A Promise that resolves to an EmbedTextResult object
+     * 
+     * @example
+     * ```typescript
+     * const result = await systemClient.EmbedText({
+     *   textToEmbed: ["System data", "Configuration"],
+     *   modelSize: "small"
+     * });
+     * ```
+     */
+    public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        try {
+            const query = gql`
+                query EmbedTextSystemUser(
+                    $textToEmbed: [String!]!,
+                    $modelSize: String!
+                ) {
+                    EmbedTextSystemUser(
+                        textToEmbed: $textToEmbed,
+                        modelSize: $modelSize
+                    ) {
+                        embeddings
+                        modelName
+                        vectorDimensions
+                        error
+                    }
+                }
+            `;
+
+            // Prepare variables - handle both single string and array
+            const textArray = Array.isArray(params.textToEmbed) 
+                ? params.textToEmbed 
+                : [params.textToEmbed];
+
+            const variables = {
+                textToEmbed: textArray,
+                modelSize: params.modelSize
+            };
+
+            // Execute the query
+            const result = await this.Client.request(query, variables) as { EmbedTextSystemUser: any };
+
+            if (!result?.EmbedTextSystemUser) {
+                return {
+                    embeddings: Array.isArray(params.textToEmbed) ? [] : [],
+                    modelName: 'Unknown',
+                    vectorDimensions: 0,
+                    error: 'Failed to generate embeddings as system user'
+                };
+            }
+
+            const embedResult = result.EmbedTextSystemUser;
+
+            // Return single embedding or array based on input
+            const returnEmbeddings = Array.isArray(params.textToEmbed)
+                ? embedResult.embeddings
+                : embedResult.embeddings[0];
+
+            return {
+                embeddings: returnEmbeddings,
+                modelName: embedResult.modelName,
+                vectorDimensions: embedResult.vectorDimensions,
+                error: embedResult.error
+            };
+
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::EmbedText - Error generating embeddings - ${e}`);
+            return {
+                embeddings: Array.isArray(params.textToEmbed) ? [] : [],
+                modelName: 'Unknown',
+                vectorDimensions: 0,
+                error: e.toString()
             };
         }
     }

@@ -4446,7 +4446,7 @@ export class ComponentLinter {
         
         const checkFieldNullability = (propertyName: string): FieldNullabilityResult => {
           // Step 1: Check if componentSpec has data requirements and utilities are available
-          if (!componentSpec?.dataRequirements?.entities || !options?.utilities?.Entities) {
+          if (!componentSpec?.dataRequirements?.entities || !options?.utilities?.md?.Entities) {
             return { found: false, nullable: false };
           }
           
@@ -4457,7 +4457,7 @@ export class ComponentLinter {
               
               // Step 3: Find this entity in the full metadata (case insensitive)
               // Use proper typing - we know Entities is an array of EntityInfo objects
-              const fullEntity = options.utilities.Entities.find((e: EntityInfo) => 
+              const fullEntity = options.utilities.md?.Entities.find((e: EntityInfo) => 
                 e.Name && e.Name.toLowerCase() === entityName.toLowerCase()
               );
               
