@@ -506,7 +506,23 @@ export class RunAIPromptResolver extends ResolverBase {
                         }
                     }
                 }
+                else if (messagesJson?.length > 0) {
+                    // messages maybe just has a simple string in it so add
+                    // as a single message
+                    messages.push({
+                        role: ChatMessageRole.user,
+                        content: messagesJson
+                    });
+                }
             } catch (e) {
+                if (messagesJson?.length > 0) {
+                    // messages maybe just has a simple string in it so add
+                    // as a single message
+                    messages.push({
+                        role: ChatMessageRole.user,
+                        content: messagesJson
+                    });
+                }
                 LogError('Failed to parse messages JSON', undefined, e);
             }
         }

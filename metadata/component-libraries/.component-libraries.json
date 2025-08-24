@@ -1012,5 +1012,25 @@
       "lastModified": "2025-08-19T20:03:40.228Z",
       "checksum": "56378fbae1c386fb6c3b0612f542ccaedef50e8cb3e565566d119bcac23b70ac"
     }
+  },
+  {
+    "fields": {
+      "Name": "marked",
+      "DisplayName": "Marked",
+      "Version": "11.1.1",
+      "GlobalVariable": "marked",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js",
+      "CDNCssUrl": null,
+      "Description": "Fast markdown parser and compiler for rendering markdown content",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F7AE9497-3E49-43AA-9319-2B81988CAE7D"
+    },
+    "sync": {
+      "lastModified": "2025-08-24T20:13:04.380Z",
+      "checksum": "a66058ccb89d9bd9f3f104360047c5f10db6af406f24e3ecc7d14fe92471dc33"
+    }
   }
 ]
