@@ -1,0 +1,63 @@
+{
+  "name": "AIPromptsClusterDetails",
+  "title": "AI Prompts Cluster Details",
+  "description": "Detail panel showing selected prompt information and similar prompts",
+  "type": "panel",
+  "location": "embedded",
+  "code": "@file:../code/ai-prompts-cluster-details.js",
+  "functionalRequirements": "Display selected prompt details including name, description, template text, show similar prompts based on vector similarity, display cluster membership info, provide navigation to prompt editor",
+  "technicalDesign": "React component that displays prompt entity details, calculates and shows top similar prompts using vector service, formats template text with syntax highlighting",
+  "properties": [
+    {
+      "name": "selectedPrompt",
+      "type": "object",
+      "required": false,
+      "description": "Currently selected prompt entity"
+    },
+    {
+      "name": "allPrompts",
+      "type": "array",
+      "required": true,
+      "description": "All prompts for similarity calculation"
+    },
+    {
+      "name": "clusterInfo",
+      "type": "object",
+      "required": false,
+      "description": "Cluster information for selected prompt"
+    },
+    {
+      "name": "similarPrompts",
+      "type": "array",
+      "required": false,
+      "description": "List of similar prompts with similarity scores"
+    }
+  ],
+  "events": [
+    {
+      "name": "onPromptNavigate",
+      "description": "Fired when user wants to navigate to a prompt",
+      "parameters": [
+        {
+          "name": "promptId",
+          "type": "string",
+          "description": "ID of prompt to navigate to"
+        }
+      ]
+    },
+    {
+      "name": "onEditPrompt",
+      "description": "Fired when user wants to edit the prompt",
+      "parameters": [
+        {
+          "name": "promptId",
+          "type": "string",
+          "description": "ID of prompt to edit"
+        }
+      ]
+    }
+  ],
+  "libraries": [],
+  "usageExample": "<AIPromptsClusterDetails selectedPrompt={prompt} allPrompts={prompts} />",
+  "version": "1.0.0"
+}
