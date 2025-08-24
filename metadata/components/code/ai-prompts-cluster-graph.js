@@ -17,12 +17,27 @@ function AIPromptsClusterGraph({
   const svgRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState(null);
+  const currentTransform = useRef(null);
+  const zoomBehavior = useRef(null);
   
-  // Color palette for clusters
+  // Modern gradient color palette for clusters
   const clusterColors = [
-    '#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3',
-    '#fdb462', '#b3de69', '#fccde5', '#d9d9d9', '#bc80bd',
-    '#ccebc5', '#ffed6f', '#a6cee3', '#ff7f00', '#33a02c'
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+    'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)',
+    'linear-gradient(135deg, #fdcbf1 0%, #e6dee9 100%)'
+  ];
+  
+  // Solid colors for D3 (gradients will be defined in defs)
+  const solidColors = [
+    '#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a',
+    '#30cfd0', '#a8edea', '#ff9a9e', '#fbc2eb', '#fdcbf1'
   ];
 
   // Update dimensions on mount and resize
@@ -49,17 +64,78 @@ function AIPromptsClusterGraph({
     const width = dimensions.width;
     const height = dimensions.height;
 
-    // Create zoom behavior
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 10])
-      .on('zoom', (event) => {
-        container.attr('transform', event.transform);
-      });
+    // Create or update zoom behavior
+    if (!zoomBehavior.current) {
+      zoomBehavior.current = d3.zoom()
+        .scaleExtent([0.1, 10])
+        .on('zoom', (event) => {
+          currentTransform.current = event.transform;
+          container.attr('transform', event.transform);
+        });
+    }
 
-    svg.call(zoom);
+    svg.call(zoomBehavior.current);
+    
+    // Apply saved transform if it exists
+    if (currentTransform.current) {
+      svg.call(zoomBehavior.current.transform, currentTransform.current);
+    }
 
     // Create container for zoom/pan
     const container = svg.append('g');
+    
+    // Add gradient definitions
+    const defs = svg.append('defs');
+    
+    // Create gradients for each cluster
+    solidColors.forEach((color, i) => {
+      const gradient = defs.append('radialGradient')
+        .attr('id', `cluster-gradient-${i}`)
+        .attr('cx', '30%')
+        .attr('cy', '30%');
+      
+      gradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', color)
+        .attr('stop-opacity', 0.8);
+      
+      gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', d3.color(color).darker(0.5))
+        .attr('stop-opacity', 1);
+    });
+    
+    // Add glow filter
+    const filter = defs.append('filter')
+      .attr('id', 'glow');
+    
+    filter.append('feGaussianBlur')
+      .attr('stdDeviation', '3')
+      .attr('result', 'coloredBlur');
+    
+    const feMerge = filter.append('feMerge');
+    feMerge.append('feMergeNode')
+      .attr('in', 'coloredBlur');
+    feMerge.append('feMergeNode')
+      .attr('in', 'SourceGraphic');
+    
+    // Add strong glow for selection
+    const selectionFilter = defs.append('filter')
+      .attr('id', 'selection-glow')
+      .attr('width', '300%')
+      .attr('height', '300%')
+      .attr('x', '-100%')
+      .attr('y', '-100%');
+    
+    selectionFilter.append('feGaussianBlur')
+      .attr('stdDeviation', '8')
+      .attr('result', 'coloredBlur');
+    
+    const selectionMerge = selectionFilter.append('feMerge');
+    selectionMerge.append('feMergeNode')
+      .attr('in', 'coloredBlur');
+    selectionMerge.append('feMergeNode')
+      .attr('in', 'SourceGraphic');
 
     // Calculate similarities between all nodes
     const links = [];
@@ -141,15 +217,36 @@ function AIPromptsClusterGraph({
       return force;
     }
 
-    // Draw links
+    // Draw links with modern styling
     const link = container.append('g')
       .attr('class', 'links')
       .selectAll('line')
       .data(links)
       .enter().append('line')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', d => d.value * 0.3)
-      .attr('stroke-width', d => Math.max(1, d.value * 3));
+      .attr('stroke', 'url(#link-gradient)')
+      .attr('stroke-opacity', d => d.value * 0.2)
+      .attr('stroke-width', d => Math.max(0.5, d.value * 2))
+      .attr('stroke-linecap', 'round');
+    
+    // Add gradient for links
+    const linkGradient = defs.append('linearGradient')
+      .attr('id', 'link-gradient')
+      .attr('gradientUnits', 'userSpaceOnUse');
+    
+    linkGradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#e0e0e0')
+      .attr('stop-opacity', 0.3);
+    
+    linkGradient.append('stop')
+      .attr('offset', '50%')
+      .attr('stop-color', '#c0c0c0')
+      .attr('stop-opacity', 0.5);
+    
+    linkGradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', '#e0e0e0')
+      .attr('stop-opacity', 0.3);
 
     // Create node groups
     const node = container.append('g')
@@ -163,68 +260,90 @@ function AIPromptsClusterGraph({
         .on('drag', dragged)
         .on('end', dragended));
 
-    // Add circles for nodes
+    // Add shadow circles
     node.append('circle')
+      .attr('r', d => {
+        const textLength = d.TemplateText?.length || 0;
+        return Math.min(25, Math.max(12, Math.sqrt(textLength / 40))) + 2;
+      })
+      .attr('fill', 'black')
+      .attr('opacity', 0.1)
+      .attr('transform', 'translate(2, 2)');
+    
+    // Add main circles for nodes with modern styling
+    node.append('circle')
+      .attr('class', 'node-circle')
       .attr('r', d => {
         // Size based on template text length
         const textLength = d.TemplateText?.length || 0;
-        return Math.min(20, Math.max(8, Math.sqrt(textLength / 50)));
+        return Math.min(25, Math.max(12, Math.sqrt(textLength / 40)));
       })
       .attr('fill', d => {
         if (highlightCluster !== null && d.cluster !== highlightCluster) {
-          return '#e0e0e0';
+          return '#f5f5f5';
         }
-        return clusterColors[d.cluster % clusterColors.length];
+        return `url(#cluster-gradient-${d.cluster % solidColors.length})`;
       })
       .attr('stroke', d => {
-        if (d.ID === selectedPromptId) return '#000';
-        if (d.ID === hoveredNode) return '#666';
-        return '#fff';
+        if (d.ID === selectedPromptId) return '#00ff88'; // Neon green for selection
+        if (d.ID === hoveredNode) return solidColors[d.cluster % solidColors.length];
+        return 'white';
       })
       .attr('stroke-width', d => {
-        if (d.ID === selectedPromptId) return 3;
-        if (d.ID === hoveredNode) return 2;
-        return 1;
+        if (d.ID === selectedPromptId) return 5;
+        if (d.ID === hoveredNode) return 3;
+        return 2;
       })
       .attr('opacity', d => {
         if (highlightCluster !== null && d.cluster !== highlightCluster) {
-          return 0.3;
+          return 0.2;
         }
-        return 0.9;
-      });
+        return 1;
+      })
+      .attr('filter', d => {
+        if (d.ID === selectedPromptId) return 'url(#selection-glow)';
+        if (d.ID === hoveredNode) return 'url(#glow)';
+        return null;
+      })
+      .style('transition', 'all 0.3s ease');
 
-    // Add labels with text wrapping
+    // Add labels with modern typography
     const labels = node.append('foreignObject')
-      .attr('x', -40)
-      .attr('y', -35)
-      .attr('width', 80)
-      .attr('height', 24)
+      .attr('x', -45)
+      .attr('y', -40)
+      .attr('width', 90)
+      .attr('height', 28)
       .attr('pointer-events', 'none');
     
     labels.append('xhtml:div')
       .style('text-align', 'center')
-      .style('font-size', '11px')
-      .style('color', styles.colors?.text?.primary || '#333')
-      .style('line-height', '12px')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+      .style('color', '#2d3748')
+      .style('line-height', '14px')
       .style('overflow', 'hidden')
       .style('text-overflow', 'ellipsis')
       .style('display', '-webkit-box')
       .style('-webkit-line-clamp', '2')
       .style('-webkit-box-orient', 'vertical')
+      .style('text-shadow', '0 1px 2px rgba(255,255,255,0.8)')
       .text(d => d.Name || 'Unnamed');
 
-    // Add tooltips
+    // Add modern tooltips
     const tooltip = d3.select('body').append('div')
-      .attr('class', 'tooltip')
+      .attr('class', 'graph-tooltip')
       .style('opacity', 0)
       .style('position', 'absolute')
-      .style('padding', '10px')
-      .style('background', 'rgba(0, 0, 0, 0.8)')
-      .style('color', 'white')
-      .style('border-radius', '4px')
+      .style('padding', '12px')
+      .style('background', 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.98) 100%)')
+      .style('color', '#2d3748')
+      .style('border-radius', '12px')
       .style('pointer-events', 'none')
-      .style('font-size', '12px')
-      .style('max-width', '300px');
+      .style('font-size', '13px')
+      .style('max-width', '320px')
+      .style('box-shadow', '0 10px 40px rgba(0,0,0,0.15), 0 2px 10px rgba(0,0,0,0.1)')
+      .style('border', '1px solid rgba(255,255,255,0.8)')
+      .style('backdrop-filter', 'blur(10px)');
 
     // Node interactions
     node
@@ -241,11 +360,19 @@ function AIPromptsClusterGraph({
           .style('opacity', .9);
         
         tooltip.html(`
-          <strong>${d.Name}</strong><br/>
-          Category: ${d.Category || 'None'}<br/>
-          Type: ${d.Type || 'None'}<br/>
-          Cluster: ${d.cluster + 1}<br/>
-          ${d.Description ? `<br/>${d.Description.substring(0, 100)}...` : ''}
+          <div style="font-weight: 600; margin-bottom: 8px; color: #1a202c; font-size: 14px;">${d.Name}</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+            <span style="padding: 2px 8px; background: #edf2f7; border-radius: 4px; font-size: 11px;">
+              ${d.Category || 'No Category'}
+            </span>
+            <span style="padding: 2px 8px; background: #edf2f7; border-radius: 4px; font-size: 11px;">
+              ${d.Type || 'No Type'}
+            </span>
+            <span style="padding: 2px 8px; background: ${solidColors[d.cluster % solidColors.length]}20; border-radius: 4px; font-size: 11px; color: ${solidColors[d.cluster % solidColors.length]};">
+              Cluster ${d.cluster + 1}
+            </span>
+          </div>
+          ${d.Description ? `<div style="font-size: 12px; color: #4a5568; line-height: 1.4;">${d.Description.substring(0, 120)}${d.Description.length > 120 ? '...' : ''}</div>` : ''}
         `)
           .style('left', (event.pageX + 10) + 'px')
           .style('top', (event.pageY - 28) + 'px');
@@ -304,9 +431,45 @@ function AIPromptsClusterGraph({
     const clusterSet = new Set(clusters.map(p => p.cluster));
     return Array.from(clusterSet).sort((a, b) => a - b);
   }, [clusters]);
+  
+  // Zoom control functions
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomBehavior.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomBehavior.current.scaleBy, 1.3);
+    }
+  };
+  
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomBehavior.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomBehavior.current.scaleBy, 0.7);
+    }
+  };
+  
+  const handleResetZoom = () => {
+    if (svgRef.current && zoomBehavior.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(300)
+        .call(zoomBehavior.current.transform, d3.zoomIdentity);
+      currentTransform.current = null;
+    }
+  };
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div style={{ 
+      width: '100%', 
+      height: '100%', 
+      position: 'relative',
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      borderRadius: '16px',
+      overflow: 'hidden'
+    }}>
       <svg
         ref={svgRef}
         width={dimensions.width}
@@ -314,56 +477,168 @@ function AIPromptsClusterGraph({
         style={{ width: '100%', height: '100%' }}
       />
       
-      {/* Cluster legend */}
+      {/* Modern Zoom Controls */}
       <div style={{
         position: 'absolute',
-        top: styles.spacing?.sm || '8px',
-        right: styles.spacing?.sm || '8px',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: styles.spacing?.sm || '8px',
-        borderRadius: styles.borders?.radius || '4px',
-        fontSize: styles.fonts?.sizes?.sm || '12px'
+        top: '20px',
+        left: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        zIndex: 10
       }}>
-        <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Clusters</div>
+        <button
+          onClick={handleZoomIn}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            border: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#4a5568',
+            cursor: 'pointer',
+            fontSize: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          title="Zoom In"
+        >
+          <i className="fa-solid fa-plus"></i>
+        </button>
+        
+        <button
+          onClick={handleZoomOut}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            border: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#4a5568',
+            cursor: 'pointer',
+            fontSize: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          title="Zoom Out"
+        >
+          <i className="fa-solid fa-minus"></i>
+        </button>
+        
+        <button
+          onClick={handleResetZoom}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            border: 'none',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#4a5568',
+            cursor: 'pointer',
+            fontSize: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          title="Reset View"
+        >
+          <i className="fa-solid fa-expand"></i>
+        </button>
+      </div>
+      
+      {/* Modern Cluster Legend */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '16px',
+        borderRadius: '12px',
+        fontSize: '13px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        backdropFilter: 'blur(10px)',
+        minWidth: '140px'
+      }}>
+        <div style={{ 
+          fontWeight: '600', 
+          marginBottom: '12px',
+          color: '#2d3748',
+          fontSize: '14px'
+        }}>
+          Clusters
+        </div>
         {uniqueClusters.map(cluster => (
           <div
             key={cluster}
             style={{
               display: 'flex',
               alignItems: 'center',
-              marginBottom: '2px',
+              marginBottom: '8px',
               cursor: 'pointer',
-              opacity: highlightCluster !== null && highlightCluster !== cluster ? 0.5 : 1
+              opacity: highlightCluster !== null && highlightCluster !== cluster ? 0.4 : 1,
+              transition: 'all 0.2s ease',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              backgroundColor: highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'
             }}
             onClick={() => onClusterSelect(cluster)}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = `${solidColors[cluster % solidColors.length]}10`}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'}
           >
             <div
               style={{
-                width: '12px',
-                height: '12px',
-                backgroundColor: clusterColors[cluster % clusterColors.length],
-                marginRight: '6px',
+                width: '16px',
+                height: '16px',
+                background: `linear-gradient(135deg, ${solidColors[cluster % solidColors.length]} 0%, ${d3.color(solidColors[cluster % solidColors.length]).darker(0.3)} 100%)`,
+                marginRight: '10px',
                 borderRadius: '50%',
-                border: highlightCluster === cluster ? '2px solid #000' : '1px solid #ccc'
+                border: '2px solid white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
               }}
             />
-            <span>Cluster {cluster + 1}</span>
+            <span style={{ color: '#4a5568', fontWeight: '500' }}>
+              Cluster {cluster + 1}
+            </span>
           </div>
         ))}
       </div>
       
-      {/* Instructions */}
+      {/* Modern Instructions */}
       <div style={{
         position: 'absolute',
-        bottom: styles.spacing?.sm || '8px',
-        left: styles.spacing?.sm || '8px',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        padding: styles.spacing?.xs || '4px',
-        borderRadius: styles.borders?.radius || '4px',
-        fontSize: styles.fonts?.sizes?.xs || '10px',
-        color: styles.colors?.text?.secondary || '#666'
+        bottom: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '8px 16px',
+        borderRadius: '20px',
+        fontSize: '12px',
+        color: '#718096',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        backdropFilter: 'blur(10px)',
+        display: 'flex',
+        gap: '16px',
+        alignItems: 'center'
       }}>
-        Drag to pan • Scroll to zoom • Click nodes to select
+        <span><i className="fa-solid fa-hand" style={{ marginRight: '4px' }}></i>Drag to pan</span>
+        <span>•</span>
+        <span><i className="fa-solid fa-magnifying-glass" style={{ marginRight: '4px' }}></i>Scroll to zoom</span>
+        <span>•</span>
+        <span><i className="fa-solid fa-pointer" style={{ marginRight: '4px' }}></i>Click to select</span>
       </div>
     </div>
   );

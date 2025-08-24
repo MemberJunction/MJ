@@ -15,44 +15,54 @@ function AIPromptsClusterDetails({
   const [expandedSection, setExpandedSection] = useState('details');
   const [showFullTemplate, setShowFullTemplate] = useState(false);
 
-  // Style helpers
+  // Modern style helpers
   const sectionStyle = {
-    marginBottom: styles.spacing?.md || '16px',
-    padding: styles.spacing?.sm || '8px',
-    backgroundColor: styles.colors?.background || '#f9f9f9',
-    borderRadius: styles.borders?.radius || '4px'
+    marginBottom: '20px',
+    padding: '16px',
+    background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(249,250,251,0.95) 100%)',
+    borderRadius: '16px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255,255,255,0.8)'
   };
 
   const headerStyle = {
-    fontSize: styles.fonts?.sizes?.md || '16px',
-    fontWeight: 'bold',
-    color: styles.colors?.text?.primary || '#333',
-    marginBottom: styles.spacing?.sm || '8px',
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#2d3748',
+    marginBottom: '12px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    padding: '8px',
+    borderRadius: '8px',
+    transition: 'all 0.2s ease'
   };
 
   const labelStyle = {
-    fontSize: styles.fonts?.sizes?.sm || '14px',
-    fontWeight: '500',
-    color: styles.colors?.text?.secondary || '#666',
-    marginBottom: styles.spacing?.xs || '4px'
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#718096',
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.025em'
   };
 
   const valueStyle = {
-    fontSize: styles.fonts?.sizes?.sm || '14px',
-    color: styles.colors?.text?.primary || '#333',
-    marginBottom: styles.spacing?.sm || '8px'
+    fontSize: '14px',
+    color: '#2d3748',
+    marginBottom: '12px',
+    lineHeight: '1.5'
   };
 
   const badgeStyle = {
     display: 'inline-block',
-    padding: `2px 6px`,
-    fontSize: styles.fonts?.sizes?.xs || '12px',
-    borderRadius: styles.borders?.radius || '4px',
-    marginRight: styles.spacing?.xs || '4px'
+    padding: '4px 10px',
+    fontSize: '12px',
+    fontWeight: '600',
+    borderRadius: '8px',
+    marginRight: '8px'
   };
 
   // Format template text with basic syntax highlighting
@@ -124,36 +134,97 @@ function AIPromptsClusterDetails({
 
   return (
     <div>
-      {/* Header with prompt name */}
+      {/* Modern Header */}
       <div style={{
-        marginBottom: styles.spacing?.md || '16px',
-        paddingBottom: styles.spacing?.sm || '8px',
-        borderBottom: `1px solid ${styles.colors?.border || '#ddd'}`
+        marginBottom: '24px',
+        padding: '20px',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '16px',
+        boxShadow: '0 8px 24px rgba(102, 126, 234, 0.2)',
+        position: 'relative'
       }}>
-        <h3 style={{
-          fontSize: styles.fonts?.sizes?.lg || '18px',
-          fontWeight: 'bold',
-          color: styles.colors?.text?.primary || '#333',
-          margin: 0,
-          marginBottom: styles.spacing?.xs || '4px'
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
         }}>
-          {selectedPrompt.Name}
-        </h3>
-        
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: styles.spacing?.xs || '4px' }}>
+          <div style={{ flex: 1 }}>
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: 'white',
+              margin: 0,
+              marginBottom: '8px'
+            }}>
+              {selectedPrompt.Name}
+            </h3>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {selectedPrompt.Category && (
+                <span style={{
+                  padding: '3px 10px',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: 'white',
+                  fontWeight: '500'
+                }}>
+                  {selectedPrompt.Category}
+                </span>
+              )}
+              {selectedPrompt.Type && (
+                <span style={{
+                  padding: '3px 10px',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: 'white',
+                  fontWeight: '500'
+                }}>
+                  {selectedPrompt.Type}
+                </span>
+              )}
+              {selectedPrompt.Status && (
+                <span style={{
+                  padding: '3px 10px',
+                  background: selectedPrompt.Status === 'Active' 
+                    ? 'rgba(72, 187, 120, 0.3)' 
+                    : 'rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: 'white',
+                  fontWeight: '500'
+                }}>
+                  {selectedPrompt.Status}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          {/* Action button */}
           <button
             onClick={() => onEditPrompt(selectedPrompt.ID)}
             style={{
-              padding: styles.spacing?.xs || '4px',
-              backgroundColor: 'transparent',
-              color: styles.colors?.primary || '#007bff',
-              fontSize: styles.fonts?.sizes?.lg || '20px',
+              width: '40px',
+              height: '40px',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              backdropFilter: 'blur(10px)',
+              color: 'white',
+              fontSize: '16px',
               border: 'none',
+              borderRadius: '10px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)';
+              e.currentTarget.style.transform = 'scale(1)';
             }}
             title="Open Prompt Record"
           >
