@@ -114,8 +114,8 @@ function SalesPipelineDashboard({ utilities, styles, components, callbacks, save
         }),
         utilities.rv.RunView({
           EntityName: 'Activities',
-          ExtraFilter: `CreatedAt >= '${dayjs().subtract(30, 'day').format('YYYY-MM-DD')}'`,
-          OrderBy: 'CreatedAt DESC',
+          ExtraFilter: `__mj_CreatedAt >= '${dayjs().subtract(30, 'day').format('YYYY-MM-DD')}'`,
+          OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 100
         })
       ]);
