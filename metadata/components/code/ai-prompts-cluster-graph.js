@@ -601,7 +601,8 @@ function AIPromptsClusterGraph({
         fontSize: '13px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
         backdropFilter: 'blur(10px)',
-        minWidth: '140px'
+        minWidth: '200px',
+        maxWidth: '280px'
       }}>
         <div style={{ 
           fontWeight: '600', 
@@ -618,12 +619,12 @@ function AIPromptsClusterGraph({
               key={cluster}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                marginBottom: '8px',
+                alignItems: 'flex-start',
+                marginBottom: '10px',
                 cursor: 'pointer',
                 opacity: highlightCluster !== null && highlightCluster !== cluster ? 0.4 : 1,
                 transition: 'all 0.2s ease',
-                padding: '4px 8px',
+                padding: '6px 8px',
                 borderRadius: '6px',
                 backgroundColor: highlightCluster === cluster ? `${solidColors[cluster % solidColors.length]}15` : 'transparent'
               }}
@@ -638,18 +639,20 @@ function AIPromptsClusterGraph({
                   height: '16px',
                   background: `linear-gradient(135deg, ${solidColors[cluster % solidColors.length]} 0%, ${d3.color(solidColors[cluster % solidColors.length]).darker(0.3)} 100%)`,
                   marginRight: '10px',
+                  marginTop: '2px',
                   borderRadius: '50%',
                   border: '2px solid white',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  flexShrink: 0
                 }}
               />
               <span style={{ 
                 color: '#4a5568', 
                 fontWeight: '500',
-                maxWidth: '140px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                display: 'block',
+                lineHeight: '1.3',
+                wordWrap: 'break-word',
+                whiteSpace: 'normal'
               }}>
                 {clusterName}
               </span>
