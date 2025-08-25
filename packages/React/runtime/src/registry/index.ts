@@ -5,4 +5,13 @@
 
 export { ComponentRegistry } from './component-registry';
 export { ComponentResolver, ResolvedComponents } from './component-resolver';
+export { ComponentRegistryService } from './component-registry-service';
+export { 
+  RegistryProvider,
+  RegistryComponentMetadata,
+  RegistryComponentResponse,
+  RegistrySearchFilters,
+  ComponentDependencyInfo,
+  DependencyTree
+} from './registry-provider';
 export { ComponentSpec } from '@memberjunction/interactive-component-types';
