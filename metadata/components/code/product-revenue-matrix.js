@@ -477,7 +477,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                 gap: '6px'
               }}
             >
-              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'brain'}`}></i>
+              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
               {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
             </button>
           </div>

@@ -129,10 +129,21 @@ export class ComponentResolver {
       }
     } else {
       // Embedded component - get from local registry
-      const component = this.registry.get(spec.name, namespace);
+      // Use the component's specified namespace if it has one, otherwise use parent's namespace
+      const componentNamespace = spec.namespace || namespace;
+      const component = this.registry.get(spec.name, componentNamespace);
       if (component) {
         resolved[spec.name] = component;
-        console.log(`📄 Resolved embedded component: ${spec.name}`);
+        console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}`);
+      } else {
+        // If not found with specified namespace, try the parent namespace as fallback
+        const fallbackComponent = this.registry.get(spec.name, namespace);
+        if (fallbackComponent) {
+          resolved[spec.name] = fallbackComponent;
+          console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}`);
+        } else {
+          console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+        }
       }
     }
 

@@ -344,6 +344,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private async resolveComponentsWithVersion(spec: ComponentSpec, version: string, namespace: string = 'Global'): Promise<ResolvedComponents> {
     const resolver = this.adapter.getResolver();
     
+    // Debug: Log what dependencies we're trying to resolve
+    console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
+    
     // Use the runtime's resolver which now handles registry-based components
     const resolved = await resolver.resolveComponents(
       spec, 
@@ -351,7 +354,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       Metadata.Provider.CurrentUser // Pass current user context for database operations
     );
     
-    console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}`);
+    console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
     return resolved;
   }
 

@@ -385,3 +385,5 @@ ${insights}`;
     </div>
   );
 }
+
+return AIInsightsPanel;
