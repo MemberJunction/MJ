@@ -40,6 +40,12 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
+  
   // Calculate date range
   const getDateRange = useCallback(() => {
     const end = new Date();
@@ -243,6 +249,175 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
     };
   }, [activeTab, agentRuns, promptRuns]);
   
+  // Format insights text using marked library for proper markdown rendering
+  const formatInsights = (text) => {
+    if (!text) return null;
+    
+    // Use marked to parse markdown to HTML
+    const htmlContent = marked.parse(text);
+    
+    // Return the HTML with dangerouslySetInnerHTML for React
+    return (
+      <div 
+        className="markdown-insights"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        style={{
+          color: '#374151',
+          lineHeight: '1.6'
+        }}
+      />
+    );
+  };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    try {
+      await navigator.clipboard.writeText(aiInsights);
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `ai-performance-insights-${timestamp}.md`;
+    
+    const markdownContent = `# AI Performance Dashboard Insights
+Generated: ${new Date().toLocaleString()}
+Time Range: ${timeRange}
+Group By: ${groupBy}
+
+---
+
+${aiInsights}`;
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Generate AI Insights
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const currentData = activeTab === 'agents' ? agentRuns : promptRuns;
+      const dataType = activeTab === 'agents' ? 'AI Agent' : 'AI Prompt';
+      
+      // Calculate additional metrics for deeper analysis
+      const modelDistribution = {};
+      const agentDistribution = {};
+      let successRate = 0;
+      let failureCount = 0;
+      
+      currentData.forEach(run => {
+        // Model distribution
+        const model = run.Model || run.ModelID || 'Unknown';
+        modelDistribution[model] = (modelDistribution[model] || 0) + 1;
+        
+        // Agent/Prompt distribution
+        const name = run.Agent || run.AgentName || run.Prompt || run.PromptName || 'Unknown';
+        agentDistribution[name] = (agentDistribution[name] || 0) + 1;
+        
+        // Success tracking
+        if (run.IsSuccess === true || run.Status === 'Success') {
+          successRate++;
+        } else if (run.IsSuccess === false || run.Status === 'Failed') {
+          failureCount++;
+        }
+      });
+      
+      successRate = currentData.length > 0 ? ((successRate / currentData.length) * 100).toFixed(1) : 0;
+      
+      const prompt = `Analyze this ${dataType} performance data and provide actionable insights:
+
+## Performance Overview
+- **Time Period:** ${timeRange}
+- **Data Grouping:** ${groupBy}
+- **Total Runs:** ${metrics.totalRuns}
+- **Total Tokens Used:** ${metrics.totalTokens.toLocaleString()}
+- **Total Cost:** $${metrics.totalCost.toFixed(2)}
+- **Average Tokens per Run:** ${metrics.avgTokensPerRun.toLocaleString()}
+- **Average Cost per Run:** $${metrics.avgCostPerRun.toFixed(4)}
+- **Success Rate:** ${successRate}%
+- **Failed Runs:** ${failureCount}
+
+## Model Distribution
+${Object.entries(modelDistribution)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5)
+  .map(([model, count]) => `- **${model}:** ${count} runs (${((count/metrics.totalRuns)*100).toFixed(1)}%)`)
+  .join('\n')}
+
+## Top ${dataType === 'AI Agent' ? 'Agents' : 'Prompts'}
+${Object.entries(agentDistribution)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5)
+  .map(([name, count]) => `- **${name}:** ${count} runs`)
+  .join('\n')}
+
+## Recent Performance Trends (Last 5 ${groupBy === 'hour' ? 'Hours' : groupBy === 'day' ? 'Days' : 'Periods'})
+${chartData.slice(-5).map(d => 
+  `- **${d.date}:** ${d.runs} runs, ${d.tokens.toLocaleString()} tokens, $${d.cost.toFixed(2)}`
+).join('\n')}
+
+## Cost Analysis
+- **Highest Cost Period:** ${chartData.reduce((max, d) => d.cost > max.cost ? d : max, chartData[0] || {}).date || 'N/A'}
+- **Most Active Period:** ${chartData.reduce((max, d) => d.runs > max.runs ? d : max, chartData[0] || {}).date || 'N/A'}
+- **Token Efficiency Trend:** ${chartData.length > 1 
+  ? (chartData[chartData.length-1].tokens/chartData[chartData.length-1].runs < chartData[0].tokens/chartData[0].runs 
+    ? 'Improving' : 'Declining')
+  : 'Stable'}
+
+Based on this specific data, please provide:
+1. **Key Performance Insights** - What patterns and trends are evident in the data?
+2. **Cost Efficiency Analysis** - Are costs justified by usage patterns? Where can we optimize?
+3. **Token Usage Patterns** - Any unusual spikes or inefficiencies?
+4. **Model Optimization** - Should we adjust model selection based on the distribution?
+5. **Specific Recommendations** - 3-4 actionable steps to improve performance and reduce costs
+6. **Risk Indicators** - Any anomalies or concerns that need immediate attention?
+
+Use markdown formatting with headers (##), bullet points, and **bold** text. Reference the actual numbers in your analysis.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert AI performance analyst specializing in token usage optimization, cost management, and AI system efficiency. Analyze the specific metrics provided and give actionable recommendations. Always reference the actual numbers and percentages from the data. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+  
   console.log('[AIPerformanceDashboard] Current state:', {
     timeRange,
     groupBy,
@@ -289,6 +464,23 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
       backgroundColor: styles.colors.background,
       padding: styles.spacing.md
     }}>
+      <style>{`
+        /* Markdown content styling */
+        .markdown-insights h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 16px 0 12px 0; }
+        .markdown-insights h2 { font-size: 18px; font-weight: 600; color: #1F2937; margin: 14px 0 10px 0; }
+        .markdown-insights h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 12px 0 8px 0; }
+        .markdown-insights h4 { font-size: 14px; font-weight: 600; color: #4B5563; margin: 10px 0 6px 0; }
+        .markdown-insights p { margin: 8px 0; color: #374151; line-height: 1.6; }
+        .markdown-insights ul, .markdown-insights ol { margin: 8px 0; padding-left: 24px; color: #374151; }
+        .markdown-insights li { margin: 4px 0; line-height: 1.5; }
+        .markdown-insights strong { font-weight: 600; color: #1F2937; }
+        .markdown-insights em { font-style: italic; }
+        .markdown-insights code { background: #F3F4F6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+        .markdown-insights blockquote { border-left: 3px solid #6366F1; padding-left: 12px; margin: 12px 0; color: #4B5563; }
+        .markdown-insights hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
+        .markdown-insights a { color: #6366F1; text-decoration: none; }
+        .markdown-insights a:hover { text-decoration: underline; }
+      `}</style>
       {/* Header Controls */}
       <div style={{
         display: 'flex',
@@ -377,6 +569,27 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
             <option value="month">By Month</option>
             <option value="quarter">By Quarter</option>
           </select>
+          
+          {/* AI Insights Button */}
+          <button
+            onClick={generateAIInsights}
+            disabled={loadingInsights || loading}
+            style={{
+              padding: `${styles.spacing.sm} ${styles.spacing.md}`,
+              backgroundColor: styles.colors.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: styles.borders?.radius || '4px',
+              cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: styles.spacing.xs,
+              opacity: loadingInsights || loading ? 0.6 : 1
+            }}
+          >
+            <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+            {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+          </button>
         </div>
       </div>
       
@@ -470,6 +683,191 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
           </div>
         )}
       </div>
+      
+      {/* AI Insights Panel */}
+      {aiInsights && (
+        <div 
+          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          style={{
+          marginTop: styles.spacing.lg,
+          backgroundColor: styles.colors.surface,
+          borderRadius: styles.borders?.radius || '4px',
+          padding: styles.spacing.lg,
+          border: `1px solid ${styles.colors.border}`,
+          background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: insightsCollapsed ? '0' : styles.spacing.md
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: styles.colors.text,
+              display: 'flex',
+              alignItems: 'center',
+              gap: styles.spacing.sm
+            }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: styles.colors.primary }}></i>
+              AI-Powered Performance Analysis
+            </h3>
+            <div style={{ display: 'flex', gap: styles.spacing.sm, alignItems: 'center' }}>
+              {/* Collapse/Expand button */}
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${styles.colors.border}`,
+                  borderRadius: '6px',
+                  color: styles.colors.textSecondary,
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              {/* Copy button */}
+              <button
+                className="copy-insights-btn"
+                onClick={copyInsightsToClipboard}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${styles.colors.border}`,
+                  borderRadius: styles.borders?.radius || '4px',
+                  padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
+                  color: styles.colors.textSecondary,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              
+              {/* Export button */}
+              <button
+                onClick={exportInsightsAsMarkdown}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${styles.colors.border}`,
+                  borderRadius: styles.borders?.radius || '4px',
+                  padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
+                  color: styles.colors.textSecondary,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Export as Markdown"
+              >
+                <i className="fa-solid fa-download"></i>
+              </button>
+              
+              {/* Refresh button */}
+              <button
+                onClick={() => {
+                  setInsightsCollapsed(false);
+                  generateAIInsights();
+                }}
+                disabled={loadingInsights}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${styles.colors.border}`,
+                  borderRadius: styles.borders?.radius || '4px',
+                  padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
+                  cursor: loadingInsights ? 'not-allowed' : 'pointer',
+                  color: styles.colors.textSecondary,
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Refresh insights"
+              >
+                <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'arrows-rotate'}`}></i>
+              </button>
+              
+              {/* Collapse/Expand button */}
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${styles.colors.border}`,
+                  borderRadius: styles.borders?.radius || '4px',
+                  padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
+                  cursor: 'pointer',
+                  color: styles.colors.textSecondary,
+                  fontSize: '14px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              {/* Close button */}
+              <button
+                onClick={() => {
+                  setAiInsights(null);
+                  setInsightsError(null);
+                  setInsightsCollapsed(false);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: styles.colors.textSecondary,
+                  padding: '4px'
+                }}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          
+          {!insightsCollapsed && (
+            <div style={{
+              backgroundColor: '#F9FAFB',
+              padding: styles.spacing.md,
+              borderRadius: styles.borders?.radius || '4px',
+              maxHeight: '500px',
+              overflowY: 'auto'
+            }}>
+              {formatInsights(aiInsights)}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Error display for insights */}
+      {insightsError && (
+        <div style={{
+          backgroundColor: '#FEE2E2',
+          borderRadius: styles.borders?.radius || '4px',
+          padding: styles.spacing.md,
+          marginTop: styles.spacing.lg,
+          border: '1px solid #FCA5A5'
+        }}>
+          <div style={{ color: styles.colors.error, fontWeight: '500', display: 'flex', alignItems: 'center', gap: styles.spacing.sm }}>
+            <i className="fa-solid fa-exclamation-triangle"></i>
+            {insightsError}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

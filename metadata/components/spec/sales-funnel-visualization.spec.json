@@ -44,8 +44,7 @@
             "type": "number",
             "description": "Win probability percentage"
           }
-        ],
-        "requiredPermissions": ["read"]
+        ] 
       }
     ]
   },
@@ -66,6 +65,11 @@
       "name": "dayjs",
       "version": "^1.11.10",
       "globalVariable": "dayjs"
+    },
+    {
+      "name": "marked",
+      "version": "11.1.1",
+      "globalVariable": "marked"
     }
   ]
 }

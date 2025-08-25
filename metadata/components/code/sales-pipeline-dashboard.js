@@ -373,6 +373,55 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
       />
     );
   };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    const textToCopy = typeof aiInsights === 'string' ? aiInsights : 
+                       aiInsights.rawInsight || JSON.stringify(aiInsights, null, 2);
+    
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    const textToExport = typeof aiInsights === 'string' ? aiInsights : 
+                         aiInsights.rawInsight || JSON.stringify(aiInsights, null, 2);
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `sales-pipeline-insights-${timestamp}.md`;
+    
+    const markdownContent = `# Sales Pipeline Insights
+Generated: ${new Date().toLocaleString()}
+Time Period: ${timeFilter === 'custom' ? `${startDate} to ${endDate}` : timeFilter}
+
+---
+
+${textToExport}`;
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleDrillDown = (title, dealList, type, metadata) => {
     setDrillDownData({ title, deals: dealList, type, metadata });
@@ -569,7 +618,9 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
         
         {/* AI Insights Panel */}
         {aiInsights && (
-          <div style={{
+          <div 
+            onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+            style={{
             backgroundColor: 'white',
             borderRadius: '8px',
             padding: '20px',
@@ -593,10 +644,71 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                 alignItems: 'center',
                 gap: '8px'
               }}>
-                <span style={{ color: '#6366F1' }}>🤖</span>
+                <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#6366F1' }}></i>
                 AI-Powered Pipeline Insights
               </h3>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {/* Collapse/Expand button */}
+                <button
+                  onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '6px',
+                    color: '#6B7280',
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title={insightsCollapsed ? 'Expand' : 'Collapse'}
+                >
+                  <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+                </button>
+                
+                {/* Copy button */}
+                <button
+                  className="copy-insights-btn"
+                  onClick={copyInsightsToClipboard}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '6px',
+                    color: '#6B7280',
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Copy to clipboard"
+                >
+                  <i className="fa-solid fa-copy"></i>
+                </button>
+                
+                {/* Export button */}
+                <button
+                  onClick={exportInsightsAsMarkdown}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '6px',
+                    color: '#6B7280',
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Export as Markdown"
+                >
+                  <i className="fa-solid fa-download"></i>
+                </button>
+                
                 {/* Refresh button */}
                 <button
                   onClick={() => {
@@ -607,8 +719,8 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                   style={{
                     background: 'none',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '4px',
-                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    padding: '6px 10px',
                     cursor: loadingInsights ? 'not-allowed' : 'pointer',
                     color: '#6B7280',
                     fontSize: '14px',
@@ -619,11 +731,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                   }}
                   title="Refresh analysis"
                 >
-                  <span style={{ 
-                    display: 'inline-block',
-                    animation: loadingInsights ? 'spin 1s linear infinite' : 'none'
-                  }}>↻</span>
-                  Refresh
+                  <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'arrows-rotate'}`}></i>
                 </button>
                 
                 {/* Collapse/Expand button */}
@@ -632,15 +740,15 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                   style={{
                     background: 'none',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '4px',
-                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    padding: '6px 10px',
                     cursor: 'pointer',
                     color: '#6B7280',
                     fontSize: '14px'
                   }}
                   title={insightsCollapsed ? 'Expand' : 'Collapse'}
                 >
-                  {insightsCollapsed ? '▼' : '▲'}
+                  <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
                 </button>
                 
                 {/* Close button */}

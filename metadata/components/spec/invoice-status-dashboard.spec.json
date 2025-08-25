@@ -12,15 +12,13 @@
         "name": "Invoices",
         "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "DueDate", "TotalAmount", "Status", "PaidAmount"],
         "filterFields": ["Status", "DueDate", "AccountID"],
-        "sortFields": ["DueDate", "TotalAmount"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["DueDate", "TotalAmount"] 
       },
       {
         "name": "Payments",
         "displayFields": ["InvoiceID", "PaymentDate", "Amount", "PaymentMethod"],
         "filterFields": ["PaymentDate", "InvoiceID"],
-        "sortFields": ["PaymentDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["PaymentDate"] 
       }
     ]
   },
@@ -48,6 +46,11 @@
       "name": "Chart.js",
       "version": "^4.4.1",
       "globalVariable": "Chart"
+    },
+    {
+      "name": "marked",
+      "version": "11.1.1",
+      "globalVariable": "marked"
     }
   ]
 }

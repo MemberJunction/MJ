@@ -11,6 +11,12 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [drillDownTitle, setDrillDownTitle] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'TotalAmount', direction: 'desc' });
   const chartRefs = useRef({});
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   useEffect(() => {
     loadFinancialData();
@@ -116,6 +122,132 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   };
 
   const metrics = calculateMetrics();
+  
+  // Format insights text using marked library for proper markdown rendering
+  const formatInsights = (text) => {
+    if (!text) return null;
+    
+    // Use marked to parse markdown to HTML
+    const htmlContent = marked.parse(text);
+    
+    // Return the HTML with dangerouslySetInnerHTML for React
+    return (
+      <div 
+        className="markdown-insights"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        style={{
+          color: '#374151',
+          lineHeight: '1.6'
+        }}
+      />
+    );
+  };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    try {
+      await navigator.clipboard.writeText(aiInsights);
+      // Optional: Show a brief success indicator
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    // Create filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `financial-insights-${timestamp}.md`;
+    
+    // Add header to the markdown content
+    const markdownContent = `# Financial Analytics Insights
+Generated: ${new Date().toLocaleString()}
+Time Period: ${timeRange}
+
+---
+
+${aiInsights}`;
+    
+    // Create blob and download
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  // Generate AI Insights
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const trendData = prepareTrendData();
+      
+      const prompt = `Analyze this financial analytics data and provide insights:
+
+Time Period: ${timeRange}
+Total Revenue: ${formatCurrency(metrics.totalRevenue)}
+Actual Revenue: ${formatCurrency(metrics.actualRevenue)}
+Projected Revenue: ${formatCurrency(metrics.projectedRevenue)}
+Outstanding Revenue: ${formatCurrency(metrics.outstandingRevenue)}
+Gross Margin: ${metrics.grossMargin.toFixed(1)}%
+Revenue Growth: ${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth.toFixed(1)}%
+Average Deal Size: ${formatCurrency(metrics.avgDealSize)}
+Cash Flow: ${formatCurrency(metrics.cashFlow)}
+
+Data Summary:
+- Total Invoices: ${invoices.length}
+- Total Deals: ${deals.length}
+- Total Products: ${products.length}
+
+Recent Trend Data:
+${trendData.slice(-3).map(d => `${d.month}: Invoice Revenue ${formatCurrency(d.revenue)}, Deal Revenue ${formatCurrency(d.deals)}`).join('\n')}
+
+Provide:
+1. Key financial performance insights and trends
+2. Revenue growth analysis and projections
+3. Cash flow and outstanding revenue concerns
+4. Gross margin analysis and optimization opportunities
+5. Specific actionable recommendations for financial improvement
+6. Risk factors to monitor
+
+Focus on actionable business insights that can help improve financial performance.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert financial analyst with deep knowledge of business finance, cash flow management, and revenue optimization. Provide clear, actionable insights with specific recommendations. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
 
   const prepareTrendData = () => {
     const monthlyData = {};
@@ -605,25 +737,88 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .ai-insights-content h1, .ai-insights-content h2, .ai-insights-content h3 {
+          margin-top: 16px;
+          margin-bottom: 8px;
+          color: #111827;
+        }
+        .ai-insights-content h1 { font-size: 1.5em; }
+        .ai-insights-content h2 { font-size: 1.3em; }
+        .ai-insights-content h3 { font-size: 1.1em; }
+        .ai-insights-content p {
+          margin: 8px 0;
+          line-height: 1.6;
+          color: #374151;
+        }
+        .ai-insights-content ul, .ai-insights-content ol {
+          margin: 8px 0;
+          padding-left: 24px;
+        }
+        .ai-insights-content li {
+          margin: 4px 0;
+          color: #374151;
+        }
+        .ai-insights-content strong {
+          color: #111827;
+          font-weight: 600;
+        }
+        .ai-insights-content code {
+          background: #F3F4F6;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.9em;
+        }
+        .ai-insights-content blockquote {
+          border-left: 4px solid #3B82F6;
+          padding-left: 16px;
+          margin: 12px 0;
+          color: #4B5563;
+        }
+      `}</style>
+      
       <div style={{ padding: '20px', borderBottom: '1px solid #E5E7EB' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Financial Analytics</h2>
-          <select
-            value={timeRange}
-            onChange={(e) => {
-              setTimeRange(e.target.value);
-              onSaveUserSettings({ ...savedUserSettings, timeRange: e.target.value });
-            }}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #D1D5DB',
-              borderRadius: '6px'
-            }}
-          >
-            <option value="month">Last Month</option>
-            <option value="quarter">Last Quarter</option>
-            <option value="year">Last Year</option>
-          </select>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <select
+              value={timeRange}
+              onChange={(e) => {
+                setTimeRange(e.target.value);
+                onSaveUserSettings({ ...savedUserSettings, timeRange: e.target.value });
+              }}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #D1D5DB',
+                borderRadius: '6px'
+              }}
+            >
+              <option value="month">Last Month</option>
+              <option value="quarter">Last Quarter</option>
+              <option value="year">Last Year</option>
+            </select>
+            
+            {/* AI Insights Button */}
+            <button
+              onClick={generateAIInsights}
+              disabled={loadingInsights || loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                opacity: loadingInsights || loading ? 0.6 : 1
+              }}
+            >
+              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+              {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+            </button>
+          </div>
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
@@ -702,6 +897,147 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
           </div>
         </div>
       </div>
+      
+      {/* AI Insights Panel - Moved to top */}
+      {(aiInsights || insightsError) && (
+        <div 
+          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          style={{
+          margin: '20px',
+          marginTop: '0',
+          padding: '20px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#3B82F6' }}></i>
+              AI Financial Insights
+            </h3>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* Collapse/Expand button */}
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              {/* Copy button */}
+              <button
+                className="copy-insights-btn"
+                onClick={copyInsightsToClipboard}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              
+              {/* Export button */}
+              <button
+                onClick={exportInsightsAsMarkdown}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Export as Markdown"
+              >
+                <i className="fa-solid fa-download"></i>
+              </button>
+              
+              {/* Close button */}
+              <button
+                onClick={() => {
+                  setAiInsights(null);
+                  setInsightsError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  padding: '4px'
+                }}
+                title="Close insights"
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          {!insightsCollapsed && insightsError ? (
+            <div style={{
+              color: '#991B1B',
+              padding: '12px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: '6px',
+              border: '1px solid #FECACA'
+            }}>
+              <i className="fa-solid fa-exclamation-triangle"></i>
+              <span style={{ marginLeft: '8px' }}>
+                Error generating insights: {insightsError}
+              </span>
+            </div>
+          ) : !insightsCollapsed ? (
+            <div className="ai-insights-content" style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '6px'
+            }}>
+              {formatInsights(aiInsights)}
+            </div>
+          ) : null}
+        </div>
+      )}
       
       <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>

@@ -154,5 +154,11 @@
     "@include:ai-detail-table.spec.json",
     "@include:ai-metrics-summary.spec.json"
   ],
-  "libraries": []
+  "libraries": [
+    {
+      "name": "marked",
+      "version": "11.1.1",
+      "globalVariable": "marked"
+    }
+  ]
 }

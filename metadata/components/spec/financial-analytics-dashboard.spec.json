@@ -12,20 +12,17 @@
         "name": "Invoices",
         "displayFields": ["InvoiceDate", "TotalAmount", "Status"],
         "filterFields": ["InvoiceDate", "Status"],
-        "sortFields": ["InvoiceDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["InvoiceDate"] 
       },
       {
         "name": "Deals",
         "displayFields": ["CloseDate", "Amount", "Stage", "Probability"],
         "filterFields": ["CloseDate", "Stage"],
-        "sortFields": ["CloseDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["CloseDate"] 
       },
       {
         "name": "Products",
-        "displayFields": ["ProductName", "Price", "Cost"],
-        "requiredPermissions": ["read"]
+        "displayFields": ["ProductName", "Price", "Cost"] 
       }
     ]
   },
@@ -43,6 +40,11 @@
       "name": "ApexCharts",
       "version": "^3.45.1",
       "globalVariable": "ApexCharts"
+    },
+    {
+      "name": "marked",
+      "version": "11.1.1",
+      "globalVariable": "marked"
     }
   ]
 }

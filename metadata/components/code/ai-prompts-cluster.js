@@ -30,6 +30,12 @@ function AIPromptsCluster({
   const [error, setError] = useState(null);
   const [highlightCluster, setHighlightCluster] = useState(null);
   const [clusterNames, setClusterNames] = useState({});
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   // Load AI Prompts data on mount
   useEffect(() => {
@@ -340,6 +346,140 @@ Only return the JSON object, nothing else.`;
     return Array.from(uniqueTypes, ([id, name]) => ({ id, name }));
   }, [prompts]);
 
+  // Format insights text using marked library for proper markdown rendering
+  const formatInsights = (text) => {
+    if (!text) return null;
+    
+    // Use marked to parse markdown to HTML
+    const htmlContent = marked.parse(text);
+    
+    // Return the HTML with dangerouslySetInnerHTML for React
+    return (
+      <div 
+        className="markdown-insights"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        style={{
+          color: '#374151',
+          lineHeight: '1.6'
+        }}
+      />
+    );
+  };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    try {
+      await navigator.clipboard.writeText(aiInsights);
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `ai-prompts-cluster-insights-${timestamp}.md`;
+    
+    const markdownContent = `# AI Prompts Cluster Analysis Insights
+Generated: ${new Date().toLocaleString()}
+Total Prompts: ${prompts.length}
+Clusters: ${clusters.length}
+
+---
+
+${aiInsights}`;
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  // Generate AI Insights about the clusters
+  const generateAIInsights = async () => {
+    if (clusters.length === 0) {
+      setInsightsError('Please generate clusters first');
+      return;
+    }
+    
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      // Prepare cluster analysis data
+      const clusterAnalysis = clusters.map((cluster, idx) => {
+        const clusterPrompts = filteredPrompts.filter(p => 
+          embeddings[p.ID] && cluster.members.includes(p.ID)
+        );
+        
+        return {
+          id: idx,
+          name: clusterNames[idx] || `Cluster ${idx + 1}`,
+          size: clusterPrompts.length,
+          prompts: clusterPrompts.slice(0, 3).map(p => p.Name), // Sample prompts
+          categories: [...new Set(clusterPrompts.map(p => p.Category).filter(Boolean))],
+          types: [...new Set(clusterPrompts.map(p => p.Type).filter(Boolean))],
+          roles: [...new Set(clusterPrompts.map(p => p.PromptRole).filter(Boolean))]
+        };
+      });
+      
+      const prompt = `Analyze this AI prompts clustering data and provide insights:
+
+Cluster Analysis:
+${JSON.stringify(clusterAnalysis, null, 2)}
+
+Total Prompts: ${prompts.length}
+Filtered Prompts: ${filteredPrompts.length}
+Number of Clusters: ${clusters.length}
+Similarity Threshold: ${similarityThreshold}
+
+Please provide:
+1. **Cluster Quality Assessment** - How well-defined and coherent are the clusters?
+2. **Thematic Patterns** - What themes or patterns emerge from the clustering?
+3. **Distribution Analysis** - How are prompts distributed across clusters?
+4. **Outliers and Anomalies** - Any unusual patterns or isolated prompts?
+5. **Optimization Suggestions** - How could the clustering be improved?
+6. **Business Insights** - What does this clustering reveal about the prompt library?
+7. **Recommendations** - Specific actions to improve prompt organization
+
+Format your response in clear markdown with headers and bullet points.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert in natural language processing, clustering analysis, and prompt engineering. Analyze the clustering results and provide actionable insights about the AI prompt library organization.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+  
   // Calculate similar prompts for selected prompt
   const similarPrompts = useMemo(() => {
     if (!selectedPrompt || !embeddings[selectedPrompt.ID]) return [];
@@ -455,21 +595,52 @@ Only return the JSON object, nothing else.`;
       <div style={{
         marginBottom: styles.spacing?.md || '16px'
       }}>
-        <h2 style={{
-          fontSize: styles.fonts?.sizes?.xl || '24px',
-          fontWeight: 'bold',
-          color: styles.colors?.text?.primary || '#333',
-          margin: 0
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
         }}>
-          AI Prompts Cluster Analysis
-        </h2>
-        <p style={{
-          fontSize: styles.fonts?.sizes?.sm || '14px',
-          color: styles.colors?.text?.secondary || '#666',
-          marginTop: styles.spacing?.xs || '4px'
-        }}>
-          Discover patterns and relationships in your AI prompts through semantic clustering
-        </p>
+          <div>
+            <h2 style={{
+              fontSize: styles.fonts?.sizes?.xl || '24px',
+              fontWeight: 'bold',
+              color: styles.colors?.text?.primary || '#333',
+              margin: 0
+            }}>
+              AI Prompts Cluster Analysis
+            </h2>
+            <p style={{
+              fontSize: styles.fonts?.sizes?.sm || '14px',
+              color: styles.colors?.text?.secondary || '#666',
+              marginTop: styles.spacing?.xs || '4px'
+            }}>
+              Discover patterns and relationships in your AI prompts through semantic clustering
+            </p>
+          </div>
+          
+          {/* AI Insights Button */}
+          {clusters.length > 0 && (
+            <button
+              onClick={generateAIInsights}
+              disabled={loadingInsights}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#8B5CF6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: loadingInsights ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                opacity: loadingInsights ? 0.6 : 1
+              }}
+            >
+              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+              {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error display */}
@@ -482,6 +653,142 @@ Only return the JSON object, nothing else.`;
           marginBottom: styles.spacing?.md || '16px'
         }}>
           {error}
+        </div>
+      )}
+      
+      {/* AI Insights Panel */}
+      {(aiInsights || insightsError) && (
+        <div 
+          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          style={{
+          marginBottom: styles.spacing?.md || '16px',
+          padding: styles.spacing?.md || '16px',
+          backgroundColor: 'white',
+          borderRadius: styles.borders?.radius || '8px',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#8B5CF6' }}></i>
+              AI Cluster Analysis Insights
+            </h3>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              <button
+                className="copy-insights-btn"
+                onClick={copyInsightsToClipboard}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              
+              <button
+                onClick={exportInsightsAsMarkdown}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Export as Markdown"
+              >
+                <i className="fa-solid fa-download"></i>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setAiInsights(null);
+                  setInsightsError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  padding: '4px'
+                }}
+                title="Close insights"
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          {!insightsCollapsed && insightsError ? (
+            <div style={{
+              color: '#991B1B',
+              padding: '12px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: '6px',
+              border: '1px solid #FECACA'
+            }}>
+              <i className="fa-solid fa-exclamation-triangle"></i>
+              <span style={{ marginLeft: '8px' }}>
+                {insightsError}
+              </span>
+            </div>
+          ) : !insightsCollapsed ? (
+            <div className="ai-insights-content" style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '6px'
+            }}>
+              {formatInsights(aiInsights)}
+            </div>
+          ) : null}
         </div>
       )}
 

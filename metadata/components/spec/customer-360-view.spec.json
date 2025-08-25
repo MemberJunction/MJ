@@ -12,26 +12,22 @@
       {
         "name": "Accounts",
         "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
-        "filterFields": ["ID"],
-        "requiredPermissions": ["read"]
+        "filterFields": ["ID"] 
       },
       {
         "name": "Contacts",
         "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
-        "filterFields": ["AccountID"],
-        "requiredPermissions": ["read"]
+        "filterFields": ["AccountID"] 
       },
       {
         "name": "Deals",
         "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
-        "filterFields": ["AccountID"],
-        "requiredPermissions": ["read"]
+        "filterFields": ["AccountID"] 
       },
       {
         "name": "Activities",
         "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
-        "filterFields": ["AccountID"],
-        "requiredPermissions": ["read"]
+        "filterFields": ["AccountID"] 
       }
     ]
   },

@@ -15,6 +15,12 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   const agingChartRef = useRef(null);
   const statusChartInstance = useRef(null);
   const agingChartInstance = useRef(null);
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -177,6 +183,173 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
     setDrillDownType(type);
     setSelectedData(data);
     setIsPanelOpen(true);
+  };
+  
+  // Generate AI Insights
+  // Format insights text using marked library for proper markdown rendering
+  const formatInsights = (text) => {
+    if (!text) return null;
+    
+    // Use marked to parse markdown to HTML
+    const htmlContent = marked.parse(text);
+    
+    // Return the HTML with dangerouslySetInnerHTML for React
+    return (
+      <div 
+        className="markdown-insights"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        style={{
+          color: '#374151',
+          lineHeight: '1.6'
+        }}
+      />
+    );
+  };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    try {
+      await navigator.clipboard.writeText(aiInsights);
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `invoice-status-insights-${timestamp}.md`;
+    
+    const markdownContent = `# Invoice Status Dashboard Insights
+Generated: ${new Date().toLocaleString()}
+Time Period: ${timePeriod}${timePeriod === 'custom' ? ` (${startDate} to ${endDate})` : ''}
+
+---
+
+${aiInsights}`;
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const metrics = calculateMetrics();
+      
+      // Calculate aging breakdown
+      const aging = { current: 0, '30days': 0, '60days': 0, '90days': 0, 'over90': 0 };
+      const today = new Date();
+      const paidByInvoice = {};
+      payments.forEach(payment => {
+        if (!paidByInvoice[payment.InvoiceID]) {
+          paidByInvoice[payment.InvoiceID] = 0;
+        }
+        paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+      });
+      
+      invoices.forEach(invoice => {
+        if (invoice.Status !== 'Paid' && invoice.Status !== 'Cancelled') {
+          const paidAmount = paidByInvoice[invoice.ID] || 0;
+          const outstanding = (invoice.TotalAmount || 0) - paidAmount;
+          
+          if (outstanding > 0) {
+            const dueDate = new Date(invoice.DueDate);
+            const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysPastDue <= 0) aging.current += outstanding;
+            else if (daysPastDue <= 30) aging['30days'] += outstanding;
+            else if (daysPastDue <= 60) aging['60days'] += outstanding;
+            else if (daysPastDue <= 90) aging['90days'] += outstanding;
+            else aging.over90 += outstanding;
+          }
+        }
+      });
+      
+      const formatCurrency = (amount) => {
+        if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+        if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+        return `$${amount?.toFixed(0) || 0}`;
+      };
+      
+      const prompt = `Analyze this invoice status and aging data and provide actionable insights:
+
+## Invoice Overview
+- **Time Period:** ${timePeriod === 'custom' ? `${startDate} to ${endDate}` : `Last ${timePeriod}`}
+- **Total Invoices:** ${metrics.total}
+- **Total Amount:** ${formatCurrency(metrics.totalAmount)}
+
+## Status Breakdown
+- **Paid:** ${metrics.paid} invoices (${formatCurrency(metrics.paidAmount)})
+- **Pending:** ${metrics.pending} invoices (${formatCurrency(metrics.pendingAmount)})
+- **Overdue:** ${metrics.overdue} invoices (${formatCurrency(metrics.overdueAmount)})
+- **Partial:** ${metrics.partial} invoices (${formatCurrency(metrics.partialAmount)})
+
+## Aging Analysis
+- **Current (not overdue):** ${formatCurrency(aging.current)}
+- **1-30 days overdue:** ${formatCurrency(aging['30days'])}
+- **31-60 days overdue:** ${formatCurrency(aging['60days'])}
+- **61-90 days overdue:** ${formatCurrency(aging['90days'])}
+- **Over 90 days overdue:** ${formatCurrency(aging.over90)}
+
+## Key Metrics
+- **Total Payments Recorded:** ${payments.length}
+- **Total Customer Accounts:** ${accounts.length}
+- **Collection Rate:** ${metrics.paid > 0 ? ((metrics.paidAmount / metrics.totalAmount) * 100).toFixed(1) : 0}%
+- **Average Days Overdue:** ${metrics.overdue > 0 ? Math.round(invoices.filter(i => i.Status === 'Overdue').reduce((sum, inv) => {
+    const dueDate = new Date(inv.DueDate);
+    const today = new Date();
+    return sum + Math.max(0, Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)));
+  }, 0) / metrics.overdue) : 0} days
+
+Based on this specific data, please provide:
+1. **Cash Flow Analysis** - What is the immediate cash flow situation?
+2. **Risk Assessment** - Which invoices pose the highest collection risk?
+3. **Customer Payment Patterns** - What behaviors are evident?
+4. **Collection Strategy** - Specific recommendations to improve collections
+5. **Action Items** - 3-4 immediate actions to reduce overdue amounts
+6. **Early Warning Indicators** - What metrics should we monitor closely?
+
+Use markdown formatting with headers (##), bullet points, and **bold** text. Reference the actual numbers in your analysis.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert accounts receivable and cash flow analyst with deep knowledge of invoice management, collections, and customer payment behavior. Provide clear, actionable insights with specific recommendations. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
   };
 
   const closeDrillDown = () => {
@@ -829,8 +1002,165 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
               />
             </>
           )}
+          
+          {/* AI Insights Button */}
+          <button
+            onClick={generateAIInsights}
+            disabled={loadingInsights || loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: loadingInsights || loading ? 0.6 : 1
+            }}
+          >
+            <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+            {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+          </button>
         </div>
       </div>
+      
+      {/* AI Insights Panel - Moved to top */}
+      {(aiInsights || insightsError) && (
+        <div 
+          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          style={{
+          marginBottom: '20px',
+          padding: '20px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#3B82F6' }}></i>
+              AI Invoice Insights
+            </h3>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              <button
+                className="copy-insights-btn"
+                onClick={copyInsightsToClipboard}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              
+              <button
+                onClick={exportInsightsAsMarkdown}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Export as Markdown"
+              >
+                <i className="fa-solid fa-download"></i>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setAiInsights(null);
+                  setInsightsError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  padding: '4px'
+                }}
+                title="Close insights"
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          {!insightsCollapsed && insightsError ? (
+            <div style={{
+              color: '#991B1B',
+              padding: '12px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: '6px',
+              border: '1px solid #FECACA'
+            }}>
+              <i className="fa-solid fa-exclamation-triangle"></i>
+              <span style={{ marginLeft: '8px' }}>
+                Error generating insights: {insightsError}
+              </span>
+            </div>
+          ) : !insightsCollapsed ? (
+            <div className="ai-insights-content" style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '6px'
+            }}>
+              {formatInsights(aiInsights)}
+            </div>
+          ) : null}
+        </div>
+      )}
       
       {/* Top Metrics Cards - Side by Side */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
@@ -994,6 +1324,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
           <DrillDownPanel />
         </div>
       )}
+      
     </div>
   );
 }

@@ -12,8 +12,7 @@
         "name": "Deals",
         "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "LossReason", "Competitor"],
         "filterFields": ["Stage", "CloseDate", "Owner"],
-        "sortFields": ["CloseDate", "Amount"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["CloseDate", "Amount"] 
       }
     ]
   },

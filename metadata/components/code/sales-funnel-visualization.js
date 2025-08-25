@@ -8,6 +8,12 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
   const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
   const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   // Load sub-components from registry
   const FunnelChart = components['SalesFunnelChart'];
@@ -176,6 +182,130 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
     if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
     return num.toString();
   };
+  
+  // Format insights text using marked library for proper markdown rendering
+  const formatInsights = (text) => {
+    if (!text) return null;
+    
+    // Use marked to parse markdown to HTML
+    const htmlContent = marked.parse(text);
+    
+    // Return the HTML with dangerouslySetInnerHTML for React
+    return (
+      <div 
+        className="markdown-insights"
+        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        style={{
+          color: '#374151',
+          lineHeight: '1.6'
+        }}
+      />
+    );
+  };
+  
+  // Copy markdown content to clipboard
+  const copyInsightsToClipboard = async () => {
+    if (!aiInsights) return;
+    
+    try {
+      await navigator.clipboard.writeText(aiInsights);
+      const copyBtn = document.querySelector('.copy-insights-btn');
+      if (copyBtn) {
+        const originalTitle = copyBtn.title;
+        copyBtn.title = 'Copied!';
+        setTimeout(() => {
+          copyBtn.title = originalTitle;
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy insights:', err);
+    }
+  };
+  
+  // Export insights as markdown file
+  const exportInsightsAsMarkdown = () => {
+    if (!aiInsights) return;
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `sales-funnel-insights-${timestamp}.md`;
+    
+    const markdownContent = `# Sales Funnel Insights\nGenerated: ${new Date().toLocaleString()}\nTime Period: ${timeFilter}${timeFilter === 'custom' ? ` (${startDate} to ${endDate})` : ''}\n\n---\n\n${aiInsights}`;
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  // Generate AI Insights
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const { funnelData, closedLost } = calculateFunnelData();
+      const totalDeals = deals.length;
+      const totalValue = deals.reduce((sum, d) => sum + (d.Amount || 0), 0);
+      const avgDealSize = totalDeals > 0 ? totalValue / totalDeals : 0;
+      const winRate = totalDeals > 0 ? 
+        (deals.filter(d => d.Stage === 'Closed Won').length / totalDeals * 100) : 0;
+      
+      const prompt = `Analyze this sales funnel data and provide insights:
+
+Time Filter: ${timeFilter}${startDate && endDate ? ` (${startDate} to ${endDate})` : ''}
+Total Deals: ${totalDeals}
+Total Value: ${formatCurrency(totalValue)}
+Win Rate: ${winRate.toFixed(1)}%
+Average Deal Size: ${formatCurrency(avgDealSize)}
+
+Funnel Stage Breakdown:
+${funnelData.map(stage => `${stage.stage}: ${stage.count} deals (${formatCurrency(stage.value)}) - ${stage.conversionRate.toFixed(1)}% conversion`).join('\n')}
+
+Closed Lost: ${closedLost.count} deals (${formatCurrency(closedLost.value)})
+
+Conversion Analysis:
+${funnelData.map((stage, index) => {
+  if (index === 0) return `${stage.stage}: Entry point`;
+  const prevStage = funnelData[index - 1];
+  const dropoff = prevStage.count - stage.count;
+  const dropoffRate = prevStage.count > 0 ? (dropoff / prevStage.count * 100) : 0;
+  return `${prevStage.stage} → ${stage.stage}: ${dropoff} deals lost (${dropoffRate.toFixed(1)}% drop-off)`;
+}).join('\n')}
+
+Provide:
+1. Sales funnel performance analysis and trends
+2. Conversion rate analysis between stages
+3. Identification of bottlenecks and drop-off points
+4. Win rate and deal velocity insights
+5. Specific recommendations to improve conversion rates
+6. Strategies to reduce drop-offs at critical stages
+7. Deal size and value optimization opportunities
+
+Focus on actionable recommendations to improve sales performance and funnel efficiency.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert sales analyst with deep knowledge of sales funnels, conversion optimization, and revenue growth strategies. Provide clear, actionable insights with specific recommendations. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -216,6 +346,45 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+      `}</style>
+      <style>{`
+        .ai-insights-content h1, .ai-insights-content h2, .ai-insights-content h3 {
+          margin-top: 16px;
+          margin-bottom: 8px;
+          color: #111827;
+        }
+        .ai-insights-content h1 { font-size: 1.5em; }
+        .ai-insights-content h2 { font-size: 1.3em; }
+        .ai-insights-content h3 { font-size: 1.1em; }
+        .ai-insights-content p {
+          margin: 8px 0;
+          line-height: 1.6;
+          color: #374151;
+        }
+        .ai-insights-content ul, .ai-insights-content ol {
+          margin: 8px 0;
+          padding-left: 24px;
+        }
+        .ai-insights-content li {
+          margin: 4px 0;
+          color: #374151;
+        }
+        .ai-insights-content strong {
+          color: #111827;
+          font-weight: 600;
+        }
+        .ai-insights-content code {
+          background: #F3F4F6;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.9em;
+        }
+        .ai-insights-content blockquote {
+          border-left: 4px solid #10B981;
+          padding-left: 16px;
+          margin: 12px 0;
+          color: #4B5563;
         }
       `}</style>
       
@@ -283,6 +452,27 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
           >
             Show {viewMode === 'count' ? 'Values' : 'Counts'}
           </button>
+          
+          {/* AI Insights Button */}
+          <button
+            onClick={generateAIInsights}
+            disabled={loadingInsights || loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#10B981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: loadingInsights || loading ? 0.6 : 1
+            }}
+          >
+            <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+            {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+          </button>
         </div>
         
         <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
@@ -313,6 +503,143 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
         </div>
       </div>
       
+      {/* AI Insights Panel - Moved to top */}
+      {(aiInsights || insightsError) && (
+        <div 
+          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          style={{
+          margin: '20px',
+          marginTop: '0',
+          padding: '20px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#10B981' }}></i>
+              AI Sales Funnel Insights
+            </h3>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+              </button>
+              
+              <button
+                className="copy-insights-btn"
+                onClick={copyInsightsToClipboard}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+              </button>
+              
+              <button
+                onClick={exportInsightsAsMarkdown}
+                style={{
+                  background: 'none',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '6px',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="Export as Markdown"
+              >
+                <i className="fa-solid fa-download"></i>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setAiInsights(null);
+                  setInsightsError(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  padding: '4px'
+                }}
+                title="Close insights"
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          {!insightsCollapsed && insightsError ? (
+            <div style={{
+              color: '#991B1B',
+              padding: '12px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: '6px',
+              border: '1px solid #FECACA'
+            }}>
+              <i className="fa-solid fa-exclamation-triangle"></i>
+              <span style={{ marginLeft: '8px' }}>
+                Error generating insights: {insightsError}
+              </span>
+            </div>
+          ) : !insightsCollapsed ? (
+            <div className="ai-insights-content" style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              padding: '12px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: '6px'
+            }}>
+              {formatInsights(aiInsights)}
+            </div>
+          ) : null}
+        </div>
+      )}
+      
       {FunnelChart && (
         <FunnelChart 
           funnelData={funnelData}
@@ -336,6 +663,7 @@ function SalesFunnelVisualization({ utilities, styles, components, callbacks, sa
           formatCurrency={formatCurrency}
         />
       )}
+      
     </div>
   );
 }
