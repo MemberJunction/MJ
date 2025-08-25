@@ -7737,6 +7737,17 @@ permanently, Warn means validation failed but execution continues.`),
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Validation error messages or warnings from final payload validation. Contains
 detailed information about what validation rules failed.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable notes and comments about this agent run step`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -7967,6 +7978,16 @@ each time the agent processes a prompt step.`),
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`),
+    RunName: z.string().nullable().describe(`
+        * * Field Name: RunName
+        * * Display Name: Run Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional name for the agent run to help identify and tag runs for easier reference`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable notes and comments about this agent run`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -9260,6 +9281,16 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`),
+    RunName: z.string().nullable().describe(`
+        * * Field Name: RunName
+        * * Display Name: Run Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional name for the prompt run to help identify and tag runs for easier reference`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable notes and comments about this prompt run`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -34126,6 +34157,33 @@ detailed information about what validation rules failed.
     set FinalPayloadValidationMessages(value: string | null) {
         this.Set('FinalPayloadValidationMessages', value);
     }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable notes and comments about this agent run step
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
 }
 
 
@@ -34696,6 +34754,32 @@ each time the agent processes a prompt step.
     }
     set EffortLevel(value: number | null) {
         this.Set('EffortLevel', value);
+    }
+
+    /**
+    * * Field Name: RunName
+    * * Display Name: Run Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional name for the agent run to help identify and tag runs for easier reference
+    */
+    get RunName(): string | null {
+        return this.Get('RunName');
+    }
+    set RunName(value: string | null) {
+        this.Set('RunName', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable notes and comments about this agent run
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
     }
 
     /**
@@ -38291,6 +38375,32 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set EffortLevel(value: number | null) {
         this.Set('EffortLevel', value);
+    }
+
+    /**
+    * * Field Name: RunName
+    * * Display Name: Run Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional name for the prompt run to help identify and tag runs for easier reference
+    */
+    get RunName(): string | null {
+        return this.Get('RunName');
+    }
+    set RunName(value: string | null) {
+        this.Set('RunName', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable notes and comments about this prompt run
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
     }
 
     /**
