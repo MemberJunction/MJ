@@ -359,7 +359,93 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     }
   };
 
-  // Format insights text using marked library for proper markdown rendering
+
+  const handleDrillDown = (title, dealList, type, metadata) => {
+    setDrillDownData({ title, deals: dealList, type, metadata });
+    setIsPanelOpen(true);
+  };
+
+  useEffect(() => {
+    if (!loading && deals.length > 0) {
+      renderPipelineChart();
+    }
+  }, [deals, loading]);
+
+  const renderPipelineChart = () => {
+    if (!chartRef.current) return;
+    
+    const stageData = stages.map(stage => ({
+      name: stage,
+      count: deals.filter(d => d.Stage === stage).length,
+      value: deals.filter(d => d.Stage === stage).reduce((sum, d) => sum + (d.Amount || 0), 0)
+    }));
+
+    const options = {
+      series: [{
+        name: 'Deal Count',
+        data: stageData.map(s => s.count)
+      }, {
+        name: 'Total Value',
+        data: stageData.map(s => s.value / 1000) // In thousands
+      }],
+      chart: {
+        type: 'bar',
+        height: 300,
+        toolbar: { show: false }
+      },
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          columnWidth: '55%'
+        }
+      },
+      colors: ['#3B82F6', '#10B981'],
+      xaxis: {
+        categories: stages
+      },
+      yaxis: [{
+        title: { text: 'Number of Deals' }
+      }, {
+        opposite: true,
+        title: { text: 'Value ($K)' }
+      }],
+      tooltip: {
+        y: [{
+          formatter: (val) => `${val} deals`
+        }, {
+          formatter: (val) => `$${val.toFixed(0)}K`
+        }]
+      },
+      legend: {
+        position: 'top'
+      }
+    };
+
+    if (chartRef.current._chart) {
+      chartRef.current._chart.destroy();
+    }
+    chartRef.current._chart = new ApexCharts(chartRef.current, options);
+    chartRef.current._chart.render();
+  };
+
+  const metrics = calculateMetrics();
+
+  if (loading) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading pipeline dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '20px', backgroundColor: '#FEE2E2', borderRadius: '8px', margin: '20px' }}>
+        <div style={{ color: '#991B1B', fontWeight: 'bold' }}>Error loading data</div>
+        <div style={{ color: '#DC2626', marginTop: '8px' }}>{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
@@ -468,29 +554,29 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
         </div>
         
         {/* AI Insights Panel */}
-      <AIInsightsPanel
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings?.aiInsights}
-        onSaveUserSettings={(settings) => onSaveUserSettings?.({
-          ...savedUserSettings,
-          aiInsights: settings
-        })}
-        insights={aiInsights}
-        loading={loadingInsights}
-        error={insightsError}
-        onGenerate={generateAIInsights}
-        title="Sales Pipeline Insights"
-        icon="fa-wand-magic-sparkles"
-        iconColor={styles?.colors?.primary || '#8B5CF6'}
-        position="bottom"
-        onClose={() => {
-          setAiInsights(null);
-          setInsightsError(null);
-        }}
-      />
+        <AIInsightsPanel
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings?.aiInsights}
+          onSaveUserSettings={(settings) => onSaveUserSettings?.({
+            ...savedUserSettings,
+            aiInsights: settings
+          })}
+          insights={aiInsights}
+          loading={loadingInsights}
+          error={insightsError}
+          onGenerate={generateAIInsights}
+          title="Sales Pipeline Insights"
+          icon="fa-wand-magic-sparkles"
+          iconColor={styles?.colors?.primary || '#8B5CF6'}
+          position="top"
+          onClose={() => {
+            setAiInsights(null);
+            setInsightsError(null);
+          }}
+        />
         
         <PipelineMetricsCards
           metrics={metrics}

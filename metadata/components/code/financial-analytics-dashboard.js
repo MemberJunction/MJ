@@ -785,7 +785,8 @@ Focus on actionable business insights that can help improve financial performanc
           setInsightsError(null);
         }}
       />
-        
+      
+      <div style={{ margin: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
           <div 
             style={{ 
@@ -862,147 +863,6 @@ Focus on actionable business insights that can help improve financial performanc
           </div>
         </div>
       </div>
-      
-      {/* AI Insights Panel - Moved to top */}
-      {(aiInsights || insightsError) && (
-        <div 
-          onDoubleClick={() => {}}
-          style={{
-          margin: '20px',
-          marginTop: '0',
-          padding: '20px',
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          border: '1px solid #E5E7EB',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{
-              margin: 0,
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#111827',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#3B82F6' }}></i>
-              AI Financial Insights
-            </h3>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {/* Collapse/Expand button */}
-              <button
-                onClick={() => {}}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title={'Collapse'}
-              >
-                <i className={`fa-solid fa-chevron-${'up'}`}></i>
-              </button>
-              
-              {/* Copy button */}
-              <button
-                className="copy-insights-btn"
-                onClick={() => {}}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title="Copy to clipboard"
-              >
-                <i className="fa-solid fa-copy"></i>
-              </button>
-              
-              {/* Export button */}
-              <button
-                onClick={() => {}}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title="Export as Markdown"
-              >
-                <i className="fa-solid fa-download"></i>
-              </button>
-              
-              {/* Close button */}
-              <button
-                onClick={() => {
-                  setAiInsights(null);
-                  setInsightsError(null);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  fontSize: '20px',
-                  padding: '4px'
-                }}
-                title="Close insights"
-              >
-                <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-          </div>
-          
-          {!insightsCollapsed && insightsError ? (
-            <div style={{
-              color: '#991B1B',
-              padding: '12px',
-              backgroundColor: '#FEE2E2',
-              borderRadius: '6px',
-              border: '1px solid #FECACA'
-            }}>
-              <i className="fa-solid fa-exclamation-triangle"></i>
-              <span style={{ marginLeft: '8px' }}>
-                Error generating insights: {insightsError}
-              </span>
-            </div>
-          ) : (!insightsError && (
-            <div style={{
-              maxHeight: '400px',
-              overflowY: 'auto',
-              padding: '12px',
-              backgroundColor: '#F9FAFB',
-              borderRadius: '6px'
-            }}>
-              {aiInsights}
-            </div>
-          )}
-        </div>
-      )}
       
       <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
