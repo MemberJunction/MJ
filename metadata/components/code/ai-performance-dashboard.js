@@ -531,6 +531,31 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
         </div>
       </div>
       
+      {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="AI-Powered Performance Analysis"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles.colors.primary}
+        position="top"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
+      
       {/* Metrics Summary */}
       <AIMetricsSummary
         metrics={metrics}
@@ -621,31 +646,6 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
           </div>
         )}
       </div>
-      
-      {/* AI Insights Panel */}
-      <AIInsightsPanel
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings?.aiInsights}
-        onSaveUserSettings={(settings) => onSaveUserSettings?.({
-          ...savedUserSettings,
-          aiInsights: settings
-        })}
-        insights={aiInsights}
-        loading={loadingInsights}
-        error={insightsError}
-        onGenerate={generateAIInsights}
-        title="AI-Powered Performance Analysis"
-        icon="fa-wand-magic-sparkles"
-        iconColor={styles.colors.primary}
-        position="bottom"
-        onClose={() => {
-          setAiInsights(null);
-          setInsightsError(null);
-        }}
-      />
     </div>
   );
 }

@@ -737,30 +737,9 @@ Focus on actionable business insights that can help improve financial performanc
               <option value="year">Last Year</option>
             </select>
             
-            {/* AI Insights Panel */}
-      <AIInsightsPanel
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings?.aiInsights}
-        onSaveUserSettings={(settings) => onSaveUserSettings?.({
-          ...savedUserSettings,
-          aiInsights: settings
-        })}
-        insights={aiInsights}
-        loading={loadingInsights}
-        error={insightsError}
-        onGenerate={generateAIInsights}
-        title="Financial Analytics Insights"
-        icon="fa-wand-magic-sparkles"
-        iconColor={styles?.colors?.primary || '#8B5CF6'}
-        position="bottom"
-        onClose={() => {
-          setAiInsights(null);
-          setInsightsError(null);
-        }}
-      />
+            {/* AI Insights Button */}
+            <button
+              onClick={generateAIInsights}
               disabled={loadingInsights || loading}
               style={{
                 padding: '8px 16px',
@@ -780,6 +759,32 @@ Focus on actionable business insights that can help improve financial performanc
             </button>
           </div>
         </div>
+      </div>
+      
+      {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Financial Analytics Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="top"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
           <div 
