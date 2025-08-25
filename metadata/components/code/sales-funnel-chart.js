@@ -1,13 +1,27 @@
 function SalesFunnelChart({ funnelData, viewMode, onStageClick, closedLost, formatCurrency }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px' }}>
+    <div style={{ 
+      flex: 1, 
+      display: 'flex', 
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: '40px 20px',
+      width: '100%',
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        width: '650px',
+        maxWidth: '90%'
+      }}>
       {funnelData.map((stage, index) => (
         <div
           key={stage.stage}
           className="funnel-stage"
           style={{
             width: `${stage.width}%`,
-            maxWidth: '600px',
             marginBottom: '4px',
             position: 'relative',
             cursor: 'pointer',
@@ -71,6 +85,7 @@ function SalesFunnelChart({ funnelData, viewMode, onStageClick, closedLost, form
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

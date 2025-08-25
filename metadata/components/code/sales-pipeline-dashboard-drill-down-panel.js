@@ -1,9 +1,13 @@
-function DrillDownPanel({ isOpen, drillDownData, stageColors = {}, onClose, onOpenDeal, DealCards, DealList }) {
+function DrillDownPanel({ isOpen, drillDownData, stageColors = {}, onClose, onOpenDeal, components }) {
   const [localFilter, setLocalFilter] = useState('');
   const [localSort, setLocalSort] = useState('Amount');
   const [displayMode, setDisplayMode] = useState('cards');
   
   if (!drillDownData) return null;
+  
+  // Get sub-components from registry
+  const DealCards = components?.['DealCards'];
+  const DealList = components?.['DealList'];
   
   const filteredDeals = drillDownData.deals.filter(deal => 
     deal.DealName?.toLowerCase().includes(localFilter.toLowerCase()) ||

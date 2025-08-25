@@ -44,8 +44,7 @@
             "type": "number",
             "description": "Win probability percentage"
           }
-        ],
-        "requiredPermissions": ["read"]
+        ] 
       }
     ]
   },
@@ -59,7 +58,13 @@
   ],
   "dependencies": [
     "@include:sales-funnel-chart.spec.json",
-    "@include:sales-funnel-stage-panel.spec.json"
+    "@include:sales-funnel-stage-panel.spec.json",
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [
     {

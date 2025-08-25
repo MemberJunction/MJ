@@ -7,9 +7,10 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
   const AIDistributionChart = components?.AIDistributionChart;
   const AIDetailTable = components?.AIDetailTable;
   const AIMetricsSummary = components?.AIMetricsSummary;
+  const AIInsightsPanel = components?.AIInsightsPanel;
   
   // Check if required components are available
-  if (!AITimeSeriesChart || !AIDistributionChart || !AIDetailTable || !AIMetricsSummary) {
+  if (!AITimeSeriesChart || !AIDistributionChart || !AIDetailTable || !AIMetricsSummary || !AIInsightsPanel) {
     return (
       <div style={{
         padding: styles?.spacing?.lg || '20px',
@@ -22,7 +23,8 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
           !AITimeSeriesChart && 'AITimeSeriesChart',
           !AIDistributionChart && 'AIDistributionChart',
           !AIDetailTable && 'AIDetailTable',
-          !AIMetricsSummary && 'AIMetricsSummary'
+          !AIMetricsSummary && 'AIMetricsSummary',
+          !AIInsightsPanel && 'AIInsightsPanel'
         ].filter(Boolean).join(', ')}
       </div>
     );
@@ -39,6 +41,11 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
   const [promptRuns, setPromptRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
   
   // Calculate date range
   const getDateRange = useCallback(() => {
@@ -243,6 +250,112 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
     };
   }, [activeTab, agentRuns, promptRuns]);
   
+
+  // Generate AI Insights
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const currentData = activeTab === 'agents' ? agentRuns : promptRuns;
+      const dataType = activeTab === 'agents' ? 'AI Agent' : 'AI Prompt';
+      
+      // Calculate additional metrics for deeper analysis
+      const modelDistribution = {};
+      const agentDistribution = {};
+      let successRate = 0;
+      let failureCount = 0;
+      
+      currentData.forEach(run => {
+        // Model distribution
+        const model = run.Model || run.ModelID || 'Unknown';
+        modelDistribution[model] = (modelDistribution[model] || 0) + 1;
+        
+        // Agent/Prompt distribution
+        const name = run.Agent || run.AgentName || run.Prompt || run.PromptName || 'Unknown';
+        agentDistribution[name] = (agentDistribution[name] || 0) + 1;
+        
+        // Success tracking
+        if (run.IsSuccess === true || run.Status === 'Success') {
+          successRate++;
+        } else if (run.IsSuccess === false || run.Status === 'Failed') {
+          failureCount++;
+        }
+      });
+      
+      successRate = currentData.length > 0 ? ((successRate / currentData.length) * 100).toFixed(1) : 0;
+      
+      const prompt = `Analyze this ${dataType} performance data and provide actionable insights:
+
+## Performance Overview
+- **Time Period:** ${timeRange}
+- **Data Grouping:** ${groupBy}
+- **Total Runs:** ${metrics.totalRuns}
+- **Total Tokens Used:** ${metrics.totalTokens.toLocaleString()}
+- **Total Cost:** $${metrics.totalCost.toFixed(2)}
+- **Average Tokens per Run:** ${metrics.avgTokensPerRun.toLocaleString()}
+- **Average Cost per Run:** $${metrics.avgCostPerRun.toFixed(4)}
+- **Success Rate:** ${successRate}%
+- **Failed Runs:** ${failureCount}
+
+## Model Distribution
+${Object.entries(modelDistribution)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5)
+  .map(([model, count]) => `- **${model}:** ${count} runs (${((count/metrics.totalRuns)*100).toFixed(1)}%)`)
+  .join('\n')}
+
+## Top ${dataType === 'AI Agent' ? 'Agents' : 'Prompts'}
+${Object.entries(agentDistribution)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5)
+  .map(([name, count]) => `- **${name}:** ${count} runs`)
+  .join('\n')}
+
+## Recent Performance Trends (Last 5 ${groupBy === 'hour' ? 'Hours' : groupBy === 'day' ? 'Days' : 'Periods'})
+${chartData.slice(-5).map(d => 
+  `- **${d.date}:** ${d.runs} runs, ${d.tokens.toLocaleString()} tokens, $${d.cost.toFixed(2)}`
+).join('\n')}
+
+## Cost Analysis
+- **Highest Cost Period:** ${chartData.reduce((max, d) => d.cost > max.cost ? d : max, chartData[0] || {}).date || 'N/A'}
+- **Most Active Period:** ${chartData.reduce((max, d) => d.runs > max.runs ? d : max, chartData[0] || {}).date || 'N/A'}
+- **Token Efficiency Trend:** ${chartData.length > 1 
+  ? (chartData[chartData.length-1].tokens/chartData[chartData.length-1].runs < chartData[0].tokens/chartData[0].runs 
+    ? 'Improving' : 'Declining')
+  : 'Stable'}
+
+Based on this specific data, please provide:
+1. **Key Performance Insights** - What patterns and trends are evident in the data?
+2. **Cost Efficiency Analysis** - Are costs justified by usage patterns? Where can we optimize?
+3. **Token Usage Patterns** - Any unusual spikes or inefficiencies?
+4. **Model Optimization** - Should we adjust model selection based on the distribution?
+5. **Specific Recommendations** - 3-4 actionable steps to improve performance and reduce costs
+6. **Risk Indicators** - Any anomalies or concerns that need immediate attention?
+
+Use markdown formatting with headers (##), bullet points, and **bold** text. Reference the actual numbers in your analysis.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert AI performance analyst specializing in token usage optimization, cost management, and AI system efficiency. Analyze the specific metrics provided and give actionable recommendations. Always reference the actual numbers and percentages from the data. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+  
   console.log('[AIPerformanceDashboard] Current state:', {
     timeRange,
     groupBy,
@@ -289,6 +402,23 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
       backgroundColor: styles.colors.background,
       padding: styles.spacing.md
     }}>
+      <style>{`
+        /* Markdown content styling */
+        .markdown-insights h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 16px 0 12px 0; }
+        .markdown-insights h2 { font-size: 18px; font-weight: 600; color: #1F2937; margin: 14px 0 10px 0; }
+        .markdown-insights h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 12px 0 8px 0; }
+        .markdown-insights h4 { font-size: 14px; font-weight: 600; color: #4B5563; margin: 10px 0 6px 0; }
+        .markdown-insights p { margin: 8px 0; color: #374151; line-height: 1.6; }
+        .markdown-insights ul, .markdown-insights ol { margin: 8px 0; padding-left: 24px; color: #374151; }
+        .markdown-insights li { margin: 4px 0; line-height: 1.5; }
+        .markdown-insights strong { font-weight: 600; color: #1F2937; }
+        .markdown-insights em { font-style: italic; }
+        .markdown-insights code { background: #F3F4F6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+        .markdown-insights blockquote { border-left: 3px solid #6366F1; padding-left: 12px; margin: 12px 0; color: #4B5563; }
+        .markdown-insights hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
+        .markdown-insights a { color: #6366F1; text-decoration: none; }
+        .markdown-insights a:hover { text-decoration: underline; }
+      `}</style>
       {/* Header Controls */}
       <div style={{
         display: 'flex',
@@ -377,8 +507,54 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
             <option value="month">By Month</option>
             <option value="quarter">By Quarter</option>
           </select>
+          
+          {/* AI Insights Button */}
+          <button
+            onClick={generateAIInsights}
+            disabled={loadingInsights || loading}
+            style={{
+              padding: `${styles.spacing.sm} ${styles.spacing.md}`,
+              backgroundColor: styles.colors.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: styles.borders?.radius || '4px',
+              cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: styles.spacing.xs,
+              opacity: loadingInsights || loading ? 0.6 : 1
+            }}
+          >
+            <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+            {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+          </button>
         </div>
       </div>
+      
+      {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="AI-Powered Performance Analysis"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles.colors.primary}
+        position="top"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
       
       {/* Metrics Summary */}
       <AIMetricsSummary

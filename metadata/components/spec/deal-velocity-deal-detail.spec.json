@@ -51,8 +51,7 @@
             "type": "string",
             "description": "Next action or milestone"
           }
-        ],
-        "requiredPermissions": ["read"]
+        ] 
       }
     ]
   },

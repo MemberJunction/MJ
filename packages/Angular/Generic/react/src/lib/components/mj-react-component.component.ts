@@ -24,7 +24,6 @@ import {
   buildComponentProps,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
-  HierarchyRegistrationResult,
   resourceManager,
   reactRootManager,
   ResolvedComponents,
@@ -340,140 +339,78 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Resolve components with specific version
+   * Resolve components using the runtime's resolver
    */
-  private resolveComponentsWithVersion(spec: ComponentSpec, version: string, namespace: string = 'Global'): ResolvedComponents {
-    const resolved: ResolvedComponents = {};
-    const registry = this.adapter.getRegistry();
+  private async resolveComponentsWithVersion(spec: ComponentSpec, version: string, namespace: string = 'Global'): Promise<ResolvedComponents> {
+    const resolver = this.adapter.getResolver();
     
-    const resolveHierarchy = (s: ComponentSpec, visited: Set<string> = new Set()) => {
-      // Prevent circular dependencies
-      if (visited.has(s.name)) {
-        console.warn(`Circular dependency detected for component: ${s.name}`);
-        return;
-      }
-      visited.add(s.name);
-      
-      // Get component with specific version
-      const component = registry.get(s.name, namespace, version);
-      if (component) {
-        resolved[s.name] = component;
-        console.log(`  Resolved ${s.name}@${version}`);
-      } else {
-        console.warn(`  ⚠️ Component not found: ${s.name}@${version}`);
-      }
-      
-      // Process dependencies
-      if (s.dependencies) {
-        for (const dep of s.dependencies) {
-          resolveHierarchy(dep, visited);
-        }
-      }
-    };
+    // Debug: Log what dependencies we're trying to resolve
+    console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
     
-    console.log(`Resolving components with version ${version}:`);
-    resolveHierarchy(spec);
+    // Use the runtime's resolver which now handles registry-based components
+    const resolved = await resolver.resolveComponents(
+      spec, 
+      namespace,
+      Metadata.Provider.CurrentUser // Pass current user context for database operations
+    );
     
+    console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
     return resolved;
   }
 
-  /**
-   * Log existing versions of components in registry (for debugging)
-   */
-  private logExistingVersions(spec: ComponentSpec, namespace: string = 'Global'): void {
-    const registry = this.adapter.getRegistry();
-    
-    // Check for existing versions of this component
-    const namespaceComponents = registry.getNamespace(namespace);
-    const componentVersions = namespaceComponents.filter(c => c.name === spec.name);
-    
-    // Log existing versions for awareness
-    if (componentVersions.length > 0) {
-      console.log(`  Found ${componentVersions.length} existing version(s) of ${spec.name}:`);
-      componentVersions.forEach(comp => {
-        console.log(`    - ${comp.name}@${comp.version}`);
-      });
-    }
-    
-    // Recursively check dependencies
-    if (spec.dependencies) {
-      for (const dep of spec.dependencies) {
-        const depVersions = namespaceComponents.filter(c => c.name === dep.name);
-        if (depVersions.length > 0) {
-          console.log(`  Found ${depVersions.length} existing version(s) of ${dep.name}:`);
-          depVersions.forEach(comp => {
-            console.log(`    - ${comp.name}@${comp.version}`);
-          });
-        }
-      }
-    }
-  }
 
   /**
    * Register all components in the hierarchy
    */
   private async registerComponentHierarchy() {
-    // Generate unique version based on component code hash
-    const version = this.generateComponentHash(this.component);
+    // Use semantic version from spec or generate hash-based version for uniqueness
+    const version = this.component.version || this.generateComponentHash(this.component);
     this.componentVersion = version;  // Store for use in resolver
     
-    console.log(`\n🔄 Registering component hierarchy for ${this.component.name}`);
-    console.log(`  Version: ${version}`);
+    console.log(`Registering ${this.component.name}@${version}`);
     
-    // Log existing versions (don't clear - allow multiple versions to coexist)
-    this.logExistingVersions(this.component);
-    
-    // Check if this exact version already exists to avoid re-registration
+    // Check if already registered to avoid duplication
     const registry = this.adapter.getRegistry();
-    const existingComponent = registry.get(this.component.name, 'Global', version);
+    const existingComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
     if (existingComponent) {
-      console.log(`  ℹ️ Version ${version} already registered - skipping registration`);
+      console.log(`Component ${this.component.name}@${version} already registered`);
       return;
     }
     
-    // Create the hierarchy registrar with adapter's compiler and registry
+    // Initialize metadata engine
+    await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
+    
+    // Use the runtime's hierarchy registrar
     const registrar = new ComponentHierarchyRegistrar(
       this.adapter.getCompiler(),
       this.adapter.getRegistry(),
       this.adapter.getRuntimeContext()
     );
     
-    await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
-    // Register the entire hierarchy with hash-based version
-    const result: HierarchyRegistrationResult = await registrar.registerHierarchy(
+    // Register with proper configuration
+    const result = await registrar.registerHierarchy(
       this.component,
       {
-        styles: this.styles as any, // Skip components use SkipComponentStyles which is a superset
-        namespace: 'Global',
-        version: version,  // Use hash-based version instead of hardcoded 'v1'
-        allowOverride: false,  // Don't override - each version is unique
+        styles: this.styles as ComponentStyles,
+        namespace: this.component.namespace || 'Global',
+        version: version,
+        allowOverride: false,  // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
       }
     );
     
-    // Check for errors
     if (!result.success) {
-      const errorMessages = result.errors.map(e => 
-        `${e.componentName}: ${e.error}`
-      );
-      throw new Error(`Component registration failed: ${errorMessages.join(', ')}`);
+      const errors = result.errors.map(e => e.error).join(', ');
+      throw new Error(`Component registration failed: ${errors}`);
     }
     
-    // Log registered components for debugging
-    console.log(`✅ Successfully registered ${result.registeredComponents.length} components with version ${version}:`);
-    result.registeredComponents.forEach(name => {
-      console.log(`    - ${name}@${version}`);
-    });
-    
-    // Also log current registry stats
-    const stats = this.adapter.getRegistry().getStats();
-    console.log(`📊 Registry stats: ${stats.totalComponents} total components in ${stats.namespaces} namespace(s)\n`);
+    console.log(`Registered ${result.registeredComponents.length} components`);
   }
 
   /**
    * Render the React component
    */
-  private renderComponent() {
+  private async renderComponent() {
     // Don't render if component is being destroyed
     if (this.isDestroying) {
       return;
@@ -497,8 +434,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     this.isRendering = true;
     const { React } = context;
     
-    // Manually resolve components with the correct version
-    const components = this.resolveComponentsWithVersion(this.component, this.componentVersion);
+    // Resolve components with the correct version using runtime's resolver
+    const components = await this.resolveComponentsWithVersion(this.component, this.componentVersion);
     
     // Create callbacks once per component instance
     if (!this.currentCallbacks) {

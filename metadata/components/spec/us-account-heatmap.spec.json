@@ -44,8 +44,7 @@
             "type": "number",
             "description": "Annual revenue of the account"
           }
-        ],
-        "requiredPermissions": ["read"]
+        ] 
       }
     ]
   },

@@ -5,7 +5,12 @@
  */
 
 import { ComponentRegistry } from './component-registry';
+import { ComponentRegistryService } from './component-registry-service';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentCompiler } from '../compiler';
+import { RuntimeContext } from '../types';
+import { UserInfo } from '@memberjunction/core';
+import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
  * Resolved component map for passing to React components
@@ -20,26 +25,54 @@ export interface ResolvedComponents {
  */
 export class ComponentResolver {
   private registry: ComponentRegistry;
+  private registryService: ComponentRegistryService | null = null;
+  private resolverInstanceId: string;
+  private compiler: ComponentCompiler | null = null;
+  private runtimeContext: RuntimeContext | null = null;
+  private componentEngine = ComponentMetadataEngine.Instance;
 
   /**
    * Creates a new ComponentResolver instance
    * @param registry - Component registry to use for resolution
+   * @param compiler - Optional compiler for registry-based components
+   * @param runtimeContext - Optional runtime context for registry-based components
    */
-  constructor(registry: ComponentRegistry) {
+  constructor(
+    registry: ComponentRegistry,
+    compiler?: ComponentCompiler,
+    runtimeContext?: RuntimeContext
+  ) {
     this.registry = registry;
+    this.resolverInstanceId = `resolver-${Date.now()}-${Math.random()}`;
+    
+    if (compiler && runtimeContext) {
+      this.compiler = compiler;
+      this.runtimeContext = runtimeContext;
+      this.registryService = ComponentRegistryService.getInstance(compiler, runtimeContext);
+    }
   }
 
   /**
    * Resolves all components for a given component specification
    * @param spec - Root component specification
    * @param namespace - Namespace for component resolution
+   * @param contextUser - Optional user context for database operations
    * @returns Map of component names to resolved components
    */
-  resolveComponents(spec: ComponentSpec, namespace: string = 'Global'): ResolvedComponents {
+  async resolveComponents(
+    spec: ComponentSpec, 
+    namespace: string = 'Global',
+    contextUser?: UserInfo
+  ): Promise<ResolvedComponents> {
     const resolved: ResolvedComponents = {};
     
+    // Initialize component engine if we have registry service
+    if (this.registryService) {
+      await this.componentEngine.Config(false, contextUser);
+    }
+    
     // Resolve the component hierarchy
-    this.resolveComponentHierarchy(spec, resolved, namespace);
+    await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
     
     return resolved;
   }
@@ -50,30 +83,86 @@ export class ComponentResolver {
    * @param resolved - Map to store resolved components
    * @param namespace - Namespace for resolution
    * @param visited - Set of visited component names to prevent cycles
+   * @param contextUser - Optional user context for database operations
    */
-  private resolveComponentHierarchy(
+  private async resolveComponentHierarchy(
     spec: ComponentSpec,
     resolved: ResolvedComponents,
     namespace: string,
-    visited: Set<string> = new Set()
-  ): void {
+    visited: Set<string> = new Set(),
+    contextUser?: UserInfo
+  ): Promise<void> {
+    // Create a unique identifier for this component
+    const componentId = `${spec.namespace || namespace}/${spec.name}@${spec.version || 'latest'}`;
+    
     // Prevent circular dependencies
-    if (visited.has(spec.name)) {
-      console.warn(`Circular dependency detected for component: ${spec.name}`);
+    if (visited.has(componentId)) {
+      console.warn(`Circular dependency detected for component: ${componentId}`);
       return;
     }
-    visited.add(spec.name);
+    visited.add(componentId);
 
-    // Try to get component from registry
-    const component = this.registry.get(spec.name, namespace);
-    if (component) {
-      resolved[spec.name] = component;
+    // Handle based on location
+    if (spec.location === 'registry' && this.registryService) {
+      // Registry component - need to load from database or external source
+      try {
+        // First, try to find the component in the metadata engine
+        const component = this.componentEngine.Components?.find(
+          (c: any) => c.Name === spec.name && 
+               c.Namespace === (spec.namespace || namespace)
+        );
+        
+        if (component) {
+          // Get compiled component from registry service
+          const compiledComponent = await this.registryService.getCompiledComponent(
+            component.ID,
+            this.resolverInstanceId,
+            contextUser
+          );
+          resolved[spec.name] = compiledComponent;
+          console.log(`📦 Resolved registry component: ${spec.name} from ${componentId}`);
+        } else {
+          console.warn(`Registry component not found in database: ${spec.name}`);
+        }
+      } catch (error) {
+        console.error(`Failed to load registry component ${spec.name}:`, error);
+      }
+    } else {
+      // Embedded component - get from local registry
+      // Use the component's specified namespace if it has one, otherwise use parent's namespace
+      const componentNamespace = spec.namespace || namespace;
+      const component = this.registry.get(spec.name, componentNamespace);
+      if (component) {
+        resolved[spec.name] = component;
+        console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}`);
+      } else {
+        // If not found with specified namespace, try the parent namespace as fallback
+        const fallbackComponent = this.registry.get(spec.name, namespace);
+        if (fallbackComponent) {
+          resolved[spec.name] = fallbackComponent;
+          console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}`);
+        } else {
+          console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+        }
+      }
     }
 
-    // Process child components
+    // Process child components recursively
     const children = spec.dependencies || [];
     for (const child of children) {
-      this.resolveComponentHierarchy(child, resolved, namespace, visited);
+      await this.resolveComponentHierarchy(child, resolved, namespace, visited, contextUser);
+    }
+  }
+
+  /**
+   * Cleanup resolver resources
+   */
+  cleanup(): void {
+    // Remove our references when resolver is destroyed
+    if (this.registryService) {
+      // This would allow the registry service to clean up unused components
+      // Implementation would track which components this resolver referenced
+      console.log(`Cleaning up resolver: ${this.resolverInstanceId}`);
     }
   }
 

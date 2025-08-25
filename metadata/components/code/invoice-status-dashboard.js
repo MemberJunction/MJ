@@ -1,4 +1,11 @@
 function InvoiceStatusDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
+
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -15,6 +22,11 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   const agingChartRef = useRef(null);
   const statusChartInstance = useRef(null);
   const agingChartInstance = useRef(null);
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -177,6 +189,112 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
     setDrillDownType(type);
     setSelectedData(data);
     setIsPanelOpen(true);
+  };
+  
+  // Generate AI Insights
+  // Format insights text using marked library for proper markdown rendering
+
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const metrics = calculateMetrics();
+      
+      // Calculate aging breakdown
+      const aging = { current: 0, '30days': 0, '60days': 0, '90days': 0, 'over90': 0 };
+      const today = new Date();
+      const paidByInvoice = {};
+      payments.forEach(payment => {
+        if (!paidByInvoice[payment.InvoiceID]) {
+          paidByInvoice[payment.InvoiceID] = 0;
+        }
+        paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+      });
+      
+      invoices.forEach(invoice => {
+        if (invoice.Status !== 'Paid' && invoice.Status !== 'Cancelled') {
+          const paidAmount = paidByInvoice[invoice.ID] || 0;
+          const outstanding = (invoice.TotalAmount || 0) - paidAmount;
+          
+          if (outstanding > 0) {
+            const dueDate = new Date(invoice.DueDate);
+            const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysPastDue <= 0) aging.current += outstanding;
+            else if (daysPastDue <= 30) aging['30days'] += outstanding;
+            else if (daysPastDue <= 60) aging['60days'] += outstanding;
+            else if (daysPastDue <= 90) aging['90days'] += outstanding;
+            else aging.over90 += outstanding;
+          }
+        }
+      });
+      
+      const formatCurrency = (amount) => {
+        if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+        if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+        return `$${amount?.toFixed(0) || 0}`;
+      };
+      
+      const prompt = `Analyze this invoice status and aging data and provide actionable insights:
+
+## Invoice Overview
+- **Time Period:** ${timePeriod === 'custom' ? `${startDate} to ${endDate}` : `Last ${timePeriod}`}
+- **Total Invoices:** ${metrics.total}
+- **Total Amount:** ${formatCurrency(metrics.totalAmount)}
+
+## Status Breakdown
+- **Paid:** ${metrics.paid} invoices (${formatCurrency(metrics.paidAmount)})
+- **Pending:** ${metrics.pending} invoices (${formatCurrency(metrics.pendingAmount)})
+- **Overdue:** ${metrics.overdue} invoices (${formatCurrency(metrics.overdueAmount)})
+- **Partial:** ${metrics.partial} invoices (${formatCurrency(metrics.partialAmount)})
+
+## Aging Analysis
+- **Current (not overdue):** ${formatCurrency(aging.current)}
+- **1-30 days overdue:** ${formatCurrency(aging['30days'])}
+- **31-60 days overdue:** ${formatCurrency(aging['60days'])}
+- **61-90 days overdue:** ${formatCurrency(aging['90days'])}
+- **Over 90 days overdue:** ${formatCurrency(aging.over90)}
+
+## Key Metrics
+- **Total Payments Recorded:** ${payments.length}
+- **Total Customer Accounts:** ${accounts.length}
+- **Collection Rate:** ${metrics.paid > 0 ? ((metrics.paidAmount / metrics.totalAmount) * 100).toFixed(1) : 0}%
+- **Average Days Overdue:** ${metrics.overdue > 0 ? Math.round(invoices.filter(i => i.Status === 'Overdue').reduce((sum, inv) => {
+    const dueDate = new Date(inv.DueDate);
+    const today = new Date();
+    return sum + Math.max(0, Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)));
+  }, 0) / metrics.overdue) : 0} days
+
+Based on this specific data, please provide:
+1. **Cash Flow Analysis** - What is the immediate cash flow situation?
+2. **Risk Assessment** - Which invoices pose the highest collection risk?
+3. **Customer Payment Patterns** - What behaviors are evident?
+4. **Collection Strategy** - Specific recommendations to improve collections
+5. **Action Items** - 3-4 immediate actions to reduce overdue amounts
+6. **Early Warning Indicators** - What metrics should we monitor closely?
+
+Use markdown formatting with headers (##), bullet points, and **bold** text. Reference the actual numbers in your analysis.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert accounts receivable and cash flow analyst with deep knowledge of invoice management, collections, and customer payment behavior. Provide clear, actionable insights with specific recommendations. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
   };
 
   const closeDrillDown = () => {
@@ -829,8 +947,54 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
               />
             </>
           )}
+          
+          {/* AI Insights Button */}
+          <button
+            onClick={generateAIInsights}
+            disabled={loadingInsights || loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: loadingInsights || loading ? 0.6 : 1
+            }}
+          >
+            <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+            {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+          </button>
         </div>
       </div>
+      
+      {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Invoice Analytics Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="top"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
       
       {/* Top Metrics Cards - Side by Side */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
@@ -994,6 +1158,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
           <DrillDownPanel />
         </div>
       )}
+      
     </div>
   );
 }

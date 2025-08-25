@@ -7,6 +7,13 @@ function AIPromptsCluster({
   onSaveUserSettings,
   data 
 }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
+
   // Load sub-components
   const ClusterGraph = components['AIPromptsClusterGraph'];
   const ClusterControls = components['AIPromptsClusterControls'];
@@ -30,6 +37,11 @@ function AIPromptsCluster({
   const [error, setError] = useState(null);
   const [highlightCluster, setHighlightCluster] = useState(null);
   const [clusterNames, setClusterNames] = useState({});
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
 
   // Load AI Prompts data on mount
   useEffect(() => {
@@ -340,6 +352,77 @@ Only return the JSON object, nothing else.`;
     return Array.from(uniqueTypes, ([id, name]) => ({ id, name }));
   }, [prompts]);
 
+  // Format insights text using marked library for proper markdown rendering
+
+  const generateAIInsights = async () => {
+    if (clusters.length === 0) {
+      setInsightsError('Please generate clusters first');
+      return;
+    }
+    
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      // Prepare cluster analysis data
+      const clusterAnalysis = clusters.map((cluster, idx) => {
+        const clusterPrompts = filteredPrompts.filter(p => 
+          embeddings[p.ID] && cluster.members.includes(p.ID)
+        );
+        
+        return {
+          id: idx,
+          name: clusterNames[idx] || `Cluster ${idx + 1}`,
+          size: clusterPrompts.length,
+          prompts: clusterPrompts.slice(0, 3).map(p => p.Name), // Sample prompts
+          categories: [...new Set(clusterPrompts.map(p => p.Category).filter(Boolean))],
+          types: [...new Set(clusterPrompts.map(p => p.Type).filter(Boolean))],
+          roles: [...new Set(clusterPrompts.map(p => p.PromptRole).filter(Boolean))]
+        };
+      });
+      
+      const prompt = `Analyze this AI prompts clustering data and provide insights:
+
+Cluster Analysis:
+${JSON.stringify(clusterAnalysis, null, 2)}
+
+Total Prompts: ${prompts.length}
+Filtered Prompts: ${filteredPrompts.length}
+Number of Clusters: ${clusters.length}
+Similarity Threshold: ${similarityThreshold}
+
+Please provide:
+1. **Cluster Quality Assessment** - How well-defined and coherent are the clusters?
+2. **Thematic Patterns** - What themes or patterns emerge from the clustering?
+3. **Distribution Analysis** - How are prompts distributed across clusters?
+4. **Outliers and Anomalies** - Any unusual patterns or isolated prompts?
+5. **Optimization Suggestions** - How could the clustering be improved?
+6. **Business Insights** - What does this clustering reveal about the prompt library?
+7. **Recommendations** - Specific actions to improve prompt organization
+
+Format your response in clear markdown with headers and bullet points.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert in natural language processing, clustering analysis, and prompt engineering. Analyze the clustering results and provide actionable insights about the AI prompt library organization.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+  
   // Calculate similar prompts for selected prompt
   const similarPrompts = useMemo(() => {
     if (!selectedPrompt || !embeddings[selectedPrompt.ID]) return [];
@@ -455,21 +538,54 @@ Only return the JSON object, nothing else.`;
       <div style={{
         marginBottom: styles.spacing?.md || '16px'
       }}>
-        <h2 style={{
-          fontSize: styles.fonts?.sizes?.xl || '24px',
-          fontWeight: 'bold',
-          color: styles.colors?.text?.primary || '#333',
-          margin: 0
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
         }}>
-          AI Prompts Cluster Analysis
-        </h2>
-        <p style={{
-          fontSize: styles.fonts?.sizes?.sm || '14px',
-          color: styles.colors?.text?.secondary || '#666',
-          marginTop: styles.spacing?.xs || '4px'
-        }}>
-          Discover patterns and relationships in your AI prompts through semantic clustering
-        </p>
+          <div>
+            <h2 style={{
+              fontSize: styles.fonts?.sizes?.xl || '24px',
+              fontWeight: 'bold',
+              color: styles.colors?.text?.primary || '#333',
+              margin: 0
+            }}>
+              AI Prompts Cluster Analysis
+            </h2>
+            <p style={{
+              fontSize: styles.fonts?.sizes?.sm || '14px',
+              color: styles.colors?.text?.secondary || '#666',
+              marginTop: styles.spacing?.xs || '4px'
+            }}>
+              Discover patterns and relationships in your AI prompts through semantic clustering
+            </p>
+          </div>
+          
+          {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="AI Prompts Cluster Analysis"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="bottom"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
+        </div>
       </div>
 
       {/* Error display */}

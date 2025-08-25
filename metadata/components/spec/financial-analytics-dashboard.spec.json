@@ -12,27 +12,31 @@
         "name": "Invoices",
         "displayFields": ["InvoiceDate", "TotalAmount", "Status"],
         "filterFields": ["InvoiceDate", "Status"],
-        "sortFields": ["InvoiceDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["InvoiceDate"] 
       },
       {
         "name": "Deals",
         "displayFields": ["CloseDate", "Amount", "Stage", "Probability"],
         "filterFields": ["CloseDate", "Stage"],
-        "sortFields": ["CloseDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["CloseDate"] 
       },
       {
         "name": "Products",
-        "displayFields": ["ProductName", "Price", "Cost"],
-        "requiredPermissions": ["read"]
+        "displayFields": ["ProductName", "Price", "Cost"] 
       }
     ]
   },
   "technicalDesign": "## Implementation\n\n### Components\n- Main: FinancialAnalyticsDashboard\n- Sub-components:\n  - RevenueTrend: Time series analysis\n  - CashFlowChart: Income/expense flow\n  - ProfitabilityMatrix: Margin analysis\n  - ForecastModel: Predictive analytics\n  - KPIGauges: Performance indicators\n\n### Features\n- Real-time calculations\n- Statistical forecasting\n- Responsive charts\n- Export functionality",
   "properties": [],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "Chart.js",

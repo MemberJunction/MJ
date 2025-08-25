@@ -11,11 +11,16 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
   const [sortBy, setSortBy] = useState('revenue');
   const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
   const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
   
   // Load sub-components from registry
   const Treemap = components['ProductRevenueTreemap'];
   const MatrixTable = components['ProductRevenueMatrixTable'];
   const DetailPanel = components['ProductRevenueDetailPanel'];
+  const AIInsightsPanel = components['AIInsightsPanel'];
 
   useEffect(() => {
     loadData();
@@ -29,7 +34,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
       const dateFilter = getDateFilter();
       
       // Use RunViews for batch loading - single server call
-      const results = await utilities.rv.RunViews([
+      const batchResults = await utilities.rv.RunViews([
         {
           EntityName: 'Products',
           OrderBy: 'ProductName ASC'
@@ -47,30 +52,39 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
         }
       ]);
 
-      // Process results
-      if (results && results.length === 3) {
-        const [productsResult, lineItemsResult, invoicesResult] = results;
+      // Process results - RunViews returns an array directly
+      if (batchResults && Array.isArray(batchResults)) {
+        const [productsResult, lineItemsResult, invoicesResult] = batchResults;
+        
+        let hasError = false;
         
         if (productsResult.Success) {
           setProducts(productsResult.Results || []);
         } else {
           console.error('Failed to load products:', productsResult.ErrorMessage);
+          hasError = true;
         }
         
         if (lineItemsResult.Success) {
           setLineItems(lineItemsResult.Results || []);
         } else {
           console.error('Failed to load line items:', lineItemsResult.ErrorMessage);
+          hasError = true;
         }
         
         if (invoicesResult.Success) {
           setInvoices(invoicesResult.Results || []);
         } else {
           console.error('Failed to load invoices:', invoicesResult.ErrorMessage);
+          hasError = true;
         }
         
-        if (!productsResult.Success || !lineItemsResult.Success || !invoicesResult.Success) {
-          setError('Failed to load some data. Please try again.');
+        // Only set error if something critical failed and we have no data to work with
+        if (hasError && products.length === 0 && lineItems.length === 0 && invoices.length === 0) {
+          setError('Failed to load data. Please try again.');
+        } else {
+          // Clear any previous errors if we have some data
+          setError(null);
         }
       } else {
         setError('Failed to load data');
@@ -167,6 +181,123 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
     return productMetrics;
   };
 
+
+  const generateAIInsights = async () => {
+    if (!products || products.length === 0 || !lineItems || lineItems.length === 0) {
+      setInsightsError('No data available for analysis');
+      return;
+    }
+
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const metrics = calculateProductMetrics();
+      const topProductsList = Object.values(metrics)
+        .filter(p => p.revenue > 0)
+        .sort((a, b) => b.revenue - a.revenue);
+      
+      // Calculate key insights data
+      const totalRevenue = topProductsList.reduce((sum, p) => sum + p.revenue, 0);
+      const avgMargin = topProductsList.length > 0 
+        ? topProductsList.reduce((sum, p) => sum + p.margin, 0) / topProductsList.length 
+        : 0;
+      
+      // Find underperformers
+      const underperformers = topProductsList.filter(p => p.margin < 20 && p.revenue > 0);
+      
+      // Calculate category performance
+      const categoryPerformance = {};
+      topProductsList.forEach(p => {
+        if (!categoryPerformance[p.category]) {
+          categoryPerformance[p.category] = { revenue: 0, products: 0, avgMargin: 0 };
+        }
+        categoryPerformance[p.category].revenue += p.revenue;
+        categoryPerformance[p.category].products++;
+        categoryPerformance[p.category].avgMargin += p.margin;
+      });
+      
+      Object.values(categoryPerformance).forEach(cat => {
+        cat.avgMargin = cat.products > 0 ? cat.avgMargin / cat.products : 0;
+      });
+      
+      // Customer concentration
+      const uniqueCustomers = new Set();
+      lineItems.forEach(item => {
+        const invoice = invoices.find(inv => inv.ID === item.InvoiceID);
+        if (invoice?.AccountID) uniqueCustomers.add(invoice.AccountID);
+      });
+
+      const prompt = `Analyze this product revenue data and provide strategic insights:
+
+## Product Performance Summary
+- **Total Products:** ${products.length}
+- **Active Products (with revenue):** ${topProductsList.length}
+- **Total Revenue:** $${totalRevenue.toLocaleString()}
+- **Average Margin:** ${avgMargin.toFixed(1)}%
+- **Unique Customers:** ${uniqueCustomers.size}
+- **Time Period:** ${timePeriod === 'custom' ? `${startDate} to ${endDate}` : `Last ${timePeriod}`}
+
+## Top 5 Products by Revenue
+${topProductsList.slice(0, 5).map((p, i) => 
+  `${i + 1}. **${p.name}**
+   - Revenue: $${p.revenue.toLocaleString()}
+   - Margin: ${p.margin.toFixed(1)}%
+   - Customers: ${p.customers.size}
+   - Units Sold: ${p.quantity}`
+).join('\n')}
+
+## Category Performance
+${Object.entries(categoryPerformance)
+  .sort((a, b) => b[1].revenue - a[1].revenue)
+  .slice(0, 5)
+  .map(([cat, data]) => 
+    `- **${cat}:** $${data.revenue.toLocaleString()} revenue, ${data.products} products, ${data.avgMargin.toFixed(1)}% avg margin`
+  ).join('\n')}
+
+## Underperforming Products (margin < 20%)
+${underperformers.length > 0 
+  ? underperformers.slice(0, 5).map(p => 
+      `- **${p.name}:** ${p.margin.toFixed(1)}% margin, $${p.revenue.toLocaleString()} revenue`
+    ).join('\n')
+  : 'No underperforming products identified'}
+
+## Revenue Distribution
+- **Top 20% of products generate:** ${((topProductsList.slice(0, Math.ceil(topProductsList.length * 0.2))
+    .reduce((sum, p) => sum + p.revenue, 0) / totalRevenue) * 100).toFixed(1)}% of revenue
+- **Products with zero revenue:** ${products.length - topProductsList.length}
+
+Based on this specific data, please provide:
+1. **Portfolio Health Assessment** - Is this product mix balanced and healthy?
+2. **Margin Optimization Opportunities** - Which specific products need pricing/cost review?
+3. **Growth Opportunities** - What expansion potential exists based on the data?
+4. **Risk Factors** - What concentration risks or declining products should we monitor?
+5. **Strategic Recommendations** - 3-4 specific actionable next steps
+
+Use markdown formatting with headers (##), bullet points, and **bold** text. Reference the actual numbers in your analysis.`;
+
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are a product portfolio analyst specializing in revenue optimization and product strategy. Analyze the specific product data provided and give actionable insights. Always reference the actual numbers and percentages from the data. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error generating AI insights:', error);
+      setInsightsError('An error occurred while generating insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+
   const handleProductClick = (product) => {
     setSelectedProduct(product);
     setIsPanelOpen(true);
@@ -216,6 +347,22 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
             grid-template-columns: 1fr !important;
           }
         }
+        
+        /* Markdown content styling */
+        .markdown-insights h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 16px 0 12px 0; }
+        .markdown-insights h2 { font-size: 18px; font-weight: 600; color: #1F2937; margin: 14px 0 10px 0; }
+        .markdown-insights h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 12px 0 8px 0; }
+        .markdown-insights h4 { font-size: 14px; font-weight: 600; color: #4B5563; margin: 10px 0 6px 0; }
+        .markdown-insights p { margin: 8px 0; color: #374151; line-height: 1.6; }
+        .markdown-insights ul, .markdown-insights ol { margin: 8px 0; padding-left: 24px; color: #374151; }
+        .markdown-insights li { margin: 4px 0; line-height: 1.5; }
+        .markdown-insights strong { font-weight: 600; color: #1F2937; }
+        .markdown-insights em { font-style: italic; }
+        .markdown-insights code { background: #F3F4F6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+        .markdown-insights blockquote { border-left: 3px solid #10B981; padding-left: 12px; margin: 12px 0; color: #4B5563; }
+        .markdown-insights hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
+        .markdown-insights a { color: #10B981; text-decoration: none; }
+        .markdown-insights a:hover { text-decoration: underline; }
       `}</style>
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
@@ -315,9 +462,56 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
               <i className={`fa-solid fa-${viewMode === 'treemap' ? 'table' : 'chart-treemap'}`}></i>
               {viewMode === 'treemap' ? ' Matrix View' : ' Treemap View'}
             </button>
+            <button
+              onClick={generateAIInsights}
+              disabled={loadingInsights}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: loadingInsights ? '#9CA3AF' : '#10B981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: loadingInsights ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+              {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+            </button>
           </div>
         </div>
-        
+      </div>
+      
+      {/* AI Insights Panel from Registry */}
+      {AIInsightsPanel && (aiInsights || insightsError) && (
+        <AIInsightsPanel
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings}
+          onSaveUserSettings={onSaveUserSettings}
+          insights={aiInsights}
+          loading={loadingInsights}
+          error={insightsError}
+          onRefresh={generateAIInsights}
+          onClose={() => {
+            setAiInsights(null);
+            setInsightsError(null);
+            setInsightsCollapsed(false);
+          }}
+          title="AI-Powered Product Portfolio Insights"
+          titleIcon="fa-wand-magic-sparkles"
+          titleIconColor="#10B981"
+          isCollapsed={insightsCollapsed}
+          onToggleCollapse={() => setInsightsCollapsed(!insightsCollapsed)}
+          exportFilename={`product-revenue-insights-${new Date().toISOString().split('T')[0]}.md`}
+        />
+      )}
+      
+      <div style={{ marginBottom: '20px' }}>
         {/* Top Products Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
           {topProducts.map((product, index) => (

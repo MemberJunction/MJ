@@ -204,7 +204,7 @@ export class ComponentHierarchyRegistrar {
       this.registry.register(
         spec.name,
         componentFactory.component,
-        namespace,
+        spec.namespace || namespace,
         version
       );
 

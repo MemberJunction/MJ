@@ -4193,7 +4193,7 @@ export class ComponentLinter {
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
-        const validProperties = new Set(['rv', 'rq', 'md']);
+        const validProperties = new Set(['rv', 'rq', 'md', 'ai']);
         
         traverse(ast, {
           MemberExpression(path: NodePath<t.MemberExpression>) {
@@ -4209,7 +4209,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Invalid utilities property '${propName}'. Valid properties are: rv (RunView), rq (RunQuery), md (Metadata)`,
+                    message: `Invalid utilities property '${propName}'. Valid properties are: rv (RunView), rq (RunQuery), md (Metadata), ai (AI Tools)`,
                     code: `utilities.${propName}`
                   });
                 }
@@ -4382,6 +4382,81 @@ export class ComponentLinter {
     },
 
     {
+      name: 'utilities-ai-methods',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const validMethods = new Set(['ExecutePrompt', 'EmbedText']);
+        const validProperties = new Set(['VectorService']);
+        
+        traverse(ast, {
+          // Check for method calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.ai.* method calls
+            if (t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's utilities.ai.methodName()
+              if (t.isMemberExpression(callee.object) &&
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property) && 
+                  callee.object.property.name === 'ai' &&
+                  t.isIdentifier(callee.property)) {
+                
+                const methodName = callee.property.name;
+                
+                if (!validMethods.has(methodName)) {
+                  violations.push({
+                    rule: 'utilities-ai-methods',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid method '${methodName}' on utilities.ai. Valid methods are: ExecutePrompt, EmbedText. Valid property: VectorService`,
+                    code: `utilities.ai.${methodName}()`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for property access (VectorService)
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Skip if this is part of a call expression (handled above)
+            if (t.isCallExpression(path.parent)) {
+              return;
+            }
+            
+            // Check if it's utilities.ai.propertyName
+            if (t.isMemberExpression(path.node.object) &&
+                t.isIdentifier(path.node.object.object) && 
+                path.node.object.object.name === 'utilities' &&
+                t.isIdentifier(path.node.object.property) && 
+                path.node.object.property.name === 'ai' &&
+                t.isIdentifier(path.node.property)) {
+              
+              const propName = path.node.property.name;
+              
+              // Check if it's a valid property or method (methods might be referenced without calling)
+              if (!validProperties.has(propName) && !validMethods.has(propName)) {
+                violations.push({
+                  rule: 'utilities-ai-properties',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Invalid property '${propName}' on utilities.ai. Valid methods are: ExecutePrompt, EmbedText. Valid property: VectorService`,
+                  code: `utilities.ai.${propName}`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
       name: 'utilities-no-direct-instantiation',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -4389,7 +4464,8 @@ export class ComponentLinter {
         const restrictedClasses = new Map([
           ['RunView', 'utilities.rv'],
           ['RunQuery', 'utilities.rq'],
-          ['Metadata', 'utilities.md']
+          ['Metadata', 'utilities.md'],
+          ['SimpleVectorService', 'utilities.ai.VectorService']
         ]);
         
         traverse(ast, {

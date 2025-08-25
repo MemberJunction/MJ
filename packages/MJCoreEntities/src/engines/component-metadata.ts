@@ -1,6 +1,11 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { ComponentEntityExtended } from "../custom/ComponentEntityExtended";
-import { ComponentLibraryEntity, ComponentLibraryLinkEntity } from "../generated/entity_subclasses";
+import { 
+    ComponentLibraryEntity, 
+    ComponentLibraryLinkEntity,
+    ComponentRegistryEntity,
+    ComponentDependencyEntity 
+} from "../generated/entity_subclasses";
 
 /**
  * Caching of metadata for components and related data
@@ -16,6 +21,8 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
     private _components: ComponentEntityExtended[];
     private _componentLibraries: ComponentLibraryEntity[];
     private _componentLibraryLinks: ComponentLibraryLinkEntity[];
+    private _componentRegistries: ComponentRegistryEntity[];
+    private _componentDependencies: ComponentDependencyEntity[];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -33,6 +40,16 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
                 Type: 'entity',
                 EntityName: 'MJ: Component Library Links',
                 PropertyName: "_componentLibraryLinks"
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Component Registries',
+                PropertyName: "_componentRegistries"
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Component Dependencies',
+                PropertyName: "_componentDependencies"
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -48,5 +65,13 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
 
     public get ComponentLibraryLinks(): ComponentLibraryLinkEntity[] {
         return this._componentLibraryLinks;
+    }
+
+    public get ComponentRegistries(): ComponentRegistryEntity[] {
+        return this._componentRegistries;
+    }
+
+    public get ComponentDependencies(): ComponentDependencyEntity[] {
+        return this._componentDependencies;
     }
 }
