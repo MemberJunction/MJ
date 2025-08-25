@@ -39,7 +39,13 @@
   "dependencies": [
     "@include:product-revenue-treemap.spec.json",
     "@include:product-revenue-matrix-table.spec.json",
-    "@include:product-revenue-detail-panel.spec.json"
+    "@include:product-revenue-detail-panel.spec.json",
+    {
+      "name": "AIInsightsPanel",
+      "namespace": "Generic/UI/AI",
+      "location": "registry",
+      "version": "1.0.0"
+    }
   ],
   "libraries": [
     {
@@ -51,11 +57,6 @@
       "name": "Chart.js",
       "version": "^4.4.1",
       "globalVariable": "Chart"
-    },
-    {
-      "name": "marked",
-      "version": "11.1.1",
-      "globalVariable": "marked"
     }
   ]
 }

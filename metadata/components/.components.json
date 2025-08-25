@@ -699,8 +699,8 @@
       "ID": "11036C9C-3AC6-4026-B3CC-74A8C28D831B"
     },
     "sync": {
-      "lastModified": "2025-08-25T00:38:52.690Z",
-      "checksum": "ec0c042f07c6580cab21824b2ffdff2332d06186f006af056d527880287eaee8"
+      "lastModified": "2025-08-25T17:30:15.503Z",
+      "checksum": "ee1c8c7afdb2aad616084418b5a7a46c4790b44a9b17f53057ed502bea78e819"
     }
   },
   {
@@ -1982,7 +1982,7 @@
   {
     "fields": {
       "Name": "AIInsightsPanel",
-      "Namespace": "UI/Components",
+      "Namespace": "Generic/UI/AI",
       "Description": "A reusable AI insights panel component with markdown rendering, copy/export functionality, and collapsible UI",
       "Title": "AI Insights Panel",
       "Type": "Widget",
@@ -1997,8 +1997,8 @@
       "ID": "89F60F0B-31C3-4676-B6DD-F3D2258C416A"
     },
     "sync": {
-      "lastModified": "2025-08-25T00:38:53.259Z",
-      "checksum": "6855aea250aaceea5a209c6d3470d169eb9df6244596812ac440f676669ddca4"
+      "lastModified": "2025-08-25T17:14:05.794Z",
+      "checksum": "eabe1440a055bb163fcbf9703fabda1e39364d81e70e9816b73c33fbdb7a1e93"
     }
   }
 ]
