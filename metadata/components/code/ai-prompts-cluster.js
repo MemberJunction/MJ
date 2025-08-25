@@ -7,6 +7,13 @@ function AIPromptsCluster({
   onSaveUserSettings,
   data 
 }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
+
   // Load sub-components
   const ClusterGraph = components['AIPromptsClusterGraph'];
   const ClusterControls = components['AIPromptsClusterControls'];
@@ -35,7 +42,6 @@ function AIPromptsCluster({
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   // Load AI Prompts data on mount
   useEffect(() => {
@@ -347,70 +353,7 @@ Only return the JSON object, nothing else.`;
   }, [prompts]);
 
   // Format insights text using marked library for proper markdown rendering
-  const formatInsights = (text) => {
-    if (!text) return null;
-    
-    // Use marked to parse markdown to HTML
-    const htmlContent = marked.parse(text);
-    
-    // Return the HTML with dangerouslySetInnerHTML for React
-    return (
-      <div 
-        className="markdown-insights"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-        style={{
-          color: '#374151',
-          lineHeight: '1.6'
-        }}
-      />
-    );
-  };
-  
-  // Copy markdown content to clipboard
-  const copyInsightsToClipboard = async () => {
-    if (!aiInsights) return;
-    
-    try {
-      await navigator.clipboard.writeText(aiInsights);
-      const copyBtn = document.querySelector('.copy-insights-btn');
-      if (copyBtn) {
-        const originalTitle = copyBtn.title;
-        copyBtn.title = 'Copied!';
-        setTimeout(() => {
-          copyBtn.title = originalTitle;
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('Failed to copy insights:', err);
-    }
-  };
-  
-  // Export insights as markdown file
-  const exportInsightsAsMarkdown = () => {
-    if (!aiInsights) return;
-    
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `ai-prompts-cluster-insights-${timestamp}.md`;
-    
-    const markdownContent = `# AI Prompts Cluster Analysis Insights
-Generated: ${new Date().toLocaleString()}
-Total Prompts: ${prompts.length}
-Clusters: ${clusters.length}
 
----
-
-${aiInsights}`;
-    
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-  
-  // Generate AI Insights about the clusters
   const generateAIInsights = async () => {
     if (clusters.length === 0) {
       setInsightsError('Please generate clusters first');
@@ -618,28 +561,30 @@ Format your response in clear markdown with headers and bullet points.`;
             </p>
           </div>
           
-          {/* AI Insights Button */}
-          {clusters.length > 0 && (
-            <button
-              onClick={generateAIInsights}
-              disabled={loadingInsights}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#8B5CF6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: loadingInsights ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                opacity: loadingInsights ? 0.6 : 1
-              }}
-            >
-              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
-              {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
-            </button>
-          )}
+          {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="AI Prompts Cluster Analysis"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="bottom"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
         </div>
       </div>
 
@@ -653,142 +598,6 @@ Format your response in clear markdown with headers and bullet points.`;
           marginBottom: styles.spacing?.md || '16px'
         }}>
           {error}
-        </div>
-      )}
-      
-      {/* AI Insights Panel */}
-      {(aiInsights || insightsError) && (
-        <div 
-          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
-          style={{
-          marginBottom: styles.spacing?.md || '16px',
-          padding: styles.spacing?.md || '16px',
-          backgroundColor: 'white',
-          borderRadius: styles.borders?.radius || '8px',
-          border: '1px solid #E5E7EB',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h3 style={{
-              margin: 0,
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#111827',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#8B5CF6' }}></i>
-              AI Cluster Analysis Insights
-            </h3>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title={insightsCollapsed ? 'Expand' : 'Collapse'}
-              >
-                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
-              </button>
-              
-              <button
-                className="copy-insights-btn"
-                onClick={copyInsightsToClipboard}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title="Copy to clipboard"
-              >
-                <i className="fa-solid fa-copy"></i>
-              </button>
-              
-              <button
-                onClick={exportInsightsAsMarkdown}
-                style={{
-                  background: 'none',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  padding: '6px 10px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                title="Export as Markdown"
-              >
-                <i className="fa-solid fa-download"></i>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setAiInsights(null);
-                  setInsightsError(null);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#6B7280',
-                  cursor: 'pointer',
-                  fontSize: '20px',
-                  padding: '4px'
-                }}
-                title="Close insights"
-              >
-                <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-          </div>
-          
-          {!insightsCollapsed && insightsError ? (
-            <div style={{
-              color: '#991B1B',
-              padding: '12px',
-              backgroundColor: '#FEE2E2',
-              borderRadius: '6px',
-              border: '1px solid #FECACA'
-            }}>
-              <i className="fa-solid fa-exclamation-triangle"></i>
-              <span style={{ marginLeft: '8px' }}>
-                {insightsError}
-              </span>
-            </div>
-          ) : !insightsCollapsed ? (
-            <div className="ai-insights-content" style={{
-              maxHeight: '400px',
-              overflowY: 'auto',
-              padding: '12px',
-              backgroundColor: '#F9FAFB',
-              borderRadius: '6px'
-            }}>
-              {formatInsights(aiInsights)}
-            </div>
-          ) : null}
         </div>
       )}
 

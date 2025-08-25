@@ -152,13 +152,13 @@
     "@include:ai-time-series-chart.spec.json",
     "@include:ai-distribution-chart.spec.json",
     "@include:ai-detail-table.spec.json",
-    "@include:ai-metrics-summary.spec.json"
-  ],
-  "libraries": [
+    "@include:ai-metrics-summary.spec.json",
     {
-      "name": "marked",
-      "version": "11.1.1",
-      "globalVariable": "marked"
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
     }
-  ]
+  ],
+  "libraries": []
 }

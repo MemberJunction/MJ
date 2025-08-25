@@ -30,7 +30,14 @@
       "description": "Navigate to invoice details"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "Plotly",
@@ -46,11 +53,6 @@
       "name": "Chart.js",
       "version": "^4.4.1",
       "globalVariable": "Chart"
-    },
-    {
-      "name": "marked",
-      "version": "11.1.1",
-      "globalVariable": "marked"
     }
   ]
 }

@@ -1,4 +1,11 @@
 function InvoiceStatusDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
+
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -20,7 +27,6 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -187,68 +193,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   
   // Generate AI Insights
   // Format insights text using marked library for proper markdown rendering
-  const formatInsights = (text) => {
-    if (!text) return null;
-    
-    // Use marked to parse markdown to HTML
-    const htmlContent = marked.parse(text);
-    
-    // Return the HTML with dangerouslySetInnerHTML for React
-    return (
-      <div 
-        className="markdown-insights"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-        style={{
-          color: '#374151',
-          lineHeight: '1.6'
-        }}
-      />
-    );
-  };
-  
-  // Copy markdown content to clipboard
-  const copyInsightsToClipboard = async () => {
-    if (!aiInsights) return;
-    
-    try {
-      await navigator.clipboard.writeText(aiInsights);
-      const copyBtn = document.querySelector('.copy-insights-btn');
-      if (copyBtn) {
-        const originalTitle = copyBtn.title;
-        copyBtn.title = 'Copied!';
-        setTimeout(() => {
-          copyBtn.title = originalTitle;
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('Failed to copy insights:', err);
-    }
-  };
-  
-  // Export insights as markdown file
-  const exportInsightsAsMarkdown = () => {
-    if (!aiInsights) return;
-    
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `invoice-status-insights-${timestamp}.md`;
-    
-    const markdownContent = `# Invoice Status Dashboard Insights
-Generated: ${new Date().toLocaleString()}
-Time Period: ${timePeriod}${timePeriod === 'custom' ? ` (${startDate} to ${endDate})` : ''}
 
----
-
-${aiInsights}`;
-    
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-  
   const generateAIInsights = async () => {
     setLoadingInsights(true);
     setInsightsError(null);
@@ -1003,9 +948,30 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             </>
           )}
           
-          {/* AI Insights Button */}
-          <button
-            onClick={generateAIInsights}
+          {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Invoice Analytics Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="bottom"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
             disabled={loadingInsights || loading}
             style={{
               padding: '6px 12px',
@@ -1029,7 +995,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
       {/* AI Insights Panel - Moved to top */}
       {(aiInsights || insightsError) && (
         <div 
-          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          onDoubleClick={() => {}}
           style={{
           marginBottom: '20px',
           padding: '20px',
@@ -1058,7 +1024,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             </h3>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
-                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -1071,14 +1037,14 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                   alignItems: 'center',
                   gap: '4px'
                 }}
-                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+                title={'Collapse'}
               >
-                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+                <i className={`fa-solid fa-chevron-${'up'}`}></i>
               </button>
               
               <button
                 className="copy-insights-btn"
-                onClick={copyInsightsToClipboard}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -1097,7 +1063,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
               </button>
               
               <button
-                onClick={exportInsightsAsMarkdown}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -1148,17 +1114,17 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                 Error generating insights: {insightsError}
               </span>
             </div>
-          ) : !insightsCollapsed ? (
-            <div className="ai-insights-content" style={{
+          ) : (!insightsError && (
+            <div style={{
               maxHeight: '400px',
               overflowY: 'auto',
               padding: '12px',
               backgroundColor: '#F9FAFB',
               borderRadius: '6px'
             }}>
-              {formatInsights(aiInsights)}
+              {aiInsights}
             </div>
-          ) : null}
+          )}
         </div>
       )}
       

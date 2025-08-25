@@ -1,4 +1,10 @@
 function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
   const [invoices, setInvoices] = useState([]);
   const [deals, setDeals] = useState([]);
   const [products, setProducts] = useState([]);
@@ -16,7 +22,6 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
 
   useEffect(() => {
     loadFinancialData();
@@ -124,73 +129,7 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const metrics = calculateMetrics();
   
   // Format insights text using marked library for proper markdown rendering
-  const formatInsights = (text) => {
-    if (!text) return null;
-    
-    // Use marked to parse markdown to HTML
-    const htmlContent = marked.parse(text);
-    
-    // Return the HTML with dangerouslySetInnerHTML for React
-    return (
-      <div 
-        className="markdown-insights"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-        style={{
-          color: '#374151',
-          lineHeight: '1.6'
-        }}
-      />
-    );
-  };
-  
-  // Copy markdown content to clipboard
-  const copyInsightsToClipboard = async () => {
-    if (!aiInsights) return;
-    
-    try {
-      await navigator.clipboard.writeText(aiInsights);
-      // Optional: Show a brief success indicator
-      const copyBtn = document.querySelector('.copy-insights-btn');
-      if (copyBtn) {
-        const originalTitle = copyBtn.title;
-        copyBtn.title = 'Copied!';
-        setTimeout(() => {
-          copyBtn.title = originalTitle;
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('Failed to copy insights:', err);
-    }
-  };
-  
-  // Export insights as markdown file
-  const exportInsightsAsMarkdown = () => {
-    if (!aiInsights) return;
-    
-    // Create filename with timestamp
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `financial-insights-${timestamp}.md`;
-    
-    // Add header to the markdown content
-    const markdownContent = `# Financial Analytics Insights
-Generated: ${new Date().toLocaleString()}
-Time Period: ${timeRange}
 
----
-
-${aiInsights}`;
-    
-    // Create blob and download
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-  
-  // Generate AI Insights
   const generateAIInsights = async () => {
     setLoadingInsights(true);
     setInsightsError(null);
@@ -798,9 +737,30 @@ Focus on actionable business insights that can help improve financial performanc
               <option value="year">Last Year</option>
             </select>
             
-            {/* AI Insights Button */}
-            <button
-              onClick={generateAIInsights}
+            {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Financial Analytics Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="bottom"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
               disabled={loadingInsights || loading}
               style={{
                 padding: '8px 16px',
@@ -901,7 +861,7 @@ Focus on actionable business insights that can help improve financial performanc
       {/* AI Insights Panel - Moved to top */}
       {(aiInsights || insightsError) && (
         <div 
-          onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
+          onDoubleClick={() => {}}
           style={{
           margin: '20px',
           marginTop: '0',
@@ -932,7 +892,7 @@ Focus on actionable business insights that can help improve financial performanc
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {/* Collapse/Expand button */}
               <button
-                onClick={() => setInsightsCollapsed(!insightsCollapsed)}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -945,15 +905,15 @@ Focus on actionable business insights that can help improve financial performanc
                   alignItems: 'center',
                   gap: '4px'
                 }}
-                title={insightsCollapsed ? 'Expand' : 'Collapse'}
+                title={'Collapse'}
               >
-                <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
+                <i className={`fa-solid fa-chevron-${'up'}`}></i>
               </button>
               
               {/* Copy button */}
               <button
                 className="copy-insights-btn"
-                onClick={copyInsightsToClipboard}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -973,7 +933,7 @@ Focus on actionable business insights that can help improve financial performanc
               
               {/* Export button */}
               <button
-                onClick={exportInsightsAsMarkdown}
+                onClick={() => {}}
                 style={{
                   background: 'none',
                   border: '1px solid #E5E7EB',
@@ -1025,17 +985,17 @@ Focus on actionable business insights that can help improve financial performanc
                 Error generating insights: {insightsError}
               </span>
             </div>
-          ) : !insightsCollapsed ? (
-            <div className="ai-insights-content" style={{
+          ) : (!insightsError && (
+            <div style={{
               maxHeight: '400px',
               overflowY: 'auto',
               padding: '12px',
               backgroundColor: '#F9FAFB',
               borderRadius: '6px'
             }}>
-              {formatInsights(aiInsights)}
+              {aiInsights}
             </div>
-          ) : null}
+          )}
         </div>
       )}
       

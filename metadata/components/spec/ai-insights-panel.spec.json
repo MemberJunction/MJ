@@ -1,10 +1,11 @@
 {
   "name": "AIInsightsPanel",
-  "location": "embedded",
   "code": "@file:../code/ai-insights-panel.js",
+  "namespace": "Generic/UI/AI",
+  "title": "AI Insights Panel",
+  "type": "Widget",
+  "version": "1.0.0",
   "description": "A reusable AI insights panel component with markdown rendering, copy/export functionality, and collapsible UI",
-  "category": "UI Components",
-  "type": "panel",
   "properties": [
     {
       "name": "insights",

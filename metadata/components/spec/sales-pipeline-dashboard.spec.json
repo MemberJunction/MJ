@@ -42,7 +42,13 @@
     "@include:sales-pipeline-dashboard-pipeline-kanban.spec.json",
     "@include:sales-pipeline-dashboard-deal-cards.spec.json",
     "@include:sales-pipeline-dashboard-deal-list.spec.json",
-    "@include:sales-pipeline-dashboard-drill-down-panel.spec.json"
+    "@include:sales-pipeline-dashboard-drill-down-panel.spec.json",
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [
     {
@@ -54,11 +60,6 @@
       "name": "ApexCharts",
       "version": "3.45.1",
       "globalVariable": "ApexCharts"
-    },
-    {
-      "name": "marked",
-      "version": "11.1.1",
-      "globalVariable": "marked"
     }
   ],
   "dataRequirements": {

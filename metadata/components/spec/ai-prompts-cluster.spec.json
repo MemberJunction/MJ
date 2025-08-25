@@ -36,7 +36,13 @@
   "dependencies": [
     "@include:ai-prompts-cluster-graph.spec.json",
     "@include:ai-prompts-cluster-controls.spec.json",
-    "@include:ai-prompts-cluster-details.spec.json"
+    "@include:ai-prompts-cluster-details.spec.json",
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [
     {

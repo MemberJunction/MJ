@@ -1,4 +1,11 @@
 function SalesPipelineDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
+
   const [deals, setDeals] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,7 +18,6 @@ function SalesPipelineDashboard({ utilities, styles, components, callbacks, save
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
   const chartRef = useRef(null);
   const saveSettingsTimeoutRef = useRef(null);
 
@@ -354,161 +360,6 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
   };
 
   // Format insights text using marked library for proper markdown rendering
-  const formatInsights = (text) => {
-    if (!text) return null;
-    
-    // Use marked to parse markdown to HTML
-    const htmlContent = marked.parse(text);
-    
-    // Return the HTML with dangerouslySetInnerHTML for React
-    // Apply custom styling via a wrapper div with markdown-insights class
-    return (
-      <div 
-        className="markdown-insights"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-        style={{
-          color: '#374151',
-          lineHeight: '1.6'
-        }}
-      />
-    );
-  };
-  
-  // Copy markdown content to clipboard
-  const copyInsightsToClipboard = async () => {
-    if (!aiInsights) return;
-    
-    const textToCopy = typeof aiInsights === 'string' ? aiInsights : 
-                       aiInsights.rawInsight || JSON.stringify(aiInsights, null, 2);
-    
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      const copyBtn = document.querySelector('.copy-insights-btn');
-      if (copyBtn) {
-        const originalTitle = copyBtn.title;
-        copyBtn.title = 'Copied!';
-        setTimeout(() => {
-          copyBtn.title = originalTitle;
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('Failed to copy insights:', err);
-    }
-  };
-  
-  // Export insights as markdown file
-  const exportInsightsAsMarkdown = () => {
-    if (!aiInsights) return;
-    
-    const textToExport = typeof aiInsights === 'string' ? aiInsights : 
-                         aiInsights.rawInsight || JSON.stringify(aiInsights, null, 2);
-    
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `sales-pipeline-insights-${timestamp}.md`;
-    
-    const markdownContent = `# Sales Pipeline Insights
-Generated: ${new Date().toLocaleString()}
-Time Period: ${timeFilter === 'custom' ? `${startDate} to ${endDate}` : timeFilter}
-
----
-
-${textToExport}`;
-    
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDrillDown = (title, dealList, type, metadata) => {
-    setDrillDownData({ title, deals: dealList, type, metadata });
-    setIsPanelOpen(true);
-  };
-
-  useEffect(() => {
-    if (!loading && deals.length > 0) {
-      renderPipelineChart();
-    }
-  }, [deals, loading]);
-
-  const renderPipelineChart = () => {
-    if (!chartRef.current) return;
-    
-    const stageData = stages.map(stage => ({
-      name: stage,
-      count: deals.filter(d => d.Stage === stage).length,
-      value: deals.filter(d => d.Stage === stage).reduce((sum, d) => sum + (d.Amount || 0), 0)
-    }));
-
-    const options = {
-      series: [{
-        name: 'Deal Count',
-        data: stageData.map(s => s.count)
-      }, {
-        name: 'Total Value',
-        data: stageData.map(s => s.value / 1000) // In thousands
-      }],
-      chart: {
-        type: 'bar',
-        height: 300,
-        toolbar: { show: false }
-      },
-      plotOptions: {
-        bar: {
-          horizontal: false,
-          columnWidth: '55%'
-        }
-      },
-      colors: ['#3B82F6', '#10B981'],
-      xaxis: {
-        categories: stages
-      },
-      yaxis: [{
-        title: { text: 'Number of Deals' }
-      }, {
-        opposite: true,
-        title: { text: 'Value ($K)' }
-      }],
-      tooltip: {
-        y: [{
-          formatter: (val) => `${val} deals`
-        }, {
-          formatter: (val) => `$${val.toFixed(0)}K`
-        }]
-      },
-      legend: {
-        position: 'top'
-      }
-    };
-
-    if (chartRef.current._chart) {
-      chartRef.current._chart.destroy();
-    }
-    chartRef.current._chart = new ApexCharts(chartRef.current, options);
-    chartRef.current._chart.render();
-  };
-
-  const metrics = calculateMetrics();
-
-  if (loading) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '18px', color: '#6B7280' }}>Loading pipeline dashboard...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: '20px', backgroundColor: '#FEE2E2', borderRadius: '8px', margin: '20px' }}>
-        <div style={{ color: '#991B1B', fontWeight: 'bold' }}>Error loading data</div>
-        <div style={{ color: '#DC2626', marginTop: '8px' }}>{error}</div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
@@ -617,338 +468,29 @@ ${textToExport}`;
         </div>
         
         {/* AI Insights Panel */}
-        {aiInsights && (
-          <div 
-            onDoubleClick={() => setInsightsCollapsed(!insightsCollapsed)}
-            style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '20px',
-            marginBottom: '20px',
-            border: '1px solid #E5E7EB',
-            background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
-            transition: 'all 0.3s ease'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: insightsCollapsed ? '0' : '16px'
-            }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: '18px',
-                fontWeight: '600',
-                color: '#1F2937',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <i className="fa-solid fa-wand-magic-sparkles" style={{ color: '#6366F1' }}></i>
-                AI-Powered Pipeline Insights
-              </h3>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {/* Collapse/Expand button */}
-                <button
-                  onClick={() => setInsightsCollapsed(!insightsCollapsed)}
-                  style={{
-                    background: 'none',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    color: '#6B7280',
-                    cursor: 'pointer',
-                    padding: '6px 10px',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title={insightsCollapsed ? 'Expand' : 'Collapse'}
-                >
-                  <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
-                </button>
-                
-                {/* Copy button */}
-                <button
-                  className="copy-insights-btn"
-                  onClick={copyInsightsToClipboard}
-                  style={{
-                    background: 'none',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    color: '#6B7280',
-                    cursor: 'pointer',
-                    padding: '6px 10px',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title="Copy to clipboard"
-                >
-                  <i className="fa-solid fa-copy"></i>
-                </button>
-                
-                {/* Export button */}
-                <button
-                  onClick={exportInsightsAsMarkdown}
-                  style={{
-                    background: 'none',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    color: '#6B7280',
-                    cursor: 'pointer',
-                    padding: '6px 10px',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title="Export as Markdown"
-                >
-                  <i className="fa-solid fa-download"></i>
-                </button>
-                
-                {/* Refresh button */}
-                <button
-                  onClick={() => {
-                    setInsightsCollapsed(false);
-                    generateAIInsights();
-                  }}
-                  disabled={loadingInsights}
-                  style={{
-                    background: 'none',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    cursor: loadingInsights ? 'not-allowed' : 'pointer',
-                    color: '#6B7280',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    opacity: loadingInsights ? 0.5 : 1
-                  }}
-                  title="Refresh analysis"
-                >
-                  <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'arrows-rotate'}`}></i>
-                </button>
-                
-                {/* Collapse/Expand button */}
-                <button
-                  onClick={() => setInsightsCollapsed(!insightsCollapsed)}
-                  style={{
-                    background: 'none',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                    color: '#6B7280',
-                    fontSize: '14px'
-                  }}
-                  title={insightsCollapsed ? 'Expand' : 'Collapse'}
-                >
-                  <i className={`fa-solid fa-chevron-${insightsCollapsed ? 'down' : 'up'}`}></i>
-                </button>
-                
-                {/* Close button */}
-                <button
-                  onClick={() => {
-                    setAiInsights(null);
-                    setInsightsCollapsed(false);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    fontSize: '20px',
-                    cursor: 'pointer',
-                    color: '#6B7280',
-                    padding: '4px'
-                  }}
-                  title="Close"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            
-            {!insightsCollapsed && (
-              <div style={{
-                backgroundColor: '#F9FAFB',
-                padding: '16px',
-                borderRadius: '6px',
-                maxHeight: '500px',
-                overflowY: 'auto'
-              }}>
-                {typeof aiInsights === 'string' ? (
-                  // Format the markdown-style text
-                  <div>
-                    {formatInsights(aiInsights)}
-                  </div>
-                ) : aiInsights?.formatted === false ? (
-                  // Unformatted text response with rawInsight property
-                  <div>
-                    {formatInsights(aiInsights.rawInsight)}
-                  </div>
-                ) : (
-                  // Formatted JSON response
-                  <div style={{ display: 'grid', gap: '16px' }}>
-                {/* Key Performance Highlights */}
-                {aiInsights.keyPerformanceHighlights && (
-                  <div>
-                    <h4 style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#4B5563',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Key Performance Highlights
-                    </h4>
-                    <ul style={{ margin: 0, paddingLeft: '20px', color: '#6B7280' }}>
-                      {Array.isArray(aiInsights.keyPerformanceHighlights) 
-                        ? aiInsights.keyPerformanceHighlights.map((item, idx) => (
-                            <li key={idx} style={{ marginBottom: '4px' }}>{item}</li>
-                          ))
-                        : <li>{aiInsights.keyPerformanceHighlights}</li>
-                      }
-                    </ul>
-                  </div>
-                )}
-                
-                {/* Pipeline Health Assessment */}
-                {aiInsights.pipelineHealthAssessment && (
-                  <div>
-                    <h4 style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#4B5563',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Pipeline Health Assessment
-                    </h4>
-                    <div style={{
-                      backgroundColor: '#F0F9FF',
-                      padding: '12px',
-                      borderRadius: '6px',
-                      borderLeft: '4px solid #3B82F6',
-                      color: '#1E40AF'
-                    }}>
-                      {aiInsights.pipelineHealthAssessment}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Bottleneck Analysis */}
-                {aiInsights.bottleneckAnalysis && (
-                  <div>
-                    <h4 style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#4B5563',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Bottleneck Analysis
-                    </h4>
-                    <div style={{
-                      backgroundColor: '#FEF3C7',
-                      padding: '12px',
-                      borderRadius: '6px',
-                      borderLeft: '4px solid #F59E0B',
-                      color: '#92400E'
-                    }}>
-                      {aiInsights.bottleneckAnalysis}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Recommendations */}
-                {aiInsights.recommendations && (
-                  <div>
-                    <h4 style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#4B5563',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Recommendations
-                    </h4>
-                    <ol style={{
-                      margin: 0,
-                      paddingLeft: '20px',
-                      color: '#059669'
-                    }}>
-                      {Array.isArray(aiInsights.recommendations)
-                        ? aiInsights.recommendations.map((rec, idx) => (
-                            <li key={idx} style={{
-                              marginBottom: '8px',
-                              backgroundColor: '#ECFDF5',
-                              padding: '8px',
-                              borderRadius: '4px',
-                              marginLeft: '-20px',
-                              paddingLeft: '28px'
-                            }}>
-                              {rec}
-                            </li>
-                          ))
-                        : <li>{aiInsights.recommendations}</li>
-                      }
-                    </ol>
-                  </div>
-                )}
-                
-                {/* Risk Indicators */}
-                {aiInsights.riskIndicators && (
-                  <div>
-                    <h4 style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#4B5563',
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Risk Indicators
-                    </h4>
-                    <div style={{
-                      backgroundColor: '#FEF2F2',
-                      padding: '12px',
-                      borderRadius: '6px',
-                      borderLeft: '4px solid #EF4444',
-                      color: '#991B1B'
-                    }}>
-                      {aiInsights.riskIndicators}
-                    </div>
-                  </div>
-                )}
-              </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Error display for insights */}
-        {insightsError && (
-          <div style={{
-            backgroundColor: '#FEE2E2',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '20px',
-            border: '1px solid #FCA5A5'
-          }}>
-            <div style={{ color: '#DC2626', fontWeight: '500' }}>
-              {insightsError}
-            </div>
-          </div>
-        )}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Sales Pipeline Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="bottom"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
         
         <PipelineMetricsCards
           metrics={metrics}
