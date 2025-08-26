@@ -10,7 +10,6 @@ function AIPromptsClusterControls({
   onClusterCountChange,
   onSimilarityThresholdChange,
   onRecalculate,
-  onExport,
   utilities,
   styles,
   components,
@@ -318,23 +317,6 @@ function AIPromptsClusterControls({
               Generate Clusters
             </>
           )}
-        </button>
-
-        <button
-          onClick={onExport}
-          disabled={isProcessing}
-          style={{
-            ...buttonStyle,
-            background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
-            color: '#4a5568',
-            border: '2px solid #e2e8f0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-          }}
-          onMouseEnter={e => !isProcessing && (e.currentTarget.style.transform = 'translateY(-2px)')}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <i className="fa-solid fa-download" style={{ marginRight: '8px' }}></i>
-          Export CSV
         </button>
       </div>
 

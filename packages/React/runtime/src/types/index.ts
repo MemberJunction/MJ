@@ -155,6 +155,8 @@ export interface CompilerConfig {
   cache: boolean;
   /** Maximum cache size */
   maxCacheSize: number;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**
@@ -169,6 +171,8 @@ export interface RegistryConfig {
   useLRU: boolean;
   /** Namespace isolation */
   enableNamespaces: boolean;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**

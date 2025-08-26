@@ -38,6 +38,12 @@
     "@include:ai-prompts-cluster-controls.spec.json",
     "@include:ai-prompts-cluster-details.spec.json",
     {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    },
+    {
       "name": "AIInsightsPanel",
       "location": "registry",
       "namespace": "Generic/UI/AI",

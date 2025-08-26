@@ -2,7 +2,6 @@
   "name": "FinancialAnalyticsDashboard",
   "namespace": "CRM/Finance",
   "type": "Dashboard",
-  "location": "embedded",
   "code": "@file:../code/financial-analytics-dashboard.js",
   "functionalRequirements": "## Financial Analytics Dashboard\n\n### Purpose\nComprehensive financial overview with revenue trends, forecasting, and profitability analysis.\n\n### Core Features\n- **Revenue Trends**: Historical and projected revenue\n- **Cash Flow Analysis**: Income vs expenses tracking\n- **Profitability Metrics**: Margin analysis by product/customer\n- **Forecast Modeling**: AI-powered predictions\n- **Budget vs Actual**: Variance analysis\n- **Interactive Gauges**: Using Recharts for KPIs\n- **Slide-out Reports**: Detailed financial reports\n- **Export Options**: PDF and Excel export\n\n### Visualizations\n- Area charts for revenue trends\n- Gauge charts for KPIs\n- Waterfall charts for P&L\n- Scatter plots for correlation analysis",
   "dataRequirements": {
@@ -35,14 +34,15 @@
       "location": "registry",
       "namespace": "Generic/UI/AI",
       "version": "^1.0.0"
+    },
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
     }
   ],
   "libraries": [
-    {
-      "name": "Chart.js",
-      "version": "^4.4.1",
-      "globalVariable": "Chart"
-    },
     {
       "name": "ApexCharts",
       "version": "^3.45.1",

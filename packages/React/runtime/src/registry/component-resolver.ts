@@ -30,25 +30,29 @@ export class ComponentResolver {
   private compiler: ComponentCompiler | null = null;
   private runtimeContext: RuntimeContext | null = null;
   private componentEngine = ComponentMetadataEngine.Instance;
+  private debug: boolean = false;
 
   /**
    * Creates a new ComponentResolver instance
    * @param registry - Component registry to use for resolution
    * @param compiler - Optional compiler for registry-based components
    * @param runtimeContext - Optional runtime context for registry-based components
+   * @param debug - Enable debug logging (defaults to false)
    */
   constructor(
     registry: ComponentRegistry,
     compiler?: ComponentCompiler,
-    runtimeContext?: RuntimeContext
+    runtimeContext?: RuntimeContext,
+    debug: boolean = false
   ) {
     this.registry = registry;
     this.resolverInstanceId = `resolver-${Date.now()}-${Math.random()}`;
+    this.debug = debug;
     
     if (compiler && runtimeContext) {
       this.compiler = compiler;
       this.runtimeContext = runtimeContext;
-      this.registryService = ComponentRegistryService.getInstance(compiler, runtimeContext);
+      this.registryService = ComponentRegistryService.getInstance(compiler, runtimeContext, debug);
     }
   }
 
@@ -74,7 +78,21 @@ export class ComponentResolver {
     // Resolve the component hierarchy
     await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
     
-    return resolved;
+    // Unwrap component wrappers before returning
+    // Components from the registry come as objects with component/print/refresh properties
+    // We need to extract just the component function for use in child components
+    const unwrapped: ResolvedComponents = {};
+    for (const [name, value] of Object.entries(resolved)) {
+      if (value && typeof value === 'object' && 'component' in value && typeof value.component === 'function') {
+        // This is a wrapped component - extract the actual React component function
+        unwrapped[name] = value.component;
+      } else {
+        // This is already a plain component function or something else
+        unwrapped[name] = value;
+      }
+    }
+    
+    return unwrapped;
   }
 
   /**
@@ -97,7 +115,9 @@ export class ComponentResolver {
     
     // Prevent circular dependencies
     if (visited.has(componentId)) {
-      console.warn(`Circular dependency detected for component: ${componentId}`);
+      if (this.debug) {
+        console.warn(`Circular dependency detected for component: ${componentId}`);
+      }
       return;
     }
     visited.add(componentId);
@@ -120,12 +140,18 @@ export class ComponentResolver {
             contextUser
           );
           resolved[spec.name] = compiledComponent;
-          console.log(`📦 Resolved registry component: ${spec.name} from ${componentId}`);
+          if (this.debug) {
+            console.log(`📦 Resolved registry component: ${spec.name} from ${componentId}`);
+          }
         } else {
-          console.warn(`Registry component not found in database: ${spec.name}`);
+          if (this.debug) {
+            console.warn(`Registry component not found in database: ${spec.name}`);
+          }
         }
       } catch (error) {
-        console.error(`Failed to load registry component ${spec.name}:`, error);
+        if (this.debug) {
+          console.error(`Failed to load registry component ${spec.name}:`, error);
+        }
       }
     } else {
       // Embedded component - get from local registry
@@ -134,15 +160,21 @@ export class ComponentResolver {
       const component = this.registry.get(spec.name, componentNamespace);
       if (component) {
         resolved[spec.name] = component;
-        console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}`);
+        if (this.debug) {
+          console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}`);
+        }
       } else {
         // If not found with specified namespace, try the parent namespace as fallback
         const fallbackComponent = this.registry.get(spec.name, namespace);
         if (fallbackComponent) {
           resolved[spec.name] = fallbackComponent;
-          console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}`);
+          if (this.debug) {
+            console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}`);
+          }
         } else {
-          console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+          if (this.debug) {
+            console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+          }
         }
       }
     }
@@ -162,7 +194,9 @@ export class ComponentResolver {
     if (this.registryService) {
       // This would allow the registry service to clean up unused components
       // Implementation would track which components this resolver referenced
-      console.log(`Cleaning up resolver: ${this.resolverInstanceId}`);
+      if (this.debug) {
+        console.log(`Cleaning up resolver: ${this.resolverInstanceId}`);
+      }
     }
   }
 

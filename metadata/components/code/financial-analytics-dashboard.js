@@ -1,10 +1,7 @@
 function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Extract AIInsightsPanel from components
+  // Load registry components
   const AIInsightsPanel = components?.AIInsightsPanel;
-  
-  if (!AIInsightsPanel) {
-    console.warn('AIInsightsPanel component not available');
-  }
+  const DataExportPanel = components?.DataExportPanel;
   const [invoices, setInvoices] = useState([]);
   const [deals, setDeals] = useState([]);
   const [products, setProducts] = useState([]);
@@ -17,6 +14,16 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [drillDownTitle, setDrillDownTitle] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'TotalAmount', direction: 'desc' });
   const chartRefs = useRef({});
+  const dashboardRef = useRef(null);
+  const aiInsightsRef = useRef(null);
+  
+  // Debug ref initialization
+  useEffect(() => {
+    console.log('Dashboard refs after mount:', {
+      dashboardRef: dashboardRef.current,
+      aiInsightsRef: aiInsightsRef.current
+    });
+  }, []);
   
   // AI Insights state
   const [aiInsights, setAiInsights] = useState(null);
@@ -126,7 +133,17 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
     };
   };
 
-  const metrics = calculateMetrics();
+  // Calculate metrics only when data is loaded
+  const metrics = loading ? {
+    actualRevenue: 0,
+    projectedRevenue: 0,
+    outstandingRevenue: 0,
+    grossMargin: 0,
+    revenueGrowth: 0,
+    avgDealSize: 0,
+    totalRevenue: 0,
+    cashFlow: 0
+  } : calculateMetrics();
   
   // Format insights text using marked library for proper markdown rendering
 
@@ -548,114 +565,154 @@ Focus on actionable business insights that can help improve financial performanc
           </div>
           
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => exportToPDF()}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#3B82F6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Export PDF
-            </button>
-            <button
-              onClick={() => exportToExcel()}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#10B981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Export Excel
-            </button>
+            {DataExportPanel ? (
+              <DataExportPanel
+                data={prepareExportData()}
+                columns={getExportColumns()}
+                htmlElement={dashboardRef.current}
+                filename={`financial-report-${new Date().toISOString().split('T')[0]}`}
+                formats={['csv', 'excel', 'pdf']}
+                buttonStyle="menu"
+                pdfOptions={{
+                  orientation: 'landscape',
+                  pageSize: 'a4',
+                  margins: { top: 40, bottom: 40, left: 40, right: 40 },
+                  title: 'Financial Analytics Report',
+                  includeDataTable: true,
+                  multiPage: true  // Enable multi-page support for tall dashboards
+                }}
+                excelOptions={{
+                  sheetName: 'Financial Data',
+                  includeFilters: true,
+                  autoWidth: true
+                }}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+              />
+            ) : null}
           </div>
         </div>
       </div>
     );
   };
 
-  const exportToPDF = () => {
-    // Create a simple HTML-based report that can be printed to PDF
-    const reportWindow = window.open('', '_blank');
-    if (!reportWindow) {
-      alert('Please allow popups to export the report');
-      return;
+  // Prepare data for export
+  const prepareExportData = () => {
+    // Return empty array if data is not loaded
+    if (!invoices || invoices.length === 0) {
+      return [];
     }
     
-    const reportHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Financial Analytics Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          h1 { color: #333; }
-          .metric { margin: 15px 0; font-size: 16px; }
-          .value { font-weight: bold; color: #1890ff; }
-          @media print {
-            body { padding: 20px; }
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Financial Analytics Report</h1>
-        <div class="metric">Date Range: <span class="value">${timeRange}</span></div>
-        <div class="metric">Total Revenue: <span class="value">${formatCurrency(metrics.totalRevenue)}</span></div>
-        <div class="metric">Actual Revenue: <span class="value">${formatCurrency(metrics.actualRevenue)}</span></div>
-        <div class="metric">Projected Revenue: <span class="value">${formatCurrency(metrics.projectedRevenue)}</span></div>
-        <div class="metric">Outstanding: <span class="value">${formatCurrency(metrics.outstandingRevenue)}</span></div>
-        <div class="metric">Gross Margin: <span class="value">${metrics.grossMargin.toFixed(1)}%</span></div>
-        <div class="metric">Revenue Growth: <span class="value">${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth.toFixed(1)}%</span></div>
-        <div class="metric">Report Generated: <span class="value">${new Date().toLocaleString()}</span></div>
-        <script>
-          window.print();
-          setTimeout(() => window.close(), 1000);
-        </script>
-      </body>
-      </html>
-    `;
+    const metrics = calculateMetrics();
+    const monthlyTrends = prepareTrendData();
     
-    reportWindow.document.write(reportHTML);
-    reportWindow.document.close();
+    // Combine all financial data into a flat structure for export
+    const exportData = [];
+    
+    // Add monthly revenue data
+    monthlyTrends.forEach(month => {
+      exportData.push({
+        category: 'Monthly Revenue',
+        date: month.month,
+        metric: 'Invoice Revenue',
+        value: month.revenue,
+        type: 'Actual'
+      });
+      exportData.push({
+        category: 'Monthly Revenue',
+        date: month.month,
+        metric: 'Deal Revenue',
+        value: month.deals,
+        type: 'Projected'
+      });
+    });
+    
+    // Add summary metrics
+    const currentDate = new Date().toISOString().split('T')[0];
+    exportData.push(
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Total Revenue',
+        value: metrics.totalRevenue,
+        type: 'Combined'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Actual Revenue',
+        value: metrics.actualRevenue,
+        type: 'Actual'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Projected Revenue',
+        value: metrics.projectedRevenue,
+        type: 'Projected'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Outstanding Revenue',
+        value: metrics.outstandingRevenue,
+        type: 'Outstanding'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Average Deal Size',
+        value: metrics.avgDealSize,
+        type: 'Calculated'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Gross Margin',
+        value: metrics.grossMargin,
+        type: 'Percentage'
+      },
+      {
+        category: 'Summary',
+        date: currentDate,
+        metric: 'Revenue Growth',
+        value: metrics.revenueGrowth,
+        type: 'Percentage'
+      }
+    );
+    
+    // Add top invoices
+    const topInvoices = invoices
+      .filter(inv => inv.Status === 'Paid')
+      .sort((a, b) => (b.TotalAmount || 0) - (a.TotalAmount || 0))
+      .slice(0, 5);
+      
+    topInvoices.forEach(invoice => {
+      exportData.push({
+        category: 'Top Invoices',
+        date: invoice.InvoiceDate,
+        metric: `Invoice #${invoice.ID}`,
+        value: invoice.TotalAmount,
+        type: 'Invoice'
+      });
+    });
+    
+    return exportData;
+  };
+  
+  // Get export columns configuration
+  const getExportColumns = () => {
+    return [
+      { key: 'category', label: 'Category', type: 'string' },
+      { key: 'date', label: 'Date', type: 'date' },
+      { key: 'metric', label: 'Metric', type: 'string' },
+      { key: 'value', label: 'Value', type: 'currency' },
+      { key: 'type', label: 'Type', type: 'string' }
+    ];
   };
 
-  const exportToExcel = () => {
-    // Create CSV data for Excel compatibility
-    const csvContent = [
-      ['Financial Analytics Report'],
-      ['Generated:', new Date().toLocaleString()],
-      ['Date Range:', timeRange],
-      [],
-      ['Metric', 'Value'],
-      ['Total Revenue', metrics.totalRevenue],
-      ['Actual Revenue', metrics.actualRevenue],
-      ['Projected Revenue', metrics.projectedRevenue],
-      ['Outstanding', metrics.outstandingRevenue],
-      ['Gross Margin %', metrics.grossMargin.toFixed(2)],
-      ['Revenue Growth %', metrics.revenueGrowth.toFixed(2)]
-    ].map(row => row.join(',')).join('\n');
-    
-    // Create and download CSV file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `financial-metrics-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    URL.revokeObjectURL(url);
-  };
 
   if (loading) {
     return (
@@ -675,7 +732,10 @@ Focus on actionable business insights that can help improve financial performanc
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div ref={(el) => {
+      dashboardRef.current = el;
+      console.log('Dashboard ref callback:', el);
+    }} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         .ai-insights-content h1, .ai-insights-content h2, .ai-insights-content h3 {
           margin-top: 16px;
@@ -757,34 +817,83 @@ Focus on actionable business insights that can help improve financial performanc
               <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
               {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
             </button>
+            
+            {/* Export Button - hidden during PDF capture */}
+            <div className="no-print">
+              {DataExportPanel ? (
+                console.log('Rendering DataExportPanel with:', {
+                  dashboardRef: dashboardRef,
+                  dashboardRefCurrent: dashboardRef.current,
+                  dashboardRefExists: !!dashboardRef.current,
+                  aiInsights: !!aiInsights,
+                  aiInsightsRef: aiInsightsRef,
+                  aiInsightsRefCurrent: aiInsightsRef.current
+                }) ||
+                <DataExportPanel
+                  data={prepareExportData()}
+                  columns={getExportColumns()}
+                  getHtmlElement={() => dashboardRef.current}
+                  aiInsightsText={aiInsights}  // Pass raw markdown text only
+                  filename={`financial-report-${new Date().toISOString().split('T')[0]}`}
+                  formats={['csv', 'excel', 'pdf']}
+                  buttonStyle="dropdown"
+                  buttonText="Export"
+                  icon="fa-download"
+                  pdfOptions={{
+                    orientation: 'landscape',
+                    pageSize: 'a4',
+                    margins: { top: 40, bottom: 40, left: 40, right: 40 },
+                    title: 'Financial Analytics Report',
+                    includeDataTable: true,
+                    multiPage: true  // Enable multi-page support for tall dashboards
+                  }}
+                  excelOptions={{
+                    sheetName: 'Financial Data',
+                    includeFilters: true,
+                    autoWidth: true
+                  }}
+                  utilities={utilities}
+                  styles={styles}
+                  components={components}
+                  callbacks={callbacks}
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
       
       {/* AI Insights Panel */}
-      <AIInsightsPanel
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings?.aiInsights}
-        onSaveUserSettings={(settings) => onSaveUserSettings?.({
-          ...savedUserSettings,
-          aiInsights: settings
-        })}
-        insights={aiInsights}
-        loading={loadingInsights}
-        error={insightsError}
-        onGenerate={generateAIInsights}
-        title="Financial Analytics Insights"
-        icon="fa-wand-magic-sparkles"
-        iconColor={styles?.colors?.primary || '#8B5CF6'}
-        position="top"
-        onClose={() => {
-          setAiInsights(null);
-          setInsightsError(null);
-        }}
-      />
+      <div ref={(el) => {
+        aiInsightsRef.current = el;
+        console.log('AI Insights ref callback:', el);
+      }}>
+      {AIInsightsPanel ? (
+        <AIInsightsPanel
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings?.aiInsights}
+          onSaveUserSettings={(settings) => onSaveUserSettings?.({
+            ...savedUserSettings,
+            aiInsights: settings
+          })}
+          insights={aiInsights}
+          loading={loadingInsights}
+          error={insightsError}
+          onGenerate={generateAIInsights}
+          title="Financial Analytics Insights"
+          icon="fa-wand-magic-sparkles"
+          iconColor={styles?.colors?.primary || '#8B5CF6'}
+          position="top"
+          onClose={() => {
+            setAiInsights(null);
+            setInsightsError(null);
+          }}
+        />
+      ) : null}
+      </div>
       
       <div style={{ margin: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
