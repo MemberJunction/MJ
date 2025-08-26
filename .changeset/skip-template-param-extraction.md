@@ -2,10 +2,8 @@
 "@memberjunction/ai-agents": patch
 "@memberjunction/codegen-lib": patch
 "@memberjunction/metadata-sync": patch
-"@memberjunction/core-entities": patch
-"@memberjunction/generated-entities": patch
+"@memberjunction/core-entities": minor
 "@memberjunction/server": patch
-"@memberjunction/api": patch
 "@memberjunction/angular-explorer-core": patch
 ---
 
