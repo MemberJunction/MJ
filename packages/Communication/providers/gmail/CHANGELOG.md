@@ -1,5 +1,14 @@
 # @memberjunction/communication-gmail
 
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/communication-types@2.93.0
+  - @memberjunction/global@2.93.0
+
 ## 2.92.0
 
 ### Patch Changes

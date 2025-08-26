@@ -1,5 +1,71 @@
 # Change Log - @memberjunction/server
 
+## 2.93.0
+
+### Minor Changes
+
+- d0eaee2: migration
+- b15b3cf: migration
+
+### Patch Changes
+
+- bfcd737: Refactoring and new AI functionality
+- 103e4a9: Added comprehensive tracking fields to AI execution entities:
+
+  - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
+  - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
+  - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
+  - **Flow Agent Type**: Added support for Chat message handling to properly bubble up messages from sub-agents to users
+  - **Action Execution**: Enhanced action execution logging by capturing input data (action name and parameters) in step entities
+  - **CodeGen SQL Execution**: Fixed QUOTED_IDENTIFIER issues by adding `-I` flag to sqlcmd execution (required for indexed views and computed columns)
+  - **MetadataSync Push Service**: Improved error reporting with detailed context for field processing failures, lookup failures, and save errors
+  - Database migration `V202508231445__v2.93.0` adds the new tracking fields with proper constraints and metadata
+  - Updated all generated entity classes, GraphQL types, and Angular forms to support the new fields
+  - Enhanced error diagnostics in push service to help identify root causes of sync failures
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/sqlserver-dataprovider@2.93.0
+  - @memberjunction/graphql-dataprovider@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ai-agents@2.93.0
+  - @memberjunction/ai-agent-manager-actions@2.93.0
+  - @memberjunction/ai-core-plus@2.93.0
+  - @memberjunction/aiengine@2.93.0
+  - @memberjunction/ai-prompts@2.93.0
+  - @memberjunction/ai-vectors-pinecone@2.93.0
+  - @memberjunction/actions-apollo@2.93.0
+  - @memberjunction/actions-bizapps-accounting@2.93.0
+  - @memberjunction/actions-bizapps-crm@2.93.0
+  - @memberjunction/actions-bizapps-lms@2.93.0
+  - @memberjunction/actions-bizapps-social@2.93.0
+  - @memberjunction/core-actions@2.93.0
+  - @memberjunction/actions@2.93.0
+  - @memberjunction/entity-communications-server@2.93.0
+  - @memberjunction/doc-utils@2.93.0
+  - @memberjunction/external-change-detection@2.93.0
+  - @memberjunction/core-entities-server@2.93.0
+  - @memberjunction/data-context@2.93.0
+  - @memberjunction/queue@2.93.0
+  - @memberjunction/storage@2.93.0
+  - @memberjunction/skip-types@2.93.0
+  - @memberjunction/templates@2.93.0
+  - @memberjunction/data-context-server@2.93.0
+  - @memberjunction/ai@2.93.0
+  - @memberjunction/ai-anthropic@2.93.0
+  - @memberjunction/ai-cerebras@2.93.0
+  - @memberjunction/ai-groq@2.93.0
+  - @memberjunction/ai-lmstudio@2.93.0
+  - @memberjunction/ai-local-embeddings@2.93.0
+  - @memberjunction/ai-mistral@2.93.0
+  - @memberjunction/ai-ollama@2.93.0
+  - @memberjunction/ai-openai@2.93.0
+  - @memberjunction/ai-openrouter@2.93.0
+  - @memberjunction/global@2.93.0
+
 ## 2.92.0
 
 ### Patch Changes

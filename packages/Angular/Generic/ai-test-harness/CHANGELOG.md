@@ -1,5 +1,22 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.93.0
+
+### Patch Changes
+
+- bfcd737: Refactoring and new AI functionality
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/graphql-dataprovider@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ng-shared@2.93.0
+  - @memberjunction/ng-code-editor@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+  - @memberjunction/ng-notifications@2.93.0
+
 ## 2.92.0
 
 ### Minor Changes

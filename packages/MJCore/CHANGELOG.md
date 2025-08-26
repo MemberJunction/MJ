@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.93.0
+
+### Patch Changes
+
+- f8757aa: bug fixes
+  - @memberjunction/global@2.93.0
+
 ## 2.92.0
 
 ### Minor Changes
