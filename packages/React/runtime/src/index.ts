@@ -138,6 +138,7 @@ export const DEFAULT_CONFIGS = {
  * Creates a complete React runtime instance with all necessary components
  * @param babelInstance - Babel standalone instance for compilation
  * @param config - Optional configuration overrides
+ * @param runtimeContext - Optional runtime context for registry-based components
  * @returns Object containing compiler, registry, and resolver instances
  */
 export function createReactRuntime(
@@ -145,13 +146,14 @@ export function createReactRuntime(
   config?: {
     compiler?: Partial<import('./types').CompilerConfig>;
     registry?: Partial<import('./types').RegistryConfig>;
-  }
+  },
+  runtimeContext?: import('./types').RuntimeContext
 ) {
   const compiler = new ComponentCompiler(config?.compiler);
   compiler.setBabelInstance(babelInstance);
   
   const registry = new ComponentRegistry(config?.registry);
-  const resolver = new ComponentResolver(registry);
+  const resolver = new ComponentResolver(registry, compiler, runtimeContext);
 
   return {
     compiler,

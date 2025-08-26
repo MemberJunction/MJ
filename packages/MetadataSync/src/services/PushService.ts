@@ -568,16 +568,57 @@ export class PushService {
     }
     
     // Process field values with parent context and batch context
+    // Process each field with better error reporting
     for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
-      const processedValue = await this.syncEngine.processFieldValue(
-        fieldValue,
-        entityDir,
-        parentEntity,
-        null, // rootRecord
-        0,
-        batchContext // Pass batch context for lookups
-      );
-      entity.Set(fieldName, processedValue);
+      try {
+        const processedValue = await this.syncEngine.processFieldValue(
+          fieldValue,
+          entityDir,
+          parentEntity,
+          null, // rootRecord
+          0,
+          batchContext // Pass batch context for lookups
+        );
+        entity.Set(fieldName, processedValue);
+      } catch (fieldError: any) {
+        // Enhanced error reporting for field processing failures
+        const primaryKeyInfo = record.primaryKey ? JSON.stringify(record.primaryKey) : 'NEW';
+        
+        // Check if this is a lookup failure
+        if (fieldError.message?.includes('Lookup failed:')) {
+          console.error(`\n❌ LOOKUP FAILURE in ${entityName} (${primaryKeyInfo})`);
+          console.error(`   Field: ${fieldName}`);
+          console.error(`   Value: ${fieldValue}`);
+          console.error(`   Error: ${fieldError.message}`);
+          console.error(`   Tip: Check if the referenced record exists in the target entity\n`);
+        } else if (fieldError.message?.includes('Entity not found:')) {
+          console.error(`\n❌ ENTITY NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          console.error(`   Field: ${fieldName}`);
+          console.error(`   Value: ${fieldValue}`);
+          console.error(`   Error: ${fieldError.message}`);
+          console.error(`   Tip: Check if the entity name is spelled correctly\n`);
+        } else if (fieldError.message?.includes('Field') && fieldError.message?.includes('not found')) {
+          console.error(`\n❌ FIELD NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          console.error(`   Field: ${fieldName}`);
+          console.error(`   Value: ${fieldValue}`);
+          console.error(`   Error: ${fieldError.message}`);
+          console.error(`   Tip: Check if the field name exists in the target entity\n`);
+        } else if (fieldError.message?.includes('File not found:')) {
+          console.error(`\n❌ FILE NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          console.error(`   Field: ${fieldName}`);
+          console.error(`   Value: ${fieldValue}`);
+          console.error(`   Error: ${fieldError.message}`);
+          console.error(`   Tip: Check if the file path is correct relative to ${entityDir}\n`);
+        } else {
+          console.error(`\n❌ FIELD PROCESSING ERROR in ${entityName} (${primaryKeyInfo})`);
+          console.error(`   Field: ${fieldName}`);
+          console.error(`   Value: ${fieldValue}`);
+          console.error(`   Error: ${fieldError.message}\n`);
+        }
+        
+        // Re-throw with enhanced context
+        throw new Error(`Failed to process field '${fieldName}' in ${entityName}: ${fieldError.message}`);
+      }
     }
     
     // Check if the record is actually dirty before considering it changed
@@ -633,8 +674,81 @@ export class PushService {
     }
     
     // Save the record with detailed error logging
-    const saveResult = await entity.Save();
+    const recordName = entity.Get('Name');
+    const entityRecordId = entity.Get('ID');
+    
+    let saveResult;
+    try {
+      saveResult = await entity.Save();
+    } catch (saveError: any) {
+      console.error(`\n❌ SAVE EXCEPTION for ${entityName}`);
+      console.error(`   Record ID: ${entityRecordId || 'NEW'}`);
+      console.error(`   Record Name: ${recordName || 'N/A'}`);
+      console.error(`   File Path: ${flattenedRecord.path}`);
+      console.error(`   Error: ${saveError.message || saveError}`);
+      
+      // Check for specific error patterns
+      if (saveError.message?.includes('Cannot insert the value NULL')) {
+        console.error(`   Tip: A required field is NULL. Check the entity's required fields.`);
+      } else if (saveError.message?.includes('FOREIGN KEY constraint')) {
+        console.error(`   Tip: Foreign key constraint violation. Check that referenced records exist.`);
+      } else if (saveError.message?.includes('duplicate key')) {
+        console.error(`   Tip: Duplicate key violation. A record with these values already exists.`);
+      } else if (saveError.message?.includes('Incorrect syntax')) {
+        console.error(`   Tip: SQL syntax error. Check for special characters in field values.`);
+      }
+      
+      // Log problematic field values for debugging
+      console.error(`\n   Failed entity field values:`);
+      for (const field of entity.Fields) {
+        const value = entity.Get(field.Name);
+        if (value !== null && value !== undefined) {
+          const displayValue = typeof value === 'string' && value.length > 100 
+            ? value.substring(0, 100) + '...' 
+            : value;
+          console.error(`     ${field.Name}: ${displayValue}`);
+        }
+      }
+      console.error(''); // Empty line for readability
+      throw saveError;
+    }
+    
     if (!saveResult) {
+      console.error(`\n❌ SAVE RETURNED FALSE for ${entityName}`);
+      console.error(`   Record ID: ${entityRecordId || 'NEW'}`);
+      console.error(`   Record Name: ${recordName || 'N/A'}`);
+      console.error(`   File Path: ${flattenedRecord.path}`);
+      
+      // Log the LatestResult for debugging
+      if (entity.LatestResult) {
+        if (entity.LatestResult.Message) {
+          console.error(`   Database Message: ${entity.LatestResult.Message}`);
+        }
+        if (entity.LatestResult.Errors && entity.LatestResult.Errors.length > 0) {
+          console.error(`   Errors:`);
+          entity.LatestResult.Errors.forEach((err: any, idx: number) => {
+            const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err));
+            console.error(`     ${idx + 1}. ${errorMsg}`);
+          });
+        }
+        if ((entity.LatestResult as any).SQL) {
+          // Don't log the full SQL as it might be huge, just indicate it's available
+          console.error(`   SQL Statement: [Available - check entity.LatestResult.SQL if needed]`);
+        }
+      }
+      
+      // Log field values that might be problematic
+      console.error(`\n   Entity field values:`);
+      for (const field of entity.Fields) {
+        const value = entity.Get(field.Name);
+        if (value !== null && value !== undefined) {
+          const displayValue = typeof value === 'string' && value.length > 100 
+            ? value.substring(0, 100) + '...' 
+            : value;
+          console.error(`     ${field.Name}: ${displayValue}`);
+        }
+      }
+      console.error(''); // Empty line for readability
       // Build detailed error information
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       const primaryKeyInfo: string[] = [];

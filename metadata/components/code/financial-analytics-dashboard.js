@@ -1,4 +1,10 @@
 function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Extract AIInsightsPanel from components
+  const AIInsightsPanel = components?.AIInsightsPanel;
+  
+  if (!AIInsightsPanel) {
+    console.warn('AIInsightsPanel component not available');
+  }
   const [invoices, setInvoices] = useState([]);
   const [deals, setDeals] = useState([]);
   const [products, setProducts] = useState([]);
@@ -11,6 +17,11 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [drillDownTitle, setDrillDownTitle] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'TotalAmount', direction: 'desc' });
   const chartRefs = useRef({});
+  
+  // AI Insights state
+  const [aiInsights, setAiInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
 
   useEffect(() => {
     loadFinancialData();
@@ -116,6 +127,66 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   };
 
   const metrics = calculateMetrics();
+  
+  // Format insights text using marked library for proper markdown rendering
+
+  const generateAIInsights = async () => {
+    setLoadingInsights(true);
+    setInsightsError(null);
+    
+    try {
+      const trendData = prepareTrendData();
+      
+      const prompt = `Analyze this financial analytics data and provide insights:
+
+Time Period: ${timeRange}
+Total Revenue: ${formatCurrency(metrics.totalRevenue)}
+Actual Revenue: ${formatCurrency(metrics.actualRevenue)}
+Projected Revenue: ${formatCurrency(metrics.projectedRevenue)}
+Outstanding Revenue: ${formatCurrency(metrics.outstandingRevenue)}
+Gross Margin: ${metrics.grossMargin.toFixed(1)}%
+Revenue Growth: ${metrics.revenueGrowth > 0 ? '+' : ''}${metrics.revenueGrowth.toFixed(1)}%
+Average Deal Size: ${formatCurrency(metrics.avgDealSize)}
+Cash Flow: ${formatCurrency(metrics.cashFlow)}
+
+Data Summary:
+- Total Invoices: ${invoices.length}
+- Total Deals: ${deals.length}
+- Total Products: ${products.length}
+
+Recent Trend Data:
+${trendData.slice(-3).map(d => `${d.month}: Invoice Revenue ${formatCurrency(d.revenue)}, Deal Revenue ${formatCurrency(d.deals)}`).join('\n')}
+
+Provide:
+1. Key financial performance insights and trends
+2. Revenue growth analysis and projections
+3. Cash flow and outstanding revenue concerns
+4. Gross margin analysis and optimization opportunities
+5. Specific actionable recommendations for financial improvement
+6. Risk factors to monitor
+
+Focus on actionable business insights that can help improve financial performance.`;
+      
+      const result = await utilities.ai.ExecutePrompt({
+        systemPrompt: 'You are an expert financial analyst with deep knowledge of business finance, cash flow management, and revenue optimization. Provide clear, actionable insights with specific recommendations. Format your response in clear markdown.',
+        messages: prompt,
+        preferredModels: ['GPT-OSS-120B', 'Qwen3 32B'],
+        modelPower: 'high',
+        temperature: 0.7,
+        maxTokens: 1500
+      });
+      
+      if (result?.success && result?.result) {
+        setAiInsights(result.result);
+      } else {
+        setInsightsError('Failed to generate insights. Please try again.');
+      }
+    } catch (error) {
+      setInsightsError(error.message || 'Failed to generate AI insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
 
   const prepareTrendData = () => {
     const monthlyData = {};
@@ -605,27 +676,117 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .ai-insights-content h1, .ai-insights-content h2, .ai-insights-content h3 {
+          margin-top: 16px;
+          margin-bottom: 8px;
+          color: #111827;
+        }
+        .ai-insights-content h1 { font-size: 1.5em; }
+        .ai-insights-content h2 { font-size: 1.3em; }
+        .ai-insights-content h3 { font-size: 1.1em; }
+        .ai-insights-content p {
+          margin: 8px 0;
+          line-height: 1.6;
+          color: #374151;
+        }
+        .ai-insights-content ul, .ai-insights-content ol {
+          margin: 8px 0;
+          padding-left: 24px;
+        }
+        .ai-insights-content li {
+          margin: 4px 0;
+          color: #374151;
+        }
+        .ai-insights-content strong {
+          color: #111827;
+          font-weight: 600;
+        }
+        .ai-insights-content code {
+          background: #F3F4F6;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.9em;
+        }
+        .ai-insights-content blockquote {
+          border-left: 4px solid #3B82F6;
+          padding-left: 16px;
+          margin: 12px 0;
+          color: #4B5563;
+        }
+      `}</style>
+      
       <div style={{ padding: '20px', borderBottom: '1px solid #E5E7EB' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Financial Analytics</h2>
-          <select
-            value={timeRange}
-            onChange={(e) => {
-              setTimeRange(e.target.value);
-              onSaveUserSettings({ ...savedUserSettings, timeRange: e.target.value });
-            }}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #D1D5DB',
-              borderRadius: '6px'
-            }}
-          >
-            <option value="month">Last Month</option>
-            <option value="quarter">Last Quarter</option>
-            <option value="year">Last Year</option>
-          </select>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <select
+              value={timeRange}
+              onChange={(e) => {
+                setTimeRange(e.target.value);
+                onSaveUserSettings({ ...savedUserSettings, timeRange: e.target.value });
+              }}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #D1D5DB',
+                borderRadius: '6px'
+              }}
+            >
+              <option value="month">Last Month</option>
+              <option value="quarter">Last Quarter</option>
+              <option value="year">Last Year</option>
+            </select>
+            
+            {/* AI Insights Button */}
+            <button
+              onClick={generateAIInsights}
+              disabled={loadingInsights || loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: loadingInsights || loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                opacity: loadingInsights || loading ? 0.6 : 1
+              }}
+            >
+              <i className={`fa-solid fa-${loadingInsights ? 'spinner fa-spin' : 'wand-magic-sparkles'}`}></i>
+              {loadingInsights ? 'Analyzing...' : 'Get AI Insights'}
+            </button>
+          </div>
         </div>
-        
+      </div>
+      
+      {/* AI Insights Panel */}
+      <AIInsightsPanel
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings?.aiInsights}
+        onSaveUserSettings={(settings) => onSaveUserSettings?.({
+          ...savedUserSettings,
+          aiInsights: settings
+        })}
+        insights={aiInsights}
+        loading={loadingInsights}
+        error={insightsError}
+        onGenerate={generateAIInsights}
+        title="Financial Analytics Insights"
+        icon="fa-wand-magic-sparkles"
+        iconColor={styles?.colors?.primary || '#8B5CF6'}
+        position="top"
+        onClose={() => {
+          setAiInsights(null);
+          setInsightsError(null);
+        }}
+      />
+      
+      <div style={{ margin: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
           <div 
             style={{ 

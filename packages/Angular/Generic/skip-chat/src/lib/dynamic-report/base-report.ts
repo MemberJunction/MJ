@@ -14,6 +14,7 @@ import { CacheManager } from '@memberjunction/react-runtime';
 export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
   @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() ShowCreateReportButton: boolean = false;
+  @Input() ShowOpenReportButton: boolean = true;
   @Input() ConversationID: string | null = null;
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: string | null = null;

@@ -4,7 +4,6 @@
   "description": "Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, and execution capabilities for React components in any JavaScript environment.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "browser": "dist/runtime.umd.js",
   "scripts": {
     "build": "npm run build:node && npm run build:umd",
     "build:node": "tsc",

@@ -62,7 +62,7 @@ export class AngularAdapterService {
       }
     };
 
-    // Create the React runtime
+    // Create the React runtime with runtime context for registry support
     this.runtime = createReactRuntime(ecosystem.Babel, {
       compiler: {
         cache: true,
@@ -74,7 +74,7 @@ export class AngularAdapterService {
         useLRU: true,
         enableNamespaces: true
       }
-    });
+    }, this.runtimeContext);
   }
 
   /**

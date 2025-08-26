@@ -319,7 +319,8 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
 
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
-    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -i "${absoluteFilePath}"`;
+    // Add -I flag to enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
+    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -I -i "${absoluteFilePath}"`;
 
     // Execute the command
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);

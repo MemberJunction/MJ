@@ -12,15 +12,13 @@
         "name": "Invoices",
         "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "DueDate", "TotalAmount", "Status", "PaidAmount"],
         "filterFields": ["Status", "DueDate", "AccountID"],
-        "sortFields": ["DueDate", "TotalAmount"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["DueDate", "TotalAmount"] 
       },
       {
         "name": "Payments",
         "displayFields": ["InvoiceID", "PaymentDate", "Amount", "PaymentMethod"],
         "filterFields": ["PaymentDate", "InvoiceID"],
-        "sortFields": ["PaymentDate"],
-        "requiredPermissions": ["read"]
+        "sortFields": ["PaymentDate"] 
       }
     ]
   },
@@ -32,7 +30,14 @@
       "description": "Navigate to invoice details"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "Plotly",
