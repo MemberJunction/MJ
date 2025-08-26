@@ -1,5 +1,16 @@
 # @memberjunction/interactive-component-types
 
+## 2.93.0
+
+### Patch Changes
+
+- bfcd737: Refactoring and new AI functionality
+- 1461a44: Added `utilities.ai`
+- Updated dependencies [f8757aa]
+- Updated dependencies [74172ce]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/ai-vectors-memory@2.93.0
+
 ## 2.92.0
 
 ### Minor Changes

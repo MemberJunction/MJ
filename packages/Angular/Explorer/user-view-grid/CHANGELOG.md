@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/actions-base@2.93.0
+  - @memberjunction/ng-compare-records@2.93.0
+  - @memberjunction/ng-entity-form-dialog@2.93.0
+  - @memberjunction/ng-shared@2.93.0
+  - @memberjunction/ng-base-types@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+  - @memberjunction/ng-entity-communications@2.93.0
+  - @memberjunction/communication-types@2.93.0
+  - @memberjunction/entity-communications-client@2.93.0
+  - @memberjunction/templates-base-types@2.93.0
+  - @memberjunction/global@2.93.0
+
 ## 2.92.0
 
 ### Patch Changes

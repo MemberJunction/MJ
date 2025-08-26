@@ -3193,7 +3193,13 @@ export class BaseAgent {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload, currentPayload);
+                // Prepare input data for the action step
+                const actionInputData = {
+                    actionName: aa.name,
+                    actionParams: aa.params
+                };
+                
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload);
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;

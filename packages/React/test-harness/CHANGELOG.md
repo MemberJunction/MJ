@@ -1,5 +1,16 @@
 # @memberjunction/react-test-harness
 
+## 2.93.0
+
+### Patch Changes
+
+- f8757aa: bug fixes
+- bfcd737: Refactoring and new AI functionality
+- Updated dependencies [bfcd737]
+- Updated dependencies [1461a44]
+  - @memberjunction/interactive-component-types@2.93.0
+  - @memberjunction/react-runtime@2.93.0
+
 ## 2.92.0
 
 ### Minor Changes

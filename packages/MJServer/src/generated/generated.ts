@@ -1710,6 +1710,13 @@ each time the agent processes a prompt step.`})
     @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional name for the agent run to help identify and tag runs for easier reference`}) 
+    @MaxLength(510)
+    RunName?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this agent run`}) 
+    Comments?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1734,11 +1741,11 @@ each time the agent processes a prompt step.`})
     @MaxLength(100)
     OverrideVendor?: string;
         
-    @Field(() => [AIAgentRunStep_])
-    MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
-    
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_ParentRunIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+    @Field(() => [AIAgentRunStep_])
+    MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -1854,6 +1861,12 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    RunName: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -1967,6 +1980,12 @@ export class UpdateAIAgentRunInput {
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
 
+    @Field({ nullable: true })
+    RunName?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -2029,17 +2048,6 @@ export class AIAgentRunResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [AIAgentRunStep_])
-    async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIAgentRun_])
     async MJ_AIAgentRuns_ParentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
@@ -2048,6 +2056,17 @@ export class AIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRunStep_])
+    async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
         return result;
     }
         
@@ -2389,14 +2408,14 @@ export class AIConfiguration_ {
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_ConfigurationIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
     @Field(() => [AIPromptModel_])
     MJ_AIPromptModels_ConfigurationIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [AIResultCache_])
     AIResultCache_ConfigurationIDArray: AIResultCache_[]; // Link to AIResultCache
-    
-    @Field(() => [AIPromptRun_])
-    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_ConfigurationIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -2541,6 +2560,17 @@ export class AIConfigurationResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [AIPromptModel_])
     async MJ_AIPromptModels_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -2560,17 +2590,6 @@ export class AIConfigurationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIPromptRun_])
-    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -5104,11 +5123,11 @@ export class AIPrompt_ {
     @Field(() => [AIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: AIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [AIPromptModel_])
-    MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
-    
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
+    
+    @Field(() => [AIPromptModel_])
+    MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -5544,17 +5563,6 @@ export class AIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptModel_])
-    async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIAgentPrompt_])
     async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
@@ -5563,6 +5571,17 @@ export class AIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptModel_])
+    async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
         
@@ -42644,6 +42663,13 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional name for the prompt run to help identify and tag runs for easier reference`}) 
+    @MaxLength(510)
+    RunName?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this prompt run`}) 
+    Comments?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -42925,6 +42951,12 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    RunName: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -43170,6 +43202,12 @@ export class UpdateAIPromptRunInput {
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
 
+    @Field({ nullable: true })
+    RunName?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -43363,6 +43401,16 @@ permanently, Warn means validation failed but execution continues.`})
 detailed information about what validation rules failed.`}) 
     FinalPayloadValidationMessages?: string;
         
+    @Field({nullable: true, description: `Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
+    Comments?: string;
+        
+    @Field(() => [AIAgentRunStep_])
+    MJ_AIAgentRunSteps_ParentIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
+    
 }
 
 //****************************************************************************
@@ -43423,6 +43471,12 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMessages: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -43484,6 +43538,12 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMessages?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43547,6 +43607,17 @@ export class AIAgentRunStepResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [AIAgentRunStep_])
+    async MJ_AIAgentRunSteps_ParentIDArray(@Root() aiagentrunstep_: AIAgentRunStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [ParentID]='${aiagentrunstep_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
+        return result;
+    }
+        
     @Mutation(() => AIAgentRunStep_)
     async CreateAIAgentRunStep(
         @Arg('input', () => CreateAIAgentRunStepInput) input: CreateAIAgentRunStepInput,

@@ -42,6 +42,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Prompt Runs" [Visible]="record.IsSaved"> 
+                        MJ: AI Prompt Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ConfigurationID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Prompt Models" [Visible]="record.IsSaved"> 
                         MJ: AI Prompt Models
                     </mj-tab>
@@ -63,19 +76,6 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','ConfigurationID')"  
                             [NewRecordValues]="NewRecordValues('AI Result Cache')"
                             [AllowLoad]="IsCurrentTab('AI Result Cache')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="MJ: AI Prompt Runs" [Visible]="record.IsSaved"> 
-                        MJ: AI Prompt Runs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','ConfigurationID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
-                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

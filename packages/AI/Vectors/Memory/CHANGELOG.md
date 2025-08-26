@@ -1,5 +1,14 @@
 # @memberjunction/ai-vectors-memory
 
+## 2.93.0
+
+### Patch Changes
+
+- 74172ce: functionality upgrades per commit messages
+- Updated dependencies [f8757aa]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/global@2.93.0
+
 ## 2.92.0
 
 ### Patch Changes

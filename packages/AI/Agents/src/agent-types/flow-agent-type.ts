@@ -150,6 +150,21 @@ export class FlowAgentType extends BaseAgentType {
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
                 
                 if (promptResponse) {
+                    // Check if the prompt response contains a Chat step request
+                    // This handles the case where a Prompt step wants to return a message to the user
+                    if (promptResponse.nextStep?.type === 'Chat' || 
+                        (promptResponse.taskComplete && promptResponse.message)) {
+                        // Return a Chat step to bubble the message back to the user
+                        return this.createNextStep('Chat', {
+                            message: promptResponse.message || 'Response from flow prompt step',
+                            reasoning: promptResponse.reasoning,
+                            confidence: promptResponse.confidence,
+                            terminate: true, // Always terminate for chat responses
+                            newPayload: payload,
+                            previousPayload: payload
+                        });
+                    }
+                    
                     // Merge the prompt response into the current payload
                     // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
                     // that key in the payload object
@@ -835,6 +850,13 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
+        // Check if this is a Chat step from a sub-agent - we need to bubble it up immediately
+        if (step.step === 'Chat') {
+            // Chat steps should bubble up immediately to the user
+            // Don't continue the flow, just return the chat step as-is
+            return step;
+        }
+        
         // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
         if (step.step !== 'Retry' && step.step !== 'Success') {
             // Not a retry or success step, use default processing
