@@ -139,6 +139,7 @@ export const DEFAULT_CONFIGS = {
  * @param babelInstance - Babel standalone instance for compilation
  * @param config - Optional configuration overrides
  * @param runtimeContext - Optional runtime context for registry-based components
+ * @param debug - Enable debug logging (defaults to false)
  * @returns Object containing compiler, registry, and resolver instances
  */
 export function createReactRuntime(
@@ -147,18 +148,31 @@ export function createReactRuntime(
     compiler?: Partial<import('./types').CompilerConfig>;
     registry?: Partial<import('./types').RegistryConfig>;
   },
-  runtimeContext?: import('./types').RuntimeContext
+  runtimeContext?: import('./types').RuntimeContext,
+  debug: boolean = false
 ) {
-  const compiler = new ComponentCompiler(config?.compiler);
+  // Merge debug flag into configs
+  const compilerConfig = {
+    ...config?.compiler,
+    debug: config?.compiler?.debug ?? debug
+  };
+  
+  const registryConfig = {
+    ...config?.registry,
+    debug: config?.registry?.debug ?? debug
+  };
+  
+  const compiler = new ComponentCompiler(compilerConfig);
   compiler.setBabelInstance(babelInstance);
   
-  const registry = new ComponentRegistry(config?.registry);
+  const registry = new ComponentRegistry(registryConfig);
   const resolver = new ComponentResolver(registry, compiler, runtimeContext);
 
   return {
     compiler,
     registry,
     resolver,
-    version: VERSION
+    version: VERSION,
+    debug
   };
 }
