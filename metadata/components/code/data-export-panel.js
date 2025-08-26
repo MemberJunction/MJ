@@ -32,8 +32,41 @@ function DataExportPanel({
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
   const [exportProgress, setExportProgress] = React.useState(0);
+  
+  // Validate and normalize columns on initialization
+  const validateColumns = (cols) => {
+    if (!cols || cols.length === 0) {
+      console.warn('⚠️ [DataExportPanel] No columns provided for export');
+      return [];
+    }
+    
+    return cols.map((col, index) => {
+      // Check for required properties
+      if (!col.key && !col.field) {
+        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'key' property. Expected format: { key: 'fieldName', label: 'Display Name' }. Got:`, col);
+      }
+      if (!col.label && !col.header && !col.name) {
+        console.warn(`⚠️ [DataExportPanel] Column at index ${index} missing 'label' property. Will fallback to key/field value.`);
+      }
+      
+      const key = col.key || col.field;
+      const label = col.label || col.header || col.name || key;
+      
+      if (!key) {
+        console.error(`❌ [DataExportPanel] Column at index ${index} has no valid key identifier. This will cause export to fail. Column:`, col);
+      }
+      
+      return {
+        ...col,
+        key: key,
+        label: label,
+        selected: true
+      };
+    });
+  };
+  
   const [selectedColumns, setSelectedColumns] = React.useState(
-    columns.map(col => ({ ...col, selected: true }))
+    validateColumns(columns)
   );
   const [showColumnSelector, setShowColumnSelector] = React.useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = React.useState(false);
@@ -41,6 +74,11 @@ function DataExportPanel({
   
   const exportRef = React.useRef(null);
   const dropdownRef = React.useRef(null);
+  
+  // Re-validate columns if they change
+  React.useEffect(() => {
+    setSelectedColumns(validateColumns(columns));
+  }, [columns]);
   
   // Merge default styles with custom styles
   const panelStyles = {
@@ -139,14 +177,34 @@ function DataExportPanel({
   const prepareData = () => {
     const activeColumns = allowColumnSelection 
       ? selectedColumns.filter(col => col.selected)
-      : columns;
+      : selectedColumns; // Use validated selectedColumns instead of raw columns
       
-    if (!data || data.length === 0) return { headers: [], rows: [] };
+    if (!data || data.length === 0) {
+      console.warn('⚠️ [DataExportPanel] No data to export');
+      return { headers: [], rows: [] };
+    }
+    
+    // Validate data structure
+    if (data.length > 0) {
+      const sampleRow = data[0];
+      activeColumns.forEach(col => {
+        if (!(col.key in sampleRow)) {
+          console.warn(`⚠️ [DataExportPanel] Data missing key '${col.key}' that was defined in columns. First row keys:`, Object.keys(sampleRow));
+        }
+      });
+    }
     
     const headers = activeColumns.map(col => col.label || col.key);
-    const rows = data.map(row => 
-      activeColumns.map(col => formatValue(row[col.key], col.type))
+    const rows = data.map((row, rowIndex) => 
+      activeColumns.map(col => {
+        if (!(col.key in row) && rowIndex === 0) {
+          console.warn(`⚠️ [DataExportPanel] Row ${rowIndex} missing value for key '${col.key}'`);
+        }
+        return formatValue(row[col.key], col.type);
+      })
     );
+    
+    console.log(`✅ [DataExportPanel] Prepared ${rows.length} rows with ${headers.length} columns for export`);
     
     return { headers, rows };
   };
@@ -354,7 +412,8 @@ function DataExportPanel({
         console.log('Wait complete, starting html2canvas...');
         
         // Capture the element with better options for dashboards
-        let canvas;
+        let canvas = null;
+        let imgData = null;
         try {
           canvas = await html2canvas(exportHtmlElement, {
             scale: 2,
@@ -370,14 +429,16 @@ function DataExportPanel({
             }
           });
           console.log('Dashboard canvas captured successfully');
+          imgData = canvas.toDataURL('image/jpeg', 0.95);  // Use JPEG for better compression
         } catch (canvasError) {
           console.error('Error capturing dashboard canvas:', canvasError);
-          throw new Error(`Failed to capture dashboard: ${canvasError.message}`);
+          console.warn('⚠️ Continuing PDF export without visualization - will include data table only');
+          // Don't throw - continue with data table export
+          canvas = null;
+          imgData = null;
         }
         
         setExportProgress(60);
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);  // Use JPEG for better compression
         
         // Calculate proper aspect ratio
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -390,42 +451,62 @@ function DataExportPanel({
         const maxWidth = pageWidth - marginLeft - marginRight;
         const maxHeight = pageHeight - marginTop - marginBottom - 10;
         
-        // Calculate dimensions maintaining aspect ratio
-        const canvasAspectRatio = canvas.width / canvas.height;
-        const pageAspectRatio = maxWidth / maxHeight;
-        
-        let imgWidth, imgHeight;
-        
-        if (canvasAspectRatio > pageAspectRatio) {
-          // Image is wider than page ratio - fit to width
-          imgWidth = maxWidth;
-          imgHeight = maxWidth / canvasAspectRatio;
-        } else {
-          // Image is taller than page ratio - fit to height
-          imgHeight = maxHeight;
-          imgWidth = maxHeight * canvasAspectRatio;
-        }
-        
-        console.log('Image sizing:', {
-          canvas: { width: canvas.width, height: canvas.height, ratio: canvasAspectRatio },
-          page: { maxWidth, maxHeight, ratio: pageAspectRatio },
-          final: { width: imgWidth, height: imgHeight }
-        });
-        
-        // Skip AI Insights canvas capture - we only want the markdown text
-        // The aiInsightsText parameter provides the markdown content directly
-        
-        // Image data and dimensions are already calculated above
-        let yPosition = marginTop;
-        const bottomMargin = pageHeight - marginBottom;
-        
-        // Check if we need multi-page support for tall dashboards
-        if (pdfOptions.multiPage && imgHeight > bottomMargin - yPosition) {
-          console.log('Using multi-page mode for tall dashboard');
-          // Split the image across multiple pages
-          const pageHeight = bottomMargin - yPosition;
-          let remainingHeight = imgHeight;
-          let currentY = 0;
+        // Only process image if canvas was captured successfully
+        if (canvas && imgData) {
+          // Calculate dimensions maintaining aspect ratio
+          const canvasAspectRatio = canvas.width / canvas.height;
+          const pageAspectRatio = maxWidth / maxHeight;
+          
+          let imgWidth, imgHeight;
+          
+          if (canvasAspectRatio > pageAspectRatio) {
+            // Image is wider than page ratio - fit to width
+            imgWidth = maxWidth;
+            imgHeight = maxWidth / canvasAspectRatio;
+          } else {
+            // Image is taller than page ratio - fit to height
+            imgHeight = maxHeight;
+            imgWidth = maxHeight * canvasAspectRatio;
+          }
+          
+          // For cluster visualization, maximize the image size on the first page
+          // since we'll put the data table on subsequent pages
+          if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {
+            console.log('Detected cluster graph - maximizing image size for PDF');
+            // Use more of the page for the visualization
+            const availableHeight = pageHeight - marginTop - marginBottom;
+            const availableWidth = pageWidth - marginLeft - marginRight;
+            
+            // Recalculate to use full available space
+            if (canvasAspectRatio > (availableWidth / availableHeight)) {
+              imgWidth = availableWidth;
+              imgHeight = availableWidth / canvasAspectRatio;
+            } else {
+              imgHeight = availableHeight;
+              imgWidth = availableHeight * canvasAspectRatio;
+            }
+          }
+          
+          console.log('Image sizing:', {
+            canvas: { width: canvas.width, height: canvas.height, ratio: canvasAspectRatio },
+            page: { maxWidth, maxHeight, ratio: pageAspectRatio },
+            final: { width: imgWidth, height: imgHeight }
+          });
+          
+          // Skip AI Insights canvas capture - we only want the markdown text
+          // The aiInsightsText parameter provides the markdown content directly
+          
+          // Image data and dimensions are already calculated above
+          let yPosition = marginTop;
+          const bottomMargin = pageHeight - marginBottom;
+          
+          // Check if we need multi-page support for tall dashboards
+          if (pdfOptions.multiPage && imgHeight > bottomMargin - yPosition) {
+            console.log('Using multi-page mode for tall dashboard');
+            // Split the image across multiple pages
+            const pageHeight = bottomMargin - yPosition;
+            let remainingHeight = imgHeight;
+            let currentY = 0;
           
           while (remainingHeight > 0) {
             const currentPageHeight = Math.min(pageHeight, remainingHeight);
@@ -463,8 +544,8 @@ function DataExportPanel({
               yPosition = pdfOptions.margins.top;
             }
           }
-        } else if (yPosition + imgHeight > bottomMargin) {
-          // Single page mode - scale to fit
+          } else if (yPosition + imgHeight > bottomMargin) {
+            // Single page mode - scale to fit
           const maxHeight = bottomMargin - yPosition;
           const scaledWidth = (maxHeight * canvas.width) / canvas.height;
           
@@ -476,18 +557,31 @@ function DataExportPanel({
             scaledWidth > imgWidth ? imgWidth : scaledWidth,
             scaledWidth > imgWidth ? imgHeight : maxHeight
           );
+          } else {
+            // Center the image horizontally if it's narrower than the page
+            const xPosition = marginLeft + Math.max(0, (maxWidth - imgWidth) / 2);
+            
+            doc.addImage(
+              imgData, 
+              'JPEG', 
+              xPosition, 
+              yPosition, 
+              imgWidth, 
+              imgHeight
+            );
+            
+            // For cluster graphs, always put data table on next page for better layout
+            if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {
+              console.log('Cluster graph exported - data table will be on next page');
+              // Force data table to next page by setting a flag
+              doc.addPage();
+            }
+          }
         } else {
-          // Center the image horizontally if it's narrower than the page
-          const xPosition = marginLeft + Math.max(0, (maxWidth - imgWidth) / 2);
-          
-          doc.addImage(
-            imgData, 
-            'JPEG', 
-            xPosition, 
-            yPosition, 
-            imgWidth, 
-            imgHeight
-          );
+          // No image captured - add a note
+          doc.setFontSize(10);
+          doc.setTextColor(150, 150, 150);
+          doc.text('Note: Visualization could not be captured', pageWidth / 2, marginTop + 20, { align: 'center' });
         }
         
         // Add AI Insights on a new page - only use markdown text
@@ -819,6 +913,10 @@ function DataExportPanel({
   
   // Handle export based on format
   const handleExport = (format) => {
+    console.log('🎯 [DataExportPanel] handleExport called with format:', format);
+    console.log('  - data:', data);
+    console.log('  - data length:', data?.length);
+    console.log('  - columns:', columns);
     setIsDropdownOpen(false);
     
     if (showPreview) {
@@ -1119,6 +1217,13 @@ function DataExportPanel({
     return (
       <button
         onClick={() => {
+          console.log('🖱️ [DataExportPanel] Button clicked!');
+          console.log('  - buttonStyle:', buttonStyle);
+          console.log('  - formats:', formats);
+          console.log('  - isDropdownOpen:', isDropdownOpen);
+          console.log('  - data at click:', data);
+          console.log('  - data length at click:', data?.length);
+          
           if (buttonStyle === 'dropdown') {
             setIsDropdownOpen(!isDropdownOpen);
           } else if (formats.length === 1) {

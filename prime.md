@@ -32,26 +32,28 @@ Successfully replaced custom export implementations with DataExportPanel in 7 co
 
 All component spec files were updated to include `@include:data-export-panel.spec.json` dependency.
 
-## Current Issue Being Debugged
+## Latest Fixes (2025-08-26 continued)
 
-### Export Button Not Working in ai-prompts-cluster.js
-Added comprehensive console logging to debug why the export button doesn't respond:
+### Export Issues Resolved
 
-1. **Main component logging**:
-   - Component loading verification
-   - Data preparation logging
-   - Props passing verification
+1. **Fixed Column Mapping Issue**:
+   - Changed from `field/header` to `key/label` format that DataExportPanel expects
+   - This fixed the undefined headers and empty rows in CSV/Excel exports
 
-2. **Controls component logging**:
-   - DataExportPanel availability check
-   - Props received verification
-   - Export lifecycle logging
+2. **Added Runtime Validation**:
+   - DataExportPanel now validates column structure and warns about issues
+   - Validates data structure and warns if keys don't match columns
+   - Provides helpful console warnings for debugging
 
-3. **Key areas to check in console**:
-   - Whether DataExportPanel is loaded
-   - Whether export data is prepared correctly
-   - Whether props are passed correctly
-   - Export start/complete/error events
+3. **Moved Export Button to Header**:
+   - Relocated from controls panel to top-right header area
+   - Better UI/UX with dropdown having proper space to display
+
+4. **Fixed PDF Export with Cluster Visualization**:
+   - Made PDF export more robust - continues with data table if visualization capture fails
+   - Fixed indentation issues in export code
+   - Added proper error handling for html2canvas failures
+   - Returns container div instead of SVG directly (html2canvas handles this better)
 
 ## Files Modified in This Session
 

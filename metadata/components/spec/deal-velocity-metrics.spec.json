@@ -22,18 +22,18 @@
   "dependencies": [
     "@include:deal-velocity-trend-chart.spec.json",
     "@include:deal-velocity-distribution-chart.spec.json",
-    "@include:data-export-panel.spec.json"
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [
     {
       "name": "ECharts",
       "version": "^5.4.3",
       "globalVariable": "echarts"
-    },
-    {
-      "name": "papaparse",
-      "version": "^5.4.1",
-      "globalVariable": "Papa"
     },
     {
       "name": "simple-statistics",

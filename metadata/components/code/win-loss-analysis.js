@@ -2,6 +2,10 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
   // Load DataExportPanel component
   const DataExportPanel = components['DataExportPanel'];
   
+  // Debug logging
+  console.log('🔍 [WinLossAnalysis] Components available:', Object.keys(components || {}));
+  console.log('🔍 [WinLossAnalysis] DataExportPanel loaded:', !!DataExportPanel);
+  
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,6 +18,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
   const [filterReason, setFilterReason] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'CloseDate', direction: 'desc' });
   
+  const componentRef = useRef(null);
   const gridRef = useRef(null);
   const chartRefs = useRef({});
 
@@ -61,11 +66,16 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
     return startDate.toISOString().split('T')[0];
   };
 
-  const calculateWinLossMetrics = () => {
-    const filteredDeals = deals.filter(d => {
+  // Helper function to get filtered deals based on current filter
+  const getFilteredDeals = () => {
+    return deals.filter(d => {
       if (filterReason !== 'all' && d.LossReason !== filterReason) return false;
       return true;
     });
+  };
+
+  const calculateWinLossMetrics = () => {
+    const filteredDeals = getFilteredDeals();
 
     const wonDeals = filteredDeals.filter(d => d.Stage === 'Closed Won');
     const lostDeals = filteredDeals.filter(d => d.Stage === 'Closed Lost');
@@ -205,66 +215,44 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
 
   // Prepare data for export
   const prepareExportData = () => {
-    const metrics = calculateWinLossMetrics();
-    const exportData = [];
+    const filteredDeals = getFilteredDeals();
     
-    // Add summary metrics
-    exportData.push({
-      Category: 'Summary',
-      Metric: 'Win Rate',
-      Value: `${metrics.winRate.toFixed(1)}%`
-    });
-    exportData.push({
-      Category: 'Summary',
-      Metric: 'Won Deals',
-      Value: metrics.wonCount
-    });
-    exportData.push({
-      Category: 'Summary', 
-      Metric: 'Lost Deals',
-      Value: metrics.lostCount
-    });
-    exportData.push({
-      Category: 'Summary',
-      Metric: 'Won Revenue',
-      Value: metrics.wonValue
-    });
-    exportData.push({
-      Category: 'Summary',
-      Metric: 'Lost Revenue',
-      Value: metrics.lostValue
-    });
-    
-    // Add deal details
-    getFilteredDeals().forEach(deal => {
-      exportData.push({
-        Category: 'Deal Details',
-        DealName: deal.DealName,
-        Account: deal.AccountName,
-        Stage: deal.Stage,
-        Status: deal.Status,
-        Amount: deal.Amount,
-        CloseDate: deal.CloseDate,
-        WinLossReason: deal.WinLossReason || 'N/A'
-      });
-    });
-    
-    return exportData;
+    // Return simplified deal data with formatted amounts
+    return filteredDeals.map(deal => ({
+      DealName: deal.DealName || '',
+      AccountName: deal.AccountName || '',
+      Stage: deal.Stage || '',
+      Status: deal.Status || '',
+      Amount: deal.Amount ? `$${(deal.Amount / 1000).toFixed(1)}K` : '$0',
+      CloseDate: deal.CloseDate ? new Date(deal.CloseDate).toLocaleDateString() : '',
+      LossReason: deal.LossReason || (deal.Stage === 'Closed Won' ? 'Won' : 'Unknown'),
+      Owner: deal.Owner || '',
+      CreatedDate: deal.CreatedAt ? new Date(deal.CreatedAt || deal.__mj_CreatedAt).toLocaleDateString() : '',
+      CycleTime: (() => {
+        if (deal.CloseDate && (deal.CreatedAt || deal.__mj_CreatedAt)) {
+          const created = new Date(deal.CreatedAt || deal.__mj_CreatedAt);
+          const closed = new Date(deal.CloseDate);
+          const days = Math.floor((closed - created) / (1000 * 60 * 60 * 24));
+          return `${days} days`;
+        }
+        return '0 days';
+      })()
+    }));
   };
 
-  // Define export columns
+  // Define export columns with correct key/label format
   const getExportColumns = () => {
     return [
-      { field: 'Category', header: 'Category' },
-      { field: 'Metric', header: 'Metric' },
-      { field: 'Value', header: 'Value' },
-      { field: 'DealName', header: 'Deal Name' },
-      { field: 'Account', header: 'Account' },
-      { field: 'Stage', header: 'Stage' },
-      { field: 'Status', header: 'Status' },
-      { field: 'Amount', header: 'Amount' },
-      { field: 'CloseDate', header: 'Close Date' },
-      { field: 'WinLossReason', header: 'Win/Loss Reason' }
+      { key: 'DealName', label: 'Deal Name' },
+      { key: 'AccountName', label: 'Account' },
+      { key: 'Stage', label: 'Stage' },
+      { key: 'Status', label: 'Status' },
+      { key: 'Amount', label: 'Amount' },
+      { key: 'CloseDate', label: 'Close Date' },
+      { key: 'LossReason', label: 'Win/Loss Reason' },
+      { key: 'Owner', label: 'Owner' },
+      { key: 'CreatedDate', label: 'Created Date' },
+      { key: 'CycleTime', label: 'Cycle Time' }
     ];
   };
 
@@ -776,7 +764,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
   }
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
+    <div ref={componentRef} style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Win/Loss Analysis</h2>
@@ -805,7 +793,7 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
                 columns={getExportColumns()}
                 filename={`win-loss-analysis-${new Date().toISOString().split('T')[0]}`}
                 formats={['csv', 'excel', 'pdf']}
-                buttonStyle="button"
+                buttonStyle="dropdown"
                 buttonText="Export"
                 icon="fa-download"
                 customStyles={{
@@ -817,12 +805,13 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '4px',
+                    minWidth: '80px'
                   }
                 }}
-                getHtmlElement={() => gridRef.current}
+                getHtmlElement={() => componentRef.current}
                 utilities={utilities}
                 styles={styles}
                 components={components}

@@ -122,20 +122,20 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
     });
   };
 
-  // Define export columns
+  // Define export columns with correct key/label format
   const getExportColumns = () => {
     const columns = [
-      { field: 'Timestamp', header: 'Timestamp' },
-      { field: 'Name', header: activeTab === 'agents' ? 'Agent' : 'Prompt' },
-      { field: 'Success', header: 'Status' },
-      { field: 'Tokens', header: 'Tokens' },
-      { field: 'Cost', header: 'Cost' },
-      { field: 'Model', header: 'Model' },
-      { field: 'Status', header: 'Status' }
+      { key: 'Timestamp', label: 'Timestamp' },
+      { key: 'Name', label: activeTab === 'agents' ? 'Agent' : 'Prompt' },
+      { key: 'Success', label: 'Status' },
+      { key: 'Tokens', label: 'Tokens' },
+      { key: 'Cost', label: 'Cost' },
+      { key: 'Model', label: 'Model' },
+      { key: 'Status', label: 'Status' }
     ];
     
     if (activeTab === 'prompts') {
-      columns.push({ field: 'Duration', header: 'Duration (ms)' });
+      columns.push({ key: 'Duration', label: 'Duration (ms)' });
     }
     
     return columns;
@@ -185,7 +185,7 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
             columns={getExportColumns()}
             filename={`ai-${activeTab}-details-${new Date().toISOString().split('T')[0]}`}
             formats={['csv', 'excel']}
-            buttonStyle="button"
+            buttonStyle="dropdown"
             buttonText="Export"
             icon="fa-download"
             customStyles={{

@@ -240,18 +240,18 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
     return exportData;
   };
 
-  // Define export columns
+  // Define export columns with correct key/label format
   const getExportColumns = () => {
     return [
-      { field: 'Stage', header: 'Stage' },
-      { field: 'DealCount', header: 'Deal Count' },
-      { field: 'AvgDays', header: 'Avg Days' },
-      { field: 'MedianDays', header: 'Median Days' },
-      { field: 'MinDays', header: 'Min Days' },
-      { field: 'MaxDays', header: 'Max Days' },
-      { field: 'StdDev', header: 'Std Dev' },
-      { field: 'TotalValue', header: 'Total Value' },
-      { field: 'AvgDealSize', header: 'Avg Deal Size' }
+      { key: 'Stage', label: 'Stage' },
+      { key: 'DealCount', label: 'Deal Count' },
+      { key: 'AvgDays', label: 'Avg Days' },
+      { key: 'MedianDays', label: 'Median Days' },
+      { key: 'MinDays', label: 'Min Days' },
+      { key: 'MaxDays', label: 'Max Days' },
+      { key: 'StdDev', label: 'Std Dev' },
+      { key: 'TotalValue', label: 'Total Value' },
+      { key: 'AvgDealSize', label: 'Avg Deal Size' }
     ];
   };
 
@@ -303,31 +303,6 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
     <div style={{ backgroundColor: '#F3F4F6', minHeight: '100vh', width: '100%', boxSizing: 'border-box', padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Deal Velocity Metrics</h2>
-        {DataExportPanel && (
-          <DataExportPanel
-            data={prepareExportData()}
-            columns={getExportColumns()}
-            filename={`deal-velocity-metrics-${new Date().toISOString().split('T')[0]}`}
-            formats={['csv', 'excel', 'pdf']}
-            buttonStyle="button"
-            buttonText="Export"
-            icon="fa-download"
-            customStyles={{
-              button: {
-                padding: '6px 12px',
-                backgroundColor: '#10B981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }
-            }}
-            utilities={utilities}
-            styles={styles}
-            components={components}
-            callbacks={callbacks}
-          />
-        )}
       </div>
       
       {/* Enhanced Filter Controls */}
@@ -693,10 +668,11 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
       </div>
       
       <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #E5E7EB' }}>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button
-              onClick={() => {
-                setViewMode('heatmap');
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setViewMode('heatmap');
                 if (onSaveUserSettings) {
                   onSaveUserSettings({ 
                     viewMode: 'heatmap',
@@ -766,6 +742,36 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
             >
               Distribution
             </button>
+            </div>
+            {DataExportPanel && (
+              <DataExportPanel
+                data={prepareExportData()}
+                columns={getExportColumns()}
+                filename={`deal-velocity-metrics-${new Date().toISOString().split('T')[0]}`}
+                formats={['csv', 'excel', 'pdf']}
+                buttonStyle="dropdown"
+                buttonText="Export"
+                icon="fa-download"
+                customStyles={{
+                  button: {
+                    padding: '6px 12px',
+                    backgroundColor: '#10B981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }
+                }}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+              />
+            )}
           </div>
           
           {viewMode === 'heatmap' && (

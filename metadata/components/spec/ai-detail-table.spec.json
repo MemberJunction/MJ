@@ -30,7 +30,12 @@
   "exampleUsage": "<AIDetailTable data={selectedPoint.items} activeTab=\"agents\" />",
   "code": "@file:../code/ai-detail-table.js",
   "dependencies": [
-    "@include:data-export-panel.spec.json"
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": []
 }
