@@ -125,9 +125,9 @@ export class MJOktaProvider extends MJAuthBase {
     // Only check for existing session if not a redirect
     // This prevents auto-login after logout
     try {
-      const isAuthenticated = await this.oktaAuth.isAuthenticated();
+      const isAuthenticated = this.oktaAuth ? await this.oktaAuth.isAuthenticated() : false;
       
-      if (isAuthenticated) {
+      if (isAuthenticated && this.oktaAuth) {
         // Double-check we actually have valid tokens
         const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
         const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
@@ -367,7 +367,7 @@ export class MJOktaProvider extends MJAuthBase {
     }
     
     // Check authentication status
-    const isAuthenticated = await this.oktaAuth.isAuthenticated();
+    const isAuthenticated = this.oktaAuth ? await this.oktaAuth.isAuthenticated() : false;
     this.updateAuthState(isAuthenticated);
   }
 
