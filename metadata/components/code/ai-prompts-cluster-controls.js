@@ -10,7 +10,9 @@ function AIPromptsClusterControls({
   onClusterCountChange,
   onSimilarityThresholdChange,
   onRecalculate,
-  onExport,
+  exportData,
+  exportColumns,
+  DataExportPanel,
   utilities,
   styles,
   components,
@@ -320,22 +322,48 @@ function AIPromptsClusterControls({
           )}
         </button>
 
-        <button
-          onClick={onExport}
-          disabled={isProcessing}
-          style={{
-            ...buttonStyle,
-            background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
-            color: '#4a5568',
-            border: '2px solid #e2e8f0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-          }}
-          onMouseEnter={e => !isProcessing && (e.currentTarget.style.transform = 'translateY(-2px)')}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <i className="fa-solid fa-download" style={{ marginRight: '8px' }}></i>
-          Export CSV
-        </button>
+        {(() => {
+          console.log('🔍 [AIPromptsClusterControls] DataExportPanel check:');
+          console.log('  - DataExportPanel exists:', !!DataExportPanel);
+          console.log('  - exportData:', exportData);
+          console.log('  - exportData length:', exportData?.length);
+          console.log('  - exportColumns:', exportColumns);
+          console.log('  - utilities:', !!utilities);
+          console.log('  - components:', !!components);
+          
+          if (!DataExportPanel) {
+            console.warn('⚠️ [AIPromptsClusterControls] DataExportPanel component not available!');
+            return null;
+          }
+          
+          return (
+            <DataExportPanel
+              data={exportData}
+              columns={exportColumns}
+              filename={`ai-prompts-clusters-${new Date().toISOString().split('T')[0]}`}
+              formats={['csv', 'excel']}
+              buttonStyle="button"
+              buttonText="Export"
+              icon="fa-download"
+              customStyles={{
+                button: {
+                  ...buttonStyle,
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+                  color: '#4a5568',
+                  border: '2px solid #e2e8f0',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                }
+              }}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              onExportStart={() => console.log('🔍 [AIPromptsClusterControls] Export started')}
+              onExportComplete={() => console.log('🔍 [AIPromptsClusterControls] Export completed')}
+              onExportError={(err) => console.error('❌ [AIPromptsClusterControls] Export error:', err)}
+            />
+          );
+        })()}
       </div>
 
       {/* Statistics */}

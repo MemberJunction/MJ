@@ -1,6 +1,9 @@
 function AIDetailTable({ data, activeTab, styles, utilities, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   console.log('[AIDetailTable] Rendering with', data?.length || 0, 'items');
   
+  // Load DataExportPanel component
+  const DataExportPanel = components['DataExportPanel'];
+  
   const [sortField, setSortField] = useState(savedUserSettings?.sortField || 'timestamp');
   const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || 'desc');
   const [currentPage, setCurrentPage] = useState(0);
@@ -97,53 +100,45 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
     return `${(ms / 60000).toFixed(1)}m`;
   };
   
-  const exportToCSV = () => {
-    console.log('[AIDetailTable] Exporting to CSV');
-    
-    const headers = [
-      'Timestamp',
-      activeTab === 'agents' ? 'Agent' : 'Prompt',
-      'Success',
-      'Tokens',
-      'Cost'
-    ];
-    
-    // Add Duration header only for prompts
-    if (activeTab === 'prompts') {
-      headers.push('Duration');
-    }
-    
-    const rows = sortedData.map(item => {
-      const row = [
-        item[timestampField],
-        item[nameField] || item[idField],
-        item.Success ? 'Yes' : 'No',
-        (item.TotalTokensUsed || item.TokensUsed) || 0,
-        item.TotalCost || 0
-      ];
+  // Prepare data for export
+  const prepareExportData = () => {
+    return sortedData.map(item => {
+      const exportRow = {
+        Timestamp: item[timestampField],
+        Name: item[nameField] || item[idField],
+        Success: item.Success ? 'Yes' : 'No',
+        Tokens: (item.TotalTokensUsed || item.TokensUsed) || 0,
+        Cost: item.TotalCost || 0,
+        Model: item.Model || 'Unknown',
+        Status: item.Status || 'Unknown'
+      };
       
-      // Add Duration value only for prompts
+      // Add Duration for prompts
       if (activeTab === 'prompts') {
-        row.push(item.ExecutionTimeMS || 0);
+        exportRow.Duration = item.ExecutionTimeMS || 0;
       }
       
-      return row;
+      return exportRow;
     });
+  };
+
+  // Define export columns
+  const getExportColumns = () => {
+    const columns = [
+      { field: 'Timestamp', header: 'Timestamp' },
+      { field: 'Name', header: activeTab === 'agents' ? 'Agent' : 'Prompt' },
+      { field: 'Success', header: 'Status' },
+      { field: 'Tokens', header: 'Tokens' },
+      { field: 'Cost', header: 'Cost' },
+      { field: 'Model', header: 'Model' },
+      { field: 'Status', header: 'Status' }
+    ];
     
-    const csv = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    if (activeTab === 'prompts') {
+      columns.push({ field: 'Duration', header: 'Duration (ms)' });
+    }
     
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ai-${activeTab}-details-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    return columns;
   };
   
   const columns = [
@@ -184,20 +179,32 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
           Detailed Records ({sortedData.length})
         </h3>
         
-        <button
-          onClick={exportToCSV}
-          style={{
-            padding: `${styles.spacing.sm} ${styles.spacing.md}`,
-            backgroundColor: styles.colors.primary,
-            color: 'white',
-            border: 'none',
-            borderRadius: styles.borders?.radius || '4px',
-            cursor: 'pointer',
-            fontSize: styles.typography.fontSize.sm
-          }}
-        >
-          Export CSV
-        </button>
+        {DataExportPanel && (
+          <DataExportPanel
+            data={prepareExportData()}
+            columns={getExportColumns()}
+            filename={`ai-${activeTab}-details-${new Date().toISOString().split('T')[0]}`}
+            formats={['csv', 'excel']}
+            buttonStyle="button"
+            buttonText="Export"
+            icon="fa-download"
+            customStyles={{
+              button: {
+                padding: `${styles.spacing.sm} ${styles.spacing.md}`,
+                backgroundColor: styles.colors.primary,
+                color: 'white',
+                border: 'none',
+                borderRadius: styles.borders?.radius || '4px',
+                cursor: 'pointer',
+                fontSize: styles.typography.fontSize.sm
+              }
+            }}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+          />
+        )}
       </div>
       
       {/* Table */}

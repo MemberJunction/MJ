@@ -18,6 +18,14 @@ function AIPromptsCluster({
   const ClusterGraph = components['AIPromptsClusterGraph'];
   const ClusterControls = components['AIPromptsClusterControls'];
   const ClusterDetails = components['AIPromptsClusterDetails'];
+  const DataExportPanel = components['DataExportPanel'];
+  
+  console.log('🔍 [AIPromptsCluster] Component loading check:');
+  console.log('  - ClusterGraph:', !!ClusterGraph);
+  console.log('  - ClusterControls:', !!ClusterControls);
+  console.log('  - ClusterDetails:', !!ClusterDetails);
+  console.log('  - DataExportPanel:', !!DataExportPanel);
+  console.log('  - All components object:', Object.keys(components || {}));
 
   // State management
   const [prompts, setPrompts] = useState([]);
@@ -489,33 +497,41 @@ Format your response in clear markdown with headers and bullet points.`;
     generateEmbeddings();
   };
 
-  const handleExport = () => {
-    // Create export data
+  // Prepare export data for DataExportPanel
+  const prepareExportData = () => {
+    console.log('🔍 [AIPromptsCluster] prepareExportData called');
+    console.log('🔍 [AIPromptsCluster] clusters:', clusters);
+    console.log('🔍 [AIPromptsCluster] clusters length:', clusters?.length);
+    
     const exportData = clusters.map(prompt => ({
       ID: prompt.ID,
       Name: prompt.Name,
       Category: prompt.Category,
       Type: prompt.Type,
-      Cluster: prompt.cluster
+      Cluster: prompt.cluster,
+      Status: prompt.Status,
+      PromptRole: prompt.PromptRole,
+      ResponseFormat: prompt.ResponseFormat
     }));
     
-    // Convert to CSV
-    const headers = ['ID', 'Name', 'Category', 'Type', 'Cluster'];
-    const csv = [
-      headers.join(','),
-      ...exportData.map(row => 
-        headers.map(h => `"${row[h] || ''}"`).join(',')
-      )
-    ].join('\n');
+    console.log('🔍 [AIPromptsCluster] exportData prepared:', exportData);
+    console.log('🔍 [AIPromptsCluster] exportData length:', exportData?.length);
     
-    // Download file
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ai-prompts-clusters-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return exportData;
+  };
+
+  // Define export columns
+  const getExportColumns = () => {
+    return [
+      { field: 'ID', header: 'ID' },
+      { field: 'Name', header: 'Name' },
+      { field: 'Category', header: 'Category' },
+      { field: 'Type', header: 'Type' },
+      { field: 'Cluster', header: 'Cluster' },
+      { field: 'Status', header: 'Status' },
+      { field: 'PromptRole', header: 'Role' },
+      { field: 'ResponseFormat', header: 'Response Format' }
+    ];
   };
 
   const handleEditPrompt = (promptId) => {
@@ -627,7 +643,20 @@ Format your response in clear markdown with headers and bullet points.`;
             onClusterCountChange={setClusterCount}
             onSimilarityThresholdChange={setSimilarityThreshold}
             onRecalculate={handleRecalculate}
-            onExport={handleExport}
+            exportData={(() => {
+              const data = prepareExportData();
+              console.log('🔍 [AIPromptsCluster] Passing exportData to controls:', data);
+              return data;
+            })()}
+            exportColumns={(() => {
+              const columns = getExportColumns();
+              console.log('🔍 [AIPromptsCluster] Passing exportColumns to controls:', columns);
+              return columns;
+            })()}
+            DataExportPanel={(() => {
+              console.log('🔍 [AIPromptsCluster] Passing DataExportPanel to controls:', !!DataExportPanel);
+              return DataExportPanel;
+            })()}
             utilities={utilities}
             styles={styles}
             components={components}

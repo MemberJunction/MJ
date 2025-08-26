@@ -24,7 +24,9 @@
       "description": "View deal details"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    "@include:data-export-panel.spec.json"
+  ],
   "libraries": [
     {
       "name": "ag-grid",

@@ -1,4 +1,7 @@
 function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load DataExportPanel component
+  const DataExportPanel = components['DataExportPanel'];
+  
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -200,32 +203,69 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
     setIsPanelOpen(true);
   };
 
-  const exportToCSV = () => {
+  // Prepare data for export
+  const prepareExportData = () => {
     const metrics = calculateWinLossMetrics();
-    const csvData = [];
+    const exportData = [];
     
-    // Headers
-    csvData.push(['Win/Loss Analysis Report', `Generated: ${new Date().toLocaleDateString()}`]);
-    csvData.push([]);
-    csvData.push(['Metric', 'Value']);
-    csvData.push(['Win Rate', `${metrics.winRate.toFixed(1)}%`]);
-    csvData.push(['Won Deals', metrics.wonCount]);
-    csvData.push(['Lost Deals', metrics.lostCount]);
-    csvData.push(['Won Revenue', `$${metrics.wonValue.toFixed(0)}`]);
-    csvData.push(['Lost Revenue', `$${metrics.lostValue.toFixed(0)}`]);
-    csvData.push([]);
+    // Add summary metrics
+    exportData.push({
+      Category: 'Summary',
+      Metric: 'Win Rate',
+      Value: `${metrics.winRate.toFixed(1)}%`
+    });
+    exportData.push({
+      Category: 'Summary',
+      Metric: 'Won Deals',
+      Value: metrics.wonCount
+    });
+    exportData.push({
+      Category: 'Summary', 
+      Metric: 'Lost Deals',
+      Value: metrics.lostCount
+    });
+    exportData.push({
+      Category: 'Summary',
+      Metric: 'Won Revenue',
+      Value: metrics.wonValue
+    });
+    exportData.push({
+      Category: 'Summary',
+      Metric: 'Lost Revenue',
+      Value: metrics.lostValue
+    });
     
+    // Add deal details
+    getFilteredDeals().forEach(deal => {
+      exportData.push({
+        Category: 'Deal Details',
+        DealName: deal.DealName,
+        Account: deal.AccountName,
+        Stage: deal.Stage,
+        Status: deal.Status,
+        Amount: deal.Amount,
+        CloseDate: deal.CloseDate,
+        WinLossReason: deal.WinLossReason || 'N/A'
+      });
+    });
     
-    // Convert to CSV string
-    const csv = csvData.map(row => row.join(',')).join('\n');
-    
-    // Download
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `win-loss-analysis-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    return exportData;
+  };
+
+  // Define export columns
+  const getExportColumns = () => {
+    return [
+      { field: 'Category', header: 'Category' },
+      { field: 'Metric', header: 'Metric' },
+      { field: 'Value', header: 'Value' },
+      { field: 'DealName', header: 'Deal Name' },
+      { field: 'Account', header: 'Account' },
+      { field: 'Stage', header: 'Stage' },
+      { field: 'Status', header: 'Status' },
+      { field: 'Amount', header: 'Amount' },
+      { field: 'CloseDate', header: 'Close Date' },
+      { field: 'WinLossReason', header: 'Win/Loss Reason' }
+    ];
   };
 
   // Enhanced Sub-component: Overview Cards with drill-down
@@ -759,24 +799,36 @@ function WinLossAnalysis({ utilities, styles, components, callbacks, savedUserSe
               <option value="year">Last Year</option>
               <option value="all">All Time</option>
             </select>
-            <button
-              onClick={exportToCSV}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#10B981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              <i className="fa-solid fa-download"></i>
-              Export CSV
-            </button>
+            {DataExportPanel && (
+              <DataExportPanel
+                data={prepareExportData()}
+                columns={getExportColumns()}
+                filename={`win-loss-analysis-${new Date().toISOString().split('T')[0]}`}
+                formats={['csv', 'excel', 'pdf']}
+                buttonStyle="button"
+                buttonText="Export"
+                icon="fa-download"
+                customStyles={{
+                  button: {
+                    padding: '6px 12px',
+                    backgroundColor: '#10B981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }
+                }}
+                getHtmlElement={() => gridRef.current}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+              />
+            )}
             <button
               onClick={() => setViewMode(viewMode === 'overview' ? 'detailed' : 'overview')}
               style={{

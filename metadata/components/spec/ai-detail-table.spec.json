@@ -29,6 +29,8 @@
   "events": [],
   "exampleUsage": "<AIDetailTable data={selectedPoint.items} activeTab=\"agents\" />",
   "code": "@file:../code/ai-detail-table.js",
-  "dependencies": [],
+  "dependencies": [
+    "@include:data-export-panel.spec.json"
+  ],
   "libraries": []
 }

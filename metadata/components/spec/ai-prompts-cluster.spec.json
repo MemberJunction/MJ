@@ -37,6 +37,7 @@
     "@include:ai-prompts-cluster-graph.spec.json",
     "@include:ai-prompts-cluster-controls.spec.json",
     "@include:ai-prompts-cluster-details.spec.json",
+    "@include:data-export-panel.spec.json",
     {
       "name": "AIInsightsPanel",
       "location": "registry",
