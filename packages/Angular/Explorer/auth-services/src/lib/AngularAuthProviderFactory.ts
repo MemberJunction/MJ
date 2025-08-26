@@ -33,6 +33,7 @@ export class AngularAuthProviderFactory {
    * Create a provider based on configuration
    */
   createProvider(config: AngularAuthProviderConfig): IAngularAuthProvider {
+    
     const existingProvider = this.providers.get(config.type);
     if (existingProvider) {
       return existingProvider;
@@ -104,6 +105,7 @@ export class AngularAuthProviderFactory {
    * This uses the static angularProviderFactory property on each provider class for extensibility
    */
   static getProviderAngularServices(type: string, environment: any): any[] {
+    
     const normalizedType = type?.toLowerCase();
     
     // Get the provider class from the ClassFactory
@@ -121,7 +123,8 @@ export class AngularAuthProviderFactory {
     // Check if the provider class has the factory property (new pattern)
     if (providerClass.angularProviderFactory) {
       // Call the factory function to get the required providers
-      return providerClass.angularProviderFactory(environment);
+      const services = providerClass.angularProviderFactory(environment);
+      return services;
     } 
     // Fallback to old method name for backward compatibility
     else if (typeof providerClass.getRequiredAngularProviders === 'function') {
@@ -130,7 +133,6 @@ export class AngularAuthProviderFactory {
     } 
     else {
       // Provider doesn't define required Angular services (might not need any)
-      console.log(`Provider ${type} does not define angularProviderFactory property`);
       return [];
     }
   }
