@@ -1032,5 +1032,45 @@
       "lastModified": "2025-08-25T22:55:52.775Z",
       "checksum": "a66058ccb89d9bd9f3f104360047c5f10db6af406f24e3ecc7d14fe92471dc33"
     }
+  },
+  {
+    "fields": {
+      "Name": "jspdf",
+      "DisplayName": "jsPDF",
+      "Version": "2.5.1",
+      "GlobalVariable": "jspdf",
+      "Category": "Other",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Client-side JavaScript PDF generation library for creating PDF documents",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4AAF4A70-9C30-496B-9324-51BD8F24D090"
+    },
+    "sync": {
+      "lastModified": "2025-08-26T14:43:59.757Z",
+      "checksum": "74e25640a2801cdc45c8e86f818b0ce061ec061c63b8549c0cde65921752fba6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "html2canvas",
+      "DisplayName": "html2canvas",
+      "Version": "1.4.1",
+      "GlobalVariable": "html2canvas",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+      "CDNCssUrl": null,
+      "Description": "JavaScript library for capturing screenshots of DOM elements and converting them to canvas/images",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "85D7C9F6-5BC7-4378-A7CE-B6CD92C3EFC5"
+    },
+    "sync": {
+      "lastModified": "2025-08-26T14:43:59.770Z",
+      "checksum": "ab8f1bc426de0ff3ae9e9a57cdb7b3356a4b0be217cedff912c8b316d4c2c917"
+    }
   }
 ]

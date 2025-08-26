@@ -765,8 +765,8 @@
       "ID": "D06D4A6B-F272-445D-8839-E5D1A4253381"
     },
     "sync": {
-      "lastModified": "2025-08-25T22:55:53.771Z",
-      "checksum": "d4ea2c9c82ebb8e457fd5119d121b565fe86f90d4d9f5910ad2af239fbc40766"
+      "lastModified": "2025-08-26T17:37:15.476Z",
+      "checksum": "8c9f17257dd888a37e9db4abdee0f88f3620ca362dbf20626b537ed569a1c163"
     }
   },
   {
@@ -1999,6 +1999,28 @@
     "sync": {
       "lastModified": "2025-08-25T22:55:54.889Z",
       "checksum": "37f623d1049022b892482c4c68b1439d4b96344471e387dca9debed498126932"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DataExportPanel",
+      "Namespace": "Generic/UI/Export",
+      "Description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
+      "Title": "Data Export Panel",
+      "Type": "Widget",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/data-export-panel.spec.json",
+      "FunctionalRequirements": "Support CSV, Excel (XLSX), and PDF export formats; Provide both UI and headless modes for flexibility; Allow column selection and customization; Support both data arrays and HTML element capture; Handle large datasets efficiently with progress indication; Provide format-specific options (PDF orientation, Excel sheet names); Include preview capability before export; Support various button styles and positions; Fire events for export lifecycle; Format dates and numbers consistently",
+      "TechnicalDesign": "Uses SheetJS (XLSX) for Excel/CSV generation; Uses jsPDF with html2canvas for PDF creation; Implements ref-based API for headless mode access; Manages export state with React hooks; Provides dropdown UI with format selection; Handles data transformation and formatting; Supports chunked processing for large datasets; Implements progress indication for long exports; Uses dayjs for date formatting; Provides customizable styling options"
+    },
+    "primaryKey": {
+      "ID": "D08BCD9D-B26F-4C96-87E7-436DE63F18FF"
+    },
+    "sync": {
+      "lastModified": "2025-08-26T17:37:15.711Z",
+      "checksum": "49389eacdb26568370b631e9ac42d8ab18797c91adcfd9e1f723b4b8d9aa6a3f"
     }
   }
 ]

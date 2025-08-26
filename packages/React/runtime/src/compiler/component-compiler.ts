@@ -27,7 +27,8 @@ const DEFAULT_COMPILER_CONFIG: CompilerConfig = {
   minify: false,
   sourceMaps: false,
   cache: true,
-  maxCacheSize: 100
+  maxCacheSize: 100,
+  debug: false
 };
 
 /**
@@ -223,13 +224,17 @@ export class ComponentCompiler {
   private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
     
-    console.log('🔍 loadRequiredLibraries called with:', {
-      librariesCount: libraries?.length || 0,
-      libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable }))
-    });
+    if (this.config.debug) {
+      console.log('🔍 loadRequiredLibraries called with:', {
+        librariesCount: libraries?.length || 0,
+        libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable }))
+      });
+    }
     
     if (!libraries || libraries.length === 0) {
-      console.log('📚 No libraries to load, returning empty map');
+      if (this.config.debug) {
+        console.log('📚 No libraries to load, returning empty map');
+      }
       return loadedLibraries;
     }
 
@@ -247,11 +252,15 @@ export class ComponentCompiler {
     }
 
     const loadPromises = libraries.map(async (lib) => {
-      console.log(`📦 Processing library: ${lib.name}`);
+      if (this.config.debug) {
+        console.log(`📦 Processing library: ${lib.name}`);
+      }
       
       // Check if library is approved
       const isApproved = LibraryRegistry.isApproved(lib.name);
-      console.log(`  ✓ Approved check for ${lib.name}: ${isApproved}`);
+      if (this.config.debug) {
+        console.log(`  ✓ Approved check for ${lib.name}: ${isApproved}`);
+      }
       
       if (!isApproved) {
         console.error(`  ❌ Library '${lib.name}' is not approved`);
@@ -260,7 +269,9 @@ export class ComponentCompiler {
 
       // Get library definition for complete info
       const libraryDef = LibraryRegistry.getLibrary(lib.name);
-      console.log(`  ✓ Library definition found for ${lib.name}: ${!!libraryDef}`);
+      if (this.config.debug) {
+        console.log(`  ✓ Library definition found for ${lib.name}: ${!!libraryDef}`);
+      }
       
       if (!libraryDef) {
         console.error(`  ❌ Library '${lib.name}' not found in registry`);
@@ -269,10 +280,14 @@ export class ComponentCompiler {
 
       // Get CDN URL for the library
       const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
-      console.log(`  ✓ Resolved version for ${lib.name}: ${resolvedVersion}`);
+      if (this.config.debug) {
+        console.log(`  ✓ Resolved version for ${lib.name}: ${resolvedVersion}`);
+      }
       
       const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
-      console.log(`  ✓ CDN URL for ${lib.name}: ${cdnUrl}`);
+      if (this.config.debug) {
+        console.log(`  ✓ CDN URL for ${lib.name}: ${cdnUrl}`);
+      }
       
       if (!cdnUrl) {
         console.error(`  ❌ No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
@@ -281,7 +296,9 @@ export class ComponentCompiler {
 
       // Check if already loaded
       if ((window as any)[lib.globalVariable]) {
-        console.log(`  ℹ️ Library ${lib.name} already loaded globally as ${lib.globalVariable}`);
+        if (this.config.debug) {
+          console.log(`  ℹ️ Library ${lib.name} already loaded globally as ${lib.globalVariable}`);
+        }
         loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
         return;
       }
@@ -293,18 +310,24 @@ export class ComponentCompiler {
       }
 
       // Load the library dynamically (cdnUrl is guaranteed to be non-null here due to check above)
-      console.log(`  📥 Loading script from CDN for ${lib.name}...`);
+      if (this.config.debug) {
+        console.log(`  📥 Loading script from CDN for ${lib.name}...`);
+      }
       await this.loadScript(cdnUrl!, lib.globalVariable);
       
       // Capture the library value from global scope
       // Note: Libraries loaded from CDN typically attach to window automatically
       // We capture them here to pass through the component's closure
       const libraryValue = (window as any)[lib.globalVariable];
-      console.log(`  ✓ Library ${lib.name} loaded successfully, global variable ${lib.globalVariable} is:`, typeof libraryValue);
+      if (this.config.debug) {
+        console.log(`  ✓ Library ${lib.name} loaded successfully, global variable ${lib.globalVariable} is type: ${typeof libraryValue}`);
+      }
       
       if (libraryValue) {
         loadedLibraries.set(lib.globalVariable, libraryValue);
-        console.log(`  ✅ Added ${lib.name} to loaded libraries map`);
+        if (this.config.debug) {
+          console.log(`  ✅ Added ${lib.name} to loaded libraries map`);
+        }
       } else {
         console.error(`  ❌ Library '${lib.name}' failed to expose global variable '${lib.globalVariable}'`);
         throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
@@ -313,8 +336,10 @@ export class ComponentCompiler {
 
     await Promise.all(loadPromises);
     
-    console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);
-    console.log('📚 Loaded libraries map:', Array.from(loadedLibraries.keys()));
+    if (this.config.debug) {
+      console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);
+      console.log('📚 Loaded libraries map:', Array.from(loadedLibraries.keys()));
+    }
     
     return loadedLibraries;
   }
@@ -390,12 +415,18 @@ export class ComponentCompiler {
         
         const checkGlobal = () => {
           if ((window as any)[globalName]) {
-            console.log(`  ✓ Global variable ${globalName} found after ${attempts * checkInterval}ms`);
+            if (this.config.debug) {
+              console.log(`  ✓ Global variable ${globalName} found after ${attempts * checkInterval}ms`);
+            }
             resolve();
           } else if (attempts >= maxAttempts) {
             // Final check - some libraries might use a different global name pattern
-            console.error(`  ❌ ${globalName} not found after ${attempts * checkInterval}ms`);
-            console.log(`  ℹ️ Window properties:`, Object.keys(window).filter(k => k.toLowerCase().includes(globalName.toLowerCase())));
+            if (this.config.debug) {
+              console.error(`  ❌ ${globalName} not found after ${attempts * checkInterval}ms`);
+              // Only log matching property names, not the entire window object
+              const matchingKeys = Object.keys(window).filter(k => k.toLowerCase().includes(globalName.toLowerCase()));
+              console.log(`  ℹ️ Matching window properties: ${matchingKeys.join(', ') || 'none'}`);
+            }
             reject(new Error(`${globalName} not found after loading script from ${url}`));
           } else {
             attempts++;
