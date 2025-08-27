@@ -6,14 +6,27 @@
   "code": "@file:../code/stage-details-panel.js",
   "functionalRequirements": "## Stage Details Panel\n\n### Purpose\nSlide-out panel displaying deals for a selected pipeline stage with filtering and sorting.\n\n### Features\n- Slide in/out animation from right\n- Stage header with name and metrics\n- Toggle between card and list views\n- Sort deals by amount, date, or probability\n- Filter deals by name\n- Display deal cards or list items\n- Close button and animation\n\n### Interactions\n- Click to open deal record\n- Sort and filter controls\n- View mode toggle\n- Smooth transitions",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives selected stage data and deals from parent"
+    "mode": "views",
+    "description": "Displays deals for a selected pipeline stage",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal entities filtered by stage",
+        "displayFields": ["ID", "DealName", "Amount", "CloseDate", "Probability", "Stage", "Account"],
+        "filterFields": ["Stage", "DealName"],
+        "sortFields": ["Amount", "CloseDate", "Probability"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Displays deals for selected stage in cards or list view"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- selectedStage: Stage data object with deals\n- isPanelOpen: Boolean for visibility\n- displayMode: 'cards' or 'list'\n- onClose: Callback to close panel\n- onDisplayModeChange: Callback for view mode\n- onOpenDeal: Callback to open deal record\n\n### State\n- sortBy: Current sort field\n- filterText: Search filter\n\n### Layout\n- Fixed position overlay\n- Transform-based animation\n- Scrollable content area",
   "properties": [
     {
       "name": "selectedStage",
-      "type": "object",
+      "type": "{name: string, deals: Array<{ID: string, DealName: string, Amount: number, CloseDate: string, Probability: number}>}",
       "required": false,
       "description": "Selected stage data with deals array"
     },
@@ -25,15 +38,27 @@
     },
     {
       "name": "displayMode",
-      "type": "string",
+      "type": "'cards' | 'list'",
       "required": true,
-      "description": "View mode: 'cards' or 'list'"
+      "description": "View mode for deals display"
     },
     {
       "name": "onClose",
-      "type": "function",
+      "type": "() => void",
       "required": true,
       "description": "Callback to close panel"
+    },
+    {
+      "name": "onDisplayModeChange",
+      "type": "(mode: 'cards' | 'list') => void",
+      "required": false,
+      "description": "Callback when view mode changes"
+    },
+    {
+      "name": "onOpenDeal",
+      "type": "(dealId: string) => void",
+      "required": false,
+      "description": "Callback to open deal record"
     }
   ],
   "events": [],

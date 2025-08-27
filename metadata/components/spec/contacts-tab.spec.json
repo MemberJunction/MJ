@@ -6,26 +6,39 @@
   "code": "@file:../code/contacts-tab.js",
   "functionalRequirements": "## Contacts Tab\n\n### Purpose\nDisplays and manages contact information in a tabular format.\n\n### Features\n- Contact list display\n- Search and filter\n- Sort by columns\n- Contact details view",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives contacts data from parent"
+    "mode": "views",
+    "description": "Displays and manages contact information",
+    "entities": [
+      {
+        "name": "Contacts",
+        "description": "Contact records for display",
+        "displayFields": ["ID", "FirstName", "LastName", "Email", "Phone", "Company", "Title"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Contact list passed via props"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- contacts: Array of contact records\n- onContactSelect: Contact selection handler\n- filters: Active filters",
   "properties": [
     {
       "name": "contacts",
-      "type": "array",
+      "type": "Array<{id: string, firstName: string, lastName: string, email: string, phone: string, company: string, title: string}>",
       "required": true,
       "description": "Contact records array"
     },
     {
       "name": "onContactSelect",
-      "type": "function",
+      "type": "(contact: {id: string, firstName: string, lastName: string}) => void",
       "required": false,
       "description": "Contact selection callback"
     },
     {
       "name": "filters",
-      "type": "object",
+      "type": "{search: string, company?: string, title?: string}",
       "required": false,
       "description": "Active filter configuration"
     }

@@ -6,26 +6,39 @@
   "code": "@file:../code/timeline-tab.js",
   "functionalRequirements": "## Timeline Tab\n\n### Purpose\nDisplays chronological timeline of events and activities.\n\n### Features\n- Chronological event display\n- Event filtering\n- Date range selection\n- Event type icons",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives timeline events from parent"
+    "mode": "views",
+    "description": "Displays chronological timeline of events",
+    "entities": [
+      {
+        "name": "Activities",
+        "description": "Activity records for timeline",
+        "displayFields": ["ID", "Type", "Subject", "Description", "Date"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Timeline event display"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- events: Array of timeline events\n- dateRange: Date filter range\n- filters: Event type filters",
   "properties": [
     {
       "name": "events",
-      "type": "array",
+      "type": "Array<{id: string, type: string, subject: string, description: string, date: string, icon: string}>",
       "required": true,
       "description": "Timeline events array"
     },
     {
       "name": "dateRange",
-      "type": "object",
+      "type": "{start: string, end: string}",
       "required": false,
       "description": "Date range filter"
     },
     {
       "name": "filters",
-      "type": "object",
+      "type": "{[eventType: string]: boolean}",
       "required": false,
       "description": "Event type filters"
     }
