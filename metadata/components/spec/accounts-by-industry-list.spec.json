@@ -7,6 +7,23 @@
   "namespace": "CRM/Analytics",
   "functionalRequirements": "## Account List Component\n\n- Display accounts in sortable table format\n- Support column sorting with visual indicators\n- Implement client-side pagination\n- Enable row hover effects\n- Handle row click for account selection\n- Format currency values appropriately\n- Show status badges with color coding\n- Display clear filter button",
   "technicalDesign": "## Technical Design\n\n### Props\n- accounts: Filtered account array\n- sortConfig: Current sort settings\n- onSort: Sort handler callback\n- onAccountClick: Row selection callback\n- currentPage: Current pagination page\n- pageSize: Items per page\n- onPageChange: Pagination callback\n\n### Features\n- Client-side sorting logic\n- Pagination calculation\n- Hover state management\n- Status badge styling",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Fetches account data using RunView for industry distribution analysis",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "CRM account data grouped by industry",
+        "displayFields": ["ID", "AccountName", "Industry", "Revenue", "Status", "IsActive"],
+        "filterFields": ["IsActive", "Industry"],
+        "sortFields": ["AccountName", "Revenue", "Industry"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
+      }
+    ],
+    "queries": []
+  },
   "properties": [
     {
       "name": "accounts",

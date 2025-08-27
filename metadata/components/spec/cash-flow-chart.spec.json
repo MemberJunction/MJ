@@ -6,14 +6,37 @@
   "code": "@file:../code/cash-flow-chart.js",
   "functionalRequirements": "## Cash Flow Chart\n\n### Purpose\nVisualize cash flow patterns.\n\n### Features\n- Waterfall chart\n- Inflows vs outflows\n- Running balance\n- Category breakdown",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives cash flow data"
+    "mode": "views",
+    "description": "Visualizes cash flow patterns from payment and invoice data",
+    "entities": [
+      {
+        "name": "Payments",
+        "description": "Payment transactions for cash flow tracking",
+        "displayFields": ["PaymentDate", "Amount", "Category"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Cash inflows from payments"
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice data for cash outflow tracking",
+        "displayFields": ["IssueDate", "TotalAmount", "Category"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Cash outflows from invoices"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- cashFlowData: Array of cash flow entries\n\n### Chart\n- ApexCharts waterfall\n- Color coding",
   "properties": [
     {
       "name": "cashFlowData",
-      "type": "array",
+      "type": "Array<{date: string, category: string, amount: number, type: 'inflow' | 'outflow', balance: number}>",
       "required": true,
       "description": "Cash flow data entries"
     }

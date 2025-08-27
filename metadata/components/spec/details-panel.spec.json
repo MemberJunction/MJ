@@ -6,14 +6,16 @@
   "code": "@file:../code/details-panel.js",
   "functionalRequirements": "## Details Panel\n\n### Purpose\nSlide-out panel for displaying detailed information.\n\n### Features\n- Slide-in/out animation\n- Tabbed content\n- Close button\n- Responsive layout",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives detail data from parent"
+    "mode": "views",
+    "description": "Displays detailed entity information",
+    "entities": [],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- data: Detail data object\n- isOpen: Panel open state\n- onClose: Close handler",
   "properties": [
     {
       "name": "data",
-      "type": "object",
+      "type": "{id: string, title: string, sections: Array<{name: string, fields: Array<{label: string, value: any}>}>}",
       "required": true,
       "description": "Detail data to display"
     },
@@ -25,7 +27,7 @@
     },
     {
       "name": "onClose",
-      "type": "function",
+      "type": "() => void",
       "required": true,
       "description": "Panel close handler"
     }

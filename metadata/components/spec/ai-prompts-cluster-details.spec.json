@@ -7,6 +7,18 @@
   "code": "@file:../code/ai-prompts-cluster-details.js",
   "functionalRequirements": "Display selected prompt details including name, description, template text, show similar prompts based on vector similarity, display cluster membership info, provide navigation to prompt editor",
   "technicalDesign": "React component that displays prompt entity details, calculates and shows top similar prompts using vector service, formats template text with syntax highlighting",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
   "properties": [
     {
       "name": "selectedPrompt",

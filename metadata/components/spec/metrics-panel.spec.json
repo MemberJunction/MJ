@@ -6,16 +6,29 @@
   "code": "@file:../code/metrics-panel.js",
   "functionalRequirements": "## Metrics Panel\n\n### Purpose\nDisplay key velocity metrics and statistics.\n\n### Features\n- Metric cards grid\n- Average velocity\n- Conversion rates\n- Stage bottlenecks\n- Trend indicators",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives calculated metrics from parent"
+    "mode": "views",
+    "description": "Displays aggregated metrics derived from Deals entity",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Source data for velocity and conversion metrics",
+        "displayFields": ["Stage", "CloseDate", "Amount", "__mj_CreatedAt"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Metrics are pre-calculated from deal velocity data"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- metrics: Object with calculated metrics\n\n### Layout\n- Grid of metric cards\n- Icons and labels\n- Formatted values",
   "properties": [
     {
       "name": "metrics",
-      "type": "object",
+      "type": "{avgVelocity: number, conversionRate: number, bottleneckStage?: string, totalDeals: number, avgDealSize: number}",
       "required": true,
-      "description": "Calculated velocity metrics"
+      "description": "Pre-calculated velocity and conversion metrics"
     }
   ],
   "events": [],

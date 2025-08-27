@@ -2012,9 +2012,8 @@ export class ComponentLinter {
         
         // Valid properties for RunView/RunViews
         const validRunViewProps = new Set([
-          'ViewID','ViewName', 'EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 
-          'MaxRows', 'StartRow', 'ResultType', 'UserSearchString', 'ForceAuditLog','AuditLogDescription',
-          'ResultType'
+          'EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 
+          'MaxRows', 'StartRow', 'ResultType'
         ]);
         
         // Valid properties for RunQuery
@@ -2098,19 +2097,13 @@ export class ComponentLinter {
                 
                 // Check each config for invalid properties and required fields
                 for (const config of configs) {
-                  // Check for required properties (must have ViewID, ViewName, ViewEntity, or EntityName)
-                  let hasViewID = false;
-                  let hasViewName = false;
-                  let hasViewEntity = false;
+                  // Check for required properties (must have EntityName)
                   let hasEntityName = false;
                   
                   for (const prop of config.properties) {
                     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                       const propName = prop.key.name;
                       
-                      if (propName === 'ViewID') hasViewID = true;
-                      if (propName === 'ViewName') hasViewName = true;
-                      if (propName === 'ViewEntity') hasViewEntity = true;
                       if (propName === 'EntityName') hasEntityName = true;
                       
                       if (!validRunViewProps.has(propName)) {
@@ -2121,6 +2114,15 @@ export class ComponentLinter {
                         if (propName === 'Parameters') {
                           message = `${methodName} does not support 'Parameters'. Use 'ExtraFilter' for WHERE clauses.`;
                           fix = `Replace 'Parameters' with 'ExtraFilter' and format as SQL WHERE clause`;
+                        } else if (propName === 'ViewID' || propName === 'ViewName') {
+                          message = `${methodName} property '${propName}' is not allowed in components. Use 'EntityName' instead.`;
+                          fix = `Replace '${propName}' with 'EntityName' and specify the entity name`;
+                        } else if (propName === 'UserSearchString') {
+                          message = `${methodName} property 'UserSearchString' is not allowed in components. Use 'ExtraFilter' for filtering.`;
+                          fix = `Remove 'UserSearchString' and use 'ExtraFilter' with appropriate WHERE clause`;
+                        } else if (propName === 'ForceAuditLog' || propName === 'AuditLogDescription') {
+                          message = `${methodName} property '${propName}' is not allowed in components.`;
+                          fix = `Remove '${propName}' property`;
                         } else if (propName === 'GroupBy') {
                           message = `${methodName} does not support 'GroupBy'. Use RunQuery with a pre-defined query for aggregations.`;
                           fix = `Remove 'GroupBy' and use RunQuery instead for aggregated data`;
@@ -2141,14 +2143,14 @@ export class ComponentLinter {
                     }
                   }
                   
-                  // Check that at least one required property is present
-                  if (!hasViewID && !hasViewName && !hasViewEntity && !hasEntityName) {
+                  // Check that EntityName is present (required property)
+                  if (!hasEntityName) {
                     violations.push({
                       rule: 'runview-runquery-valid-properties',
                       severity: 'critical',
                       line: config.loc?.start.line || 0,
                       column: config.loc?.start.column || 0,
-                      message: `${methodName} requires one of: ViewID, ViewName, ViewEntity, or EntityName. Add one to identify what data to retrieve.`,
+                      message: `${methodName} requires 'EntityName' property. Add EntityName to identify what data to retrieve.`,
                       code: `${methodName}({ ... })`
                     });
                   }

@@ -6,8 +6,21 @@
   "code": "@file:../code/sales-funnel-stage-panel.js",
   "functionalRequirements": "## Stage Details Panel Sub-Component\n\n### Purpose\nSlide-out panel showing detailed information for a selected stage.\n\n### Core Features\n- **Stage Overview**: Count, value, conversion metrics\n- **Deal List**: Filtered deals for the stage\n- **Search & Filter**: Local search within stage\n- **Sort Options**: Multiple sort criteria\n- **View Modes**: Card or list display",
   "dataRequirements": {
-    "mode": "props",
-    "props": ["isOpen", "stageData", "onClose", "components", "callbacks", "formatCurrency"]
+    "mode": "views",
+    "description": "Shows detailed information for a selected stage",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records for stage details",
+        "displayFields": ["ID", "Name", "Amount", "Probability", "Stage", "CloseDate", "Account"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Stage-filtered deal display"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Panel Behavior\n- Fixed positioning with slide animation\n- Local state for search and sort\n- Uses DealCard and DealList sub-components",
   "properties": [
@@ -19,31 +32,19 @@
     },
     {
       "name": "stageData",
-      "type": "object",
+      "type": "{stage: string, count: number, value: number, deals: Array<any>}",
       "description": "Selected stage data including deals",
       "required": false
     },
     {
       "name": "onClose",
-      "type": "function",
+      "type": "() => void",
       "description": "Handler to close the panel",
       "required": true
     },
     {
-      "name": "components",
-      "type": "object",
-      "description": "Registry of available sub-components",
-      "required": true
-    },
-    {
-      "name": "callbacks",
-      "type": "object",
-      "description": "Callback functions",
-      "required": true
-    },
-    {
       "name": "formatCurrency",
-      "type": "function",
+      "type": "(value: number) => string",
       "description": "Currency formatting function",
       "required": true
     }

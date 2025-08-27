@@ -4,31 +4,47 @@
   "description": "Collapsible filter panel for filtering entities by various criteria",
   "type": "form",
   "functionalRequirements": "## Entity Filter Requirements\n\n- Collapsible panel on the left side\n- Filter by schema name (dropdown)\n- Filter by base table (dropdown)\n- Search box for text search\n- Clear all filters button\n- Show active filter count\n- Smooth collapse/expand animation\n- Remember collapsed state",
-  "dataRequirements": null,
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives filter options derived from Entities metadata",
+    "entities": [
+      {
+        "name": "Entities",
+        "description": "Source of schema and table filter options",
+        "displayFields": ["SchemaName", "BaseTable"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Extracts unique schema names and base tables for filter dropdowns"
+      }
+    ],
+    "queries": []
+  },
   "technicalDesign": "## Technical Design\n\n### Props\n- filters: Current filter values\n- onFilterChange: Callback when filters change\n- schemas: Available schema options\n- tables: Available table options\n- isCollapsed: Whether panel is collapsed\n- onToggleCollapse: Callback to toggle collapse\n\n### Components\n- Collapse toggle button\n- Schema dropdown\n- Table dropdown\n- Search input\n- Clear filters button\n- Active filter badges",
   "properties": [
     {
       "name": "filters",
       "description": "Current filter values",
-      "type": "object",
+      "type": "{schema?: string, table?: string, search?: string}",
       "required": true
     },
     {
       "name": "onFilterChange",
       "description": "Callback when filters change",
-      "type": "function",
+      "type": "(filters: {schema?: string, table?: string, search?: string}) => void",
       "required": true
     },
     {
       "name": "schemas",
       "description": "Available schema options",
-      "type": "array",
+      "type": "Array<string>",
       "required": true
     },
     {
       "name": "tables",
       "description": "Available table options",
-      "type": "array",
+      "type": "Array<string>",
       "required": true
     },
     {
@@ -40,7 +56,7 @@
     {
       "name": "onToggleCollapse",
       "description": "Callback to toggle collapse state",
-      "type": "function",
+      "type": "() => void",
       "required": true
     }
   ],

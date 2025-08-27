@@ -6,20 +6,33 @@
   "code": "@file:../code/opportunity-panel.js",
   "functionalRequirements": "## Opportunity Panel\n\n### Purpose\nDisplay customer opportunities and deals.\n\n### Features\n- Active opportunities list\n- Deal value and stage\n- Probability indicators\n- Quick actions",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives opportunity data from parent"
+    "mode": "views",
+    "description": "Displays customer opportunities and deals",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Customer opportunity/deal records",
+        "displayFields": ["ID", "Name", "Amount", "Stage", "Probability", "CloseDate", "AccountID"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Active opportunities for customer"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- opportunities: Array of opportunity data\n- onOpportunityClick: Selection callback",
   "properties": [
     {
       "name": "opportunities",
-      "type": "array",
+      "type": "Array<{id: string, name: string, amount: number, stage: string, probability: number, closeDate: string}>",
       "required": true,
       "description": "Customer opportunities"
     },
     {
       "name": "onOpportunityClick",
-      "type": "function",
+      "type": "(opportunityId: string) => void",
       "required": false,
       "description": "Opportunity selection callback"
     }

@@ -32,6 +32,12 @@ export class ComponentSpec {
     version?: string;
 
     /**
+     * Only used when location === 'registry', logic explaining why this component is being selected
+     * to serve a specific use case or requirement
+     */
+    selectionReasoning?: string;
+
+    /**
      * When an architect decides to use an existing component as a base for a new version,
      * they can set this flag to true. This indicates that the new version will be created
      * based on the existing component based on the namespace/name/version specified above
@@ -90,6 +96,11 @@ export class ComponentSpec {
     events?: ComponentEvent[];
 
     /**
+     * Metadata about methods the component supports, if any
+     */
+    methods?: ComponentMethodInfo;
+
+    /**
      * Example of the component being used in JSX format. This is used to provide a clear example on the properties and 
      * event handling that the component supports.
      */
@@ -108,8 +119,38 @@ export class ComponentSpec {
     /**
      * Relevant examples of components intended to inspire this component's creation
      */
-    relevantExamples?: Array<ComponentExample[]>;
+    relevantExamples?: ComponentExample[];
 };
+
+/**
+ * Defines standard and custom methods a component implements
+ */
+export interface ComponentMethodInfo {
+    standardMethodsSupported: {
+        print?: boolean;
+        refresh?: boolean;
+        getCurrentDataState?: boolean;
+        getDataStateHistory?: boolean;
+        validate?: boolean;
+        isDirty?: boolean;
+        reset?: boolean;
+        scrollTo?: boolean;
+        focus?: boolean;
+        invokeMethod?: boolean;
+        hasMethod?: boolean;
+    }
+    customMethods: CustomComponentMethod[]
+}
+
+/**
+ * Defines a single custom component method
+ */
+export interface CustomComponentMethod {
+    name: string;
+    description: string;
+    parameters: Array<{name: string, type: string, description?: string }>;
+    returnType: string;
+}
 
 /**
  * Type that defines an example component used to inspire the creation

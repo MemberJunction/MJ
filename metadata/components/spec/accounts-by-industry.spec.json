@@ -5,7 +5,23 @@
   "type": "dashboard",
   "location": "embedded",
   "functionalRequirements": "## Accounts by Industry Dashboard\n\n### Core Functionality\n- Display an interactive pie chart showing account distribution across industries\n- Calculate and show percentages for each industry segment\n- Support click-to-filter: clicking a pie slice filters the account list below\n- Display filtered account list with key information (name, revenue, status)\n- Enable row selection to view detailed account information in a slide-in panel\n- Provide sorting capabilities on all columns (client-side)\n- Implement pagination for large datasets (server-side via RunView)\n- Include an 'Open' button on account details to trigger OpenEntityRecord callback\n- Remember user's last selected industry and sort preferences\n\n### Visual Features\n- Smooth hover animations on pie slices with tooltips\n- Highlighted state for selected pie slice\n- Color-coded legend with industry names and counts\n- Responsive layout adapting to different screen sizes\n- Loading states during data fetching\n- Empty states with helpful messages\n- Smooth slide-in animation for detail panel\n\n### Interactive Elements\n- Click pie slice to select/deselect and filter accounts\n- Click legend items to toggle slice visibility\n- Sort columns by clicking headers\n- Select account rows to view details\n- Close detail panel via X button or clicking outside\n- Pagination controls for navigating large datasets",
-  "@include.data": "../shared/crm-accounts-data.json",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Fetches account data using RunView for industry distribution analysis",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "CRM account data grouped by industry",
+        "displayFields": ["ID", "AccountName", "Industry", "Revenue", "Status", "IsActive"],
+        "filterFields": ["IsActive", "Industry"],
+        "sortFields": ["AccountName", "Revenue", "Industry"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
+      }
+    ],
+    "queries": []
+  },
   "technicalDesign": "## Technical Architecture\n\n### Component Structure\n- **Root Component (AccountsByIndustry)**: Manages overall state and data loading\n- **PieChart (inline)**: Chart.js-based interactive pie visualization\n- **AccountList (inline)**: Filtered, sortable table with pagination\n- **AccountDetails (inline)**: Sliding panel with comprehensive account info\n\n### State Management\n- Selected industry (persisted in savedUserSettings)\n- Sort configuration (field, direction) (persisted)\n- Current page number\n- Selected account ID\n- Detail panel visibility\n- Loading states for async operations\n\n### Data Flow\n1. Load all accounts via RunView on mount\n2. Group accounts by Industry field client-side\n3. Calculate percentages and prepare chart data\n4. Render pie chart with Chart.js\n5. Filter account list based on selected slice\n6. Load account details when row selected\n7. Persist user preferences via onSaveUserSettings\n\n### Performance Optimizations\n- Use React.memo for chart component\n- Implement useMemo for data grouping\n- Client-side filtering/sorting to reduce server calls\n- Virtual scrolling for very large lists (future)",
   "properties": [
     {
@@ -31,9 +47,9 @@
     },
     {
       "name": "colorScheme",
-      "type": "string",
+      "type": "'default' | 'vibrant' | 'pastel'",
       "required": false,
-      "description": "Color palette for the pie chart (default, vibrant, pastel)",
+      "description": "Color palette for the pie chart",
       "defaultValue": "default"
     }
   ],

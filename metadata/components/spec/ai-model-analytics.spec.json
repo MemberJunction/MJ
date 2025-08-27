@@ -4,8 +4,205 @@
   "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
   "type": "chart",
   "functionalRequirements": "Display pie chart for prompt usage, bar chart for performance, time series for usage trends",
-  "dataRequirements": null,
   "technicalDesign": "",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Models",
+        "description": "Core AI model definitions and specifications",
+        "displayFields": [
+          "ID",
+          "Name",
+          "APIName",
+          "Description",
+          "AIModelTypeID",
+          "InputTokenLimit",
+          "PowerRank",
+          "SpeedRank",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "AIModelTypeID",
+          "IsActive"
+        ],
+        "sortFields": [
+          "Name",
+          "InputTokenLimit",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the AI model"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the AI model"
+          },
+          {
+            "name": "APIName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "API identifier for the model"
+          },
+          {
+            "name": "InputTokenLimit",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum input token limit"
+          },
+          {
+            "name": "CostRank",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Relative cost ranking (1-5)"
+          }
+        ], 
+        "usageContext": "Main list of AI models"
+      },
+      {
+        "name": "MJ: AI Model Vendors",
+        "description": "Vendor associations for AI models",
+        "displayFields": [
+          "ID",
+          "ModelID",
+          "VendorID",
+          "TypeID",
+          "Model",
+          "Vendor",
+          "Type",
+          "Status",
+          "Priority",
+          "APIName",
+          "MaxInputTokens",
+          "MaxOutputTokens",
+          "SupportsStreaming",
+          "SupportsEffortLevel"
+        ],
+        "filterFields": [
+          "ModelID",
+          "Type",
+          "Status"
+        ],
+        "sortFields": [
+          "Vendor",
+          "Priority",
+          "Type"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ModelID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to AI Model"
+          },
+          {
+            "name": "Vendor",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor name"
+          },
+          {
+            "name": "Type",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor type (Model Developer or Inference Provider)"
+          }
+        ], 
+        "usageContext": "Vendor associations for models"
+      },
+      {
+        "name": "AI Model Types",
+        "description": "Types/categories of AI models",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Filter dropdown for model types"
+      },
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Execution history for AI prompts",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "ModelID",
+          "StartTime",
+          "EndTime",
+          "TotalExecutionTime",
+          "InputTokens",
+          "OutputTokens",
+          "TotalTokens",
+          "Status",
+          "Error"
+        ],
+        "filterFields": [
+          "ModelID",
+          "PromptID",
+          "Status"
+        ],
+        "sortFields": [
+          "StartTime",
+          "TotalExecutionTime"
+        ], 
+        "usageContext": "Analytics and usage history"
+      },
+      {
+        "name": "AI Prompts",
+        "description": "AI prompt definitions",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description",
+          "CategoryID"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Enrich prompt runs with names"
+      }
+    ]
+  },
   "properties": [
     {
       "name": "model",

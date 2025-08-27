@@ -6,26 +6,33 @@
   "code": "@file:../code/sales-funnel-deal-card.js",
   "functionalRequirements": "## Deal Card Sub-Component\n\n### Purpose\nDisplay individual deal information in a card format.\n\n### Core Features\n- **Deal Information**: Name, account, amount\n- **Visual Indicators**: Stage colors and status\n- **Interactive Elements**: Click to open deal\n- **Responsive Layout**: Adapts to container",
   "dataRequirements": {
-    "mode": "props",
-    "props": ["deal", "callbacks", "formatCurrency"]
+    "mode": "views",
+    "description": "Displays individual deal information",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal entity data",
+        "displayFields": ["ID", "Name", "Amount", "Stage", "AccountID", "Account"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Individual deal card display"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Card Layout\n- Flexbox for responsive design\n- Hover effects for interactivity\n- Click handlers for navigation",
   "properties": [
     {
       "name": "deal",
-      "type": "object",
+      "type": "{ID: string, Name: string, Amount: number, Stage: string, Account: string}",
       "description": "Deal entity data",
       "required": true
     },
     {
-      "name": "callbacks",
-      "type": "object",
-      "description": "Callback functions including OpenEntityRecord",
-      "required": true
-    },
-    {
       "name": "formatCurrency",
-      "type": "function",
+      "type": "(value: number) => string",
       "description": "Currency formatting function",
       "required": true
     }

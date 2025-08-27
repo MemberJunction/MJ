@@ -60,6 +60,18 @@
       ]
     }
   ],
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "filterFields": ["CloseDate", "Stage", "Owner"],
+        "sortFields": ["CloseDate", "Amount", "Probability"],
+        "permissions": ["read"]
+      }
+    ]
+  },
   "usageExample": "```javascript\n<DrillDownPanel\n  isOpen={isPanelOpen}\n  drillDownData={drillDownData}\n  stageColors={stageColors}\n  onClose={() => setIsPanelOpen(false)}\n  onOpenDeal={(entityName, pk) => callbacks.OpenEntityRecord(entityName, pk)}\n/>\n```",
   "functionalRequirements": "- Slide in from right side at top: 75px\n- Display title and deal count/value summary\n- Allow filtering deals by text search\n- Support sorting by Amount, CloseDate, Probability\n- Toggle between card and list views\n- Include close button in header\n- Use appropriate background color based on drill-down type",
   "technicalDesign": "Fixed position panel with CSS transitions. Contains local state for filter text, sort order, and display mode. Reuses DealCards and DealList components for display. Header color determined by drillDownData type/metadata."

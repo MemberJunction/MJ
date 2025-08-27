@@ -6,20 +6,22 @@
   "code": "@file:../code/overview-cards.js",
   "functionalRequirements": "## Overview Cards\n\n### Purpose\nDisplays summary information in card format.\n\n### Features\n- Multiple metric cards\n- Color-coded indicators\n- Trend arrows\n- Click actions",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives card data from parent"
+    "mode": "views",
+    "description": "Displays summary information in card format",
+    "entities": [],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- cards: Array of card configurations\n- onCardClick: Card click handler",
   "properties": [
     {
       "name": "cards",
-      "type": "array",
+      "type": "Array<{title: string, value: string | number, trend?: 'up' | 'down' | 'neutral', color?: string, icon?: string}>",
       "required": true,
       "description": "Card configuration array"
     },
     {
       "name": "onCardClick",
-      "type": "function",
+      "type": "(cardIndex: number) => void",
       "required": false,
       "description": "Card click handler"
     }

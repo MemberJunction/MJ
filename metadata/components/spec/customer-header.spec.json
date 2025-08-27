@@ -6,22 +6,35 @@
   "code": "@file:../code/customer-header.js",
   "functionalRequirements": "## Customer Header\n\n### Purpose\nDisplay customer summary information at the top.\n\n### Features\n- Customer name and logo\n- Key metrics\n- Contact info\n- Status badges",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives customer data from parent"
+    "mode": "views",
+    "description": "Displays customer header information passed via props",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "Customer/account entity for header display",
+        "displayFields": ["ID", "AccountName", "Industry", "Type", "Status", "Website", "Phone", "Email"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Customer information displayed in header section"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- customer: Customer entity\n- metrics: Key metrics object",
   "properties": [
     {
       "name": "customer",
-      "type": "object",
+      "type": "{ID: string, AccountName: string, Industry?: string, Type?: string, Status?: string, Website?: string, Phone?: string, Email?: string}",
       "required": true,
-      "description": "Customer entity"
+      "description": "Customer/account entity"
     },
     {
       "name": "metrics",
-      "type": "object",
+      "type": "{totalRevenue?: number, openDeals?: number, lifetime?: number, healthScore?: number}",
       "required": true,
-      "description": "Customer metrics"
+      "description": "Customer metrics summary"
     }
   ],
   "events": [],

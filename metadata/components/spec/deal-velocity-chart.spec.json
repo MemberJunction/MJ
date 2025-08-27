@@ -8,44 +8,23 @@
   "functionalRequirements": "## Deal Velocity Analysis\n\n### Core Features\n- Track deal creation and closure rates over time\n- Show multiple metrics: count, value, velocity, conversion\n- Configurable time ranges (1 month to 2 years)\n- Dynamic bucketing (daily, weekly, monthly)\n- Summary statistics cards\n\n### Metric Types\n1. **Deal Count**: New, Won, Lost deals over time\n2. **Deal Value**: Pipeline and Won value trends\n3. **Velocity**: Average days to close and win rate\n4. **Conversion**: Cumulative conversion rate trend\n\n### Visual Design\n- Line charts with smooth curves\n- Color-coded metrics\n- Interactive tooltips\n- Responsive layout\n- Summary cards with key metrics",
   "dataRequirements": {
     "mode": "views",
+    "description": "Fetches deal data for velocity analysis using RunView",
     "entities": [
       {
         "name": "Deals",
-        "fields": [
-          { "name": "ID", "type": "string", "required": true },
-          { "name": "DealName", "type": "string", "required": true },
-          { "name": "Amount", "type": "number", "required": true },
-          { "name": "Stage", "type": "string", "required": true },
-          { "name": "CloseDate", "type": "date", "required": false },
-          { "name": "__mj_CreatedAt", "type": "datetime", "required": true }
-        ]
+        "description": "Deal data for velocity tracking and analysis",
+        "displayFields": ["ID", "DealName", "Amount", "Stage", "CloseDate", "__mj_CreatedAt"],
+        "filterFields": ["CloseDate", "__mj_CreatedAt", "Stage"],
+        "sortFields": ["CloseDate", "__mj_CreatedAt"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Analyzes deal velocity, conversion rates, and trends over time"
       }
-    ]
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Data Loading\n- Single RunView call with date range filter\n- Load deals created OR closed in range\n- Use __mj_CreatedAt for creation tracking\n\n### Time Bucketing\n- Daily buckets for 1 month\n- Weekly buckets for 3-6 months\n- Monthly buckets for 1-2 years\n\n### Metrics Calculation\n- Deal count by bucket\n- Sum values by bucket\n- Average cycle time (close - create)\n- Win rate percentage\n- Cumulative conversion rate\n\n### Chart.js Configuration\n- Line chart with tension for smooth curves\n- Multiple Y-axes for different scales\n- Custom tooltips with formatting\n- Responsive aspect ratio",
-  "properties": [
-    {
-      "name": "timeRange",
-      "type": "string",
-      "required": false,
-      "defaultValue": "6months",
-      "description": "Time range to display: 1month, 3months, 6months, 1year, 2years"
-    },
-    {
-      "name": "metricType",
-      "type": "string",
-      "required": false,
-      "defaultValue": "count",
-      "description": "Metric to display: count, value, velocity, conversion"
-    },
-    {
-      "name": "showSummary",
-      "type": "boolean",
-      "required": false,
-      "defaultValue": true,
-      "description": "Whether to show summary statistics cards"
-    }
-  ],
+  "properties": [],
   "exampleUsage": "<DealVelocityChart\n  timeRange=\"6months\"\n  metricType=\"count\"\n  showSummary={true}\n/>",
   "code": "@file:../code/deal-velocity-chart.js",
   "libraries": [

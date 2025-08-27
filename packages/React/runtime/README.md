@@ -165,18 +165,196 @@ const context = {
 const MyComponent = runtime.registry.get('MyComponent', 'MyNamespace');
 
 // Execute the component factory
-const { component } = MyComponent(context);
+const componentObject = MyComponent(context);
+
+// The componentObject contains the React component and method accessors
+const { component, print, refresh, getCurrentDataState, isDirty } = componentObject;
 
 // Render with props
 const props = {
   data: { name: 'World' },
   userState: {},
   callbacks: {
-    RefreshData: () => console.log('Refresh clicked!')
+    OpenEntityRecord: (entityName, key) => console.log('Open entity:', entityName),
+    RegisterMethod: (methodName, handler) => {
+      // Component will register its methods here
+    }
   }
 };
 
 React.createElement(component, props);
+```
+
+## Component Methods System
+
+### Overview
+
+Components can expose methods that allow containers to interact with them beyond just passing props. This enables scenarios like:
+- AI agents introspecting component state
+- Containers checking if components have unsaved changes
+- Programmatic validation and reset operations
+- Custom business logic exposed by components
+
+### How Components Register Methods
+
+Components register their methods during initialization using the `RegisterMethod` callback:
+
+```typescript
+function MyComponent({ callbacks, data, userState }) {
+  const [currentData, setCurrentData] = React.useState(data);
+  const [isDirty, setIsDirty] = React.useState(false);
+  
+  // Register methods on mount
+  React.useEffect(() => {
+    if (callbacks?.RegisterMethod) {
+      // Register standard methods
+      callbacks.RegisterMethod('getCurrentDataState', () => {
+        return currentData;
+      });
+      
+      callbacks.RegisterMethod('isDirty', () => {
+        return isDirty;
+      });
+      
+      callbacks.RegisterMethod('reset', () => {
+        setCurrentData(data);
+        setIsDirty(false);
+      });
+      
+      callbacks.RegisterMethod('validate', () => {
+        // Custom validation logic
+        if (!currentData.name) {
+          return { valid: false, errors: ['Name is required'] };
+        }
+        return true;
+      });
+      
+      // Register custom methods
+      callbacks.RegisterMethod('exportToCSV', () => {
+        // Custom export logic
+        return convertToCSV(currentData);
+      });
+    }
+  }, [callbacks, currentData, isDirty]);
+  
+  return (
+    <div>
+      {/* Component UI */}
+    </div>
+  );
+}
+```
+
+### Standard Methods
+
+The ComponentObject interface defines standard methods that components can optionally implement:
+
+- **`getCurrentDataState()`**: Returns the current data being displayed
+- **`getDataStateHistory()`**: Returns an array of timestamped state changes
+- **`validate()`**: Validates the component state
+- **`isDirty()`**: Checks if there are unsaved changes
+- **`reset()`**: Resets the component to initial state
+- **`scrollTo(target)`**: Scrolls to a specific element
+- **`focus(target)`**: Sets focus to an element
+- **`print()`**: Prints the component content
+- **`refresh()`**: Refreshes the component data
+
+### Using Component Methods
+
+After compilation, the ComponentObject provides typed access to standard methods:
+
+```typescript
+// Compile the component
+const result = await compiler.compile({
+  componentName: 'MyComponent',
+  componentCode: componentCode
+});
+
+// Get the component object
+const componentObject = result.component.component(context);
+
+// Call standard methods directly (type-safe)
+const currentData = componentObject.getCurrentDataState();
+const isDirty = componentObject.isDirty();
+const validationResult = componentObject.validate();
+
+if (isDirty) {
+  componentObject.reset();
+}
+
+// Call custom methods via invokeMethod
+if (componentObject.hasMethod('exportToCSV')) {
+  const csvData = componentObject.invokeMethod('exportToCSV');
+}
+```
+
+### Method Availability
+
+All methods are optional. The runtime provides sensible defaults when methods aren't registered:
+
+- `getCurrentDataState()` returns `undefined`
+- `getDataStateHistory()` returns `[]`
+- `isDirty()` returns `false`
+- `validate()` returns `true`
+- Other methods perform no operation if not implemented
+
+### Integration with Angular
+
+The Angular wrapper (`@memberjunction/ng-react`) provides strongly-typed access to all standard methods:
+
+```typescript
+export class MyDashboard {
+  @ViewChild(MJReactComponent) reactComponent!: MJReactComponent;
+  
+  checkComponentState() {
+    // Standard methods have full TypeScript support
+    if (this.reactComponent.isDirty()) {
+      const data = this.reactComponent.getCurrentDataState();
+      console.log('Component has unsaved changes:', data);
+    }
+    
+    // Validate before saving
+    const validation = this.reactComponent.validate();
+    if (validation === true || validation.valid) {
+      // Save data...
+    }
+    
+    // Custom methods
+    if (this.reactComponent.hasMethod('generateReport')) {
+      const report = this.reactComponent.invokeMethod('generateReport', options);
+    }
+  }
+}
+```
+
+### Method Declaration in Component Spec
+
+Components can declare their supported methods in the ComponentSpec for discovery:
+
+```typescript
+const componentSpec = {
+  name: 'MyComponent',
+  code: '...',
+  methods: [
+    {
+      name: 'getCurrentDataState',
+      category: 'standard',
+      description: 'Returns current component data',
+      returnType: 'DataState | undefined'
+    },
+    {
+      name: 'exportToExcel',
+      category: 'custom',
+      description: 'Exports data to Excel format',
+      parameters: [{
+        name: 'options',
+        type: '{includeHeaders?: boolean, sheetName?: string}',
+        required: false
+      }],
+      returnType: 'Promise<Blob>'
+    }
+  ]
+};
 ```
 
 ## Advanced Features

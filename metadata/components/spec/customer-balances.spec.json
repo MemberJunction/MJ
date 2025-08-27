@@ -6,20 +6,43 @@
   "code": "@file:../code/customer-balances.js",
   "functionalRequirements": "## Customer Balances\n\n### Purpose\nDisplay customer outstanding balances table.\n\n### Features\n- Sortable table\n- Customer name, balance, age\n- Click for details\n- Pagination",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives customer balance data"
+    "mode": "views",
+    "description": "Displays customer outstanding balances",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "Customer account information",
+        "displayFields": ["ID", "AccountName"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Customer identification"
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice data for balance calculations",
+        "displayFields": ["AccountID", "TotalAmount", "PaidAmount", "DueDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Outstanding balance calculation"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- balances: Array of customer balances\n- onCustomerClick: Selection callback",
   "properties": [
     {
       "name": "balances",
-      "type": "array",
+      "type": "Array<{customerId: string, customerName: string, balance: number, age: number, overdueAmount: number}>",
       "required": true,
       "description": "Customer balance data"
     },
     {
       "name": "onCustomerClick",
-      "type": "function",
+      "type": "(customerId: string) => void",
       "required": false,
       "description": "Customer selection callback"
     }

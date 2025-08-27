@@ -6,14 +6,14 @@
 
 import { UserInfo } from '@memberjunction/core';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
-import { ComponentLibraryDependency, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 
 /**
  * Represents a compiled React component with its metadata
  */
 export interface CompiledComponent {
-  /** The compiled React component function or class */
-  component: any;
+  /** Factory function that creates a ComponentObject when called with context */
+  factory: (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject;
   /** Unique identifier for the component */
   id: string;
   /** Original component name */
@@ -58,8 +58,8 @@ export interface CompileOptions {
  * Registry entry for a compiled component
  */
 export interface RegistryEntry {
-  /** The compiled component */
-  component: any;
+  /** The compiled component object with all methods */
+  component: ComponentObject;
   /** Component metadata */
   metadata: ComponentMetadata;
   /** Last access time for LRU cache */
@@ -113,27 +113,13 @@ export interface ComponentProps {
   /** Utility functions available to the component */
   utilities: any;
   /** Callback functions */
-  callbacks: ComponentCallbacks;
+  callbacks: any;
   /** Child components available for use */
   components?: Record<string, any>;
   /** Component styles */
   styles?: ComponentStyles;
   /** Standard state change handler for controlled components */
   onStateChanged?: (stateUpdate: Record<string, any>) => void;
-}
-
-/**
- * Callbacks available to React components
- */
-export interface ComponentCallbacks {
-  /** Request data refresh */
-  RefreshData?: () => void;
-  /** Open an entity record */
-  OpenEntityRecord?: (entityName: string, key: any) => void;
-  /** Update user state */
-  UpdateUserState?: (state: any) => void;
-  /** Notify of a custom event */
-  NotifyEvent?: (event: string, data: any) => void;
 }
 
 /**
@@ -237,3 +223,9 @@ export interface ErrorBoundaryOptions {
 
 // Export library configuration types
 export * from './library-config';
+
+// Export dependency types
+export * from './dependency-types';
+
+// Re-export ComponentObject for convenience
+export { ComponentObject } from '@memberjunction/interactive-component-types';

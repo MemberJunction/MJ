@@ -16,12 +16,11 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { Subject } from 'rxjs';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
-  buildComponentProps,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
@@ -180,7 +179,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
   private reactRootId: string | null = null;
-  private compiledComponent: any = null;
+  private compiledComponent: ComponentObject | null = null;
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
   isInitialized = false;
@@ -230,31 +229,31 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
       
-      // Register component hierarchy
+      // Register component hierarchy (this compiles and registers all components)
       await this.registerComponentHierarchy();
       
-      // Compile main component with its library dependencies
-      await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
-      const result = await this.adapter.compileComponent({
-        componentName: this.component.name,
-        componentCode: this.component.code,
-        styles: this.styles as ComponentStyles,
-        libraries: this.component.libraries, // Pass library dependencies from ComponentSpec
-        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
+      // Get the already-registered component from the registry
+      const registry = this.adapter.getRegistry();
+      const componentWrapper = registry.get(
+        this.component.name, 
+        this.component.namespace || 'Global', 
+        this.componentVersion
+      );
+      
+      console.log(`🔍 Retrieved from registry for ${this.component.name}:`, {
+        exists: !!componentWrapper,
+        type: typeof componentWrapper,
+        hasComponent: componentWrapper && 'component' in componentWrapper,
+        componentType: componentWrapper && componentWrapper.component ? typeof componentWrapper.component : 'N/A',
+        keys: componentWrapper ? Object.keys(componentWrapper) : []
       });
-
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Component compilation failed');
+      
+      if (!componentWrapper) {
+        throw new Error(`Component ${this.component.name} was not found in registry after registration`);
       }
-
-      // Get runtime context and execute component factory
-      const context = this.adapter.getRuntimeContext();
       
-      // Call the factory function to get the component wrapper
-      // result.component is a CompiledComponent object with a 'component' property that's the factory
-      const componentWrapper = result.component!.component(context, this.styles);
-      
-      // Validate the component wrapper structure
+      // The registry now stores ComponentObjects directly
+      // Validate it has the expected structure
       if (!componentWrapper || typeof componentWrapper !== 'object') {
         throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
       }
@@ -263,8 +262,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
       }
       
-      if (typeof componentWrapper.component !== 'function') {
-        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+      // React.forwardRef components are not plain functions, they're special React elements
+      // We need to check if it's a valid React element type instead of just checking for function
+      const isValidComponent = typeof componentWrapper.component === 'function' || 
+                               (componentWrapper.component && (componentWrapper.component as any).$$typeof);
+      
+      if (!isValidComponent) {
+        throw new Error(`Component is not a valid React component for ${this.component.name}: ${typeof componentWrapper.component}`);
       }
       
       this.compiledComponent = componentWrapper;
@@ -457,6 +461,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       LogError(`Component is undefined for ${this.component.name} during render`);
       return;
     }
+    
+    // ForwardRef components and regular functions are both valid
+    const isValidComponent = typeof this.compiledComponent.component === 'function' || 
+                           (this.compiledComponent.component && (this.compiledComponent.component as any).$$typeof);
+    
+    if (!isValidComponent) {
+      LogError(`Component is not a valid React component for ${this.component.name}: ${typeof this.compiledComponent.component}`);
+      return;
+    }
 
     // Create error boundary
     const ErrorBoundary = createErrorBoundary(React, {
@@ -520,6 +533,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private createCallbacks(): ComponentCallbacks {
     return {
+      RegisterMethod: (_methodName: string, _handler: any) => {
+        // The component compiler wrapper will handle this internally
+        // This is just a placeholder to satisfy the interface
+        // The actual registration happens in the wrapper component
+      },
       OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
@@ -659,8 +677,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * @deprecated Components manage their own state and data now
    */
   refresh() {
-    // Just trigger a re-render if needed
-    this.renderComponent();
+    // Check if the component has registered a refresh method
+    if (this.compiledComponent?.refresh) {
+      this.compiledComponent.refresh();
+    } else {
+      // Fallback: trigger a re-render if needed
+      this.renderComponent();
+    }
   }
 
   /**
@@ -672,6 +695,97 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   updateState(path: string, value: any) {
     // Just emit the event, don't manage state here
     this.stateChange.emit({ path, value });
+  }
+
+  // =================================================================
+  // Standard Component Methods - Strongly Typed
+  // =================================================================
+  
+  /**
+   * Gets the current data state of the component
+   * Used by AI agents to understand what data is currently displayed
+   * @returns The current data state, or undefined if not implemented
+   */
+  getCurrentDataState(): any {
+    return this.compiledComponent?.getCurrentDataState?.();
+  }
+  
+  /**
+   * Gets the history of data state changes in the component
+   * @returns Array of timestamped state snapshots, or empty array if not implemented
+   */
+  getDataStateHistory(): Array<{ timestamp: Date; state: any }> {
+    return this.compiledComponent?.getDataStateHistory?.() || [];
+  }
+  
+  /**
+   * Validates the current state of the component
+   * @returns true if valid, false or validation errors otherwise
+   */
+  validate(): boolean | { valid: boolean; errors?: string[] } {
+    return this.compiledComponent?.validate?.() || true;
+  }
+  
+  /**
+   * Checks if the component has unsaved changes
+   * @returns true if dirty, false otherwise
+   */
+  isDirty(): boolean {
+    return this.compiledComponent?.isDirty?.() || false;
+  }
+  
+  /**
+   * Resets the component to its initial state
+   */
+  reset(): void {
+    this.compiledComponent?.reset?.();
+  }
+  
+  /**
+   * Scrolls to a specific element or position within the component
+   * @param target - Element selector, element reference, or scroll options
+   */
+  scrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
+    this.compiledComponent?.scrollTo?.(target);
+  }
+  
+  /**
+   * Sets focus to a specific element within the component
+   * @param target - Element selector or element reference
+   */
+  focus(target?: string | HTMLElement): void {
+    this.compiledComponent?.focus?.(target);
+  }
+  
+  /**
+   * Invokes a custom method on the component
+   * @param methodName - Name of the method to invoke
+   * @param args - Arguments to pass to the method
+   * @returns The result of the method call, or undefined if method doesn't exist
+   */
+  invokeMethod(methodName: string, ...args: any[]): any {
+    return this.compiledComponent?.invokeMethod?.(methodName, ...args);
+  }
+  
+  /**
+   * Checks if a method is available on the component
+   * @param methodName - Name of the method to check
+   * @returns true if the method exists
+   */
+  hasMethod(methodName: string): boolean {
+    return this.compiledComponent?.hasMethod?.(methodName) || false;
+  }
+  
+  /**
+   * Print the component content
+   * Uses component's print method if available, otherwise uses window.print()
+   */
+  print(): void {
+    if (this.compiledComponent?.print) {
+      this.compiledComponent.print();
+    } else if (typeof window !== 'undefined' && window.print) {
+      window.print();
+    }
   }
 
 }

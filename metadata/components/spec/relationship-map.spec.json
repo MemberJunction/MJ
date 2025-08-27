@@ -6,14 +6,17 @@
   "code": "@file:../code/relationship-map.js",
   "functionalRequirements": "## Relationship Map\n\n### Purpose\nVisualize customer relationships and connections.\n\n### Features\n- Network graph visualization\n- Relationship types\n- Connection strength\n- Interactive nodes",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives relationship data from parent"
+    "mode": "views",
+    "description": "Visualizes customer relationships and connections",
+    "entities": [ 
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- relationships: Array of relationship data\n- selectedNode: Currently selected node",
   "properties": [
     {
       "name": "relationships",
-      "type": "array",
+      "type": "Array<{fromId: string, toId: string, type: string, strength: number, fromName: string, toName: string}>",
       "required": true,
       "description": "Customer relationship connections"
     },
