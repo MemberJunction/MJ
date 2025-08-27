@@ -9622,6 +9622,11 @@ export const ComponentLibrarySchema = z.object({
         * * Display Name: Lint Rules
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for library-specific lint rules that are applied during component validation. This field contains structured rules that define how components using this library should be validated, including DOM element requirements, initialization patterns, lifecycle methods, and common error patterns. Example structure: {"initialization": {"constructorName": "Chart", "elementType": "canvas"}, "lifecycle": {"requiredMethods": ["render"], "cleanupMethods": ["destroy"]}}. The linter dynamically applies these rules based on the libraries referenced in a component spec, enabling extensible validation without hardcoding library-specific logic.`),
+    Dependencies: z.string().nullable().describe(`
+        * * Field Name: Dependencies
+        * * Display Name: Dependencies
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -39262,6 +39267,19 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     }
     set LintRules(value: string | null) {
         this.Set('LintRules', value);
+    }
+
+    /**
+    * * Field Name: Dependencies
+    * * Display Name: Dependencies
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.
+    */
+    get Dependencies(): string | null {
+        return this.Get('Dependencies');
+    }
+    set Dependencies(value: string | null) {
+        this.Set('Dependencies', value);
     }
 }
 
