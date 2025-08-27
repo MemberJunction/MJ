@@ -200,16 +200,110 @@ export class ComponentCompiler {
           throw new Error('Component "${componentName}" is not defined in the provided code');
         }
         
-        // Return the component with utilities
+        // Create method registry for this component instance
+        const methodRegistry = new Map();
+        
+        // Create a wrapper component that provides RegisterMethod in callbacks
+        const ComponentWithMethodRegistry = React.forwardRef((props, ref) => {
+          // Register methods on mount
+          React.useEffect(() => {
+            // Clear previous methods
+            methodRegistry.clear();
+            
+            // Provide RegisterMethod callback if callbacks exist
+            if (props.callbacks && typeof props.callbacks.RegisterMethod === 'function') {
+              // Component can now register its methods
+              // This will be called from within the component
+            }
+          }, [props.callbacks]);
+          
+          // Create enhanced callbacks with RegisterMethod
+          const enhancedCallbacks = React.useMemo(() => {
+            if (!props.callbacks) return {};
+            
+            return {
+              ...props.callbacks,
+              RegisterMethod: (methodName, handler) => {
+                if (methodName && handler) {
+                  methodRegistry.set(methodName, handler);
+                }
+              }
+            };
+          }, [props.callbacks]);
+          
+          // Render the original component with enhanced callbacks
+          return React.createElement(${componentName}, {
+            ...props,
+            callbacks: enhancedCallbacks
+          });
+        });
+        
+        ComponentWithMethodRegistry.displayName = '${componentName}WithMethods';
+        
+        // Return the component object with method access
         return {
-          component: ${componentName},
+          component: ComponentWithMethodRegistry,
+          
+          // Legacy methods for backward compatibility
           print: function() { 
-            if (typeof window !== 'undefined' && window.print) {
+            const printMethod = methodRegistry.get('print');
+            if (printMethod) {
+              printMethod();
+            } else if (typeof window !== 'undefined' && window.print) {
               window.print(); 
             }
           },
           refresh: function(data) { 
+            const refreshMethod = methodRegistry.get('refresh');
+            if (refreshMethod) {
+              refreshMethod(data);
+            }
             // Refresh functionality is handled by the host environment
+          },
+          
+          // Standard method accessors with type safety
+          getCurrentDataState: function() {
+            const method = methodRegistry.get('getCurrentDataState');
+            return method ? method() : undefined;
+          },
+          getDataStateHistory: function() {
+            const method = methodRegistry.get('getDataStateHistory');
+            return method ? method() : [];
+          },
+          validate: function() {
+            const method = methodRegistry.get('validate');
+            return method ? method() : true;
+          },
+          isDirty: function() {
+            const method = methodRegistry.get('isDirty');
+            return method ? method() : false;
+          },
+          reset: function() {
+            const method = methodRegistry.get('reset');
+            if (method) method();
+          },
+          scrollTo: function(target) {
+            const method = methodRegistry.get('scrollTo');
+            if (method) method(target);
+          },
+          focus: function(target) {
+            const method = methodRegistry.get('focus');
+            if (method) method(target);
+          },
+          
+          // Generic method invoker for custom methods
+          invokeMethod: function(methodName, ...args) {
+            const method = methodRegistry.get(methodName);
+            if (method) {
+              return method(...args);
+            }
+            console.warn(\`Method '\${methodName}' is not registered on component ${componentName}\`);
+            return undefined;
+          },
+          
+          // Check if a method exists
+          hasMethod: function(methodName) {
+            return methodRegistry.has(methodName);
           }
         };
       }

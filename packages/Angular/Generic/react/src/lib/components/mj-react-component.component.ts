@@ -16,12 +16,11 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { Subject } from 'rxjs';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
-  buildComponentProps,
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
@@ -180,7 +179,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
   private reactRootId: string | null = null;
-  private compiledComponent: any = null;
+  private compiledComponent: ComponentObject | null = null;
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
   isInitialized = false;
@@ -520,6 +519,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private createCallbacks(): ComponentCallbacks {
     return {
+      RegisterMethod: (_methodName: string, _handler: any) => {
+        // The component compiler wrapper will handle this internally
+        // This is just a placeholder to satisfy the interface
+        // The actual registration happens in the wrapper component
+      },
       OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
@@ -659,8 +663,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * @deprecated Components manage their own state and data now
    */
   refresh() {
-    // Just trigger a re-render if needed
-    this.renderComponent();
+    // Check if the component has registered a refresh method
+    if (this.compiledComponent?.refresh) {
+      this.compiledComponent.refresh();
+    } else {
+      // Fallback: trigger a re-render if needed
+      this.renderComponent();
+    }
   }
 
   /**
@@ -672,6 +681,97 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   updateState(path: string, value: any) {
     // Just emit the event, don't manage state here
     this.stateChange.emit({ path, value });
+  }
+
+  // =================================================================
+  // Standard Component Methods - Strongly Typed
+  // =================================================================
+  
+  /**
+   * Gets the current data state of the component
+   * Used by AI agents to understand what data is currently displayed
+   * @returns The current data state, or undefined if not implemented
+   */
+  getCurrentDataState(): any {
+    return this.compiledComponent?.getCurrentDataState?.();
+  }
+  
+  /**
+   * Gets the history of data state changes in the component
+   * @returns Array of timestamped state snapshots, or empty array if not implemented
+   */
+  getDataStateHistory(): Array<{ timestamp: Date; state: any }> {
+    return this.compiledComponent?.getDataStateHistory?.() || [];
+  }
+  
+  /**
+   * Validates the current state of the component
+   * @returns true if valid, false or validation errors otherwise
+   */
+  validate(): boolean | { valid: boolean; errors?: string[] } {
+    return this.compiledComponent?.validate?.() || true;
+  }
+  
+  /**
+   * Checks if the component has unsaved changes
+   * @returns true if dirty, false otherwise
+   */
+  isDirty(): boolean {
+    return this.compiledComponent?.isDirty?.() || false;
+  }
+  
+  /**
+   * Resets the component to its initial state
+   */
+  reset(): void {
+    this.compiledComponent?.reset?.();
+  }
+  
+  /**
+   * Scrolls to a specific element or position within the component
+   * @param target - Element selector, element reference, or scroll options
+   */
+  scrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
+    this.compiledComponent?.scrollTo?.(target);
+  }
+  
+  /**
+   * Sets focus to a specific element within the component
+   * @param target - Element selector or element reference
+   */
+  focus(target?: string | HTMLElement): void {
+    this.compiledComponent?.focus?.(target);
+  }
+  
+  /**
+   * Invokes a custom method on the component
+   * @param methodName - Name of the method to invoke
+   * @param args - Arguments to pass to the method
+   * @returns The result of the method call, or undefined if method doesn't exist
+   */
+  invokeMethod(methodName: string, ...args: any[]): any {
+    return this.compiledComponent?.invokeMethod?.(methodName, ...args);
+  }
+  
+  /**
+   * Checks if a method is available on the component
+   * @param methodName - Name of the method to check
+   * @returns true if the method exists
+   */
+  hasMethod(methodName: string): boolean {
+    return this.compiledComponent?.hasMethod?.(methodName) || false;
+  }
+  
+  /**
+   * Print the component content
+   * Uses component's print method if available, otherwise uses window.print()
+   */
+  print(): void {
+    if (this.compiledComponent?.print) {
+      this.compiledComponent.print();
+    } else if (typeof window !== 'undefined' && window.print) {
+      window.print();
+    }
   }
 
 }

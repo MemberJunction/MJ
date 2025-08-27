@@ -6,14 +6,14 @@
 
 import { UserInfo } from '@memberjunction/core';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
-import { ComponentLibraryDependency, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 
 /**
  * Represents a compiled React component with its metadata
  */
 export interface CompiledComponent {
-  /** The compiled React component function or class */
-  component: any;
+  /** The compiled React component factory function */
+  component: Function;
   /** Unique identifier for the component */
   id: string;
   /** Original component name */
@@ -113,27 +113,13 @@ export interface ComponentProps {
   /** Utility functions available to the component */
   utilities: any;
   /** Callback functions */
-  callbacks: ComponentCallbacks;
+  callbacks: any;
   /** Child components available for use */
   components?: Record<string, any>;
   /** Component styles */
   styles?: ComponentStyles;
   /** Standard state change handler for controlled components */
   onStateChanged?: (stateUpdate: Record<string, any>) => void;
-}
-
-/**
- * Callbacks available to React components
- */
-export interface ComponentCallbacks {
-  /** Request data refresh */
-  RefreshData?: () => void;
-  /** Open an entity record */
-  OpenEntityRecord?: (entityName: string, key: any) => void;
-  /** Update user state */
-  UpdateUserState?: (state: any) => void;
-  /** Notify of a custom event */
-  NotifyEvent?: (event: string, data: any) => void;
 }
 
 /**
@@ -240,3 +226,6 @@ export * from './library-config';
 
 // Export dependency types
 export * from './dependency-types';
+
+// Re-export ComponentObject for convenience
+export { ComponentObject } from '@memberjunction/interactive-component-types';

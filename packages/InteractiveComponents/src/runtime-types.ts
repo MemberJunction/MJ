@@ -12,6 +12,13 @@ export interface ComponentCallbacks {
      * @param key - this is an array of key/value pairs representing the primary key. The format of a Composite Key is an array of KeyValuePair objects and KeyValuePair objects simply have FieldName and Value properties. In most cases entities have single-valued primary keys but this structure is here for complex entity types that have composite primary keys
      */
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
+    
+    /**
+     * Allows a component to register methods that can be called by the container.
+     * @param methodName - Name of the method being registered
+     * @param handler - The method implementation
+     */
+    RegisterMethod: (methodName: string, handler: Function) => void;
 }
  
 /**
@@ -168,9 +175,9 @@ export type ComponentRefreshFunction = () => void;
  */
 export interface ComponentObject {
     /**
-     * This component receives props including data, userState, callbacks, utilities, and styles.
+     * The React component function that receives props including data, userState, callbacks, utilities, and styles.
      */
-    component: any; 
+    component: Function; 
 
     /**
      * The optional print function that is called when the user clicks on the print button in the parent of the component. This function will never be called by the parent before the init function so the print function
@@ -182,6 +189,61 @@ export interface ComponentObject {
      * The optional refresh function that is called when the user clicks on the refresh button in the parent of the component. This function will never be called by the parent before the init function so the refresh function
      */
     refresh?: ComponentRefreshFunction;
+    
+    /**
+     * Gets the current data state of the component.
+     * Used by AI agents to understand what data is currently displayed.
+     */
+    getCurrentDataState?: () => any;
+    
+    /**
+     * Gets the history of data state changes in the component.
+     * Returns an array of timestamped state snapshots.
+     */
+    getDataStateHistory?: () => Array<{ timestamp: Date; state: any }>;
+    
+    /**
+     * Validates the current state of the component.
+     * Returns true if valid, false or validation errors otherwise.
+     */
+    validate?: () => boolean | { valid: boolean; errors?: string[] };
+    
+    /**
+     * Checks if the component has unsaved changes.
+     */
+    isDirty?: () => boolean;
+    
+    /**
+     * Resets the component to its initial state.
+     */
+    reset?: () => void;
+    
+    /**
+     * Scrolls to a specific element or position within the component.
+     * @param target - Element selector, element reference, or scroll options
+     */
+    scrollTo?: (target: string | HTMLElement | { top?: number; left?: number }) => void;
+    
+    /**
+     * Sets focus to a specific element within the component.
+     * @param target - Element selector or element reference
+     */
+    focus?: (target?: string | HTMLElement) => void;
+    
+    /**
+     * Generic method invoker for custom methods
+     * @param methodName - Name of the method to invoke
+     * @param args - Arguments to pass to the method
+     * @returns The result of the method call, or undefined if method doesn't exist
+     */
+    invokeMethod?: (methodName: string, ...args: any[]) => any;
+    
+    /**
+     * Check if a method is registered on the component
+     * @param methodName - Name of the method to check
+     * @returns true if the method exists
+     */
+    hasMethod?: (methodName: string) => boolean;
 }
 
 /**

@@ -3,7 +3,7 @@
  * @module @memberjunction/react-runtime/registry
  */
 
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentObject } from '@memberjunction/interactive-component-types';
 import { ComponentCompiler } from '../compiler';
 import { RuntimeContext } from '../types';
 import { 
@@ -26,7 +26,7 @@ import {
  * Cached compiled component with metadata
  */
 interface CachedCompiledComponent {
-  component: Function;
+  component: ComponentObject;
   metadata: RegistryComponentResponse['metadata'];
   compiledAt: Date;
   lastUsed: Date;
@@ -89,7 +89,7 @@ export class ComponentRegistryService {
     componentId: string,
     referenceId?: string,
     contextUser?: UserInfo
-  ): Promise<Function> {
+  ): Promise<ComponentObject> {
     await this.initialize(contextUser);
     
     // Find component in metadata
