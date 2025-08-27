@@ -14,6 +14,7 @@ import {
   RuntimeContext
 } from '../types';
 import { LibraryRegistry } from '../utilities/library-registry';
+import { LibraryLoader } from '../utilities/library-loader';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -216,9 +217,9 @@ export class ComponentCompiler {
   }
 
   /**
-   * Load required libraries from the registry
+   * Load required libraries from the registry with dependency resolution
    * @param libraries - Array of library dependencies
-   * @param contextUser - Context user for accessing library registry
+   * @param componentLibraries - All available component libraries for dependency resolution
    * @returns Map of loaded libraries
    */
   private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
@@ -251,90 +252,85 @@ export class ComponentCompiler {
       console.warn('⚠️ No componentLibraries provided for LibraryRegistry initialization');
     }
 
-    const loadPromises = libraries.map(async (lib) => {
-      if (this.config.debug) {
-        console.log(`📦 Processing library: ${lib.name}`);
-      }
-      
-      // Check if library is approved
-      const isApproved = LibraryRegistry.isApproved(lib.name);
-      if (this.config.debug) {
-        console.log(`  ✓ Approved check for ${lib.name}: ${isApproved}`);
-      }
-      
-      if (!isApproved) {
-        console.error(`  ❌ Library '${lib.name}' is not approved`);
-        throw new Error(`Library '${lib.name}' is not approved. Only approved libraries can be used.`);
-      }
+    // Extract library names from the requested libraries
+    const libraryNames = libraries.map(lib => lib.name);
+    
+    if (this.config.debug) {
+      console.log('📦 Using dependency-aware loading for libraries:', libraryNames);
+    }
 
-      // Get library definition for complete info
-      const libraryDef = LibraryRegistry.getLibrary(lib.name);
-      if (this.config.debug) {
-        console.log(`  ✓ Library definition found for ${lib.name}: ${!!libraryDef}`);
-      }
-      
-      if (!libraryDef) {
-        console.error(`  ❌ Library '${lib.name}' not found in registry`);
-        throw new Error(`Library '${lib.name}' not found in registry`);
-      }
+    try {
+      // Use the new dependency-aware loading
+      const loadedLibraryMap = await LibraryLoader.loadLibrariesWithDependencies(
+        libraryNames,
+        componentLibraries,
+        'component-compiler',
+        { debug: this.config.debug }
+      );
 
-      // Get CDN URL for the library
-      const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
-      if (this.config.debug) {
-        console.log(`  ✓ Resolved version for ${lib.name}: ${resolvedVersion}`);
-      }
-      
-      const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
-      if (this.config.debug) {
-        console.log(`  ✓ CDN URL for ${lib.name}: ${cdnUrl}`);
-      }
-      
-      if (!cdnUrl) {
-        console.error(`  ❌ No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
-        throw new Error(`No CDN URL found for library '${lib.name}' version '${lib.version || 'default'}'`);
-      }
-
-      // Check if already loaded
-      if ((window as any)[lib.globalVariable]) {
-        if (this.config.debug) {
-          console.log(`  ℹ️ Library ${lib.name} already loaded globally as ${lib.globalVariable}`);
+      // Map the results to match the expected format
+      // We need to map from library name to global variable
+      for (const lib of libraries) {
+        // Check if library is approved first
+        const isApproved = LibraryRegistry.isApproved(lib.name);
+        if (!isApproved) {
+          console.error(`❌ Library '${lib.name}' is not approved`);
+          throw new Error(`Library '${lib.name}' is not approved. Only approved libraries can be used.`);
         }
-        loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
-        return;
-      }
 
-      // Load CSS files if the library requires them
-      const versionInfo = libraryDef.versions[resolvedVersion || libraryDef.defaultVersion];
-      if (versionInfo?.cssUrls) {
-        await this.loadStyles(versionInfo.cssUrls);
-      }
-
-      // Load the library dynamically (cdnUrl is guaranteed to be non-null here due to check above)
-      if (this.config.debug) {
-        console.log(`  📥 Loading script from CDN for ${lib.name}...`);
-      }
-      await this.loadScript(cdnUrl!, lib.globalVariable);
-      
-      // Capture the library value from global scope
-      // Note: Libraries loaded from CDN typically attach to window automatically
-      // We capture them here to pass through the component's closure
-      const libraryValue = (window as any)[lib.globalVariable];
-      if (this.config.debug) {
-        console.log(`  ✓ Library ${lib.name} loaded successfully, global variable ${lib.globalVariable} is type: ${typeof libraryValue}`);
-      }
-      
-      if (libraryValue) {
-        loadedLibraries.set(lib.globalVariable, libraryValue);
-        if (this.config.debug) {
-          console.log(`  ✅ Added ${lib.name} to loaded libraries map`);
+        // Get the loaded library from the map
+        const loadedValue = loadedLibraryMap.get(lib.name);
+        
+        if (loadedValue) {
+          // Store by global variable name for component access
+          loadedLibraries.set(lib.globalVariable, loadedValue);
+          if (this.config.debug) {
+            console.log(`✅ Mapped ${lib.name} to global variable ${lib.globalVariable}`);
+          }
+        } else {
+          // Fallback: check if it's already globally available (might be a dependency)
+          const globalValue = (window as any)[lib.globalVariable];
+          if (globalValue) {
+            loadedLibraries.set(lib.globalVariable, globalValue);
+            if (this.config.debug) {
+              console.log(`✅ Found ${lib.name} already loaded as ${lib.globalVariable}`);
+            }
+          } else {
+            console.error(`❌ Library '${lib.name}' failed to load`);
+            throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
+          }
         }
-      } else {
-        console.error(`  ❌ Library '${lib.name}' failed to expose global variable '${lib.globalVariable}'`);
-        throw new Error(`Library '${lib.name}' failed to load or did not expose '${lib.globalVariable}'`);
       }
-    });
-
-    await Promise.all(loadPromises);
+    } catch (error: any) {
+      console.error('Failed to load libraries with dependencies:', error);
+      
+      // Fallback to old loading method if dependency resolution fails
+      if (this.config.debug) {
+        console.warn('⚠️ Falling back to non-dependency-aware loading due to error');
+      }
+      
+      // Load each library independently (old method)
+      for (const lib of libraries) {
+        if ((window as any)[lib.globalVariable]) {
+          loadedLibraries.set(lib.globalVariable, (window as any)[lib.globalVariable]);
+        } else {
+          // Try to load using LibraryRegistry
+          const libraryDef = LibraryRegistry.getLibrary(lib.name);
+          if (libraryDef) {
+            const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
+            const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
+            
+            if (cdnUrl) {
+              await this.loadScript(cdnUrl, lib.globalVariable);
+              const libraryValue = (window as any)[lib.globalVariable];
+              if (libraryValue) {
+                loadedLibraries.set(lib.globalVariable, libraryValue);
+              }
+            }
+          }
+        }
+      }
+    }
     
     if (this.config.debug) {
       console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);

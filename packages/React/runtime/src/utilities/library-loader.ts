@@ -11,6 +11,10 @@ import {
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
 import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
 import { resourceManager } from './resource-manager';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { LibraryDependencyResolver } from './library-dependency-resolver';
+import { LoadedLibraryState, DependencyResolutionOptions } from '../types/dependency-types';
+import { LibraryRegistry } from './library-registry';
 
 // Unique component ID for resource tracking
 const LIBRARY_LOADER_COMPONENT_ID = 'mj-react-runtime-library-loader-singleton';
@@ -53,6 +57,8 @@ export interface LibraryLoadResult {
  */
 export class LibraryLoader {
   private static loadedResources = new Map<string, LoadedResource>();
+  private static loadedLibraryStates = new Map<string, LoadedLibraryState>();
+  private static dependencyResolver = new LibraryDependencyResolver({ debug: false });
 
   /**
    * Load all standard libraries (core + UI + CSS)
@@ -383,8 +389,254 @@ export class LibraryLoader {
     });
     
     this.loadedResources.clear();
+    this.loadedLibraryStates.clear();
     
     // Clean up any resources managed by resource manager
     resourceManager.cleanupComponent(LIBRARY_LOADER_COMPONENT_ID);
+  }
+
+  /**
+   * Load a library with its dependencies
+   * @param libraryName - Name of the library to load
+   * @param allLibraries - All available libraries for dependency resolution
+   * @param requestedBy - Name of the component/library requesting this load
+   * @param options - Dependency resolution options
+   * @returns Promise resolving to the loaded library global object
+   */
+  static async loadLibraryWithDependencies(
+    libraryName: string,
+    allLibraries: ComponentLibraryEntity[],
+    requestedBy: string = 'user',
+    options?: DependencyResolutionOptions
+  ): Promise<any> {
+    const debug = options?.debug || false;
+    
+    if (debug) {
+      console.log(`📚 Loading library '${libraryName}' with dependencies`);
+    }
+
+    // Check if already loaded
+    const existingState = this.loadedLibraryStates.get(libraryName);
+    if (existingState) {
+      if (debug) {
+        console.log(`✅ Library '${libraryName}' already loaded (version: ${existingState.version})`);
+      }
+      // Track who requested it
+      if (!existingState.requestedBy.includes(requestedBy)) {
+        existingState.requestedBy.push(requestedBy);
+      }
+      return (window as any)[existingState.globalVariable];
+    }
+
+    // Get load order including dependencies
+    const loadOrderResult = this.dependencyResolver.getLoadOrder(
+      [libraryName],
+      allLibraries,
+      options
+    );
+
+    if (!loadOrderResult.success) {
+      const errors = loadOrderResult.errors?.join(', ') || 'Unknown error';
+      throw new Error(`Failed to resolve dependencies for '${libraryName}': ${errors}`);
+    }
+
+    if (loadOrderResult.warnings && debug) {
+      console.warn(`⚠️ Warnings for '${libraryName}':`, loadOrderResult.warnings);
+    }
+
+    const loadOrder = loadOrderResult.order || [];
+    if (debug) {
+      console.log(`📋 Load order for '${libraryName}':`, loadOrder.map(lib => `${lib.Name}@${lib.Version}`));
+    }
+
+    // Load libraries in order
+    for (const library of loadOrder) {
+      // Skip if already loaded
+      if (this.loadedLibraryStates.has(library.Name)) {
+        if (debug) {
+          console.log(`⏭️ Skipping '${library.Name}' (already loaded)`);
+        }
+        continue;
+      }
+
+      if (debug) {
+        console.log(`📥 Loading '${library.Name}@${library.Version}'`);
+      }
+
+      // Load the library
+      if (!library.CDNUrl || !library.GlobalVariable) {
+        throw new Error(`Library '${library.Name}' missing CDN URL or global variable`);
+      }
+
+      // Load CSS if available
+      if (library.CDNCssUrl) {
+        const cssUrls = library.CDNCssUrl.split(',').map(url => url.trim());
+        for (const cssUrl of cssUrls) {
+          if (cssUrl) {
+            this.loadCSS(cssUrl);
+          }
+        }
+      }
+
+      // Load the script
+      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable);
+
+      // Track the loaded state
+      const dependencies = Array.from(
+        this.dependencyResolver.getDirectDependencies(library).keys()
+      );
+
+      this.loadedLibraryStates.set(library.Name, {
+        name: library.Name,
+        version: library.Version || 'unknown',
+        globalVariable: library.GlobalVariable,
+        loadedAt: new Date(),
+        requestedBy: library.Name === libraryName ? [requestedBy] : [],
+        dependencies
+      });
+
+      if (debug) {
+        console.log(`✅ Loaded '${library.Name}@${library.Version}'`);
+      }
+    }
+
+    // Return the originally requested library's global
+    const targetLibrary = loadOrder.find(lib => lib.Name === libraryName);
+    if (!targetLibrary || !targetLibrary.GlobalVariable) {
+      throw new Error(`Failed to load library '${libraryName}'`);
+    }
+
+    return (window as any)[targetLibrary.GlobalVariable];
+  }
+
+  /**
+   * Load multiple libraries with dependency resolution
+   * @param libraryNames - Names of libraries to load
+   * @param allLibraries - All available libraries for dependency resolution
+   * @param requestedBy - Name of the component requesting these libraries
+   * @param options - Dependency resolution options
+   * @returns Map of library names to their loaded global objects
+   */
+  static async loadLibrariesWithDependencies(
+    libraryNames: string[],
+    allLibraries: ComponentLibraryEntity[],
+    requestedBy: string = 'user',
+    options?: DependencyResolutionOptions
+  ): Promise<Map<string, any>> {
+    const debug = options?.debug || false;
+    const result = new Map<string, any>();
+    
+    if (debug) {
+      console.log(`📚 Loading libraries with dependencies:`, libraryNames);
+    }
+
+    // Get combined load order for all requested libraries
+    const loadOrderResult = this.dependencyResolver.getLoadOrder(
+      libraryNames,
+      allLibraries,
+      options
+    );
+
+    if (!loadOrderResult.success) {
+      const errors = loadOrderResult.errors?.join(', ') || 'Unknown error';
+      throw new Error(`Failed to resolve dependencies: ${errors}`);
+    }
+
+    if (loadOrderResult.warnings && debug) {
+      console.warn(`⚠️ Warnings:`, loadOrderResult.warnings);
+    }
+
+    const loadOrder = loadOrderResult.order || [];
+    if (debug) {
+      console.log(`📋 Combined load order:`, loadOrder.map(lib => `${lib.Name}@${lib.Version}`));
+    }
+
+    // Load all libraries in order
+    for (const library of loadOrder) {
+      // Skip if already loaded
+      if (this.loadedLibraryStates.has(library.Name)) {
+        if (debug) {
+          console.log(`⏭️ Skipping '${library.Name}' (already loaded)`);
+        }
+        const state = this.loadedLibraryStates.get(library.Name)!;
+        if (libraryNames.includes(library.Name)) {
+          result.set(library.Name, (window as any)[state.globalVariable]);
+        }
+        continue;
+      }
+
+      if (debug) {
+        console.log(`📥 Loading '${library.Name}@${library.Version}'`);
+      }
+
+      // Load the library
+      if (!library.CDNUrl || !library.GlobalVariable) {
+        throw new Error(`Library '${library.Name}' missing CDN URL or global variable`);
+      }
+
+      // Load CSS if available
+      if (library.CDNCssUrl) {
+        const cssUrls = library.CDNCssUrl.split(',').map(url => url.trim());
+        for (const cssUrl of cssUrls) {
+          if (cssUrl) {
+            this.loadCSS(cssUrl);
+          }
+        }
+      }
+
+      // Load the script
+      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable);
+
+      // Track the loaded state
+      const dependencies = Array.from(
+        this.dependencyResolver.getDirectDependencies(library).keys()
+      );
+
+      this.loadedLibraryStates.set(library.Name, {
+        name: library.Name,
+        version: library.Version || 'unknown',
+        globalVariable: library.GlobalVariable,
+        loadedAt: new Date(),
+        requestedBy: libraryNames.includes(library.Name) ? [requestedBy] : [],
+        dependencies
+      });
+
+      // Add to result if it was directly requested
+      if (libraryNames.includes(library.Name)) {
+        result.set(library.Name, loadedGlobal);
+      }
+
+      if (debug) {
+        console.log(`✅ Loaded '${library.Name}@${library.Version}'`);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get information about loaded libraries
+   * @returns Map of loaded library states
+   */
+  static getLoadedLibraryStates(): Map<string, LoadedLibraryState> {
+    return new Map(this.loadedLibraryStates);
+  }
+
+  /**
+   * Check if a library is loaded
+   * @param libraryName - Name of the library
+   * @returns True if the library is loaded
+   */
+  static isLibraryLoaded(libraryName: string): boolean {
+    return this.loadedLibraryStates.has(libraryName);
+  }
+
+  /**
+   * Get the version of a loaded library
+   * @param libraryName - Name of the library
+   * @returns Version string or undefined if not loaded
+   */
+  static getLoadedLibraryVersion(libraryName: string): string | undefined {
+    return this.loadedLibraryStates.get(libraryName)?.version;
   }
 }

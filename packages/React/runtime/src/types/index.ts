@@ -237,3 +237,6 @@ export interface ErrorBoundaryOptions {
 
 // Export library configuration types
 export * from './library-config';
+
+// Export dependency types
+export * from './dependency-types';
