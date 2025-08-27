@@ -3,7 +3,7 @@
  * @module @memberjunction/react-runtime/registry
  */
 
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentObject } from '@memberjunction/interactive-component-types';
 import { ComponentCompiler } from '../compiler';
 import { RuntimeContext } from '../types';
 import { 
@@ -26,7 +26,7 @@ import {
  * Cached compiled component with metadata
  */
 interface CachedCompiledComponent {
-  component: Function;
+  component: ComponentObject;
   metadata: RegistryComponentResponse['metadata'];
   compiledAt: Date;
   lastUsed: Date;
@@ -48,13 +48,16 @@ export class ComponentRegistryService {
   private runtimeContext: RuntimeContext;
   private componentEngine = ComponentMetadataEngine.Instance;
   private registryProviders = new Map<string, RegistryProvider>();
+  private debug: boolean = false;
   
   private constructor(
     compiler: ComponentCompiler,
-    runtimeContext: RuntimeContext
+    runtimeContext: RuntimeContext,
+    debug: boolean = false
   ) {
     this.compiler = compiler;
     this.runtimeContext = runtimeContext;
+    this.debug = debug;
   }
   
   /**
@@ -62,10 +65,11 @@ export class ComponentRegistryService {
    */
   static getInstance(
     compiler: ComponentCompiler, 
-    context: RuntimeContext
+    context: RuntimeContext,
+    debug: boolean = false
   ): ComponentRegistryService {
     if (!ComponentRegistryService.instance) {
-      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context);
+      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug);
     }
     return ComponentRegistryService.instance;
   }
@@ -85,7 +89,7 @@ export class ComponentRegistryService {
     componentId: string,
     referenceId?: string,
     contextUser?: UserInfo
-  ): Promise<Function> {
+  ): Promise<ComponentObject> {
     await this.initialize(contextUser);
     
     // Find component in metadata
@@ -107,12 +111,16 @@ export class ComponentRegistryService {
         this.addComponentReference(key, referenceId);
       }
       
-      console.log(`✅ Reusing compiled component from cache: ${key} (use count: ${cached.useCount})`);
+      if (this.debug) {
+        console.log(`✅ Reusing compiled component from cache: ${key} (use count: ${cached.useCount})`);
+      }
       return cached.component;
     }
     
     // Not in cache, need to load and compile
-    console.log(`🔄 Loading and compiling component: ${key}`);
+    if (this.debug) {
+      console.log(`🔄 Loading and compiling component: ${key}`);
+    }
     
     // Get the component specification
     const spec = await this.getComponentSpec(componentId, contextUser);
@@ -152,7 +160,7 @@ export class ComponentRegistryService {
     if (!compilationResult.component) {
       throw new Error(`Component compilation succeeded but no component returned`);
     }
-    const compiledComponent = compilationResult.component.component(this.runtimeContext);
+    const compiledComponent = compilationResult.component.factory(this.runtimeContext);
     this.compiledComponentCache.set(key, {
       component: compiledComponent,
       metadata,
@@ -194,7 +202,9 @@ export class ComponentRegistryService {
     // EXTERNAL: Check if we have a cached version
     if (component.Specification && component.LastSyncedAt) {
       // For now, always use cached version (no expiration)
-      console.log(`Using cached external component: ${component.Name} (synced: ${component.LastSyncedAt})`);
+      if (this.debug) {
+        console.log(`Using cached external component: ${component.Name} (synced: ${component.LastSyncedAt})`);
+      }
       return JSON.parse(component.Specification);
     }
     
@@ -245,7 +255,9 @@ export class ComponentRegistryService {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
     
-    console.log(`Fetching from external registry: ${url}`);
+    if (this.debug) {
+      console.log(`Fetching from external registry: ${url}`);
+    }
     
     const response = await fetch(url, { headers });
     
@@ -339,7 +351,9 @@ export class ComponentRegistryService {
       throw new Error(`Failed to save cached component: ${componentEntity.Name}\n${componentEntity.LatestResult.Message || componentEntity.LatestResult.Error || componentEntity.LatestResult.Errors?.join(',')}`);
     }
     
-    console.log(`Cached external component: ${componentEntity.Name} at ${componentEntity.LastSyncedAt}`);
+    if (this.debug) {
+      console.log(`Cached external component: ${componentEntity.Name} at ${componentEntity.LastSyncedAt}`);
+    }
     
     // Refresh metadata cache after saving
     await this.componentEngine.Config(true, contextUser);
@@ -496,7 +510,9 @@ export class ComponentRegistryService {
       const evictionThreshold = 5 * 60 * 1000; // 5 minutes
       
       if (timeSinceLastUse > evictionThreshold) {
-        console.log(`🗑️ Evicting unused component from cache: ${componentKey}`);
+        if (this.debug) {
+          console.log(`🗑️ Evicting unused component from cache: ${componentKey}`);
+        }
         this.compiledComponentCache.delete(componentKey);
       }
     }
@@ -539,7 +555,9 @@ export class ComponentRegistryService {
    * Clear all caches
    */
   clearCache(): void {
-    console.log('🧹 Clearing all component caches');
+    if (this.debug) {
+      console.log('🧹 Clearing all component caches');
+    }
     this.compiledComponentCache.clear();
     this.componentReferences.clear();
   }

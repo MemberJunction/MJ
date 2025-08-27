@@ -24,7 +24,14 @@
       "description": "View deal details"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "ag-grid",

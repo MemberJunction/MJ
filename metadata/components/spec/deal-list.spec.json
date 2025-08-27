@@ -6,20 +6,33 @@
   "code": "@file:../code/deal-list.js",
   "functionalRequirements": "## Deal List Component\n\n### Purpose\nDisplay deals in a tabular format with sortable columns.\n\n### Features\n- Table layout with headers\n- Deal name, amount, and probability columns\n- Currency formatting\n- Clickable rows to open deals\n- Hover effects on rows\n- Clean table styling",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives deals array from parent"
+    "mode": "views",
+    "description": "Displays list of deals passed via props",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal entities displayed in table format",
+        "displayFields": ["ID", "DealName", "Amount", "CloseDate", "Probability", "Stage", "Account"],
+        "filterFields": [],
+        "sortFields": ["DealName", "Amount", "Probability"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Array of deals displayed as sortable table rows"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- deals: Array of deal objects\n- onOpenDeal: Callback to open deal record\n\n### Table Structure\n- Header row with column labels\n- Data rows with deal information\n- Click handlers on rows",
   "properties": [
     {
       "name": "deals",
-      "type": "array",
+      "type": "Array<{ID: string, DealName: string, Amount: number, CloseDate: string, Probability: number, Stage?: string, Account?: string}>",
       "required": true,
       "description": "Array of deal entities"
     },
     {
       "name": "onOpenDeal",
-      "type": "function",
+      "type": "(dealId: string) => void",
       "required": true,
       "description": "Callback to open deal record"
     }

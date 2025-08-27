@@ -102,7 +102,7 @@ export class GraphQLSystemUserClient {
             }
         }
         catch (e) {
-            const error = `GraphQLSystemUserClient::GetData - Error getting geta - ${e}`
+            const error = `GraphQLSystemUserClient::GetData - Error getting data - ${e}`
             LogError(error);
             return {
                 Success: false,

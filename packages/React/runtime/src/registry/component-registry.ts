@@ -9,6 +9,7 @@ import {
   ComponentMetadata, 
   RegistryConfig 
 } from '../types';
+import { ComponentObject } from '@memberjunction/interactive-component-types';
 import { resourceManager } from '../utilities/resource-manager';
 
 /**
@@ -49,7 +50,7 @@ export class ComponentRegistry {
   /**
    * Registers a compiled component
    * @param name - Component name
-   * @param component - Compiled component
+   * @param component - Compiled component object
    * @param namespace - Component namespace (default: 'Global')
    * @param version - Component version (default: 'v1')
    * @param tags - Optional tags for categorization
@@ -57,7 +58,7 @@ export class ComponentRegistry {
    */
   register(
     name: string,
-    component: any,
+    component: ComponentObject,
     namespace: string = 'Global',
     version: string = 'v1',
     tags?: string[]
@@ -98,9 +99,9 @@ export class ComponentRegistry {
    * @param name - Component name
    * @param namespace - Component namespace
    * @param version - Component version
-   * @returns The component if found, undefined otherwise
+   * @returns The component object if found, undefined otherwise
    */
-  get(name: string, namespace: string = 'Global', version?: string): any {
+  get(name: string, namespace: string = 'Global', version?: string): ComponentObject | undefined {
     const id = version 
       ? this.generateRegistryKey(name, namespace, version)
       : this.findLatestVersion(name, namespace);
@@ -171,10 +172,10 @@ export class ComponentRegistry {
    * Gets all components in a namespace and version as a map
    * @param namespace - Namespace to query (default: 'Global')
    * @param version - Version to query (default: 'v1')
-   * @returns Object mapping component names to components
+   * @returns Object mapping component names to component objects
    */
-  getAll(namespace: string = 'Global', version: string = 'v1'): Record<string, any> {
-    const components: Record<string, any> = {};
+  getAll(namespace: string = 'Global', version: string = 'v1'): Record<string, ComponentObject> {
+    const components: Record<string, ComponentObject> = {};
     
     for (const entry of this.registry.values()) {
       if (entry.metadata.namespace === namespace && entry.metadata.version === version) {

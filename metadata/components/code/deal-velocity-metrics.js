@@ -2,6 +2,7 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
   // Load sub-components from registry
   const DealVelocityTrendChart = components['DealVelocityTrendChart'];
   const DealVelocityDistributionChart = components['DealVelocityDistributionChart'];
+  const DataExportPanel = components['DataExportPanel'];
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -185,14 +186,12 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
     // This function is kept for backward compatibility but is no longer used
   };
 
-  const exportToCSV = () => {
+  // Prepare data for export
+  const prepareExportData = () => {
     const velocityData = calculateVelocityData();
-    const csvData = [];
+    const exportData = [];
     
-    // Header row with comprehensive metrics
-    csvData.push(['Stage', 'Deal Count', 'Avg Days', 'Median Days', 'Min Days', 'Max Days', 'Std Dev', 'Total Value', 'Avg Deal Size']);
-    
-    // Calculate additional metrics for each stage
+    // Add stage velocity metrics
     stages.forEach(stage => {
       const stageDeals = deals.filter(d => d.Stage === stage);
       const totalValue = stageDeals.reduce((sum, deal) => sum + (deal.Amount || 0), 0);
@@ -200,70 +199,60 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
       
       if (velocityData[stage] && velocityData[stage]['Average Duration']) {
         const metrics = velocityData[stage]['Average Duration'];
-        csvData.push([
-          stage,
-          metrics.count || 0,
-          Math.round(metrics.mean) || 0,
-          Math.round(metrics.median) || 0,
-          Math.round(metrics.min) || 0,
-          Math.round(metrics.max) || 0,
-          Math.round(metrics.stdev) || 0,
-          Math.round(totalValue),
-          Math.round(avgDealSize)
-        ]);
+        exportData.push({
+          Stage: stage,
+          DealCount: metrics.count || 0,
+          AvgDays: Math.round(metrics.mean) || 0,
+          MedianDays: Math.round(metrics.median) || 0,
+          MinDays: Math.round(metrics.min) || 0,
+          MaxDays: Math.round(metrics.max) || 0,
+          StdDev: Math.round(metrics.stdev) || 0,
+          TotalValue: Math.round(totalValue),
+          AvgDealSize: Math.round(avgDealSize)
+        });
       } else {
-        // Include stages with no data
-        csvData.push([
-          stage,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ]);
+        exportData.push({
+          Stage: stage,
+          DealCount: 0,
+          AvgDays: 0,
+          MedianDays: 0,
+          MinDays: 0,
+          MaxDays: 0,
+          StdDev: 0,
+          TotalValue: 0,
+          AvgDealSize: 0
+        });
       }
     });
     
-    // Add summary row
+    // Add summary metrics
     const totalDeals = deals.length;
     const totalValue = deals.reduce((sum, deal) => sum + (deal.Amount || 0), 0);
     const avgValue = totalDeals > 0 ? totalValue / totalDeals : 0;
     
-    csvData.push([]); // Empty row for separation
-    csvData.push(['Summary', '', '', '', '', '', '', '', '']);
-    csvData.push(['Total Deals', totalDeals, '', '', '', '', '', Math.round(totalValue), Math.round(avgValue)]);
+    exportData.push({
+      Stage: 'SUMMARY',
+      DealCount: totalDeals,
+      TotalValue: Math.round(totalValue),
+      AvgDealSize: Math.round(avgValue)
+    });
     
-    // Add date range info
-    csvData.push([]);
-    csvData.push(['Export Date', new Date().toLocaleDateString()]);
-    if (useCustomDates) {
-      csvData.push(['Date Range', `${startDate} to ${endDate}`]);
-    } else {
-      const rangeLabel = {
-        '7': 'Last 7 Days',
-        '30': 'Last 30 Days',
-        '90': 'Last 90 Days',
-        'thisYear': 'This Year',
-        'lastYear': 'Last Year',
-        'allTime': 'All Time'
-      }[timeRange] || 'Last 30 Days';
-      csvData.push(['Date Range', rangeLabel]);
-    }
-    
-    // Generate CSV
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `deal-velocity-metrics-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    return exportData;
+  };
+
+  // Define export columns with correct key/label format
+  const getExportColumns = () => {
+    return [
+      { key: 'Stage', label: 'Stage' },
+      { key: 'DealCount', label: 'Deal Count' },
+      { key: 'AvgDays', label: 'Avg Days' },
+      { key: 'MedianDays', label: 'Median Days' },
+      { key: 'MinDays', label: 'Min Days' },
+      { key: 'MaxDays', label: 'Max Days' },
+      { key: 'StdDev', label: 'Std Dev' },
+      { key: 'TotalValue', label: 'Total Value' },
+      { key: 'AvgDealSize', label: 'Avg Deal Size' }
+    ];
   };
 
 
@@ -314,19 +303,6 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
     <div style={{ backgroundColor: '#F3F4F6', minHeight: '100vh', width: '100%', boxSizing: 'border-box', padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Deal Velocity Metrics</h2>
-        <button
-          onClick={exportToCSV}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: '#10B981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          Export CSV
-        </button>
       </div>
       
       {/* Enhanced Filter Controls */}
@@ -692,10 +668,11 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
       </div>
       
       <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #E5E7EB' }}>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button
-              onClick={() => {
-                setViewMode('heatmap');
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setViewMode('heatmap');
                 if (onSaveUserSettings) {
                   onSaveUserSettings({ 
                     viewMode: 'heatmap',
@@ -765,6 +742,36 @@ function DealVelocityMetrics({ utilities, styles, components, callbacks, savedUs
             >
               Distribution
             </button>
+            </div>
+            {DataExportPanel && (
+              <DataExportPanel
+                data={prepareExportData()}
+                columns={getExportColumns()}
+                filename={`deal-velocity-metrics-${new Date().toISOString().split('T')[0]}`}
+                formats={['csv', 'excel', 'pdf']}
+                buttonStyle="dropdown"
+                buttonText="Export"
+                icon="fa-download"
+                customStyles={{
+                  button: {
+                    padding: '6px 12px',
+                    backgroundColor: '#10B981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }
+                }}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+              />
+            )}
           </div>
           
           {viewMode === 'heatmap' && (

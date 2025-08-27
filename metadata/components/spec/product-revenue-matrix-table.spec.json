@@ -6,44 +6,77 @@
   "code": "@file:../code/product-revenue-matrix-table.js",
   "functionalRequirements": "## Product Revenue Matrix Table Sub-Component\n\n### Purpose\nDisplay product revenue metrics in a sortable table format with sparkline trends.\n\n### Core Features\n- **Sortable Columns**: Sort by revenue, quantity, margin, or customers\n- **Revenue Heat Map**: Color-coded revenue cells\n- **Margin Indicators**: Color-coded margin percentages\n- **Sparkline Trends**: Mini charts showing revenue trends\n- **Click for Details**: Select rows to view product details",
   "dataRequirements": {
-    "mode": "props",
-    "props": ["products", "lineItems", "invoices", "sortBy", "onSortChange", "onProductClick"]
+    "mode": "views",
+    "description": "Receives entity data via props to display in sortable table format",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product catalog for table row display",
+        "displayFields": ["ID", "ProductName", "Category", "UnitPrice", "Cost"],
+        "filterFields": [],
+        "sortFields": ["ProductName", "UnitPrice"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Each product becomes a row in the matrix table"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Line items for revenue and quantity calculations",
+        "displayFields": ["ID", "InvoiceID", "ProductID", "Quantity", "UnitPrice", "TotalPrice", "Discount"],
+        "filterFields": [],
+        "sortFields": ["TotalPrice"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Aggregated to show revenue and quantity sold per product"
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice headers for customer metrics",
+        "displayFields": ["ID", "AccountID", "InvoiceDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Used to calculate unique customers and transaction counts"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Table Generation\n- Dynamic HTML table creation\n- Color scales for revenue and margin\n- Chart.js sparklines for trends\n- Hover effects and click handlers",
   "properties": [
     {
       "name": "products",
-      "type": "array",
+      "type": "Array<{ID: string, ProductName: string, Category?: string, UnitPrice?: number, Cost?: number}>",
       "description": "Array of product entities",
       "required": true
     },
     {
       "name": "lineItems",
-      "type": "array",
+      "type": "Array<{ID: string, InvoiceID: string, ProductID: string, Quantity?: number, UnitPrice?: number, TotalPrice?: number, Discount?: number}>",
       "description": "Array of invoice line item entities",
       "required": true
     },
     {
       "name": "invoices",
-      "type": "array",
+      "type": "Array<{ID: string, AccountID?: string, InvoiceDate?: string}>",
       "description": "Array of invoice entities",
       "required": true
     },
     {
       "name": "sortBy",
-      "type": "string",
+      "type": "'revenue' | 'quantity' | 'margin' | 'customers' | 'name'",
       "description": "Current sort field",
       "required": true
     },
     {
       "name": "onSortChange",
-      "type": "function",
+      "type": "(sortBy: string) => void",
       "description": "Callback when sort changes",
       "required": false
     },
     {
       "name": "onProductClick",
-      "type": "function",
+      "type": "(product: {id: string, name: string, revenue: number, margin: number}) => void",
       "description": "Callback when product is clicked",
       "required": false
     }

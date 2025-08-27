@@ -6,20 +6,33 @@
   "code": "@file:../code/win-loss-chart.js",
   "functionalRequirements": "## Win Loss Chart\n\n### Purpose\nVisualize win/loss ratios and trends.\n\n### Features\n- Stacked bar chart\n- Win/loss percentages\n- Trend analysis\n- Period comparison",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives win/loss data from parent"
+    "mode": "views",
+    "description": "Visualizes win/loss ratios and trends",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records for win/loss analysis",
+        "displayFields": ["ID", "Name", "Stage", "Amount", "CloseDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Win/loss ratio calculation"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- winLossData: Array of win/loss metrics\n- period: Time period filter",
   "properties": [
     {
       "name": "winLossData",
-      "type": "array",
+      "type": "Array<{period: string, wins: number, losses: number, winRate: number}>",
       "required": true,
       "description": "Win/loss metrics data"
     },
     {
       "name": "period",
-      "type": "string",
+      "type": "'month' | 'quarter' | 'year'",
       "required": false,
       "description": "Time period filter"
     }

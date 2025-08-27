@@ -7,6 +7,23 @@
   "namespace": "CRM/Analytics",
   "functionalRequirements": "## Pie Chart Component\n\n- Display interactive pie chart using Chart.js\n- Show industry names with counts in legend\n- Calculate and display percentages in tooltips\n- Support click-to-select functionality\n- Animate on hover with visual feedback\n- Configurable color schemes\n- Handle 'Others' grouping for small segments",
   "technicalDesign": "## Technical Design\n\n### Props\n- industryData: Grouped and calculated industry data\n- selectedIndustry: Currently selected slice\n- onSliceClick: Callback for slice selection\n- colorScheme: Color palette selection\n- maxIndustries: Maximum slices to show\n\n### Implementation\n- Uses Chart.js for rendering\n- Ref-based chart instance management\n- Cleanup on unmount to prevent memory leaks",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Fetches account data using RunView for industry distribution analysis",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "CRM account data grouped by industry",
+        "displayFields": ["ID", "AccountName", "Industry", "Revenue", "Status", "IsActive"],
+        "filterFields": ["IsActive", "Industry"],
+        "sortFields": ["AccountName", "Revenue", "Industry"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
+      }
+    ],
+    "queries": []
+  },
   "properties": [
     {
       "name": "industryData",

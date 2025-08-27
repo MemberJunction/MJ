@@ -18,10 +18,31 @@ function AIPromptsCluster({
   const ClusterGraph = components['AIPromptsClusterGraph'];
   const ClusterControls = components['AIPromptsClusterControls'];
   const ClusterDetails = components['AIPromptsClusterDetails'];
+  const DataExportPanel = components['DataExportPanel'];
+  
+  console.log('🔍 [AIPromptsCluster] Component loading check:');
+  console.log('  - ClusterGraph:', !!ClusterGraph);
+  console.log('  - ClusterControls:', !!ClusterControls);
+  console.log('  - ClusterDetails:', !!ClusterDetails);
+  console.log('  - DataExportPanel:', !!DataExportPanel);
+  console.log('  - All components object:', Object.keys(components || {}));
+  console.log('  - DataExportPanel type:', typeof DataExportPanel);
+  
+  // Debug when DataExportPanel changes
+  useEffect(() => {
+    console.log('📌 [AIPromptsCluster] DataExportPanel updated:', !!DataExportPanel);
+    if (DataExportPanel) {
+      console.log('  - DataExportPanel is a:', typeof DataExportPanel);
+      console.log('  - DataExportPanel.toString():', DataExportPanel.toString().substring(0, 100));
+    }
+  }, [DataExportPanel]);
 
   // State management
   const [prompts, setPrompts] = useState([]);
   const [embeddings, setEmbeddings] = useState({});
+  
+  // Ref for cluster visualization
+  const clusterGraphRef = useRef(null);
   const [clusters, setClusters] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [filters, setFilters] = useState({
@@ -489,33 +510,52 @@ Format your response in clear markdown with headers and bullet points.`;
     generateEmbeddings();
   };
 
-  const handleExport = () => {
-    // Create export data
+  // Prepare export data for DataExportPanel
+  const prepareExportData = () => {
+    console.log('🔍 [AIPromptsCluster] prepareExportData called');
+    console.log('🔍 [AIPromptsCluster] clusters:', clusters);
+    console.log('🔍 [AIPromptsCluster] clusters length:', clusters?.length);
+    console.log('🔍 [AIPromptsCluster] clusterNames:', clusterNames);
+    
+    // Return empty array if no clusters
+    if (!clusters || clusters.length === 0) {
+      console.log('⚠️ [AIPromptsCluster] No clusters available for export');
+      return [];
+    }
+    
     const exportData = clusters.map(prompt => ({
-      ID: prompt.ID,
-      Name: prompt.Name,
-      Category: prompt.Category,
-      Type: prompt.Type,
-      Cluster: prompt.cluster
+      ID: prompt.ID || '',
+      Name: prompt.Name || '',
+      Category: prompt.Category || '',
+      Type: prompt.Type || '',
+      // Use the LLM-generated cluster name if available, otherwise fall back to numbered cluster
+      ClusterName: clusterNames[prompt.cluster] || `Cluster ${prompt.cluster + 1}`,
+      Status: prompt.Status || '',
+      PromptRole: prompt.PromptRole || '',
+      ResponseFormat: prompt.ResponseFormat || ''
     }));
     
-    // Convert to CSV
-    const headers = ['ID', 'Name', 'Category', 'Type', 'Cluster'];
-    const csv = [
-      headers.join(','),
-      ...exportData.map(row => 
-        headers.map(h => `"${row[h] || ''}"`).join(',')
-      )
-    ].join('\n');
+    console.log('🔍 [AIPromptsCluster] exportData prepared:', exportData);
+    console.log('🔍 [AIPromptsCluster] exportData length:', exportData?.length);
+    console.log('🔍 [AIPromptsCluster] Sample export row:', exportData[0]);
     
-    // Download file
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ai-prompts-clusters-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return exportData;
+  };
+
+  // Define export columns - DataExportPanel expects key/label not field/header
+  const getExportColumns = () => {
+    const columns = [
+      { key: 'ID', label: 'ID' },
+      { key: 'Name', label: 'Name' },
+      { key: 'Category', label: 'Category' },
+      { key: 'Type', label: 'Type' },
+      { key: 'ClusterName', label: 'Cluster' },  // Only export cluster name, not redundant number
+      { key: 'Status', label: 'Status' },
+      { key: 'PromptRole', label: 'Role' },
+      { key: 'ResponseFormat', label: 'Response Format' }
+    ];
+    console.log('🔍 [AIPromptsCluster] Export columns defined:', columns);
+    return columns;
   };
 
   const handleEditPrompt = (promptId) => {
@@ -523,6 +563,28 @@ Format your response in clear markdown with headers and bullet points.`;
       { FieldName: 'ID', Value: promptId }
     ]);
   };
+  
+  // Function to get the cluster visualization element for PDF export
+  // Using a callback function to ensure we get the element at export time
+  const getClusterVisualization = useCallback(() => {
+    console.log('🎨 [AIPromptsCluster] Getting cluster visualization for PDF export');
+    if (!clusterGraphRef.current) {
+      console.warn('⚠️ Cluster graph ref not available');
+      return null;
+    }
+    
+    // Return the container div which html2canvas can handle better
+    // html2canvas has issues with standalone SVG elements from React components
+    console.log('📦 Returning cluster graph container for capture');
+    console.log('  - Container dimensions:', {
+      width: clusterGraphRef.current.offsetWidth,
+      height: clusterGraphRef.current.offsetHeight,
+      hasContent: clusterGraphRef.current.children.length > 0
+    });
+    
+    // Return the container which includes the SVG/canvas in context
+    return clusterGraphRef.current;
+  }, []);
 
   // Render component
   return (
@@ -561,30 +623,86 @@ Format your response in clear markdown with headers and bullet points.`;
             </p>
           </div>
           
-          {/* AI Insights Panel */}
-      <AIInsightsPanel
-        utilities={utilities}
-        styles={styles}
-        components={components}
-        callbacks={callbacks}
-        savedUserSettings={savedUserSettings?.aiInsights}
-        onSaveUserSettings={(settings) => onSaveUserSettings?.({
-          ...savedUserSettings,
-          aiInsights: settings
-        })}
-        insights={aiInsights}
-        loading={loadingInsights}
-        error={insightsError}
-        onGenerate={generateAIInsights}
-        title="AI Prompts Cluster Analysis"
-        icon="fa-wand-magic-sparkles"
-        iconColor={styles?.colors?.primary || '#8B5CF6'}
-        position="bottom"
-        onClose={() => {
-          setAiInsights(null);
-          setInsightsError(null);
-        }}
-      />
+          {/* Export and AI Insights buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center'
+          }}>
+            {/* Export Button */}
+            {DataExportPanel && clusters.length > 0 && (
+              <DataExportPanel
+                data={prepareExportData()}
+                columns={getExportColumns()}
+                filename={`ai-prompts-clusters-${new Date().toISOString().split('T')[0]}`}
+                formats={['csv', 'excel', 'pdf']}
+                buttonStyle="dropdown"
+                buttonText="Export"
+                icon="fa-download"
+                getHtmlElement={getClusterVisualization}  // Provide cluster viz for PDF
+                pdfOptions={{
+                  orientation: 'landscape',  // Better for wide cluster visualization
+                  pageSize: 'a4',
+                  margins: { top: 60, bottom: 40, left: 40, right: 40 }
+                }}
+                onExportStart={() => {
+                  console.log('🎯 [AIPromptsCluster] Export started!');
+                }}
+                onExportComplete={(format) => {
+                  console.log('✅ [AIPromptsCluster] Export completed!', format);
+                }}
+                onExportError={(error) => {
+                  console.error('❌ [AIPromptsCluster] Export error:', error);
+                }}
+                customStyles={{
+                  button: {
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    backgroundColor: 'white',
+                    color: '#4a5568',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                  }
+                }}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+              />
+            )}
+            
+            {/* AI Insights Panel */}
+            <AIInsightsPanel
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings?.aiInsights}
+              onSaveUserSettings={(settings) => onSaveUserSettings?.({
+                ...savedUserSettings,
+                aiInsights: settings
+              })}
+              insights={aiInsights}
+              loading={loadingInsights}
+              error={insightsError}
+              onGenerate={generateAIInsights}
+              title="AI Prompts Cluster Analysis"
+              icon="fa-wand-magic-sparkles"
+              iconColor={styles?.colors?.primary || '#8B5CF6'}
+              position="bottom"
+              onClose={() => {
+                setAiInsights(null);
+                setInsightsError(null);
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -627,7 +745,6 @@ Format your response in clear markdown with headers and bullet points.`;
             onClusterCountChange={setClusterCount}
             onSimilarityThresholdChange={setSimilarityThreshold}
             onRecalculate={handleRecalculate}
-            onExport={handleExport}
             utilities={utilities}
             styles={styles}
             components={components}
@@ -638,13 +755,19 @@ Format your response in clear markdown with headers and bullet points.`;
         </div>
 
         {/* Center - Graph */}
-        <div style={{
-          flex: 1,
-          backgroundColor: styles.colors?.surface || 'white',
-          borderRadius: styles.borders?.radius || '4px',
-          padding: styles.spacing?.sm || '8px',
-          position: 'relative'
-        }}>
+        <div 
+          ref={clusterGraphRef}
+          id="cluster-graph-container"
+          style={{
+            flex: 1,
+            backgroundColor: styles.colors?.surface || 'white',
+            borderRadius: styles.borders?.radius || '4px',
+            padding: styles.spacing?.sm || '8px',
+            position: 'relative',
+            // Ensure proper rendering for export
+            minHeight: '400px',
+            overflow: 'visible'
+          }}>
           {clusters.length > 0 ? (
             <ClusterGraph
               prompts={clusters}

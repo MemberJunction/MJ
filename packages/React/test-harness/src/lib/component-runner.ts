@@ -9,7 +9,8 @@ import {
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
-  SimpleEmbedTextResult
+  SimpleEmbedTextResult,
+  ComponentObject
 } from '@memberjunction/interactive-component-types';
 import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
@@ -376,17 +377,28 @@ export class ComponentRunner {
             // We can see what was registered through the registrationResult
           }
 
-          // Get the root component - explicitly pass namespace and version
-          const RootComponent = registry.get(spec.name, 'Global', 'v1');
-          if (!RootComponent) {
+          // Get the root component object - explicitly pass namespace and version
+          const RootComponentObject = registry.get(spec.name, 'Global', 'v1');
+          if (!RootComponentObject) {
             // Enhanced error message with debugging info
             console.error('Failed to find component:', spec.name);
             console.error('Registry keys:', Array.from(registry.components.keys()));
             throw new Error('Root component not found: ' + spec.name);
           }
+          
+          // Extract the React component from the ComponentObject
+          const RootComponent = RootComponentObject.component;
+          if (!RootComponent || typeof RootComponent !== 'function') {
+            throw new Error('Component object does not contain a valid React component');
+          }
 
-          // Get all registered components for prop passing
-          const components = registry.getAll('Global', 'v1');
+          // Get all registered component objects and extract React components
+          const componentObjects = registry.getAll('Global', 'v1');
+          const components: Record<string, any> = {};
+          for (const [name, componentObj] of Object.entries(componentObjects)) {
+            // ComponentObject has a component property that's the React component
+            components[name] = (componentObj as any).component;
+          }
           
           // Add all loaded library exports to the components object
           // This allows generated code to use components.PieChart, components.ResponsiveContainer, etc.

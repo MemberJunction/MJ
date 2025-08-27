@@ -6,26 +6,39 @@
   "code": "@file:../code/factor-analysis.js",
   "functionalRequirements": "## Factor Analysis\n\n### Purpose\nAnalyze factors contributing to wins and losses.\n\n### Features\n- Multi-factor comparison\n- Correlation analysis\n- Heat map visualization\n- Statistical insights",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives factor analysis data from parent"
+    "mode": "views",
+    "description": "Analyzes factors contributing to wins and losses",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal data for win/loss analysis",
+        "displayFields": ["ID", "Stage", "WonLostReason", "Amount", "CompetitorID", "ProductID"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Win/loss factor analysis"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- factors: Array of factor data\n- correlations: Correlation matrix\n- onFactorSelect: Factor selection handler",
   "properties": [
     {
       "name": "factors",
-      "type": "array",
+      "type": "Array<{name: string, winRate: number, impact: number, count: number}>",
       "required": true,
       "description": "Factor analysis data"
     },
     {
       "name": "correlations",
-      "type": "object",
+      "type": "{[key: string]: {[key: string]: number}}",
       "required": false,
       "description": "Factor correlation matrix"
     },
     {
       "name": "onFactorSelect",
-      "type": "function",
+      "type": "(factor: string) => void",
       "required": false,
       "description": "Factor selection callback"
     }

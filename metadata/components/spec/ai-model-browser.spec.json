@@ -81,10 +81,7 @@
             "isPrimaryKey": false,
             "description": "Relative cost ranking (1-5)"
           }
-        ],
-        "permissions": [
-          "read"
-        ],
+        ], 
         "usageContext": "Main list of AI models"
       },
       {
@@ -144,10 +141,7 @@
             "isPrimaryKey": false,
             "description": "Vendor type (Model Developer or Inference Provider)"
           }
-        ],
-        "permissions": [
-          "read"
-        ],
+        ], 
         "usageContext": "Vendor associations for models"
       },
       {
@@ -161,10 +155,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ],
-        "permissions": [
-          "read"
-        ],
+        ], 
         "usageContext": "Filter dropdown for model types"
       },
       {
@@ -191,10 +182,7 @@
         "sortFields": [
           "StartTime",
           "TotalExecutionTime"
-        ],
-        "permissions": [
-          "read"
-        ],
+        ], 
         "usageContext": "Analytics and usage history"
       },
       {
@@ -209,10 +197,7 @@
         "filterFields": [],
         "sortFields": [
           "Name"
-        ],
-        "permissions": [
-          "read"
-        ],
+        ], 
         "usageContext": "Enrich prompt runs with names"
       }
     ]

@@ -42,7 +42,8 @@ export class AppComponent implements OnInit {
       const wsurl: string = environment.GRAPHQL_WS_URI;
 
       try {
-        const start = Date.now();        
+        console.log('Setting up GraphQL client...');
+        const start = Date.now();
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
           const refresh$ = await this.authBase.refresh();
           const claims = await lastValueFrom(refresh$);
@@ -50,6 +51,8 @@ export class AppComponent implements OnInit {
           return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
+        const end = Date.now();
+        console.log(`GraphQL Client Setup took ${end - start}ms`);
 
         // const testUrl = 'http://localhost:4050/'
         // const testwSUrl = 'ws://localhost:4050/'
@@ -63,10 +66,10 @@ export class AppComponent implements OnInit {
         // await g2.Config(c2, true);
         // console.log(g2.Entities);
 
-        const end = Date.now();
-        LogStatus(`GraphQL Client Setup took ${end - start}ms`);
-
+        const refreshStart = Date.now();
         await SharedService.RefreshData(true);
+        const refreshEnd = Date.now();
+        console.log(`GetAllMetadata() took ${refreshEnd - refreshStart}ms`);
 
         // Check to see if the user has access... 
         const md = new Metadata();
@@ -139,8 +142,11 @@ export class AppComponent implements OnInit {
   }
 
   async setupAuth() {
-    const claims = await this.authBase.getUserClaims()
-    claims.subscribe((claims: any) => {
+    
+    // Don't await here - let it run asynchronously to avoid blocking app startup
+    this.authBase.getUserClaims().then(claims => {
+      
+      claims.subscribe((claims: any) => {
       if (claims) {
         const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
         const result = claims.idTokenClaims ? 
@@ -165,19 +171,24 @@ export class AppComponent implements OnInit {
       }
 
       this.authBase.authenticated = false;
+      });
+    }).catch(err => {
+      console.error('Error getting user claims:', err);
+      this.authBase.authenticated = false;
     });
   
-    const isAuth = await this.authBase.isAuthenticated()
-    isAuth.pipe(take(1)) /* only do this for the first message */
+    // Don't await here either - let auth check run async
+    this.authBase.isAuthenticated()
+      .pipe(take(1)) /* only do this for the first message */
       .subscribe((loggedIn: any) => {
-        if (!loggedIn) {
+          if (!loggedIn) {
           //this.authBase.login(); 
 
           //Instead of kicking off the login process,
           //just display the login screen to the user
           this.authBase.authenticated = false;
         }
-      });  
+      });
 
     this.initalPath = window.location.pathname + (window.location.search ? window.location.search : '');
   }

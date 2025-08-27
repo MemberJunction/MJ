@@ -6,20 +6,43 @@
   "code": "@file:../code/revenue-trend-chart.js",
   "functionalRequirements": "## Revenue Trend Chart\n\n### Purpose\nVisualize revenue trends over time.\n\n### Features\n- Multi-line chart\n- Invoice vs deal revenue\n- Time period selection\n- Trend indicators",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives revenue trend data"
+    "mode": "views",
+    "description": "Visualizes revenue trends over time",
+    "entities": [
+      {
+        "name": "Invoices",
+        "description": "Invoice data for revenue trends",
+        "displayFields": ["TotalAmount", "IssueDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Historical revenue tracking"
+      },
+      {
+        "name": "Deals",
+        "description": "Deal pipeline revenue",
+        "displayFields": ["Amount", "CloseDate", "Stage"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Pipeline revenue tracking"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- trendData: Array of time-series data\n- period: Selected time period",
   "properties": [
     {
       "name": "trendData",
-      "type": "array",
+      "type": "Array<{date: string, invoiceRevenue: number, dealRevenue: number}>",
       "required": true,
       "description": "Revenue trend data"
     },
     {
       "name": "period",
-      "type": "string",
+      "type": "'day' | 'week' | 'month' | 'quarter' | 'year'",
       "required": false,
       "description": "Time period selection"
     }

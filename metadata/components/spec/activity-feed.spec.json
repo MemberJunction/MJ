@@ -6,20 +6,33 @@
   "code": "@file:../code/activity-feed.js",
   "functionalRequirements": "## Activity Feed\n\n### Purpose\nDisplay recent sales activities in a timeline format.\n\n### Features\n- Chronological activity list\n- Activity type icons\n- Timestamps and descriptions\n- User avatars or initials\n- Click to view activity details",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives activities array from parent"
+    "mode": "views",
+    "description": "Displays recent CRM activities in timeline format",
+    "entities": [
+      {
+        "name": "Activities",
+        "description": "CRM activity records",
+        "displayFields": ["ID", "Type", "Subject", "Description", "ActivityDate", "OwnerID", "Owner", "RelatedEntityID"],
+        "filterFields": [],
+        "sortFields": ["ActivityDate"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Recent activities displayed in chronological feed"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- activities: Array of activity objects\n- onActivityClick: Callback for activity selection\n\n### Display\n- Timeline layout\n- Activity cards with metadata\n- Time formatting",
   "properties": [
     {
       "name": "activities",
-      "type": "array",
+      "type": "Array<{ID: string, Type: string, Subject: string, Description?: string, ActivityDate: string, Owner?: string}>",
       "required": true,
       "description": "Array of activity records"
     },
     {
       "name": "onActivityClick",
-      "type": "function",
+      "type": "(activityId: string) => void",
       "required": false,
       "description": "Callback for activity selection"
     }

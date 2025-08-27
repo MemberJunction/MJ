@@ -6,26 +6,49 @@
   "code": "@file:../code/win-rate-by-owner.js",
   "functionalRequirements": "## Win Rate By Owner\n\n### Purpose\nVisualize win rates by deal owner/sales rep.\n\n### Features\n- Bar chart visualization\n- Owner performance comparison\n- Win/loss ratios\n- Sortable by metrics",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives owner performance data from parent"
+    "mode": "views",
+    "description": "Visualizes win rates by deal owner",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records for owner performance analysis",
+        "displayFields": ["ID", "Name", "Stage", "Amount", "OwnerID", "Owner"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Owner win rate calculation"
+      },
+      {
+        "name": "Users",
+        "description": "Sales rep user information",
+        "displayFields": ["ID", "Name"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Owner identification"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- ownerData: Array of owner performance metrics\n- sortBy: Sort field\n- onOwnerClick: Owner selection handler",
   "properties": [
     {
       "name": "ownerData",
-      "type": "array",
+      "type": "Array<{ownerId: string, ownerName: string, wins: number, losses: number, winRate: number, totalDeals: number}>",
       "required": true,
       "description": "Owner performance data"
     },
     {
       "name": "sortBy",
-      "type": "string",
+      "type": "'winRate' | 'totalDeals' | 'wins' | 'losses'",
       "required": false,
       "description": "Sort field"
     },
     {
       "name": "onOwnerClick",
-      "type": "function",
+      "type": "(ownerId: string) => void",
       "required": false,
       "description": "Owner selection callback"
     }

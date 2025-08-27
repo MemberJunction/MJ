@@ -18,6 +18,7 @@ export function LoadMJAuth0Provider() {
 export class MJAuth0Provider extends MJAuthBase {
   static readonly PROVIDER_TYPE = 'auth0';
   type = MJAuth0Provider.PROVIDER_TYPE;
+  private _initialized = false;
 
   /**
    * Factory function to provide Angular dependencies required by Auth0
@@ -50,16 +51,22 @@ export class MJAuth0Provider extends MJAuthBase {
       type: MJAuth0Provider.PROVIDER_TYPE 
     };
     super(config);
-    this.auth.isAuthenticated$.subscribe((loggedIn) => {
-      this.updateAuthState(loggedIn);
-    });
+    // Defer subscription to avoid blocking app startup
   }
 
   override login(options?: any): Observable<void> {
+    // Ensure initialized before login
+    this.ensureInitialized();
     // Auth0's loginWithRedirect executes immediately
     this.auth.loginWithRedirect(options);
     // Return an observable for backward compatibility
     return of(void 0);
+  }
+  
+  private async ensureInitialized(): Promise<void> {
+    if (!this._initialized) {
+      await this.initialize();
+    }
   }
 
   public async logout(): Promise<void> {
@@ -76,10 +83,13 @@ export class MJAuth0Provider extends MJAuthBase {
   }
 
   override isAuthenticated(): Observable<boolean> {
+    // Don't initialize just for checking auth state
+    // Auth0 SDK handles this internally
     return this.auth.isAuthenticated$;
   }
 
   async getUserClaims(): Promise<Observable<any>> {
+    await this.ensureInitialized();
     return this.auth.idTokenClaims$;
   }
 
@@ -89,11 +99,17 @@ export class MJAuth0Provider extends MJAuthBase {
 
   // Add required methods for the new interface
   async initialize(): Promise<void> {
+    if (this._initialized) {
+      return;
+    }
+    
     // Auth0 Angular SDK handles initialization internally
-    // Just subscribe to authentication state
+    // Just subscribe to authentication state once
     this.auth.isAuthenticated$.subscribe((loggedIn) => {
       this.updateAuthState(loggedIn);
     });
+    
+    this._initialized = true;
   }
 
   protected async loginInternal(options?: any): Promise<void> {

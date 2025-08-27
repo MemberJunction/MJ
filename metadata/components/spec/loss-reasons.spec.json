@@ -6,26 +6,39 @@
   "code": "@file:../code/loss-reasons.js",
   "functionalRequirements": "## Loss Reasons\n\n### Purpose\nAnalyze and display reasons for lost deals.\n\n### Features\n- Categorized loss reasons\n- Frequency analysis\n- Pie/bar chart options\n- Drill-down capability",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives loss reason data from parent"
+    "mode": "views",
+    "description": "Analyzes and displays reasons for lost deals",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Lost deal records with reasons",
+        "displayFields": ["ID", "Name", "Stage", "WonLostReason", "Amount"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Loss reason analysis from lost deals"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- lossData: Array of loss reason categories\n- chartType: Chart display type\n- onReasonClick: Reason selection handler",
   "properties": [
     {
       "name": "lossData",
-      "type": "array",
+      "type": "Array<{reason: string, count: number, percentage: number, amount: number}>",
       "required": true,
       "description": "Loss reason data"
     },
     {
       "name": "chartType",
-      "type": "string",
+      "type": "'pie' | 'bar'",
       "required": false,
       "description": "Chart type (pie/bar)"
     },
     {
       "name": "onReasonClick",
-      "type": "function",
+      "type": "(reason: string) => void",
       "required": false,
       "description": "Reason selection callback"
     }

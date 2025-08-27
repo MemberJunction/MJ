@@ -6,22 +6,36 @@
   "code": "@file:../code/distribution-chart.js",
   "functionalRequirements": "## Distribution Chart\n\n### Purpose\nShow distribution of deal velocity values.\n\n### Features\n- Histogram or box plot\n- Statistical indicators\n- Outlier detection\n- Hover details",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives distribution data from parent"
+    "mode": "views",
+    "description": "Visualizes statistical distribution of deal velocity values",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal data for velocity distribution analysis",
+        "displayFields": ["Stage", "CloseDate", "__mj_CreatedAt"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Velocity values calculated and passed as distribution array"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Props\n- distributionData: Array of velocity values\n- bins: Number of histogram bins\n\n### Visualization\n- ECharts histogram",
   "properties": [
     {
       "name": "distributionData",
-      "type": "array",
+      "type": "Array<number>",
       "required": true,
-      "description": "Array of velocity values"
+      "description": "Array of velocity values for distribution"
     },
     {
       "name": "bins",
       "type": "number",
       "required": false,
-      "description": "Number of histogram bins"
+      "description": "Number of histogram bins",
+      "defaultValue": 10
     }
   ],
   "events": [],

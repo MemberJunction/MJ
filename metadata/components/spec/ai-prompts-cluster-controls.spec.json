@@ -7,6 +7,18 @@
   "code": "@file:../code/ai-prompts-cluster-controls.js",
   "functionalRequirements": "Provide search input for finding prompts, filter by category/type/status, adjust clustering parameters, control similarity threshold, toggle view options, export cluster assignments",
   "technicalDesign": "React component with controlled inputs for various filters and parameters, emits change events to parent component for re-clustering or re-filtering",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
   "properties": [
     {
       "name": "categories",

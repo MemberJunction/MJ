@@ -6,16 +6,35 @@
   "code": "@file:../code/aging-chart.js",
   "functionalRequirements": "## Aging Chart\n\n### Purpose\nVisualize accounts receivable aging buckets.\n\n### Features\n- Bar chart by age buckets\n- 0-30, 31-60, 61-90, 90+ days\n- Amount totals\n- Color coding by severity",
   "dataRequirements": {
-    "mode": "props",
-    "description": "Receives aging bucket data"
+    "mode": "views",
+    "description": "Expects aggregated invoice aging data passed via props, typically derived from Invoices entity",
+    "entities": [
+      {
+        "name": "Invoices",
+        "description": "Invoice data aggregated into aging buckets",
+        "displayFields": ["InvoiceDate", "DueDate", "TotalAmount", "PaidAmount", "BalanceDue"],
+        "filterFields": ["Status", "AccountID"],
+        "sortFields": ["DueDate", "InvoiceDate"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Data is pre-aggregated by parent component into aging buckets (0-30, 31-60, 61-90, 90+ days)"
+      }
+    ],
+    "queries": []
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- agingData: Array of bucket data\n\n### Chart\n- Plotly bar chart\n- Color gradients",
+  "technicalDesign": "## Implementation\n\n### Props\n- data: Chart configuration object\n- onDataClick: Optional click handler\n\n### Chart\n- ApexCharts line chart\n- Smooth curves with markers\n- Interactive tooltips",
   "properties": [
     {
-      "name": "agingData",
-      "type": "array",
+      "name": "data",
+      "type": "{series?: Array<{name: string, data: number[]}>, values?: number[], categories?: string[], xAxisLabel?: string, yAxisLabel?: string}",
       "required": true,
-      "description": "Aging bucket data"
+      "description": "Chart data configuration with series, categories, and axis labels"
+    },
+    {
+      "name": "onDataClick",
+      "type": "(event: {seriesIndex: number, dataPointIndex: number, value: number}) => void",
+      "required": false,
+      "description": "Callback function triggered when a data point is clicked"
     }
   ],
   "events": [],
