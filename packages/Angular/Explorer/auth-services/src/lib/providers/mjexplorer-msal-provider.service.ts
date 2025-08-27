@@ -24,6 +24,7 @@ export class MJMSALProvider extends MJAuthBase {
 
   private readonly _destroying$ = new Subject<void>();
   private readonly _initializationCompleted$ = new BehaviorSubject<boolean>(false);
+  private _initPromise: Promise<void> | null = null;
 
   /**
    * Factory function to provide Angular dependencies required by MSAL
@@ -71,13 +72,25 @@ export class MJMSALProvider extends MJAuthBase {
       type: MJMSALProvider.PROVIDER_TYPE 
     };
     super(config);
-    this.initializeMSAL();
+    // Defer initialization to avoid blocking app startup
+    // This will be called lazily when auth is actually needed
   }
 
-  private async initializeMSAL() {
+  private async initializeMSAL(): Promise<void> {
+    // Only initialize once
+    if (this._initPromise) {
+      return this._initPromise;
+    }
+    
+    this._initPromise = this._performInitialization();
+    return this._initPromise;
+  }
+  
+  private async _performInitialization(): Promise<void> {
+    
     await this.auth.instance.initialize();
     
-    // Handle redirect immediately after initialization  
+    // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
@@ -95,11 +108,13 @@ export class MJMSALProvider extends MJAuthBase {
     } else {
       // Set active account if we have one
       const accounts = this.auth.instance.getAllAccounts();
+      
       if (accounts.length > 0) {
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
         this.authenticated = true;
         this._initializationCompleted$.next(true);
+      } else {
       }
     }
     
@@ -119,8 +134,12 @@ export class MJMSALProvider extends MJAuthBase {
 
   // Ensure methods wait for initialization
   private async ensureInitialized() {
-    if (!this._initializationCompleted$.value) {
-      await firstValueFrom(this._initializationCompleted$.pipe(filter(done => done), take(1)));
+    // Trigger lazy initialization if not started
+    if (!this._initPromise) {
+      await this.initializeMSAL();
+    } else if (!this._initializationCompleted$.value) {
+      // Waiting for existing initialization to complete...
+      await this._initPromise;
     }
   }
 
@@ -206,7 +225,7 @@ export class MJMSALProvider extends MJAuthBase {
 
   // Required methods for the new interface
   async initialize(): Promise<void> {
-    await this.ensureInitialized();
+    await this.initializeMSAL();
   }
 
   protected async loginInternal(options?: any): Promise<void> {
