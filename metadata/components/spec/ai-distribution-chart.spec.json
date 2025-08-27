@@ -8,7 +8,75 @@
   "dataRequirements": {
     "mode": "views",
     "description": "Receives drill-down data from parent component",
-    "entities": [],
+    "entities": [ 
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Historical prompt execution data for performance analysis",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "Prompt",
+          "ModelID",
+          "Model",
+          "RunAt",
+          "CompletedAt",
+          "Success",
+          "TokensUsed",
+          "TotalCost"
+        ],
+        "filterFields": [
+          "RunAt",
+          "Success",
+          "PromptID",
+          "ModelID"
+        ],
+        "sortFields": [
+          "RunAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "isPrimaryKey": true,
+            "allowsNull": false,
+            "description": "Unique run identifier"
+          },
+          {
+            "name": "PromptID",
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "description": "Reference to AI Prompt"
+          },
+          {
+            "name": "Prompt",
+            "type": "nvarchar",
+            "allowsNull": true,
+            "description": "Prompt name (denormalized)"
+          },
+          {
+            "name": "RunAt",
+            "type": "datetime",
+            "allowsNull": false,
+            "description": "Execution timestamp"
+          },
+          {
+            "name": "TokensUsed",
+            "type": "int",
+            "allowsNull": true,
+            "description": "Total tokens consumed"
+          },
+          {
+            "name": "TotalCost",
+            "type": "decimal",
+            "allowsNull": true,
+            "description": "Total cost in USD"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }      
+    ],
     "queries": []
   },
   "technicalDesign": "## Technical Design\n\n### Props\n- data: Array of items for selected period\n- activeTab: Current view (agents/prompts)\n- groupBy: Time grouping context\n\n### Chart Features\n- Aggregates data by agent/prompt\n- Calculates percentages\n- Sorts by total value\n- Groups small items into 'Others'",
