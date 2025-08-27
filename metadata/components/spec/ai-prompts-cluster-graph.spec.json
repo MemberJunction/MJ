@@ -7,6 +7,18 @@
   "code": "@file:../code/ai-prompts-cluster-graph.js",
   "functionalRequirements": "Render interactive force-directed graph with prompts as nodes, display clusters with different colors, show similarity connections between prompts, support zoom/pan navigation, highlight on hover, animate transitions",
   "technicalDesign": "Uses D3.js force simulation for node positioning, implements clustering visualization with color coding, draws edges based on similarity threshold, handles mouse interactions for selection and tooltips",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
   "properties": [
     {
       "name": "prompts",

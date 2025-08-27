@@ -5,6 +5,31 @@
   "description": "Overview tab showing customer summary and key metrics",
   "category": "Customer",
   "type": "overview",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
+        "filterFields": ["ID"] 
+      },
+      {
+        "name": "Contacts",
+        "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"] 
+      }
+    ]
+  },
   "properties": [
     {
       "name": "account",

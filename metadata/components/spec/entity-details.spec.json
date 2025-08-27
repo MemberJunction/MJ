@@ -4,8 +4,298 @@
   "description": "Sliding panel that displays detailed information about a selected entity including fields and relationships",
   "type": "form",
   "functionalRequirements": "## Entity Details Requirements\n\n- Slide in from the right when an entity is selected\n- Display entity metadata at the top\n- Show fields in a formatted table\n- Display relationships with icons\n- Include 'Open Record' button\n- Support closing via X button or Escape key\n- Smooth slide animation\n- Scrollable content area",
-  "dataRequirements": null,
   "technicalDesign": "## Technical Design\n\n### Props\n- entity: Selected entity object\n- fields: Array of entity fields\n- relationships: Array of entity relationships\n- isOpen: Whether panel is visible\n- onClose: Callback to close panel\n- onOpenRecord: Callback to open entity record\n\n### Layout\n- Fixed position overlay\n- Slide animation using transform\n- Header with entity name and close button\n- Sections for metadata, fields, relationships\n- Sticky 'Open Record' button at bottom",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Entities",
+        "description": "Metadata about all entities in the system",
+        "displayFields": [
+          "ID",
+          "Name",
+          "DisplayName",
+          "NameSuffix",
+          "Description",
+          "SchemaName",
+          "BaseTable",
+          "BaseView"
+        ],
+        "filterFields": [
+          "SchemaName",
+          "BaseTable"
+        ],
+        "sortFields": [
+          "Name",
+          "DisplayName"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the entity"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the entity"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly display name for the entity"
+          },
+          {
+            "name": "NameSuffix",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Optional suffix appended to entity names for display purposes"
+          },
+          {
+            "name": "Description",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Description of the entity"
+          },
+          {
+            "name": "SchemaName",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Database schema name"
+          },
+          {
+            "name": "BaseTable",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Base table in the database"
+          },
+          {
+            "name": "BaseView",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Base view used for the entity"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Main entity list display and filtering"
+      },
+      {
+        "name": "Entity Fields",
+        "description": "Fields belonging to each entity",
+        "displayFields": [
+          "Name",
+          "DisplayName",
+          "Type",
+          "Length",
+          "AllowsNull",
+          "IsPrimaryKey",
+          "IsUnique"
+        ],
+        "filterFields": [
+          "EntityID"
+        ],
+        "sortFields": [
+          "Sequence",
+          "Name"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "EntityID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to parent entity"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Field name"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly field name"
+          },
+          {
+            "name": "Type",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Data type of the field"
+          },
+          {
+            "name": "Length",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum length for string fields"
+          },
+          {
+            "name": "AllowsNull",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field allows null values"
+          },
+          {
+            "name": "IsPrimaryKey",
+            "sequence": 7,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field is part of primary key"
+          },
+          {
+            "name": "IsUnique",
+            "sequence": 8,
+            "defaultInView": true,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Whether field must be unique"
+          },
+          {
+            "name": "Sequence",
+            "sequence": 9,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Display order of the field"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Details panel to show entity fields"
+      },
+      {
+        "name": "Entity Relationships",
+        "description": "Relationships between entities",
+        "displayFields": [
+          "RelatedEntity",
+          "Type",
+          "DisplayName",
+          "RelatedEntityJoinField"
+        ],
+        "filterFields": [
+          "EntityID"
+        ],
+        "sortFields": [
+          "Sequence",
+          "RelatedEntity"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "EntityID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to parent entity"
+          },
+          {
+            "name": "RelatedEntity",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "The related entity in the relationship"
+          },
+          {
+            "name": "Type",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Type of relationship (One to Many, Many to One, etc.)"
+          },
+          {
+            "name": "DisplayName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "User-friendly name for the relationship"
+          },
+          {
+            "name": "RelatedEntityJoinField",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "The field in the related entity that joins to this entity"
+          },
+          {
+            "name": "Sequence",
+            "sequence": 6,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Display order"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ],
+        "usageContext": "Details panel to show entity relationships"
+      }
+    ],
+    "queries": [],
+    "description": "This component requires access to entity metadata including entities, their fields, and relationships to provide a comprehensive entity browsing experience"
+  },
   "properties": [
     {
       "name": "entity",

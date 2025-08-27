@@ -5,6 +5,31 @@
   "description": "Timeline view of customer activities and interactions",
   "category": "Customer",
   "type": "timeline",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
+        "filterFields": ["ID"] 
+      },
+      {
+        "name": "Contacts",
+        "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"] 
+      }
+    ]
+  },
   "properties": [
     {
       "name": "activities",

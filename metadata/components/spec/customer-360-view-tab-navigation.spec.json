@@ -5,6 +5,31 @@
   "description": "Tab navigation for Customer 360 View",
   "category": "Navigation",
   "type": "navigation",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
+        "filterFields": ["ID"] 
+      },
+      {
+        "name": "Contacts",
+        "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"] 
+      }
+    ]
+  },
   "properties": [
     {
       "name": "activeTab",
