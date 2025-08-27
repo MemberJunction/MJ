@@ -27,14 +27,17 @@
       "Category": "UI",
       "CDNUrl": "https://unpkg.com/antd@5.20.2/dist/antd.min.js",
       "CDNCssUrl": null,
-      "Description": "Enterprise-class UI design language and React components"
+      "Description": "Enterprise-class UI design language and React components",
+      "Dependencies": {
+        "dayjs": "^1.11.10"
+      }
     },
     "primaryKey": {
       "ID": "91591953-DB49-4E61-A81D-4F7755E2FF73"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:15.736Z",
-      "checksum": "4253ef52471025110375b806e19106b068e749a63767ee2793218875e89aafcf"
+      "lastModified": "2025-08-27T15:11:12.500Z",
+      "checksum": "995f76a01225fa0e928d00fb0c8e921200aa0e994cdd2787d62e7c460a67a28c"
     }
   },
   {
