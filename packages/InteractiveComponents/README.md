@@ -224,6 +224,197 @@ async function loadDashboardData(props, events, data, metadata, runView) {
 }
 ```
 
+## Component Methods System
+
+### ComponentObject Interface
+
+The `ComponentObject` interface defines the structure returned by compiled components, providing both the React component and method accessors:
+
+```typescript
+interface ComponentObject {
+  // The React component function
+  component: Function;
+  
+  // Standard methods (all optional)
+  print?: () => void;
+  refresh?: () => void;
+  getCurrentDataState?: () => any;
+  getDataStateHistory?: () => Array<{ timestamp: Date; state: any }>;
+  validate?: () => boolean | { valid: boolean; errors?: string[] };
+  isDirty?: () => boolean;
+  reset?: () => void;
+  scrollTo?: (target: string | HTMLElement | { top?: number; left?: number }) => void;
+  focus?: (target?: string | HTMLElement) => void;
+  
+  // Dynamic method access
+  invokeMethod?: (methodName: string, ...args: any[]) => any;
+  hasMethod?: (methodName: string) => boolean;
+}
+```
+
+### ComponentCallbacks Interface
+
+Components receive callbacks that enable interaction with their container:
+
+```typescript
+interface ComponentCallbacks {
+  // Open an entity record in the container
+  OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
+  
+  // Register a method that can be called by the container
+  RegisterMethod: (methodName: string, handler: Function) => void;
+}
+```
+
+### How Method Registration Works
+
+1. **Component registers methods** during initialization using the `RegisterMethod` callback
+2. **Runtime stores methods** in an internal registry Map
+3. **ComponentObject exposes methods** with type-safe accessors for standard methods
+4. **Containers call methods** directly or via `invokeMethod()` for custom methods
+
+### Example: Component Registering Methods
+
+```typescript
+function DataTableComponent({ callbacks, data, userState }) {
+  const [tableData, setTableData] = React.useState(data);
+  const [hasChanges, setHasChanges] = React.useState(false);
+  const [selectedRows, setSelectedRows] = React.useState([]);
+  
+  React.useEffect(() => {
+    if (callbacks?.RegisterMethod) {
+      // Register standard methods
+      callbacks.RegisterMethod('getCurrentDataState', () => ({
+        data: tableData,
+        selectedRows: selectedRows,
+        totalCount: tableData.length
+      }));
+      
+      callbacks.RegisterMethod('isDirty', () => hasChanges);
+      
+      callbacks.RegisterMethod('validate', () => {
+        if (tableData.length === 0) {
+          return { valid: false, errors: ['Table cannot be empty'] };
+        }
+        return true;
+      });
+      
+      callbacks.RegisterMethod('reset', () => {
+        setTableData(data);
+        setSelectedRows([]);
+        setHasChanges(false);
+      });
+      
+      // Register custom business logic methods
+      callbacks.RegisterMethod('exportSelectedRows', () => {
+        return selectedRows.map(idx => tableData[idx]);
+      });
+      
+      callbacks.RegisterMethod('deleteSelected', () => {
+        const newData = tableData.filter((_, idx) => !selectedRows.includes(idx));
+        setTableData(newData);
+        setHasChanges(true);
+        setSelectedRows([]);
+      });
+    }
+  }, [callbacks, tableData, selectedRows, hasChanges]);
+  
+  return <div>{/* Table UI */}</div>;
+}
+```
+
+### Example: Container Using Methods
+
+```typescript
+// After component compilation
+const componentObject = compiledComponent as ComponentObject;
+
+// Use standard methods with type safety
+if (componentObject.isDirty && componentObject.isDirty()) {
+  console.log('Component has unsaved changes');
+  
+  const validation = componentObject.validate?.();
+  if (validation === true || validation?.valid) {
+    // Safe to proceed
+    const currentState = componentObject.getCurrentDataState?.();
+    await saveData(currentState);
+  } else {
+    console.error('Validation failed:', validation?.errors);
+  }
+}
+
+// Use custom methods via invokeMethod
+if (componentObject.hasMethod?.('exportSelectedRows')) {
+  const selectedData = componentObject.invokeMethod('exportSelectedRows');
+  await exportToFile(selectedData);
+}
+
+// Reset the component
+componentObject.reset?.();
+```
+
+### Method Declaration in ComponentSpec
+
+Components can declare their supported methods in the spec for static discovery:
+
+```typescript
+interface ComponentSpec {
+  name: string;
+  code: string;
+  
+  // Optional method declarations for discovery/documentation
+  methods?: Array<{
+    name: string;
+    category?: 'standard' | 'custom';
+    description?: string;
+    parameters?: Array<{
+      name: string;
+      type: string;  // Free-form type description
+      required?: boolean;
+      description?: string;
+    }>;
+    returnType?: string;  // Free-form type description
+  }>;
+}
+```
+
+Example declaration:
+
+```typescript
+const spec: ComponentSpec = {
+  name: 'DataTable',
+  code: '...',
+  methods: [
+    {
+      name: 'getCurrentDataState',
+      category: 'standard',
+      description: 'Returns current table data and selection state',
+      returnType: '{data: any[], selectedRows: number[], totalCount: number}'
+    },
+    {
+      name: 'exportSelectedRows',
+      category: 'custom',
+      description: 'Exports currently selected rows',
+      returnType: 'any[]'
+    },
+    {
+      name: 'deleteSelected',
+      category: 'custom',
+      description: 'Deletes selected rows from the table'
+    }
+  ]
+};
+```
+
+### Benefits of the Method System
+
+1. **AI Agent Integration**: AI agents can introspect component state for analysis
+2. **Validation & State Management**: Containers can check dirty state and validate before saving
+3. **Custom Business Logic**: Components can expose domain-specific operations
+4. **Framework Agnostic**: Works across Angular, React, and other frameworks
+5. **Type Safety**: Standard methods have full TypeScript support
+6. **Discoverability**: Method declarations enable static analysis without runtime
+
 ## Component Specifications
 
 The package includes comprehensive types for component specifications:
