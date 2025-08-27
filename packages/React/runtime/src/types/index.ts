@@ -12,8 +12,8 @@ import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@m
  * Represents a compiled React component with its metadata
  */
 export interface CompiledComponent {
-  /** The compiled React component factory function */
-  component: Function;
+  /** Factory function that creates a ComponentObject when called with context */
+  factory: (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject;
   /** Unique identifier for the component */
   id: string;
   /** Original component name */
@@ -58,8 +58,8 @@ export interface CompileOptions {
  * Registry entry for a compiled component
  */
 export interface RegistryEntry {
-  /** The compiled component */
-  component: any;
+  /** The compiled component object with all methods */
+  component: ComponentObject;
   /** Component metadata */
   metadata: ComponentMetadata;
   /** Last access time for LRU cache */

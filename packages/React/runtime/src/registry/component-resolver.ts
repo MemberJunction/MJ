@@ -83,9 +83,15 @@ export class ComponentResolver {
     // We need to extract just the component function for use in child components
     const unwrapped: ResolvedComponents = {};
     for (const [name, value] of Object.entries(resolved)) {
-      if (value && typeof value === 'object' && 'component' in value && typeof value.component === 'function') {
-        // This is a wrapped component - extract the actual React component function
-        unwrapped[name] = value.component;
+      if (value && typeof value === 'object' && 'component' in value) {
+        if (typeof value.component === 'function') {
+          // This is a wrapped component - extract the actual React component function
+          unwrapped[name] = value.component;
+        } else {
+          // ComponentObject has a component property but it's not a function
+          console.error(`Component ${name} has invalid component property:`, typeof value.component, value);
+          unwrapped[name] = value; // Pass through the problematic value so we can see the error
+        }
       } else {
         // This is already a plain component function or something else
         unwrapped[name] = value;
@@ -161,7 +167,7 @@ export class ComponentResolver {
       if (component) {
         resolved[spec.name] = component;
         if (this.debug) {
-          console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}`);
+          console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}, type:`, typeof component);
         }
       } else {
         // If not found with specified namespace, try the parent namespace as fallback
@@ -169,12 +175,13 @@ export class ComponentResolver {
         if (fallbackComponent) {
           resolved[spec.name] = fallbackComponent;
           if (this.debug) {
-            console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}`);
+            console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`, typeof fallbackComponent);
           }
         } else {
-          if (this.debug) {
-            console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
-          }
+          // Component not found - this might cause issues later
+          console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+          // Store undefined explicitly so we know it failed to resolve
+          resolved[spec.name] = undefined;
         }
       }
     }

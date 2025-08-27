@@ -197,13 +197,21 @@ export class ComponentHierarchyRegistrar {
         };
       }
 
-      // Create component factory
-      const componentFactory = compilationResult.component!.component(this.runtimeContext, styles);
+      // Call the factory to create the ComponentObject
+      const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
-      // Register the component
+      // Debug logging to verify ComponentObject structure
+      console.log(`📦 Registering ComponentObject for ${spec.name}:`, {
+        hasComponent: 'component' in componentObject,
+        componentType: typeof componentObject.component,
+        hasPrint: 'print' in componentObject,
+        hasRefresh: 'refresh' in componentObject
+      });
+
+      // Register the full ComponentObject (not just the React component)
       this.registry.register(
         spec.name,
-        componentFactory.component,
+        componentObject,
         spec.namespace || namespace,
         version
       );

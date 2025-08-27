@@ -160,7 +160,7 @@ export class ComponentRegistryService {
     if (!compilationResult.component) {
       throw new Error(`Component compilation succeeded but no component returned`);
     }
-    const compiledComponent = compilationResult.component.component(this.runtimeContext);
+    const compiledComponent = compilationResult.component.factory(this.runtimeContext);
     this.compiledComponentCache.set(key, {
       component: compiledComponent,
       metadata,

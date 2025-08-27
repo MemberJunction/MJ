@@ -13,6 +13,7 @@ import {
   ComponentError,
   RuntimeContext
 } from '../types';
+import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
@@ -102,7 +103,7 @@ export class ComponentCompiler {
 
       // Build the compiled component
       const compiledComponent: CompiledComponent = {
-        component: componentFactory,
+        factory: componentFactory,
         id: this.generateComponentId(options.componentName),
         name: options.componentName,
         compiledAt: new Date(),
@@ -193,6 +194,7 @@ export class ComponentCompiler {
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console, components
       ) {
+        // Parse the component code once to get the component definition
         ${libraryDeclarations ? libraryDeclarations + '\n        ' : ''}${componentDeclarations ? componentDeclarations + '\n        ' : ''}${componentCode}
         
         // Ensure the component exists
@@ -200,7 +202,34 @@ export class ComponentCompiler {
           throw new Error('Component "${componentName}" is not defined in the provided code');
         }
         
-        // Create method registry for this component instance
+        // Store the component in a variable so we don't lose it
+        const UserComponent = ${componentName};
+        
+        // Debug logging to understand what we're getting
+        console.log('Component ${componentName} type:', typeof UserComponent);
+        if (typeof UserComponent === 'object' && UserComponent !== null) {
+          console.log('Component ${componentName} keys:', Object.keys(UserComponent));
+          console.log('Component ${componentName} has .component:', 'component' in UserComponent);
+          if ('component' in UserComponent) {
+            console.log('Component ${componentName}.component type:', typeof UserComponent.component);
+          }
+        }
+        
+        // Check if the component is already a ComponentObject (has a .component property)
+        // If so, extract the actual React component
+        const ActualComponent = (typeof UserComponent === 'object' && UserComponent !== null && 'component' in UserComponent)
+          ? UserComponent.component
+          : UserComponent;
+        
+        // Validate that we have a function (React component)
+        if (typeof ActualComponent !== 'function') {
+          console.error('Invalid component type for ${componentName}:', typeof ActualComponent);
+          console.error('ActualComponent value:', ActualComponent);
+          console.error('Original UserComponent value:', UserComponent);
+          throw new Error('Component "${componentName}" must be a function (React component) or an object with a .component property that is a function. Got: ' + typeof ActualComponent);
+        }
+        
+        // Create a fresh method registry for each factory call
         const methodRegistry = new Map();
         
         // Create a wrapper component that provides RegisterMethod in callbacks
@@ -232,7 +261,7 @@ export class ComponentCompiler {
           }, [props.callbacks]);
           
           // Render the original component with enhanced callbacks
-          return React.createElement(${componentName}, {
+          return React.createElement(ActualComponent, {
             ...props,
             callbacks: enhancedCallbacks
           });
@@ -547,7 +576,7 @@ export class ComponentCompiler {
     transpiledCode: string, 
     componentName: string,
     loadedLibraries: Map<string, any>
-  ): Function {
+  ): (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject {
     try {
       // Create the factory function with all React hooks
       const factoryCreator = new Function(

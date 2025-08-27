@@ -229,31 +229,31 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
       
-      // Register component hierarchy
+      // Register component hierarchy (this compiles and registers all components)
       await this.registerComponentHierarchy();
       
-      // Compile main component with its library dependencies
-      await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
-      const result = await this.adapter.compileComponent({
-        componentName: this.component.name,
-        componentCode: this.component.code,
-        styles: this.styles as ComponentStyles,
-        libraries: this.component.libraries, // Pass library dependencies from ComponentSpec
-        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
+      // Get the already-registered component from the registry
+      const registry = this.adapter.getRegistry();
+      const componentWrapper = registry.get(
+        this.component.name, 
+        this.component.namespace || 'Global', 
+        this.componentVersion
+      );
+      
+      console.log(`🔍 Retrieved from registry for ${this.component.name}:`, {
+        exists: !!componentWrapper,
+        type: typeof componentWrapper,
+        hasComponent: componentWrapper && 'component' in componentWrapper,
+        componentType: componentWrapper && componentWrapper.component ? typeof componentWrapper.component : 'N/A',
+        keys: componentWrapper ? Object.keys(componentWrapper) : []
       });
-
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Component compilation failed');
+      
+      if (!componentWrapper) {
+        throw new Error(`Component ${this.component.name} was not found in registry after registration`);
       }
-
-      // Get runtime context and execute component factory
-      const context = this.adapter.getRuntimeContext();
       
-      // Call the factory function to get the component wrapper
-      // result.component is a CompiledComponent object with a 'component' property that's the factory
-      const componentWrapper = result.component!.component(context, this.styles);
-      
-      // Validate the component wrapper structure
+      // The registry now stores ComponentObjects directly
+      // Validate it has the expected structure
       if (!componentWrapper || typeof componentWrapper !== 'object') {
         throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
       }
@@ -262,8 +262,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
       }
       
-      if (typeof componentWrapper.component !== 'function') {
-        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+      // React.forwardRef components are not plain functions, they're special React elements
+      // We need to check if it's a valid React element type instead of just checking for function
+      const isValidComponent = typeof componentWrapper.component === 'function' || 
+                               (componentWrapper.component && (componentWrapper.component as any).$$typeof);
+      
+      if (!isValidComponent) {
+        throw new Error(`Component is not a valid React component for ${this.component.name}: ${typeof componentWrapper.component}`);
       }
       
       this.compiledComponent = componentWrapper;
@@ -454,6 +459,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Validate component before creating element
     if (!this.compiledComponent.component) {
       LogError(`Component is undefined for ${this.component.name} during render`);
+      return;
+    }
+    
+    // ForwardRef components and regular functions are both valid
+    const isValidComponent = typeof this.compiledComponent.component === 'function' || 
+                           (this.compiledComponent.component && (this.compiledComponent.component as any).$$typeof);
+    
+    if (!isValidComponent) {
+      LogError(`Component is not a valid React component for ${this.component.name}: ${typeof this.compiledComponent.component}`);
       return;
     }
 
