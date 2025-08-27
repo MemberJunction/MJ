@@ -108,7 +108,7 @@ export class ComponentSpec {
     /**
      * Relevant examples of components intended to inspire this component's creation
      */
-    relevantExamples?: Array<ComponentExample[]>;
+    relevantExamples?: ComponentExample[];
 };
 
 /**
