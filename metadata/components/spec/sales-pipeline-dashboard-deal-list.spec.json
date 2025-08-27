@@ -5,6 +5,18 @@
   "description": "Displays deals in a sortable table format with open action",
   "category": "Deals",
   "type": "list",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "filterFields": ["CloseDate", "Stage", "Owner"],
+        "sortFields": ["CloseDate", "Amount", "Probability"],
+        "permissions": ["read"]
+      } 
+    ]
+  },
   "properties": [
     {
       "name": "deals",

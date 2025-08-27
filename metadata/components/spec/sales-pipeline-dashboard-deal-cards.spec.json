@@ -5,6 +5,17 @@
   "description": "Displays deals in an interactive card layout with open action",
   "category": "Deals",
   "type": "cards",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "filterFields": ["CloseDate", "Stage", "Owner"],
+        "sortFields": ["CloseDate", "Amount", "Probability"]  
+      }
+    ]
+  },
   "properties": [
     {
       "name": "deals",
