@@ -581,7 +581,16 @@ export class RunViewResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: `Failed to execute view: ${input.ViewName}`,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0
+        };
+      }
 
       const entity = provider.Entities.find((e) => e.Name === input.ViewName);
       const entityId = entity ? entity.ID : null;
@@ -596,8 +605,16 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: rawData?.ErrorMessage,
       };
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       LogError(err);
-      return null;
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0
+      };
     }
   }
 
@@ -611,7 +628,16 @@ export class RunViewResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: `Failed to execute view with ID: ${input.ViewID}`,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0
+        };
+      }
 
       const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID);
@@ -625,8 +651,16 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: rawData?.ErrorMessage,
       };
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       LogError(err);
-      return null;
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0
+      };
     }
   }
 
@@ -640,12 +674,29 @@ export class RunViewResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) return null;
+      if (rawData === null) {
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: 'Failed to execute dynamic view',
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0
+        };
+      }
 
       const entity = provider.Entities.find((e) => e.Name === input.EntityName);
       if (!entity) {
-        LogError(new Error(`Entity with name ${input.EntityName} not found`));
-        return null;
+        const errorMsg = `Entity ${input.EntityName} not found in metadata`;
+        LogError(new Error(errorMsg));
+        return {
+          Results: [],
+          Success: false,
+          ErrorMessage: errorMsg,
+          RowCount: 0,
+          TotalRowCount: 0,
+          ExecutionTime: 0
+        };
       }
       const returnData = this.processRawData(rawData.Results, entity.ID);
       return {
@@ -658,8 +709,16 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: rawData?.ErrorMessage,
       };
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       LogError(err);
-      return null;
+      return {
+        Results: [],
+        Success: false,
+        ErrorMessage: errorMessage,
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0
+      };
     }
   }
 
