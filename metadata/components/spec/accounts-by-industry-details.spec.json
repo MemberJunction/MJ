@@ -7,6 +7,23 @@
   "namespace": "CRM/Analytics",
   "functionalRequirements": "## Account Details Panel\n\n- Slide in from right with smooth animation\n- Display account name and industry prominently\n- Show key metrics (revenue, status, type)\n- Include contact information section\n- Display location details if available\n- Provide 'Open Record' action button\n- Support close via X button or overlay click\n- Format all data appropriately",
   "technicalDesign": "## Technical Design\n\n### Props\n- account: Selected account object\n- isOpen: Panel visibility state\n- onClose: Close handler callback\n- onOpenRecord: Open record callback\n\n### Layout\n- Fixed positioning overlay\n- Transform-based slide animation\n- Sections for different data types\n- Sticky header with close button\n- Scrollable content area",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Fetches account data using RunView for industry distribution analysis",
+    "entities": [
+      {
+        "name": "Accounts",
+        "description": "CRM account data grouped by industry",
+        "displayFields": ["ID", "AccountName", "Industry", "Revenue", "Status", "IsActive"],
+        "filterFields": ["IsActive", "Industry"],
+        "sortFields": ["AccountName", "Revenue", "Industry"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
+      }
+    ],
+    "queries": []
+  },
   "properties": [
     {
       "name": "account",
