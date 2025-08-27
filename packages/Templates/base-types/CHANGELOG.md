@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/templates-base-types
 
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
 ## 2.93.0
 
 ### Patch Changes

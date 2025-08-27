@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/ng-base-types@2.94.0
+- @memberjunction/ng-notifications@2.94.0
+- @memberjunction/ng-container-directives@2.94.0
+- @memberjunction/ng-generic-dialog@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
 ## 2.93.0
 
 ### Patch Changes

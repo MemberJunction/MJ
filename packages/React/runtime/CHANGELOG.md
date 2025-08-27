@@ -1,5 +1,21 @@
 # @memberjunction/react-runtime
 
+## 2.94.0
+
+### Minor Changes
+
+- 455654e: migration (unrelated) to bump to minor
+- 7c27b04: migration
+- 98afc80: migrations
+
+### Patch Changes
+
+- Updated dependencies [eed16e0]
+  - @memberjunction/interactive-component-types@2.94.0
+  - @memberjunction/core-entities@2.94.0
+  - @memberjunction/core@2.94.0
+  - @memberjunction/global@2.94.0
+
 ## 2.93.0
 
 ### Patch Changes

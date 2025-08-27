@@ -1,5 +1,13 @@
 # @memberjunction/interactive-component-types
 
+## 2.94.0
+
+### Patch Changes
+
+- eed16e0: fix type
+  - @memberjunction/ai-vectors-memory@2.94.0
+  - @memberjunction/core@2.94.0
+
 ## 2.93.0
 
 ### Patch Changes
