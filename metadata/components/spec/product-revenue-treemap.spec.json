@@ -6,32 +6,65 @@
   "code": "@file:../code/product-revenue-treemap.js",
   "functionalRequirements": "## Product Revenue Treemap Sub-Component\n\n### Purpose\nVisualize product revenue distribution using an interactive treemap chart.\n\n### Core Features\n- **Hierarchical View**: Products grouped by category\n- **Size by Revenue**: Box size represents revenue amount\n- **Color by Margin**: Color intensity shows profit margin\n- **Interactive Tooltips**: Hover for detailed metrics\n- **Click to Drill-down**: Select products for details",
   "dataRequirements": {
-    "mode": "props",
-    "props": ["products", "lineItems", "invoices", "onProductClick"]
+    "mode": "views",
+    "description": "Receives entity data via props from parent component for treemap visualization",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product catalog with pricing and cost information for margin calculation",
+        "displayFields": ["ID", "ProductName", "Category", "UnitPrice", "Cost"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Used to build treemap hierarchy and calculate profit margins"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Line items for calculating product revenue and quantities",
+        "displayFields": ["ID", "InvoiceID", "ProductID", "Quantity", "UnitPrice", "TotalPrice", "Discount"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Aggregated to calculate total revenue per product"
+      },
+      {
+        "name": "Invoices",
+        "description": "Invoice headers for customer counts and date filtering",
+        "displayFields": ["ID", "AccountID"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Used to count unique customers per product"
+      }
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### D3.js Treemap\n- Dynamic treemap layout with category grouping\n- Color scale based on margin percentages\n- Responsive sizing and text truncation\n- Tooltip on hover with key metrics",
   "properties": [
     {
       "name": "products",
-      "type": "array",
+      "type": "Array<{ID: string, ProductName: string, Category?: string, UnitPrice?: number, Cost?: number}>",
       "description": "Array of product entities",
       "required": true
     },
     {
       "name": "lineItems",
-      "type": "array",
+      "type": "Array<{ID: string, InvoiceID: string, ProductID: string, Quantity?: number, UnitPrice?: number, TotalPrice?: number, Discount?: number}>",
       "description": "Array of invoice line item entities",
       "required": true
     },
     {
       "name": "invoices",
-      "type": "array",
+      "type": "Array<{ID: string, AccountID?: string, InvoiceDate?: string}>",
       "description": "Array of invoice entities",
       "required": true
     },
     {
       "name": "onProductClick",
-      "type": "function",
+      "type": "(product: {id: string, name: string, revenue: number, margin: number, customerCount: number}) => void",
       "description": "Callback when product is clicked",
       "required": false
     }

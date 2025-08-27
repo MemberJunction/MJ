@@ -10,23 +10,33 @@
     "entities": [
       {
         "name": "Products",
-        "displayFields": ["ProductName", "Category", "Price", "Cost", "SKU"],
-        "filterFields": ["Category"],
-        "sortFields": ["ProductName", "Price"] 
+        "description": "Product catalog with pricing and cost information",
+        "displayFields": ["ID", "ProductName", "Category", "UnitPrice", "Cost"],
+        "filterFields": [],
+        "sortFields": ["ProductName"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"]
       },
       {
         "name": "Invoice Line Items",
-        "displayFields": ["InvoiceID", "ProductID", "Quantity", "TotalPrice", "Discount"],
-        "filterFields": ["ProductID", "InvoiceID"],
-        "sortFields": ["TotalPrice"] 
+        "description": "Line items linking products to invoices with quantities and pricing",
+        "displayFields": ["ID", "InvoiceID", "ProductID", "Quantity", "UnitPrice", "TotalPrice", "Discount"],
+        "filterFields": [],
+        "sortFields": ["TotalPrice"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"]
       },
       {
         "name": "Invoices",
-        "displayFields": ["InvoiceNumber", "AccountID", "InvoiceDate", "TotalAmount"],
-        "filterFields": ["InvoiceDate", "AccountID"],
-        "sortFields": ["InvoiceDate"] 
+        "description": "Invoice headers with dates and customer references",
+        "displayFields": ["ID", "AccountID", "InvoiceDate"],
+        "filterFields": ["InvoiceDate"],
+        "sortFields": ["InvoiceDate"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"]
       }
-    ]
+    ],
+    "queries": []
   },
   "technicalDesign": "## Implementation\n\n### Components\n- Main: ProductRevenueMatrix\n- Sub-components:\n  - RevenueTreemap: Hierarchical product visualization\n  - ProductMatrix: Grid view of products\n  - TrendSparkline: Mini trend charts\n  - ProductDetails: Detailed analysis panel\n\n### Data Processing\n- Aggregate sales by product and period\n- Calculate margins and profitability\n- Generate trend data\n- Build hierarchical structures",
   "properties": [],
