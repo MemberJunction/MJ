@@ -358,6 +358,49 @@ module.exports = {
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
 
+## MJAPI Public URL Configuration
+
+When MJAPI needs to communicate with remote services (like Skip API), it sends a callback URL so the remote service can make requests back to MJAPI. By default, this URL is constructed from `baseUrl`, `graphqlPort`, and `graphqlRootPath` (e.g., `http://localhost:4000/`).
+
+For development scenarios where MJAPI is running locally but needs to communicate with remote services, you can configure a public URL that remote services can reach:
+
+### Configuration Methods
+
+#### 1. Environment Variable (Recommended for Development)
+```bash
+# Using ngrok
+ngrok http 4000
+# Output: Forwarding https://abc123.ngrok.io -> http://localhost:4000
+
+# Set the environment variable (include the full path if graphqlRootPath is not '/')
+export MJAPI_PUBLIC_URL=https://abc123.ngrok.io
+# OR if graphqlRootPath is '/graphql'
+export MJAPI_PUBLIC_URL=https://abc123.ngrok.io/graphql
+
+# Start MJAPI
+npm run start:api
+```
+
+#### 2. Configuration File
+Add to your `mj.config.cjs` or `.mjrc` file:
+```javascript
+module.exports = {
+  publicUrl: 'https://your-public-url.com',  // Include full path if needed
+  // ... other configuration
+};
+```
+
+### How It Works
+- When `publicUrl` is configured, MJAPI will use it as the `callingServerURL` when communicating with remote services
+- If `publicUrl` is not set, MJAPI constructs the URL as: `${baseUrl}:${graphqlPort}${graphqlRootPath}`
+- The `publicUrl` should include the complete path including any root path (e.g., `/graphql` if that's your GraphQL endpoint)
+- This ensures backward compatibility while enabling hybrid development scenarios
+
+### Use Cases
+- **Local Development with Remote Services**: Test local MJAPI changes against production Skip API
+- **Webhook Testing**: Receive callbacks from remote services during development
+- **Hybrid Deployments**: Mix local and cloud services during development/testing
+
 ## MetadataSync Package
 
 ### Validation System

@@ -54,7 +54,7 @@ import {
   UserNotificationEntity,
   AIAgentEntityExtended
 } from '@memberjunction/core-entities';
-import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { apiKey, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -932,7 +932,7 @@ cycle.`);
       organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
-      callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
+      callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
       callingServerAPIKey: accessToken ? apiKey : undefined,
       callingServerAccessToken: accessToken ? accessToken.Token : undefined
     };
