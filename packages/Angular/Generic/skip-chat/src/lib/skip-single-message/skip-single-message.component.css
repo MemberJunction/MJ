@@ -111,6 +111,11 @@
     height: .5rem;
 }
 
+.message-content {
+    white-space: pre-wrap; /* Preserve whitespace, line breaks, and wrap long lines */
+    word-break: break-word; /* Break long words if needed */
+}
+
 .suggested-container {
     margin-right: 20px; /*match the message class*/
     display: flex;
