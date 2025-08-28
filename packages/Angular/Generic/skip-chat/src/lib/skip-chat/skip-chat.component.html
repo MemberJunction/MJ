@@ -119,34 +119,34 @@
                                         (input)="onInputChange($event)"
                                         type="text" 
                                         [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
-                                </div>
-                                <div class="button-area">
-                                    @if (ShowDataContextButton) {
-                                        <button kendoButton >
-                                            <span class="fa-solid fa-gear" 
-                                                    (click)="showDataContextDialog()"></span>
-                                        </button>    
-                                    }
-                                    @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
-                                        <button kendoButton 
-                                            class="stop-button"
-                                            (click)="stopProcessing()">
-                                            <span class="fas fa-solid fa-stop"></span>
-                                        </button>
-                                    }
-                                    @else {
-                                        <button kendoButton 
-                                            [disabled]="IsTextAreaEmpty()" 
-                                            (click)="sendSkipMessage()">
-                                            <span class="fas fa-solid fa-arrow-up"></span>
-                                        </button>
-                                    }
-                                    @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
-                                        <button kendoButton class="share-button">
-                                            <span class="fa-solid fa-share"
-                                                    (click)="showSharingDialog()"></span>
-                                        </button>    
-                                    }
+                                    <div class="button-area">
+                                        @if (ShowDataContextButton) {
+                                            <button kendoButton >
+                                                <span class="fa-solid fa-gear" 
+                                                        (click)="showDataContextDialog()"></span>
+                                            </button>    
+                                        }
+                                        @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
+                                            <button kendoButton 
+                                                class="stop-button"
+                                                (click)="stopProcessing()">
+                                                <span class="fas fa-solid fa-stop"></span>
+                                            </button>
+                                        }
+                                        @else {
+                                            <button kendoButton 
+                                                [disabled]="IsTextAreaEmpty()" 
+                                                (click)="sendSkipMessage()">
+                                                <span class="fas fa-solid fa-arrow-up"></span>
+                                            </button>
+                                        }
+                                        @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
+                                            <button kendoButton class="share-button">
+                                                <span class="fa-solid fa-share"
+                                                        (click)="showSharingDialog()"></span>
+                                            </button>    
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         </div>
