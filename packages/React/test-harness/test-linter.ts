@@ -120,6 +120,7 @@ async function runTests() {
   
   await testLinter('src/lib/broken.json');
   await testLinter('src/lib/broken-2.json');
+  await testLinter('src/lib/broken-3.json');
   
   console.log('\n' + '='.repeat(80));
   console.log('✅ Test complete');
