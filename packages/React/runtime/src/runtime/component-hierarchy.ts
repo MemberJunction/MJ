@@ -200,14 +200,6 @@ export class ComponentHierarchyRegistrar {
       // Call the factory to create the ComponentObject
       const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
-      // Debug logging to verify ComponentObject structure
-      console.log(`📦 Registering ComponentObject for ${spec.name}:`, {
-        hasComponent: 'component' in componentObject,
-        componentType: typeof componentObject.component,
-        hasPrint: 'print' in componentObject,
-        hasRefresh: 'refresh' in componentObject
-      });
-
       // Register the full ComponentObject (not just the React component)
       this.registry.register(
         spec.name,

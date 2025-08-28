@@ -233,7 +233,7 @@ export class ComponentCompiler {
         const methodRegistry = new Map();
         
         // Create a wrapper component that provides RegisterMethod in callbacks
-        const ComponentWithMethodRegistry = React.forwardRef((props, ref) => {
+        const ComponentWithMethodRegistry = (props) => {
           // Register methods on mount
           React.useEffect(() => {
             // Clear previous methods
@@ -265,7 +265,7 @@ export class ComponentCompiler {
             ...props,
             callbacks: enhancedCallbacks
           });
-        });
+        };
         
         ComponentWithMethodRegistry.displayName = '${componentName}WithMethods';
         
