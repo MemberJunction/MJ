@@ -391,6 +391,11 @@ export class ComponentRunner {
             components[name] = (componentObj as any).component;
           }
           
+          if (debug) {
+            console.log('📚 Registered components for dependencies:', Object.keys(components));
+            console.log('📋 Component spec dependencies:', spec.dependencies?.map((d: ComponentSpec) => d.name) || []);
+          }
+          
           // Note: Library components are now handled by the runtime's compiler
           // which loads them into the appropriate context/closure
 
