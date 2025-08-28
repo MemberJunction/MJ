@@ -2103,7 +2103,23 @@ export class ComponentLinter {
                       severity: 'critical',
                       line: path.node.arguments[0].loc?.start.line || 0,
                       column: path.node.arguments[0].loc?.start.column || 0,
-                      message: `RunViews expects an array of RunViewParams objects, not a ${t.isObjectExpression(path.node.arguments[0]) ? 'single object' : 'non-array'}. Use: RunViews([{ EntityName: 'Entity1' }, { EntityName: 'Entity2' }])`,
+                      message: `RunViews expects an array of RunViewParams objects, not a ${t.isObjectExpression(path.node.arguments[0]) ? 'single object' : 'non-array'}.
+Use: RunViews([
+  { 
+    EntityName: 'Entity1',
+    ExtraFilter: 'IsActive = 1',
+    Fields: 'ID, Name',
+    StartRow: 0,
+    MaxRows: 50
+  },
+  { 
+    EntityName: 'Entity2',
+    OrderBy: 'CreatedAt DESC',
+    StartRow: 0,
+    MaxRows: 100
+  }
+])
+Each object supports: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, ResultType`,
                       code: path.toString().substring(0, 100)
                     });
                   }
@@ -2122,7 +2138,16 @@ export class ComponentLinter {
                       severity: 'critical',
                       line: path.node.arguments[0].loc?.start.line || 0,
                       column: path.node.arguments[0].loc?.start.column || 0,
-                      message: `RunView expects a RunViewParams object, not ${argType === 'array' ? 'an' : 'a'} ${argType}. Use: RunView({ EntityName: 'YourEntity' }) or for multiple use RunViews([...])`,
+                      message: `RunView expects a RunViewParams object, not ${argType === 'array' ? 'an' : 'a'} ${argType}.
+Use: RunView({ 
+  EntityName: 'YourEntity',
+  ExtraFilter: 'Status = "Active"',  // Optional WHERE clause
+  Fields: 'ID, Name, Status',        // Optional columns to return
+  OrderBy: 'Name ASC',                // Optional sort
+  StartRow: 0,                        // Optional offset (0-based)
+  MaxRows: 100                        // Optional limit
+})
+Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, ResultType`,
                       code: path.toString().substring(0, 100)
                     });
                   }
@@ -2212,7 +2237,15 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `RunQuery requires a RunQueryParams object as the first parameter. Must provide an object with either QueryID or QueryName.`,
+                  message: `RunQuery requires a RunQueryParams object as the first parameter.
+Use: RunQuery({ 
+  QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
+  Parameters: {                       // Optional query parameters
+    param1: 'value1'
+  },
+  StartRow: 0,                        // Optional offset (0-based)
+  MaxRows: 100                        // Optional limit
+})`,
                   code: `RunQuery()`
                 });
               } else if (!t.isObjectExpression(path.node.arguments[0])) {
@@ -2225,7 +2258,17 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.arguments[0].loc?.start.line || 0,
                   column: path.node.arguments[0].loc?.start.column || 0,
-                  message: `RunQuery expects a RunQueryParams object, not a ${argType}. Use: RunQuery({ QueryName: 'YourQuery' }) or RunQuery({ QueryID: 'id' })`,
+                  message: `RunQuery expects a RunQueryParams object, not a ${argType}.
+Use: RunQuery({ 
+  QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
+  Parameters: {                       // Optional query parameters
+    startDate: '2024-01-01',
+    endDate: '2024-12-31'
+  },
+  StartRow: 0,                        // Optional offset (0-based)
+  MaxRows: 100                        // Optional limit
+})
+Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription`,
                   code: path.toString().substring(0, 100)
                 });
               } else {

@@ -182,8 +182,10 @@ export class ComponentCompiler {
       : '';
     
     // Generate component declarations if dependencies are provided
+    // Filter out the component being compiled to avoid naming conflicts
     const componentDeclarations = dependencies && dependencies.length > 0
       ? dependencies
+          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
           .map(dep => `const ${dep.name} = components['${dep.name}'];`)
           .join('\n        ')
       : '';
