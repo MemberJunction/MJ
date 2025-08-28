@@ -209,34 +209,71 @@ export class ComponentLinter {
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
+        // Track if we're inside the main function and where it ends
+        let mainFunctionEnd = 0;
+        
+        // First pass: find the main component function
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id?.name === componentName) {
+              mainFunctionEnd = path.node.loc?.end.line || 0;
+              path.stop(); // Stop traversing once we find it
+            }
+          },
+          FunctionExpression(path: NodePath<t.FunctionExpression>) {
+            // Check for function expressions assigned to const/let/var
+            const parent = path.parent;
+            if (t.isVariableDeclarator(parent) && 
+                t.isIdentifier(parent.id) && 
+                parent.id.name === componentName) {
+              mainFunctionEnd = path.node.loc?.end.line || 0;
+              path.stop();
+            }
+          },
+          ArrowFunctionExpression(path: NodePath<t.ArrowFunctionExpression>) {
+            // Check for arrow functions assigned to const/let/var
+            const parent = path.parent;
+            if (t.isVariableDeclarator(parent) && 
+                t.isIdentifier(parent.id) && 
+                parent.id.name === componentName) {
+              mainFunctionEnd = path.node.loc?.end.line || 0;
+              path.stop();
+            }
+          }
+        });
+        
+        // Second pass: check for export statements
         traverse(ast, {
           ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {
+            const line = path.node.loc?.start.line || 0;
             violations.push({
               rule: 'no-export-statements',
               severity: 'critical',
-              line: path.node.loc?.start.line || 0,
+              line: line,
               column: path.node.loc?.start.column || 0,
-              message: `Component "${componentName}" contains an export statement. Interactive components are self-contained and cannot export values.`,
+              message: `Component "${componentName}" contains an export statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
               code: path.toString().substring(0, 100)
             });
           },
           ExportDefaultDeclaration(path: NodePath<t.ExportDefaultDeclaration>) {
+            const line = path.node.loc?.start.line || 0;
             violations.push({
               rule: 'no-export-statements',
               severity: 'critical',
-              line: path.node.loc?.start.line || 0,
+              line: line,
               column: path.node.loc?.start.column || 0,
-              message: `Component "${componentName}" contains an export default statement. Interactive components are self-contained and cannot export values.`,
+              message: `Component "${componentName}" contains an export default statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
               code: path.toString().substring(0, 100)
             });
           },
           ExportAllDeclaration(path: NodePath<t.ExportAllDeclaration>) {
+            const line = path.node.loc?.start.line || 0;
             violations.push({
               rule: 'no-export-statements',
               severity: 'critical',
-              line: path.node.loc?.start.line || 0,
+              line: line,
               column: path.node.loc?.start.column || 0,
-              message: `Component "${componentName}" contains an export * statement. Interactive components are self-contained and cannot export values.`,
+              message: `Component "${componentName}" contains an export * statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
               code: path.toString().substring(0, 100)
             });
           }
@@ -4712,6 +4749,44 @@ export class ComponentLinter {
     }
   ];
   
+  public static async validateComponentSyntax(
+    code: string,
+    componentName: string
+  ): Promise<{ valid: boolean; errors: string[] }> {
+    try {
+      const parseResult = parser.parse(code, {
+        sourceType: 'module',
+        plugins: ['jsx', 'typescript'],
+        errorRecovery: true,
+        ranges: true
+      });
+      
+      if (parseResult.errors && parseResult.errors.length > 0) {
+        const errors = parseResult.errors.map((error: any) => {
+          const location = error.loc ? `Line ${error.loc.line}, Column ${error.loc.column}` : 'Unknown location';
+          return `${location}: ${error.message || error.toString()}`; 
+        });
+        
+        return {
+          valid: false,
+          errors
+        };
+      }
+      
+      return {
+        valid: true,
+        errors: []
+      };
+    } catch (error: unknown) {
+      // Handle catastrophic parse failures
+      const errorMessage = error instanceof Error ? error.message : 'Unknown parsing error';
+      return {
+        valid: false,
+        errors: [`Failed to parse component: ${errorMessage}`]
+      };
+    }
+  }
+
   public static async lintComponent(
     code: string,
     componentName: string,
@@ -4722,11 +4797,47 @@ export class ComponentLinter {
     options?: ComponentExecutionOptions
   ): Promise<LintResult> {
     try {
-      const ast = parser.parse(code, {
+      // Parse with error recovery to get both AST and errors
+      const parseResult = parser.parse(code, {
         sourceType: 'module',
         plugins: ['jsx', 'typescript'],
-        errorRecovery: true
+        errorRecovery: true,
+        attachComment: false,
+        ranges: true,
+        tokens: false
       });
+      
+      // Check for syntax errors from parser
+      const syntaxViolations: Violation[] = [];
+      if (parseResult.errors && parseResult.errors.length > 0) {
+        for (const error of parseResult.errors) {
+          const err = error as any; // Babel parser errors don't have proper types
+          syntaxViolations.push({
+            rule: 'syntax-error',
+            severity: 'critical',
+            line: err.loc?.line || 0,
+            column: err.loc?.column || 0,
+            message: `Syntax error in component "${componentName}": ${err.message || err.toString()}`,
+            code: err.code || 'BABEL_PARSER_ERROR'
+          });
+        }
+      }
+      
+      // If we have critical syntax errors, return immediately with those
+      if (syntaxViolations.length > 0) {
+        return {
+          success: false,
+          violations: syntaxViolations,
+          suggestions: this.generateSyntaxErrorSuggestions(syntaxViolations),
+          criticalCount: syntaxViolations.length,
+          highCount: 0,
+          mediumCount: 0,
+          lowCount: 0
+        };
+      }
+      
+      // Continue with existing linting logic
+      const ast = parseResult;
       
       // Use universal rules for all components in the new pattern
       let rules = this.universalComponentRules;
@@ -6260,6 +6371,40 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
 // }`
           });
           break;
+      }
+    }
+    
+    return suggestions;
+  }
+
+  private static generateSyntaxErrorSuggestions(violations: Violation[]): FixSuggestion[] {
+    const suggestions: FixSuggestion[] = [];
+    
+    for (const violation of violations) {
+      if (violation.message.includes('Unterminated string')) {
+        suggestions.push({
+          violation: violation.rule,
+          suggestion: 'Check that all string literals are properly closed with matching quotes',
+          example: 'Template literals with interpolation must use backticks: `text ${variable} text`'
+        });
+      } else if (violation.message.includes('Unexpected token') || violation.message.includes('export')) {
+        suggestions.push({
+          violation: violation.rule,
+          suggestion: 'Ensure all code is within the component function body',
+          example: 'Remove any export statements or code outside the function definition'
+        });
+      } else if (violation.message.includes('import') && violation.message.includes('top level')) {
+        suggestions.push({
+          violation: violation.rule,
+          suggestion: 'Import statements are not allowed in components - use props instead',
+          example: 'Access libraries through props: const { React, MaterialUI } = props.components'
+        });
+      } else {
+        suggestions.push({
+          violation: violation.rule,
+          suggestion: 'Fix the syntax error before the component can be compiled',
+          example: 'Review the code at the specified line and column for syntax issues'
+        });
       }
     }
     

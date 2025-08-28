@@ -260,7 +260,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // we need to transform each of the items in the result set into a BaseEntity-derived object
             // Create entities and load data in parallel for better performance
             const entityPromises = result.Results.map(async (item) => {
-                if (item instanceof BaseEntity) {
+                if (item instanceof BaseEntity || (typeof item.Save === 'function')) {
+                    // the second check is a "duck-typing" check in case we have different runtime
+                    // loading sources where the instanceof will fail
                     return item;
                 }
                 else {
