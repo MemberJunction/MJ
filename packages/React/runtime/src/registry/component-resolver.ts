@@ -68,15 +68,26 @@ export class ComponentResolver {
     namespace: string = 'Global',
     contextUser?: UserInfo
   ): Promise<ResolvedComponents> {
+    console.log(`🚀 [ComponentResolver] Starting component resolution for: ${spec.name}`);
+    console.log(`📋 [ComponentResolver] Dependencies to resolve:`, (spec.dependencies || []).map(d => ({
+      name: d.name,
+      location: d.location,
+      namespace: d.namespace
+    })));
+    
     const resolved: ResolvedComponents = {};
     
     // Initialize component engine if we have registry service
     if (this.registryService) {
+      console.log(`🔄 [ComponentResolver] Initializing component engine...`);
       await this.componentEngine.Config(false, contextUser);
+      console.log(`✅ [ComponentResolver] Component engine initialized with ${this.componentEngine.Components?.length || 0} components`);
     }
     
     // Resolve the component hierarchy
     await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
+    
+    console.log(`📊 [ComponentResolver] Resolved components before unwrapping:`, Object.keys(resolved));
     
     // Unwrap component wrappers before returning
     // Components from the registry come as objects with component/print/refresh properties
@@ -87,16 +98,28 @@ export class ComponentResolver {
         if (typeof value.component === 'function') {
           // This is a wrapped component - extract the actual React component function
           unwrapped[name] = value.component;
+          console.log(`✅ [ComponentResolver] Unwrapped component: ${name} (was object with .component)`);
         } else {
           // ComponentObject has a component property but it's not a function
-          console.error(`Component ${name} has invalid component property:`, typeof value.component, value);
+          console.error(`❌ [ComponentResolver] Component ${name} has invalid component property:`, typeof value.component, value);
           unwrapped[name] = value; // Pass through the problematic value so we can see the error
         }
-      } else {
-        // This is already a plain component function or something else
+      } else if (typeof value === 'function') {
+        // Already a function - use as is
         unwrapped[name] = value;
+        console.log(`✅ [ComponentResolver] Component already a function: ${name}`);
+      } else {
+        // Something else - could be undefined or an error
+        console.warn(`⚠️ [ComponentResolver] Component ${name} is not a function or wrapped component:`, typeof value, value);
+        unwrapped[name] = value; // Pass through for debugging
       }
     }
+    
+    console.log(`🎯 [ComponentResolver] Final resolved components:`, Object.keys(unwrapped).map(name => ({
+      name,
+      type: typeof unwrapped[name],
+      isUndefined: unwrapped[name] === undefined
+    })));
     
     return unwrapped;
   }
@@ -131,14 +154,40 @@ export class ComponentResolver {
     // Handle based on location
     if (spec.location === 'registry' && this.registryService) {
       // Registry component - need to load from database or external source
+      console.log(`🔍 [ComponentResolver] Looking for registry component: ${spec.name} in namespace: ${spec.namespace || namespace}`);
+      
       try {
         // First, try to find the component in the metadata engine
+        const allComponents = this.componentEngine.Components || [];
+        console.log(`📊 [ComponentResolver] Total components in engine: ${allComponents.length}`);
+        
+        // Log all matching names to see duplicates
+        const matchingNames = allComponents.filter((c: any) => c.Name === spec.name);
+        if (matchingNames.length > 0) {
+          console.log(`🔎 [ComponentResolver] Found ${matchingNames.length} components with name "${spec.name}":`, 
+            matchingNames.map((c: any) => ({
+              ID: c.ID,
+              Name: c.Name,
+              Namespace: c.Namespace,
+              Version: c.Version,
+              Status: c.Status
+            }))
+          );
+        }
+        
         const component = this.componentEngine.Components?.find(
           (c: any) => c.Name === spec.name && 
                c.Namespace === (spec.namespace || namespace)
         );
         
         if (component) {
+          console.log(`✅ [ComponentResolver] Found component in DB:`, {
+            ID: component.ID,
+            Name: component.Name,
+            Namespace: component.Namespace,
+            Version: component.Version
+          });
+          
           // Get compiled component from registry service
           const compiledComponent = await this.registryService.getCompiledComponent(
             component.ID,
@@ -146,10 +195,13 @@ export class ComponentResolver {
             contextUser
           );
           resolved[spec.name] = compiledComponent;
+          console.log(`📦 [ComponentResolver] Successfully compiled and resolved: ${spec.name}, type: ${typeof compiledComponent}`);
+          
           if (this.debug) {
             console.log(`📦 Resolved registry component: ${spec.name} from ${componentId}`);
           }
         } else {
+          console.error(`❌ [ComponentResolver] Registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace}`);
           if (this.debug) {
             console.warn(`Registry component not found in database: ${spec.name}`);
           }
@@ -163,22 +215,28 @@ export class ComponentResolver {
       // Embedded component - get from local registry
       // Use the component's specified namespace if it has one, otherwise use parent's namespace
       const componentNamespace = spec.namespace || namespace;
+      console.log(`🔍 [ComponentResolver] Looking for embedded component: ${spec.name} in namespace: ${componentNamespace}`);
+      
       const component = this.registry.get(spec.name, componentNamespace);
       if (component) {
         resolved[spec.name] = component;
+        console.log(`✅ [ComponentResolver] Found embedded component: ${spec.name}, type: ${typeof component}`);
         if (this.debug) {
           console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}, type:`, typeof component);
         }
       } else {
         // If not found with specified namespace, try the parent namespace as fallback
+        console.log(`⚠️ [ComponentResolver] Not found in namespace ${componentNamespace}, trying fallback namespace: ${namespace}`);
         const fallbackComponent = this.registry.get(spec.name, namespace);
         if (fallbackComponent) {
           resolved[spec.name] = fallbackComponent;
+          console.log(`✅ [ComponentResolver] Found embedded component in fallback namespace: ${spec.name}, type: ${typeof fallbackComponent}`);
           if (this.debug) {
             console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`, typeof fallbackComponent);
           }
         } else {
           // Component not found - this might cause issues later
+          console.error(`❌ [ComponentResolver] Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
           console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
           // Store undefined explicitly so we know it failed to resolve
           resolved[spec.name] = undefined;
