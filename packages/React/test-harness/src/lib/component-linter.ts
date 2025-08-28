@@ -1208,11 +1208,26 @@ export class ComponentLinter {
           // Track JSX element usage
           JSXElement(path: NodePath<t.JSXElement>) {
             const openingElement = path.node.openingElement;
+            
+            // Check for direct usage (e.g., <ComponentName>)
             if (t.isJSXIdentifier(openingElement.name) && /^[A-Z]/.test(openingElement.name.name)) {
               const componentName = openingElement.name.name;
               // Only track if it's from our destructured components
               if (componentsFromProps.has(componentName)) {
                 componentsUsedInJSX.add(componentName);
+              }
+            }
+            
+            // Also check for components.X pattern (e.g., <components.ComponentName>)
+            if (t.isJSXMemberExpression(openingElement.name)) {
+              if (t.isJSXIdentifier(openingElement.name.object) && 
+                  openingElement.name.object.name === 'components' &&
+                  t.isJSXIdentifier(openingElement.name.property)) {
+                const componentName = openingElement.name.property.name;
+                // Track usage of components accessed via dot notation
+                if (componentsFromProps.has(componentName)) {
+                  componentsUsedInJSX.add(componentName);
+                }
               }
             }
           }
@@ -3431,13 +3446,12 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
           }
         }
         
-        // Track dependency components (these are now auto-destructured in the wrapper)
+        // Track dependency components (NOT auto-destructured - must be manually destructured or accessed via components.X)
         if (componentSpec?.dependencies) {
           for (const dep of componentSpec.dependencies) {
             if (dep.name) {
               componentsFromProp.add(dep.name);
-              // Mark as available since they're auto-destructured
-              availableIdentifiers.add(dep.name);
+              // DO NOT add to availableIdentifiers - components must be destructured first
             }
           }
         }
@@ -5256,6 +5270,92 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
     
     {
+      name: 'component-usage-without-destructuring',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Skip if no dependencies
+        if (!componentSpec?.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+        
+        // Track dependency names
+        const dependencyNames = new Set(componentSpec.dependencies.map(d => d.name).filter(Boolean));
+        
+        // Track what's been destructured from components prop
+        const destructuredComponents = new Set<string>();
+        
+        traverse(ast, {
+          // Track destructuring from components
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              // Check if destructuring from 'components'
+              if (path.node.init.name === 'components') {
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    const name = prop.key.name;
+                    if (dependencyNames.has(name)) {
+                      destructuredComponents.add(name);
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Also check function parameter destructuring
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
+              const param = path.node.params[0];
+              if (t.isObjectPattern(param)) {
+                for (const prop of param.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'components') {
+                    // Check for nested destructuring like { components: { A, B } }
+                    if (t.isObjectPattern(prop.value)) {
+                      for (const innerProp of prop.value.properties) {
+                        if (t.isObjectProperty(innerProp) && t.isIdentifier(innerProp.key)) {
+                          const name = innerProp.key.name;
+                          if (dependencyNames.has(name)) {
+                            destructuredComponents.add(name);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          // Check JSX usage
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            
+            // Check for direct component usage (e.g., <ComponentName>)
+            if (t.isJSXIdentifier(openingElement.name)) {
+              const name = openingElement.name.name;
+              
+              // Check if this is one of our dependencies being used directly
+              if (dependencyNames.has(name) && !destructuredComponents.has(name)) {
+                violations.push({
+                  rule: 'component-usage-without-destructuring',
+                  severity: 'critical',
+                  line: openingElement.loc?.start.line || 0,
+                  column: openingElement.loc?.start.column || 0,
+                  message: `Component "${name}" used without destructuring. Either destructure it from components prop (const { ${name} } = components;) or use <components.${name} />`,
+                  code: `<${name}>`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'prefer-jsx-syntax',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string) => {
@@ -6463,6 +6563,33 @@ const handleSelect = (id) => {
 // Then in your component:
 const { ModelTreeView, PromptTable, FilterPanel } = components;
 // All these will be available`
+          });
+          break;
+          
+        case 'component-usage-without-destructuring':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Components must be properly accessed - either destructure from components prop or use dot notation',
+            example: `// ❌ WRONG - Using component without destructuring:
+function MyComponent({ components }) {
+  return <AccountList />; // Error: AccountList not destructured
+}
+
+// ✅ CORRECT - Option 1: Destructure from components
+function MyComponent({ components }) {
+  const { AccountList } = components;
+  return <AccountList />;
+}
+
+// ✅ CORRECT - Option 2: Use dot notation
+function MyComponent({ components }) {
+  return <components.AccountList />;
+}
+
+// ✅ CORRECT - Option 3: Destructure in function parameters
+function MyComponent({ components: { AccountList } }) {
+  return <AccountList />;
+}`
           });
           break;
           

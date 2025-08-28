@@ -13,7 +13,7 @@ import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@m
  */
 export interface CompiledComponent {
   /** Factory function that creates a ComponentObject when called with context */
-  factory: (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject;
+  factory: (context: RuntimeContext, styles?: ComponentStyles, components?: Record<string, any>) => ComponentObject;
   /** Unique identifier for the component */
   id: string;
   /** Original component name */
