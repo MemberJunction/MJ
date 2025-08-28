@@ -160,8 +160,9 @@ export class ComponentRunner {
 
       // Always load runtime libraries after setting content
       // This ensures they persist in the current page context
-      // allLibraries is loaded above from ComponentMetadataEngine
-      await this.loadRuntimeLibraries(page, options.componentSpec, allLibraries, debug);
+      // NOTE: We only load core React/Babel here. Component-specific libraries
+      // are loaded by the runtime's ComponentCompiler with proper dependency resolution
+      await this.loadRuntimeLibraries(page, debug);
       
       // Verify the runtime is actually loaded
       const runtimeCheck = await page.evaluate(() => {
@@ -233,45 +234,35 @@ export class ComponentRunner {
           if (debug) {
             console.log('🚀 Starting component execution with real runtime');
             console.log('Available runtime classes:', Object.keys(MJRuntime));
+            
+            // Check if LibraryLoader and LibraryRegistry are available
+            if (MJRuntime.LibraryLoader) {
+              console.log('✅ LibraryLoader is available in MJRuntime');
+            } else {
+              console.log('❌ LibraryLoader is NOT available in MJRuntime');
+            }
+            if (MJRuntime.LibraryRegistry) {
+              console.log('✅ LibraryRegistry is available in MJRuntime');
+            } else {
+              console.log('❌ LibraryRegistry is NOT available in MJRuntime');
+            }
           }
 
           // Initialize LibraryRegistry if needed
           // Note: In test environment, we may not have full database access
           // so libraries are handled by the runtime internally
 
-          // Build libraries object from loaded libraries
-          const loadedLibraries: Record<string, any> = {};
-          if (spec.libraries && componentLibraries) {
-            for (const specLib of spec.libraries) {
-              // Find the library definition
-              const libDef = componentLibraries.find(l => 
-                l.Name.toLowerCase() === specLib.name.toLowerCase()
-              );
-              
-              if (libDef && libDef.GlobalVariable) {
-                // Check if the library is available as a global
-                const libraryValue = (window as any)[libDef.GlobalVariable];
-                if (libraryValue) {
-                  loadedLibraries[libDef.GlobalVariable] = libraryValue;
-                  if (debug) {
-                    console.log(`📦 Added ${libDef.Name} to runtime context as ${libDef.GlobalVariable}`);
-                  }
-                } else {
-                  console.warn(`⚠️ Library ${libDef.Name} global variable ${libDef.GlobalVariable} not found on window`);
-                }
-              }
-            }
-          }
-
-          // Create runtime context with loaded libraries
+          // Create runtime context
+          // Note: Component libraries are loaded by the ComponentCompiler itself
+          // via loadRequiredLibraries, so we don't need to pass them here
           const runtimeContext = {
             React: (window as any).React,
             ReactDOM: (window as any).ReactDOM,
-            libraries: loadedLibraries
+            libraries: {} // Libraries are loaded internally by the compiler
           };
 
-          // Create instances
-          const compiler = new ComponentCompiler();
+          // Create instances with debug mode to see library loading
+          const compiler = new ComponentCompiler({ debug: debug });
           compiler.setBabelInstance((window as any).Babel);
           
           // IMPORTANT: Configure the LibraryRegistry in the browser context
@@ -400,18 +391,8 @@ export class ComponentRunner {
             components[name] = (componentObj as any).component;
           }
           
-          // Add all loaded library exports to the components object
-          // This allows generated code to use components.PieChart, components.ResponsiveContainer, etc.
-          // for libraries that export components (like Recharts)
-          for (const [globalVar, libraryValue] of Object.entries(loadedLibraries)) {
-            if (typeof libraryValue === 'object' && libraryValue !== null) {
-              // If the library exports an object with multiple components, spread them
-              Object.assign(components, libraryValue);
-              if (debug) {
-                console.log(`📦 Added ${globalVar} exports to components object`);
-              }
-            }
-          }
+          // Note: Library components are now handled by the runtime's compiler
+          // which loads them into the appropriate context/closure
 
           // Render the component
           const rootElement = document.getElementById('root');
@@ -721,9 +702,10 @@ export class ComponentRunner {
   }
 
   /**
-   * Load runtime libraries into the page
+   * Load core runtime libraries into the page (React, ReactDOM, Babel, MJRuntime)
+   * Component-specific libraries are loaded by the runtime's ComponentCompiler
    */
-  private async loadRuntimeLibraries(page: any, componentSpec?: ComponentSpec, allLibraries?: ComponentLibraryEntity[], debug: boolean = false) {
+  private async loadRuntimeLibraries(page: any, debug: boolean = false) {
     // Helper function to load scripts with timeout (Recommendation #3)
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
       try {
@@ -776,15 +758,15 @@ export class ComponentRunner {
       };
     });
 
-    // All libraries loaded successfully
-
+    // All core libraries loaded successfully
     if (!loaded.React || !loaded.ReactDOM || !loaded.Babel || !loaded.MJRuntime) {
-      throw new Error('Failed to load required libraries');
+      throw new Error('Failed to load required core libraries');
     }
-
-    // Load component-specific libraries from CDN
-    if (componentSpec?.libraries && allLibraries) {
-      await this.loadComponentLibraries(page, componentSpec.libraries, allLibraries, debug);
+    
+    // Component-specific libraries are now loaded by the runtime's ComponentCompiler
+    // which properly handles dependency resolution (e.g., dayjs for antd)
+    if (debug) {
+      console.log('✅ Core runtime libraries loaded. Component libraries will be loaded by the runtime.');
     }
   }
 
@@ -799,9 +781,12 @@ export class ComponentRunner {
   ): Promise<void> {
     
     if (debug) {
-      console.log('📚 Loading component libraries:', {
-        count: specLibraries.length,
-        libraries: specLibraries.map(l => l.name)
+      console.log('📚 Loading component libraries:');
+      console.log('  🔍 Component requires libraries:', specLibraries.map(l => l.name));
+      console.log('  📦 Total available ComponentLibrary entries:', allLibraries.length);
+      console.log('  📋 Sample of available libraries (first 10):');
+      allLibraries.slice(0, 10).forEach(lib => {
+        console.log(`    - ${lib.Name}@${lib.Version} (${lib.Status})`);
       });
     }
 
@@ -823,7 +808,8 @@ export class ComponentRunner {
       if (debug) {
         console.log(`📦 Loading ${specLib.name}:`, {
           cdnUrl: libDef.CDNUrl,
-          globalVariable: libDef.GlobalVariable
+          globalVariable: libDef.GlobalVariable,
+          dependencies: libDef.Dependencies ? JSON.parse(libDef.Dependencies) : null
         });
       }
 

@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" >
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,16 +16,27 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Activities" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '0B0F90DE-CE31-4312-BF7F-97C4252E06CA'}">
-                        Activities
+                    <mj-tab Name="Invoices" [Visible]="record.IsSaved"> 
+                        Invoices
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
-                            [NewRecordValues]="NewRecordValues('Activities')"
-                            [AllowLoad]="IsCurrentTab('Activities')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Invoices','DealID')"  
+                            [NewRecordValues]="NewRecordValues('Invoices')"
+                            [AllowLoad]="IsCurrentTab('Invoices')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Deal Products" [Visible]="record.IsSaved"> 
+                        Deal Products
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Deal Products','DealID')"  
+                            [NewRecordValues]="NewRecordValues('Deal Products')"
+                            [AllowLoad]="IsCurrentTab('Deal Products')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

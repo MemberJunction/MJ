@@ -171,15 +171,16 @@ export type ComponentExample = {
     name: string;
     namespace: string;
     version?: string;
-    description: string;
-    functionalRequirements: string;
-    technicalDesign: string;
+    registry?: string;
+    description?: string;
+    functionalRequirements?: string;
+    technicalDesign?: string;
 
     /**
      * Tracks a 0-1 number that indicates the relevance of this example to the containing ComponentSpec, can be used
      * for ranking examples by importance/relevance
      */
-    relevance: number;
+    relevance?: number;
 
     code?: string;
 

@@ -198,6 +198,11 @@ export class ComponentHierarchyRegistrar {
       }
 
       // Call the factory to create the ComponentObject
+      console.log(`🏭 Calling factory for ${spec.name} with runtime context:`, {
+        hasReact: !!this.runtimeContext.React,
+        hasReactDOM: !!this.runtimeContext.ReactDOM,
+        libraryKeys: Object.keys(this.runtimeContext.libraries || {})
+      });
       const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
       // Register the full ComponentObject (not just the React component)

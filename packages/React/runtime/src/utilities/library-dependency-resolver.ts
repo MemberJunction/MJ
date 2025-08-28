@@ -421,16 +421,19 @@ export class LibraryDependencyResolver {
     const warnings: string[] = [];
 
     if (this.debug || options?.debug) {
-      console.log('🔍 Getting load order for:', requestedLibs);
+      console.log('🔍 Getting load order for requested libraries:');
+      console.log('  📝 Requested:', requestedLibs);
+      console.log('  📚 Total available libraries:', allLibs.length);
     }
 
-    // Build a map for quick lookup
+    // Build a map for quick lookup (case-insensitive)
     const libMap = new Map<string, ComponentLibraryEntity[]>();
     for (const lib of allLibs) {
-      if (!libMap.has(lib.Name)) {
-        libMap.set(lib.Name, []);
+      const key = lib.Name.toLowerCase();
+      if (!libMap.has(key)) {
+        libMap.set(key, []);
       }
-      libMap.get(lib.Name)!.push(lib);
+      libMap.get(key)!.push(lib);
     }
 
     // Collect all libraries needed (requested + their dependencies)
@@ -448,9 +451,12 @@ export class LibraryDependencyResolver {
       processed.add(current);
       needed.add(current);
 
-      // Find the library
-      const libVersions = libMap.get(current);
+      // Find the library (case-insensitive lookup)
+      const libVersions = libMap.get(current.toLowerCase());
       if (!libVersions || libVersions.length === 0) {
+        if (this.debug || options?.debug) {
+          console.log(`    ❌ Library '${current}' not found in available libraries`);
+        }
         errors.push(`Library '${current}' not found`);
         continue;
       }
@@ -458,6 +464,10 @@ export class LibraryDependencyResolver {
       // For now, use the first version found (should be resolved properly)
       const lib = libVersions[0];
       const deps = this.parseDependencies(lib.Dependencies);
+      
+      if ((this.debug || options?.debug) && deps.size > 0) {
+        console.log(`    📌 ${current} requires:`, Array.from(deps.entries()));
+      }
 
       // Process dependencies
       for (const [depName, depVersion] of deps) {
@@ -489,7 +499,7 @@ export class LibraryDependencyResolver {
     const resolvedLibraries: ComponentLibraryEntity[] = [];
     for (const libName of needed) {
       const requirements = versionRequirements.get(libName) || [];
-      const versions = libMap.get(libName) || [];
+      const versions = libMap.get(libName.toLowerCase()) || [];
       
       if (versions.length === 0) {
         errors.push(`Library '${libName}' not found`);
@@ -573,10 +583,10 @@ export class LibraryDependencyResolver {
     const processed = new Set<string>();
     let depth = 0;
 
-    // Build lookup map
+    // Build lookup map (case-insensitive)
     const libMap = new Map<string, ComponentLibraryEntity>();
     for (const lib of allLibs) {
-      libMap.set(lib.Name, lib);
+      libMap.set(lib.Name.toLowerCase(), lib);
     }
 
     while (toProcess.length > 0 && depth < maxDepth) {
@@ -584,7 +594,7 @@ export class LibraryDependencyResolver {
       if (processed.has(current)) continue;
 
       processed.add(current);
-      const lib = libMap.get(current);
+      const lib = libMap.get(current.toLowerCase());
       if (!lib) continue;
 
       const deps = this.parseDependencies(lib.Dependencies);

@@ -528,6 +528,8 @@ export class LibraryLoader {
     
     if (debug) {
       console.log(`📚 Loading libraries with dependencies:`, libraryNames);
+      console.log(`  📦 Total available libraries: ${allLibraries.length}`);
+      console.log(`  📋 Available library list:`, allLibraries.map(l => `${l.Name}@${l.Version}`));
     }
 
     // Get combined load order for all requested libraries
@@ -542,13 +544,33 @@ export class LibraryLoader {
       throw new Error(`Failed to resolve dependencies: ${errors}`);
     }
 
+    if (debug) {
+      console.log(`  📊 Dependency resolution result:`, {
+        success: loadOrderResult.success,
+        errors: loadOrderResult.errors || [],
+        warnings: loadOrderResult.warnings || []
+      });
+      
+      if (loadOrderResult.order) {
+        console.log(`  🔄 Resolved dependencies for each library:`);
+        loadOrderResult.order.forEach(lib => {
+          const deps = this.dependencyResolver.parseDependencies(lib.Dependencies);
+          if (deps.size > 0) {
+            console.log(`    • ${lib.Name}@${lib.Version} requires:`, Array.from(deps.entries()));
+          } else {
+            console.log(`    • ${lib.Name}@${lib.Version} (no dependencies)`);
+          }
+        });
+      }
+    }
+
     if (loadOrderResult.warnings && debug) {
-      console.warn(`⚠️ Warnings:`, loadOrderResult.warnings);
+      console.warn(`  ⚠️ Warnings:`, loadOrderResult.warnings);
     }
 
     const loadOrder = loadOrderResult.order || [];
     if (debug) {
-      console.log(`📋 Combined load order:`, loadOrder.map(lib => `${lib.Name}@${lib.Version}`));
+      console.log(`  📋 Final load order:`, loadOrder.map(lib => `${lib.Name}@${lib.Version}`));
     }
 
     // Load all libraries in order

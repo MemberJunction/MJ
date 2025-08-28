@@ -16,19 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Contact Relationships" [Visible]="record.IsSaved"> 
-                        Contact Relationships
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','PrimaryContactID')"  
-                            [NewRecordValues]="NewRecordValues('Contact Relationships')"
-                            [AllowLoad]="IsCurrentTab('Contact Relationships')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Activities" [Visible]="record.IsSaved"> 
                         Activities
                     </mj-tab>
@@ -37,6 +24,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Activities','ContactID')"  
                             [NewRecordValues]="NewRecordValues('Activities')"
                             [AllowLoad]="IsCurrentTab('Activities')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Contact Relationships" [Visible]="record.IsSaved"> 
+                        Contact Relationships
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','RelatedContactID')"  
+                            [NewRecordValues]="NewRecordValues('Contact Relationships')"
+                            [AllowLoad]="IsCurrentTab('Contact Relationships')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -55,14 +55,40 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Deals" [Visible]="record.IsSaved"> 
+                        Deals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Deals','ContactID')"  
+                            [NewRecordValues]="NewRecordValues('Deals')"
+                            [AllowLoad]="IsCurrentTab('Deals')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Contact Relationships" [Visible]="record.IsSaved"> 
                         Contact Relationships
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','RelatedContactID')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Contact Relationships','PrimaryContactID')"  
                             [NewRecordValues]="NewRecordValues('Contact Relationships')"
                             [AllowLoad]="IsCurrentTab('Contact Relationships')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Deals" [Visible]="record.IsSaved"> 
+                        Deals
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Deals','OwnerID')"  
+                            [NewRecordValues]="NewRecordValues('Deals')"
+                            [AllowLoad]="IsCurrentTab('Deals')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
