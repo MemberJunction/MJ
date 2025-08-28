@@ -142,6 +142,12 @@ export class ComponentResolver {
     // Create a unique identifier for this component
     const componentId = `${spec.namespace || namespace}/${spec.name}@${spec.version || 'latest'}`;
     
+    // Check if already resolved (not just visited)
+    if (resolved[spec.name]) {
+      console.log(`⏭️ [ComponentResolver] Component already resolved: ${spec.name}`);
+      return;
+    }
+    
     // Prevent circular dependencies
     if (visited.has(componentId)) {
       if (this.debug) {
@@ -151,6 +157,18 @@ export class ComponentResolver {
     }
     visited.add(componentId);
 
+    // *** CRITICAL: Process child components FIRST (depth-first, post-order) ***
+    console.log(`🔄 [ComponentResolver] Resolving dependencies for ${spec.name} BEFORE resolving itself`);
+    const children = spec.dependencies || [];
+    for (const child of children) {
+      console.log(`  ↳ [ComponentResolver] Resolving dependency: ${child.name} for parent ${spec.name}`);
+      await this.resolveComponentHierarchy(child, resolved, namespace, visited, contextUser);
+    }
+    if (children.length > 0) {
+      console.log(`✅ [ComponentResolver] All ${children.length} dependencies resolved for ${spec.name}, now resolving itself`);
+    }
+
+    // NOW resolve the current component (it can access its dependencies)
     // Handle based on location
     if (spec.location === 'registry' && this.registryService) {
       // Registry component - need to load from database or external source
@@ -201,7 +219,7 @@ export class ComponentResolver {
             console.log(`📦 Resolved registry component: ${spec.name} from ${componentId}`);
           }
         } else {
-          console.error(`❌ [ComponentResolver] Registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace}`);
+          console.error(`❌❌❌❌❌ [ComponentResolver] Registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace} ❌❌❌❌`);
           if (this.debug) {
             console.warn(`Registry component not found in database: ${spec.name}`);
           }
@@ -243,12 +261,9 @@ export class ComponentResolver {
         }
       }
     }
-
-    // Process child components recursively
-    const children = spec.dependencies || [];
-    for (const child of children) {
-      await this.resolveComponentHierarchy(child, resolved, namespace, visited, contextUser);
-    }
+    
+    // Child components have already been processed at the beginning of this method
+    // No need to process them again - we're using depth-first, post-order traversal
   }
 
   /**
