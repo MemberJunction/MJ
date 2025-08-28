@@ -172,11 +172,15 @@ export class ComponentCompiler {
    * @param dependencies - Optional child component dependencies
    * @returns Wrapped component code
    */
+  // Core libraries that are passed as parameters to createComponent and should not be destructured
+  private readonly CORE_LIBRARIES = new Set(['React', 'ReactDOM']);
+
   private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[], dependencies?: Array<{ name: string }>): string {
     // Generate library declarations if libraries are provided
+    // Skip core libraries as they're passed as parameters to createComponent
     const libraryDeclarations = libraries && libraries.length > 0
       ? libraries
-          .filter(lib => lib.globalVariable) // Only include libraries with globalVariable
+          .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
           .map(lib => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
           .join('\n        ')
       : '';

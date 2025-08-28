@@ -2901,6 +2901,105 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
     
     {
+      name: 'missing-data-transformation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track query results and their usage
+        const queryResultVars = new Map<string, string>(); // varName -> queryName
+        const componentPropsUsage = new Map<string, { componentName: string, propName: string, line: number }[]>();
+        
+        traverse(ast, {
+          // Track query result assignments
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isIdentifier(path.node.id) && t.isCallExpression(path.node.init)) {
+              const call = path.node.init;
+              // Check for RunQuery calls
+              if (t.isMemberExpression(call.callee) && 
+                  t.isMemberExpression(call.callee.object) &&
+                  t.isIdentifier(call.callee.property) && 
+                  call.callee.property.name === 'RunQuery') {
+                
+                // Get the query name from the first argument
+                if (t.isObjectExpression(call.arguments[0])) {
+                  const queryNameProp = call.arguments[0].properties.find(
+                    prop => t.isObjectProperty(prop) && 
+                           t.isIdentifier(prop.key) && 
+                           prop.key.name === 'QueryName'
+                  ) as t.ObjectProperty | undefined;
+                  
+                  if (queryNameProp && t.isStringLiteral(queryNameProp.value)) {
+                    queryResultVars.set(path.node.id.name, queryNameProp.value.value);
+                  }
+                }
+              }
+            }
+          },
+          
+          // Track when setState is called with raw query results  
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (t.isIdentifier(path.node.callee)) {
+              const calleeName = path.node.callee.name;
+              // Check for setState calls with raw data
+              if (calleeName.startsWith('set') && path.node.arguments[0]) {
+                const arg = path.node.arguments[0];
+                if (t.isIdentifier(arg) && queryResultVars.has(arg.name)) {
+                  // Track this raw usage
+                  const stateName = calleeName.substring(3);
+                  const lowerStateName = stateName.charAt(0).toLowerCase() + stateName.slice(1);
+                  if (!componentPropsUsage.has(lowerStateName)) {
+                    componentPropsUsage.set(lowerStateName, []);
+                  }
+                }
+              }
+            }
+          },
+          
+          // Track component prop usage
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            if (t.isJSXIdentifier(openingElement.name)) {
+              const componentName = openingElement.name.name;
+              
+              // Only check components that look like registry components (e.g., AccountsByIndustryChart)
+              if (/^[A-Z]/.test(componentName) && componentName.includes('Chart')) {
+                // Check attributes
+                openingElement.attributes?.forEach(attr => {
+                  if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                    const propName = attr.name.name;
+                    
+                    // Check if this prop is passed raw query data
+                    if (t.isJSXExpressionContainer(attr.value) && t.isIdentifier(attr.value.expression)) {
+                      const varName = attr.value.expression.name;
+                      
+                      // Special check for chart components expecting structured data
+                      if (propName === 'data' || propName === 'industryData') {
+                        // Check if it's raw query data
+                        if (queryResultVars.has(varName) || varName.endsWith('Data')) {
+                          violations.push({
+                            rule: 'missing-data-transformation',
+                            severity: 'critical',
+                            line: attr.loc?.start.line || 0,
+                            column: attr.loc?.start.column || 0,
+                            message: `Component "${componentName}" receives raw query data for prop "${propName}". Chart components typically expect transformed data with labels, values, and percentages. Transform the query result before passing it as a prop.\n\nExample transformation:\nconst chartData = {\n  labels: rawData.map(item => item.Industry),\n  data: rawData.map(item => item.AccountCount),\n  percentages: rawData.map(item => (item.AccountCount / total * 100).toFixed(1)),\n  total: rawData.reduce((sum, item) => sum + item.AccountCount, 0)\n};`,
+                            code: `<${componentName} ${propName}={${varName}} />`
+                          });
+                        }
+                      }
+                    }
+                  }
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'component-props-validation',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -4974,6 +5073,353 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               });
             }
           }
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'unused-libraries',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Skip if no libraries declared
+        if (!componentSpec?.libraries || componentSpec.libraries.length === 0) {
+          return violations;
+        }
+        
+        // Get the function body to search within
+        let functionBody: string = '';
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName) {
+              functionBody = path.toString();
+            }
+          }
+        });
+        
+        // If we couldn't find the function body, use the whole code
+        if (!functionBody) {
+          functionBody = ast.toString ? ast.toString() : '';
+        }
+        
+        // Track which libraries are used and unused
+        const unusedLibraries: Array<{name: string, globalVariable: string}> = [];
+        const usedLibraries: Array<{name: string, globalVariable: string}> = [];
+        
+        // Check each library for usage
+        for (const lib of componentSpec.libraries) {
+          const globalVar = lib.globalVariable;
+          if (!globalVar) continue;
+          
+          // Check for various usage patterns
+          const usagePatterns = [
+            globalVar + '.',           // Direct property access: Chart.defaults
+            globalVar + '(',           // Direct call: dayjs()
+            'new ' + globalVar + '(',  // Constructor: new Chart()
+            globalVar + '[',           // Array/property access: XLSX['utils']
+            '= ' + globalVar,          // Assignment: const myChart = Chart
+            ', ' + globalVar,          // In parameter list
+            '(' + globalVar,           // Start of expression
+            '{' + globalVar,           // In object literal
+            '<' + globalVar,           // JSX component
+            globalVar + ' ',           // Followed by space (various uses)
+          ];
+          
+          const isUsed = usagePatterns.some(pattern => functionBody.includes(pattern));
+          
+          if (isUsed) {
+            usedLibraries.push({ name: lib.name, globalVariable: globalVar });
+          } else {
+            unusedLibraries.push({ name: lib.name, globalVariable: globalVar });
+          }
+        }
+        
+        // Determine severity based on usage patterns
+        const totalLibraries = componentSpec.libraries.length;
+        const usedCount = usedLibraries.length;
+        
+        if (usedCount === 0 && totalLibraries > 0) {
+          // CRITICAL: No libraries used at all
+          violations.push({
+            rule: 'unused-libraries',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `CRITICAL: None of the ${totalLibraries} declared libraries are used. This indicates missing core functionality.`,
+            code: `Unused libraries: ${unusedLibraries.map(l => l.name).join(', ')}`
+          });
+        } else if (unusedLibraries.length > 0) {
+          // Some libraries unused, severity depends on ratio
+          for (const lib of unusedLibraries) {
+            const severity = totalLibraries === 1 ? 'high' : 'low';
+            const contextMessage = totalLibraries === 1 
+              ? 'This is the only declared library and it\'s not being used.'
+              : `${usedCount} of ${totalLibraries} libraries are being used. This might be an alternative/optional library.`;
+            
+            violations.push({
+              rule: 'unused-libraries',
+              severity: severity,
+              line: 1,
+              column: 0,
+              message: `Library "${lib.name}" (${lib.globalVariable}) is declared but not used. ${contextMessage}`,
+              code: `Consider removing if not needed: { name: "${lib.name}", globalVariable: "${lib.globalVariable}" }`
+            });
+          }
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'unused-component-dependencies',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Skip if no dependencies declared
+        if (!componentSpec?.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+        
+        // Filter to only embedded components
+        const embeddedDeps = componentSpec.dependencies.filter(dep => 
+          dep.location === 'embedded' && dep.name
+        );
+        
+        if (embeddedDeps.length === 0) {
+          return violations;
+        }
+        
+        // Get the function body to search within
+        let functionBody: string = '';
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            if (path.node.id && path.node.id.name === componentName) {
+              functionBody = path.toString();
+            }
+          }
+        });
+        
+        // If we couldn't find the function body, use the whole code
+        if (!functionBody) {
+          functionBody = ast.toString ? ast.toString() : '';
+        }
+        
+        // Check each component dependency for usage
+        for (const dep of embeddedDeps) {
+          const depName = dep.name!;
+          
+          // Check for various usage patterns
+          // Components can be used directly (if destructured) or via components object
+          const usagePatterns = [
+            // Direct usage (after destructuring)
+            '<' + depName + ' ',                    // JSX: <AccountList />
+            '<' + depName + '>',                    // JSX: <AccountList>
+            '<' + depName + '/',                    // JSX self-closing: <AccountList/>
+            depName + '(',                          // Direct call: AccountList()
+            '= ' + depName,                         // Assignment: const List = AccountList
+            depName + ' ||',                        // Fallback: AccountList || DefaultComponent
+            depName + ' &&',                        // Conditional: AccountList && ...
+            depName + ' ?',                         // Ternary: AccountList ? ... : ...
+            ', ' + depName,                         // In parameter/array list
+            '(' + depName,                          // Start of expression
+            '{' + depName,                          // In object literal
+            
+            // Via components object
+            'components.' + depName,                // Dot notation: components.AccountList
+            "components['" + depName + "']",        // Bracket notation single quotes
+            'components["' + depName + '"]',        // Bracket notation double quotes
+            'components[`' + depName + '`]',        // Bracket notation template literal
+            '<components.' + depName,               // JSX via components: <components.AccountList
+          ];
+          
+          const isUsed = usagePatterns.some(pattern => functionBody.includes(pattern));
+          
+          if (!isUsed) {
+            violations.push({
+              rule: 'unused-component-dependencies',
+              severity: 'high',
+              line: 1,
+              column: 0,
+              message: `Component dependency "${depName}" is declared but never used. This likely means missing functionality.`,
+              code: `Expected usage: <${depName} /> or <components.${depName} />`
+            });
+          }
+        }
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'prefer-jsx-syntax',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for React.createElement
+            if (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) && 
+                callee.object.name === 'React' &&
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'createElement') {
+              
+              violations.push({
+                rule: 'prefer-jsx-syntax',
+                severity: 'low',
+                line: callee.loc?.start.line || 0,
+                column: callee.loc?.start.column || 0,
+                message: 'Prefer JSX syntax over React.createElement for better readability',
+                code: 'React.createElement(...) → <ComponentName ... />'
+              });
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'prefer-async-await',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for .then() chains
+            if (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'then') {
+              
+              // Try to get the context of what's being chained
+              let context = '';
+              if (t.isMemberExpression(callee.object)) {
+                context = ' Consider using async/await for cleaner code.';
+              }
+              
+              violations.push({
+                rule: 'prefer-async-await',
+                severity: 'low',
+                line: callee.property.loc?.start.line || 0,
+                column: callee.property.loc?.start.column || 0,
+                message: `Prefer async/await over .then() chains for better readability.${context}`,
+                code: '.then(result => ...) → const result = await ...'
+              });
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'single-function-only',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string) => {
+        const violations: Violation[] = [];
+        
+        // Count all function declarations and expressions at the top level
+        const functionDeclarations: Array<{name: string, line: number, column: number}> = [];
+        const functionExpressions: Array<{name: string, line: number, column: number}> = [];
+        
+        traverse(ast, {
+          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+            // Only check top-level functions (not nested inside other functions)
+            const parent = path.getFunctionParent();
+            if (!parent) {
+              const funcName = path.node.id?.name || 'anonymous';
+              functionDeclarations.push({
+                name: funcName,
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0
+              });
+            }
+          },
+          VariableDeclaration(path: NodePath<t.VariableDeclaration>) {
+            // Check for const/let/var func = function() or arrow functions at top level
+            const parent = path.getFunctionParent();
+            if (!parent) {
+              for (const declarator of path.node.declarations) {
+                if (t.isVariableDeclarator(declarator) && 
+                    (t.isFunctionExpression(declarator.init) || 
+                     t.isArrowFunctionExpression(declarator.init))) {
+                  const funcName = t.isIdentifier(declarator.id) ? declarator.id.name : 'anonymous';
+                  functionExpressions.push({
+                    name: funcName,
+                    line: declarator.loc?.start.line || 0,
+                    column: declarator.loc?.start.column || 0
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        const allFunctions = [...functionDeclarations, ...functionExpressions];
+        
+        // Check if we have more than one function
+        if (allFunctions.length > 1) {
+          // Find which one is the main component
+          const mainComponentIndex = allFunctions.findIndex(f => f.name === componentName);
+          const otherFunctions = allFunctions.filter((_, index) => index !== mainComponentIndex);
+          
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: otherFunctions[0].line,
+            column: otherFunctions[0].column,
+            message: `Component code must contain ONLY the main component function "${componentName}". Found ${allFunctions.length} functions: ${allFunctions.map(f => f.name).join(', ')}. Move other functions to separate component dependencies.`,
+            code: `Remove functions: ${otherFunctions.map(f => f.name).join(', ')}`
+          });
+          
+          // Add a violation for each extra function
+          for (const func of otherFunctions) {
+            violations.push({
+              rule: 'single-function-only',
+              severity: 'critical',
+              line: func.line,
+              column: func.column,
+              message: `Extra function "${func.name}" not allowed. Each component must be a single function. Move this to a separate component dependency.`,
+              code: `function ${func.name} should be a separate component`
+            });
+          }
+        }
+        
+        // Also check that the single function matches the component name
+        if (allFunctions.length === 1 && allFunctions[0].name !== componentName) {
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: allFunctions[0].line,
+            column: allFunctions[0].column,
+            message: `Component function name "${allFunctions[0].name}" does not match component name "${componentName}". The function must be named exactly as specified.`,
+            code: `Rename function to: function ${componentName}(...)`
+          });
+        }
+        
+        // Check for no function at all
+        if (allFunctions.length === 0) {
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `Component code must contain exactly one function named "${componentName}". No functions found.`,
+            code: `Add: function ${componentName}({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) { ... }`
+          });
         }
         
         return violations;
