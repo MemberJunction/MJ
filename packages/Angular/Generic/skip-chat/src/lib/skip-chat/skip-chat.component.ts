@@ -189,6 +189,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   private static __skipChatWindowsCurrentlyVisible: number = 0;
   private sub?: Subscription;
   
+  // Per-conversation status message tracking
+  private _statusMessagesByConversation: { [conversationId: string]: { message: string; startTime?: Date } } = {};
+  private _temporaryMessagesByConversation: { [conversationId: string]: ConversationDetailEntity } = {};
+  
   /**
    * Currently selected artifact for viewing in the split panel
    */
@@ -339,21 +343,39 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
                    message?: string } = statusObj;
       if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
         if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
+          // Cache the status message for this conversation regardless of whether it's selected
+          if (obj.message && obj.message.length > 0) {
+            // Keep the original start time if it exists, otherwise use now
+            const existingStatus = this._statusMessagesByConversation[obj.conversationID];
+            this._statusMessagesByConversation[obj.conversationID] = {
+              message: obj.message,
+              startTime: existingStatus?.startTime || new Date()
+            };
+            console.log(`[DEBUG] Cached status for conversation ${obj.conversationID}:`, this._statusMessagesByConversation[obj.conversationID]);
+            this.LogVerbose(`Skip Chat: Cached status message for conversation ${obj.conversationID}: ${obj.message}`);
+          }
+          
+          // If this is the currently selected conversation, update the display
           if (obj.conversationID === this.SelectedConversation?.ID) {
             if (obj.message && obj.message.length > 0) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
-              this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
-              this.SetSkipStatusMessage(obj.message, 0);
+              console.log(`[DEBUG] Updating display for selected conversation ${obj.conversationID} with message: ${obj.message}`);
+              this.LogVerbose(`Skip Chat: Displaying Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
+              // Use the cached start time to preserve the timer
+              const cachedStatus = this._statusMessagesByConversation[obj.conversationID];
+              this.SetSkipStatusMessage(obj.message, 0, cachedStatus?.startTime);
             }
             else {
               this.LogVerbose(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
             }
           }
           else {
-            this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
+            console.log(`[DEBUG] Received status for non-selected conversation ${obj.conversationID} - cached for later`);
+            this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation - cached for later`);
           }
         }
         else {
+          console.log(`[DEBUG] Received status for conversation ${obj.conversationID} but it's not in progress. In progress:`, this._conversationsInProgress);
           this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
         }
       }
@@ -404,12 +426,34 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   protected InnerSetSkipStatusMessage(message: string, startTime?: Date) {
+    const conversationId = this.SelectedConversation?.ID;
+    console.log(`[DEBUG] InnerSetSkipStatusMessage called for conversation ${conversationId} with message: "${message}", startTime:`, startTime);
+    
     if (message && message.length > 0) {
+      // Store the status message for the current conversation
+      if (conversationId) {
+        // Preserve existing start time if we have one
+        const existingStatus = this._statusMessagesByConversation[conversationId];
+        this._statusMessagesByConversation[conversationId] = {
+          message,
+          startTime: startTime || existingStatus?.startTime || new Date()
+        };
+        console.log(`[DEBUG] Stored status for conversation ${conversationId}:`, this._statusMessagesByConversation[conversationId]);
+      }
+      
       if (!this._temporaryMessage) {
-        this._temporaryMessage = <ConversationDetailEntity>(<any>{ ID: -1, Message: message, Role: 'ai', __mj_CreatedAt: startTime }); // create a new object
+        const actualStartTime = startTime || (conversationId ? this._statusMessagesByConversation[conversationId]?.startTime : undefined) || new Date();
+        this._temporaryMessage = <ConversationDetailEntity>(<any>{ ID: -1, Message: message, Role: 'ai', __mj_CreatedAt: actualStartTime }); // create a new object
+        console.log(`[DEBUG] Created new temporary message with startTime:`, actualStartTime);
         this.AddMessageToCurrentConversation(this._temporaryMessage, true, false);
+        
+        // Store the temporary message for this conversation
+        if (conversationId) {
+          this._temporaryMessagesByConversation[conversationId] = this._temporaryMessage;
+        }
       } else {
         this._temporaryMessage.Message = message;
+        console.log(`[DEBUG] Updated existing temporary message`);
         // we need to send a refresh signal to the component linked to this detail record
         const ref = (<any>this._temporaryMessage)._componentRef;
         if (ref) {
@@ -421,11 +465,24 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       this._AskSkipTextboxPlaceholder = this.ProcessingTextBoxPlaceholder;
     } 
     else {
+      console.log(`[DEBUG] Clearing temporary message for conversation ${conversationId}`);
       if (this._temporaryMessage) {
         // get rid of the temporary message
         this.RemoveMessageFromCurrentConversation(this._temporaryMessage);
         this._temporaryMessage = undefined;
+        
+        // Clear the cached temporary message for this conversation
+        if (conversationId && this._temporaryMessagesByConversation[conversationId]) {
+          delete this._temporaryMessagesByConversation[conversationId];
+        }
       }
+      
+      // Clear the status message cache when clearing the message
+      if (conversationId && this._statusMessagesByConversation[conversationId]) {
+        console.log(`[DEBUG] Clearing cached status for conversation ${conversationId}`);
+        delete this._statusMessagesByConversation[conversationId];
+      }
+      
       this._AskSkipTextboxPlaceholder = this.DefaultTextboxPlaceholder;
     }
   }
@@ -469,7 +526,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
             if (this.SelectedConversation && this.SelectedConversation.ID === convo.ID) {
               this.setProcessingStatus(convo.ID, true);
               this.startRequestStatusPolling(convo.ID);
-              this.SetSkipStatusMessage("Processing...", 0, convo.__mj_UpdatedAt);
+              
+              // Restore the cached status message if available
+              const cachedStatus = this._statusMessagesByConversation[convo.ID];
+              const statusMessage = cachedStatus?.message || "Processing...";
+              const statusStartTime = cachedStatus?.startTime || convo.__mj_UpdatedAt;
+              
+              this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
             }
 
             this._conversationsInProgress[convo.ID] = true;
@@ -1202,20 +1265,32 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
       this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
       
-      // Check if this conversation is in 'Processing' status and restore the streaming state
-      if (conversation.Status === 'Processing') {
+      // Check if this conversation is actually processing (regardless of DB status)
+      if (conversation.Status === 'Processing' || this._conversationsInProgress[conversation.ID]) {
+        console.log(`[DEBUG] SelectConversation: Conversation ${conversation.ID} is processing (DB Status: ${conversation.Status}, InProgress: ${!!this._conversationsInProgress[conversation.ID]})`);
+        console.log(`[DEBUG] Cached status messages:`, this._statusMessagesByConversation);
+        
         // This conversation is currently being processed
         this.setProcessingStatus(conversation.ID, true);
         this._conversationsInProgress[conversation.ID] = true;
         this._messageInProgress = true;
         this.AllowSend = false;
         
+        // Restore the cached status message if available
+        const cachedStatus = this._statusMessagesByConversation[conversation.ID];
+        const statusMessage = cachedStatus?.message || "Processing...";
+        const statusStartTime = cachedStatus?.startTime || conversation.__mj_UpdatedAt;
+        
+        console.log(`[DEBUG] Restoring status for conversation ${conversation.ID}: message="${statusMessage}", startTime=`, statusStartTime);
+        
         // Create the temporary status message after a brief delay to ensure DOM is ready
         this.setTimeout(() => {
-          this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
+          this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
           // Start polling after the temporary message is created
           this.startRequestStatusPolling(conversation.ID);
         }, 100);
+      } else {
+        console.log(`[DEBUG] SelectConversation: Conversation ${conversation.ID} is NOT processing (Status: ${conversation.Status})`);
       }
       
       InvokeManualResize(500);
@@ -1329,7 +1404,18 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
 
-      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
+      // Store the start time when first creating the status message
+      const startTime = new Date();
+      const statusMessage = this.pickSkipStartMessage();
+      if (convoID) {
+        this._statusMessagesByConversation[convoID] = {
+          message: statusMessage,
+          startTime: startTime
+        };
+        console.log(`[DEBUG] sendPrompt: Initialized status for conversation ${convoID} with message="${statusMessage}", startTime:`, startTime);
+      }
+
+      this.SetSkipStatusMessage(statusMessage, 850, startTime);
       
       // Ensure scroll to bottom after adding user message AND progress message
       this.setTimeout(() => {
@@ -1425,9 +1511,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   public ClearMessages() {
+    console.log(`[DEBUG] ClearMessages called for conversation switch`);
     this.Messages = []; // clear out the messages
     
-    // Clear the temporary message reference
+    // Clear the temporary message reference (but keep the cached ones)
     this._temporaryMessage = undefined;
 
     // Get the first mjContainer in the DOM which is the one we're injecting into
