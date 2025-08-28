@@ -4,7 +4,7 @@
   if (t.isObjectProperty(path.node) && 
       t.isIdentifier(path.node.key) && 
       path.node.key.name === 'annotations') {
-    
+     
     const value = path.node.value;
     if (t.isObjectExpression(value)) {
       // Check for points property

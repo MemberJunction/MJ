@@ -15,7 +15,15 @@ export class ComponentSpec {
     location: "embedded" | "registry";
 
     /**
-     * Only used when location == "registry", a hierarchical namespace such as "crm/analytics/accounts". The combination of the 
+     * Used when location === 'registry' - the unique name of a given registry without the @ sign
+     * for example MJ or Skip would be valid globally unique registry names (as registered with MemberJunction.org)
+     * You would not include @ here. Fully qualified component identifiers would be
+     * @Registry/Namespace/Name/Version but in the context of this field it is just the registry name.
+     */
+    registry?: string;
+
+    /**
+     * Used when location === "registry", a hierarchical namespace such as "crm/analytics/accounts". The combination of the 
      * namespace and name are how a registry component is loaded. Registry components might have
      * a root level segment that starts with @ such as "@memberjunction/examples/entities" or if the root
      * segment doesn't have @ that means the component is local to that registry
@@ -23,7 +31,7 @@ export class ComponentSpec {
     namespace?: string;
 
     /**
-     * Only used when location == "registry", a semantic versioning string such as
+     * Used when location === "registry", a semantic versioning string such as
      * "1.0.0"
      * "^1.0.0"
      * "~1.0.0"
@@ -163,15 +171,16 @@ export type ComponentExample = {
     name: string;
     namespace: string;
     version?: string;
-    description: string;
-    functionalRequirements: string;
-    technicalDesign: string;
+    registry?: string;
+    description?: string;
+    functionalRequirements?: string;
+    technicalDesign?: string;
 
     /**
      * Tracks a 0-1 number that indicates the relevance of this example to the containing ComponentSpec, can be used
      * for ranking examples by importance/relevance
      */
-    relevance: number;
+    relevance?: number;
 
     code?: string;
 

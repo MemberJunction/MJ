@@ -172,62 +172,109 @@ export class ComponentCompiler {
    * @param dependencies - Optional child component dependencies
    * @returns Wrapped component code
    */
+  // Core libraries that are passed as parameters to createComponent and should not be destructured
+  private readonly CORE_LIBRARIES = new Set(['React', 'ReactDOM']);
+
   private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[], dependencies?: Array<{ name: string }>): string {
     // Generate library declarations if libraries are provided
+    // Skip core libraries as they're passed as parameters to createComponent
     const libraryDeclarations = libraries && libraries.length > 0
       ? libraries
-          .filter(lib => lib.globalVariable) // Only include libraries with globalVariable
+          .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
           .map(lib => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
           .join('\n        ')
       : '';
-    
-    // Generate component declarations if dependencies are provided
-    const componentDeclarations = dependencies && dependencies.length > 0
-      ? dependencies
-          .map(dep => `const ${dep.name} = components['${dep.name}'];`)
+    const libraryLogChecks = libraries && libraries.length > 0  
+      ? libraries
+          .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
+          .map(lib => `\nif (!${lib.globalVariable}) { console.error('[React-Runtime-JS] Library "${lib.globalVariable}" is not defined'); } else { console.log('[React-Runtime-JS] Library "${lib.globalVariable}" is defined'); }`)
           .join('\n        ')
       : '';
 
-    return `
+    // Generate component declarations if dependencies are provided
+    // Filter out the component being compiled to avoid naming conflicts
+    const componentDeclarations = dependencies && dependencies.length > 0
+      ? dependencies
+          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
+          .map(dep => `const ${dep.name} = componentsOuter['${dep.name}'];`)
+          .join('\n        ')
+      : '';
+    const componentLogChecks = dependencies && dependencies.length > 0
+      ? dependencies
+          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
+          .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined'); }`)
+          .join('\n        ')
+      : '';
+
+    const wrappedCode = `
       function createComponent(
         React, ReactDOM, 
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console, components
       ) {
-        // Parse the component code once to get the component definition
-        ${libraryDeclarations ? libraryDeclarations + '\n        ' : ''}${componentDeclarations ? componentDeclarations + '\n        ' : ''}${componentCode}
+        // Code for ${componentName}
+        ${componentCode}
         
         // Ensure the component exists
         if (typeof ${componentName} === 'undefined') {
           throw new Error('Component "${componentName}" is not defined in the provided code');
         }
+        else {
+          console.log('[React-Runtime-JS] Component "${componentName}" is defined');
+        }
         
         // Store the component in a variable so we don't lose it
         const UserComponent = ${componentName};
-        
-        // Debug logging to understand what we're getting
-        console.log('Component ${componentName} type:', typeof UserComponent);
-        if (typeof UserComponent === 'object' && UserComponent !== null) {
-          console.log('Component ${componentName} keys:', Object.keys(UserComponent));
-          console.log('Component ${componentName} has .component:', 'component' in UserComponent);
-          if ('component' in UserComponent) {
-            console.log('Component ${componentName}.component type:', typeof UserComponent.component);
-          }
-        }
-        
+
         // Check if the component is already a ComponentObject (has a .component property)
         // If so, extract the actual React component
         const ActualComponent = (typeof UserComponent === 'object' && UserComponent !== null && 'component' in UserComponent)
           ? UserComponent.component
           : UserComponent;
         
+        // Debug logging to understand what we're getting
+        console.log('[React-Runtime-JS]Component ${componentName} type:', typeof UserComponent);
+        if (typeof UserComponent === 'object' && UserComponent !== null) {
+          console.log('[React-Runtime-JS]Component ${componentName} keys:', Object.keys(UserComponent));
+          console.log('[React-Runtime-JS]Component ${componentName} has .component:', 'component' in UserComponent);
+          if ('component' in UserComponent) {
+            console.log('[React-Runtime-JS]Component ${componentName}.component type:', typeof UserComponent.component);
+          }
+        }
+        
         // Validate that we have a function (React component)
         if (typeof ActualComponent !== 'function') {
-          console.error('Invalid component type for ${componentName}:', typeof ActualComponent);
-          console.error('ActualComponent value:', ActualComponent);
-          console.error('Original UserComponent value:', UserComponent);
-          throw new Error('Component "${componentName}" must be a function (React component) or an object with a .component property that is a function. Got: ' + typeof ActualComponent);
+          console.error('[React-Runtime-JS] Invalid component type for ${componentName}:', typeof ActualComponent);
+          console.error('[React-Runtime-JS] ActualComponent value:', ActualComponent);
+          console.error('[React-Runtime-JS] Original UserComponent value:', UserComponent);
+          throw new Error('[React-Runtime-JS] Component "${componentName}" must be a function (React component) or an object with a .component property that is a function. Got: ' + typeof ActualComponent);
         }
+
+        let componentsOuter = null, utilitiesOuter = null;
+        const DestructureWrapperUserComponent = (props) => {
+          if (!componentsOuter) {
+            componentsOuter = props?.components || components;
+          }
+          if (!utilitiesOuter) {
+            utilitiesOuter = props?.utilities;
+          }
+          console.log('Props for ${componentName}:', props);
+          console.log('components for ${componentName}:', componentsOuter);
+          console.log('styles for ${componentName}:', styles);
+          console.log('utilities for ${componentName}:', utilitiesOuter);
+          console.log('libraries for ${componentName}:', libraries);
+          ${libraryDeclarations ? '// Destructure Libraries\n' + libraryDeclarations + '\n        ' : ''}
+          ${componentDeclarations ? '// Destructure Dependencies\n' + componentDeclarations + '\n        ' : ''}
+          ${libraryLogChecks}
+          ${componentLogChecks}          
+
+          const newProps = {
+            ...props,
+            components: componentsOuter,
+            utilities: utilitiesOuter 
+          }
+          return ActualComponent(newProps);
+        };
         
         // Create a fresh method registry for each factory call
         const methodRegistry = new Map();
@@ -261,7 +308,7 @@ export class ComponentCompiler {
           }, [props.callbacks]);
           
           // Render the original component with enhanced callbacks
-          return React.createElement(ActualComponent, {
+          return React.createElement(DestructureWrapperUserComponent, {
             ...props,
             callbacks: enhancedCallbacks
           });
@@ -273,7 +320,6 @@ export class ComponentCompiler {
         return {
           component: ComponentWithMethodRegistry,
           
-          // Legacy methods for backward compatibility
           print: function() { 
             const printMethod = methodRegistry.get('print');
             if (printMethod) {
@@ -326,7 +372,7 @@ export class ComponentCompiler {
             if (method) {
               return method(...args);
             }
-            console.warn(\`Method '\${methodName}' is not registered on component ${componentName}\`);
+            console.warn(\`[React-Runtime-JS] Method '\${methodName}' is not registered on component ${componentName}\`);
             return undefined;
           },
           
@@ -337,6 +383,8 @@ export class ComponentCompiler {
         };
       }
     `;
+
+    return wrappedCode;
   }
 
   /**
