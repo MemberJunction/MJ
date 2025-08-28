@@ -1853,6 +1853,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     else if (this._processingStatus[Conversation.ID]) {
       return this._processingStatus[Conversation.ID];
     } 
+    else if (Conversation.Status === 'Processing') {
+      // Check the database status field as well (important for page refreshes)
+      return true;
+    }
     else {
       return false;
     }

@@ -259,7 +259,7 @@
     color: #666;
     font-style: italic;
     margin-top: 5px;
-    display: inline-block;
+    display: block;
 }
 
 /* Input wrapper styles */
