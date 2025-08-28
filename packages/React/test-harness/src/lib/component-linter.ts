@@ -4746,6 +4746,195 @@ export class ComponentLinter {
         
         return violations;
       }
+    },
+    
+    {
+      name: 'validate-component-references',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Skip if no spec or no dependencies
+        if (!componentSpec?.dependencies || componentSpec.dependencies.length === 0) {
+          return violations;
+        }
+        
+        // Build a set of available component names from dependencies
+        const availableComponents = new Set<string>();
+        for (const dep of componentSpec.dependencies) {
+          if (dep.location === 'embedded' && dep.name) {
+            availableComponents.add(dep.name);
+          }
+        }
+        
+        // If no embedded dependencies, nothing to validate
+        if (availableComponents.size === 0) {
+          return violations;
+        }
+        
+        // Track component references in the code
+        const referencedComponents = new Set<string>();
+        
+        traverse(ast, {
+          // Look for React.createElement calls
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check for React.createElement(ComponentName, ...)
+            if (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) && 
+                callee.object.name === 'React' &&
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'createElement') {
+              
+              const firstArg = path.node.arguments[0];
+              
+              // If first argument is an identifier (component reference)
+              if (t.isIdentifier(firstArg)) {
+                const componentRef = firstArg.name;
+                
+                // Skip HTML elements and React built-ins
+                if (!componentRef.match(/^[a-z]/) && componentRef !== 'Fragment') {
+                  referencedComponents.add(componentRef);
+                  
+                  // Check if this component exists in dependencies
+                  if (!availableComponents.has(componentRef)) {
+                    const availableList = Array.from(availableComponents).sort().join(', ');
+                    
+                    // Try to find similar names for suggestions
+                    const suggestions = Array.from(availableComponents).filter(name => 
+                      name.toLowerCase().includes(componentRef.toLowerCase()) ||
+                      componentRef.toLowerCase().includes(name.toLowerCase())
+                    );
+                    
+                    let message = `Component "${componentRef}" is not found in dependencies. Available components: ${availableList}`;
+                    if (suggestions.length > 0) {
+                      message += `. Did you mean: ${suggestions.join(' or ')}?`;
+                    }
+                    
+                    violations.push({
+                      rule: 'validate-component-references',
+                      severity: 'critical',
+                      line: firstArg.loc?.start.line || 0,
+                      column: firstArg.loc?.start.column || 0,
+                      message: message,
+                      code: `React.createElement(${componentRef}, ...)`
+                    });
+                  }
+                }
+              }
+            }
+          },
+          
+          // Look for JSX elements
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            const elementName = openingElement.name;
+            
+            if (t.isJSXIdentifier(elementName)) {
+              const componentRef = elementName.name;
+              
+              // Skip HTML elements and fragments
+              if (!componentRef.match(/^[a-z]/) && componentRef !== 'Fragment') {
+                referencedComponents.add(componentRef);
+                
+                // Check if this component exists in dependencies
+                if (!availableComponents.has(componentRef)) {
+                  const availableList = Array.from(availableComponents).sort().join(', ');
+                  
+                  // Try to find similar names for suggestions
+                  const suggestions = Array.from(availableComponents).filter(name => 
+                    name.toLowerCase().includes(componentRef.toLowerCase()) ||
+                    componentRef.toLowerCase().includes(name.toLowerCase())
+                  );
+                  
+                  let message = `Component "${componentRef}" is not found in dependencies. Available components: ${availableList}`;
+                  if (suggestions.length > 0) {
+                    message += `. Did you mean: ${suggestions.join(' or ')}?`;
+                  }
+                  
+                  violations.push({
+                    rule: 'validate-component-references',
+                    severity: 'critical',
+                    line: elementName.loc?.start.line || 0,
+                    column: elementName.loc?.start.column || 0,
+                    message: message,
+                    code: `<${componentRef} ... />`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Look for destructuring from components prop
+          ObjectPattern(path: NodePath<t.ObjectPattern>) {
+            // Check if this is destructuring from a 'components' parameter
+            const parent = path.parent;
+            
+            // Check if it's a function parameter with components
+            if ((t.isFunctionDeclaration(parent) || t.isFunctionExpression(parent) || 
+                 t.isArrowFunctionExpression(parent)) && parent.params.includes(path.node)) {
+              
+              // Look for components property
+              for (const prop of path.node.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && 
+                    prop.key.name === 'components' && t.isObjectPattern(prop.value)) {
+                  
+                  // Check each destructured component
+                  for (const componentProp of prop.value.properties) {
+                    if (t.isObjectProperty(componentProp) && t.isIdentifier(componentProp.key)) {
+                      const componentRef = componentProp.key.name;
+                      referencedComponents.add(componentRef);
+                      
+                      if (!availableComponents.has(componentRef)) {
+                        const availableList = Array.from(availableComponents).sort().join(', ');
+                        
+                        // Try to find similar names for suggestions
+                        const suggestions = Array.from(availableComponents).filter(name => 
+                          name.toLowerCase().includes(componentRef.toLowerCase()) ||
+                          componentRef.toLowerCase().includes(name.toLowerCase())
+                        );
+                        
+                        let message = `Destructured component "${componentRef}" is not found in dependencies. Available components: ${availableList}`;
+                        if (suggestions.length > 0) {
+                          message += `. Did you mean: ${suggestions.join(' or ')}?`;
+                        }
+                        
+                        violations.push({
+                          rule: 'validate-component-references',
+                          severity: 'critical',
+                          line: componentProp.key.loc?.start.line || 0,
+                          column: componentProp.key.loc?.start.column || 0,
+                          message: message,
+                          code: `{ components: { ${componentRef}, ... } }`
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Also warn about unused dependencies
+        if (referencedComponents.size > 0) {
+          for (const depName of availableComponents) {
+            if (!referencedComponents.has(depName)) {
+              violations.push({
+                rule: 'validate-component-references',
+                severity: 'low',
+                line: 1,
+                column: 0,
+                message: `Component "${depName}" is defined as a dependency but never used in the code.`,
+                code: `dependencies: [..., { name: "${depName}", ... }, ...]`
+              });
+            }
+          }
+        }
+        
+        return violations;
+      }
     }
   ];
   
