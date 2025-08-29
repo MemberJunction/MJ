@@ -26,7 +26,8 @@ import {
   resourceManager,
   reactRootManager,
   ResolvedComponents,
-  SetupStyles
+  SetupStyles,
+  ComponentRegistryService
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
@@ -771,6 +772,23 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     } else if (typeof window !== 'undefined' && window.print) {
       window.print();
     }
+  }
+
+  /**
+   * Force clear component registries
+   * Used by Component Studio for fresh loads
+   * This is a static method that can be called without a component instance
+   */
+  public static forceClearRegistries(): void {
+    // Clear React runtime's component registry service
+    ComponentRegistryService.reset();
+    
+    // Clear any cached hierarchy registrar
+    if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
+      (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
+    }
+    
+    console.log('🧹 All component registries cleared for fresh load');
   }
 
 }

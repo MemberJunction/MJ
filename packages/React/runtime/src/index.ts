@@ -29,7 +29,8 @@ export { ComponentRegistry } from './registry';
 export { 
   ComponentResolver,
   ComponentSpec,
-  ResolvedComponents
+  ResolvedComponents,
+  ComponentRegistryService
 } from './registry';
 
 // Export runtime APIs
