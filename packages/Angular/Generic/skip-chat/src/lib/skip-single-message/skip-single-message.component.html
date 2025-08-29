@@ -16,7 +16,7 @@
                     <kendo-loader></kendo-loader>
                     <span class="elapsed-time">{{ElapsedTimeSinceLoadFormatted}}</span>
                 }
-                {{Message}}
+                <span class="message-content">{{Message}}</span>
                 @if(!IsTemporaryMessage && !IsAIMessage && ShowMessageEditPanel && !ConversationProcessing) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
                     <div class="message-actions" title="Message actions">

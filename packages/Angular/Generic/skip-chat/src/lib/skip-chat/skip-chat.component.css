@@ -401,84 +401,92 @@
 
 
 .input-area {
-    min-height: 35px;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 15px;
+    padding: 10px 20px;
     position: sticky;
     bottom: 0;
     background-color: #f9f9f9;
     z-index: 10;
 }
 
-.input-area > .button-area {
-    vertical-align: top;
-    margin-top: 3px;
-    margin-left: -65px;
+.input-container {
+    width: 100%;
+    max-width: 800px;
 }
-/*all buttons in the button area within the input area*/
+
+.button-area {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+/* All buttons in the button area */
 .button-area > button {
-    width: 30px;
-    height: 30px;
-    border-radius: 12px;
-    margin-left: 3px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    min-width: 28px;
+    background-color: transparent;
+    border: 1px solid transparent;
+}
+
+.button-area > button:hover:not(:disabled) {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.button-area > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Stop button styling */
 .button-area > button.stop-button {
     background-color: #dc3545;
     color: white;
+    border-color: #dc3545;
 }
 
 .button-area > button.stop-button:hover {
     background-color: #c82333;
+    border-color: #c82333;
 }
-/* .input-area > button:first-of-type {
-    margin-left: -40px;
-}
-.input-area > button:last-child {
-    margin-left: -65px;
-}
-.input-area > .share-button {
-    margin-left: 10px;
-} */
 
 .text-area-wrapper {
-    padding: 3px;
-    border: solid 1px rgba(0, 0, 0, 0.08) ;
+    position: relative;
+    display: flex;
+    padding: 10px 12px;
+    padding-right: 120px; /* Space for buttons */
+    border: solid 1px rgba(0, 0, 0, 0.08);
     border-radius: 15px;
-
-    margin-top: 4px;
-    margin-right: -1px;
-    min-height: 42px;
-    max-height: 100%; /* Prevent it from growing beyond the container */
-
-    overflow: hidden;    
-    align-items: center;
-
-    /*combined width and padding is 800*/
-    width: 710px;    
-    padding-right: 90px
+    min-height: 44px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: white;
+    align-items: flex-end;
 } 
 .text-area-wrapper > textarea {
     border: 0;
     outline: 0;
     resize: none;
-
-    min-height: 20px; /* Initial height */
-
     width: 100%;
-    overflow-y: hidden; /* Hide scrollbar */
-
+    min-height: 24px;
+    max-height: 180px;
+    overflow-y: auto;
     font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     font-size: 1rem;
-
-    margin-left: 7px;
-    margin-top: 7px;
-    margin-bottom: 5px;
-
-    background-color: #f9f9f9;
+    line-height: 1.5;
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
 }
 
 /* .text-area-wrapper > textarea:disabled {
