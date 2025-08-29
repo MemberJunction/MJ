@@ -67,6 +67,114 @@ import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists
 import e from 'express';
 
 /**
+ * Store for active conversation streams
+ * Maps conversationID to the last status message received
+ */
+class ActiveConversationStreams {
+  private static instance: ActiveConversationStreams;
+  private streams: Map<string, { 
+    lastStatus: string, 
+    lastUpdate: Date,
+    sessionIds: Set<string> // Track which sessions are listening
+  }> = new Map();
+
+  private constructor() {}
+
+  static getInstance(): ActiveConversationStreams {
+    if (!ActiveConversationStreams.instance) {
+      ActiveConversationStreams.instance = new ActiveConversationStreams();
+    }
+    return ActiveConversationStreams.instance;
+  }
+
+  updateStatus(conversationId: string, status: string, sessionId?: string) {
+    const existing = this.streams.get(conversationId);
+    if (existing) {
+      existing.lastStatus = status;
+      existing.lastUpdate = new Date();
+      if (sessionId) {
+        existing.sessionIds.add(sessionId);
+      }
+    } else {
+      this.streams.set(conversationId, {
+        lastStatus: status,
+        lastUpdate: new Date(),
+        sessionIds: sessionId ? new Set([sessionId]) : new Set()
+      });
+    }
+  }
+
+  getStatus(conversationId: string): string | null {
+    const stream = this.streams.get(conversationId);
+    return stream ? stream.lastStatus : null;
+  }
+
+  addSession(conversationId: string, sessionId: string) {
+    const stream = this.streams.get(conversationId);
+    if (stream) {
+      stream.sessionIds.add(sessionId);
+    } else {
+      // If no stream exists yet, create one with default status
+      this.streams.set(conversationId, {
+        lastStatus: 'Processing...',
+        lastUpdate: new Date(),
+        sessionIds: new Set([sessionId])
+      });
+    }
+  }
+
+  removeConversation(conversationId: string) {
+    this.streams.delete(conversationId);
+  }
+
+  isActive(conversationId: string): boolean {
+    const stream = this.streams.get(conversationId);
+    if (!stream) return false;
+    
+    // Consider a stream inactive if no update in last 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    return stream.lastUpdate > fiveMinutesAgo;
+  }
+
+  getSessionIds(conversationId: string): string[] {
+    const stream = this.streams.get(conversationId);
+    return stream ? Array.from(stream.sessionIds) : [];
+  }
+
+  /**
+   * Clean up stale streams that haven't been updated in a while
+   * This prevents memory leaks from abandoned conversations
+   */
+  cleanupStaleStreams() {
+    const now = new Date();
+    const staleThreshold = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes
+    
+    const staleConversations: string[] = [];
+    this.streams.forEach((stream, conversationId) => {
+      if (stream.lastUpdate < staleThreshold) {
+        staleConversations.push(conversationId);
+      }
+    });
+    
+    staleConversations.forEach(conversationId => {
+      this.streams.delete(conversationId);
+      LogStatus(`Cleaned up stale stream for conversation ${conversationId}`);
+    });
+    
+    if (staleConversations.length > 0) {
+      LogStatus(`Cleaned up ${staleConversations.length} stale conversation streams`);
+    }
+  }
+}
+
+const activeStreams = ActiveConversationStreams.getInstance();
+
+// Set up periodic cleanup of stale streams (every 10 minutes)
+setInterval(() => {
+  activeStreams.cleanupStaleStreams();
+}, 10 * 60 * 1000);
+
+/**
  * Enumeration representing the different phases of a Skip response
  * Corresponds to the lifecycle of a Skip AI interaction
  */
@@ -1332,6 +1440,99 @@ cycle.`);
   }
 
   /**
+   * Re-attaches the current session to receive status updates for a processing conversation
+   * This is needed after page reloads to resume receiving push notifications
+   */
+  @Query(() => String)
+  async ReattachToProcessingConversation(
+    @Arg('ConversationId', () => String) ConversationId: string,
+    @Ctx() { userPayload }: AppContext,
+    @PubSub() pubSub: PubSubEngine
+  ): Promise<string | null> {
+    try {
+      const md = new Metadata();
+      const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+      if (!user) {
+        LogError(`User ${userPayload.email} not found in UserCache`);
+        return null;
+      }
+      
+      // Load the conversation
+      const convoEntity = await md.GetEntityObject<ConversationEntity>('Conversations', user);
+      const loadResult = await convoEntity.Load(ConversationId);
+      
+      if (!loadResult) {
+        LogError(`Could not load conversation ${ConversationId} for re-attachment`);
+        return null;
+      }
+      
+      // Check if the conversation belongs to this user
+      if (convoEntity.UserID !== user.ID) {
+        LogError(`Conversation ${ConversationId} does not belong to user ${user.Email}`);
+        return null;
+      }
+      
+      // If the conversation is processing, reattach the session to receive updates
+      if (convoEntity.Status === 'Processing') {
+        // Add this session to the active streams for this conversation
+        activeStreams.addSession(ConversationId, userPayload.sessionId);
+        
+        // Get the last known status message from our cache
+        const lastStatusMessage = activeStreams.getStatus(ConversationId) || 'Processing...';
+        
+        // Check if the stream is still active
+        const isStreamActive = activeStreams.isActive(ConversationId);
+        
+        if (isStreamActive) {
+          // Send the last known status to the frontend
+          const statusMessage = {
+            type: 'AskSkip',
+            status: 'OK',
+            ResponsePhase: 'Processing',
+            conversationID: convoEntity.ID,
+            message: lastStatusMessage,
+          };
+          
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            pushStatusUpdates: {
+              message: JSON.stringify(statusMessage),
+              sessionId: userPayload.sessionId
+            }
+          });
+          
+          LogStatus(`Re-attached session ${userPayload.sessionId} to active stream for conversation ${ConversationId}, last status: ${lastStatusMessage}`);
+        } else {
+          // Stream is inactive or doesn't exist, just send default status
+          const statusMessage = {
+            type: 'AskSkip',
+            status: 'OK',
+            ResponsePhase: 'Processing',
+            conversationID: convoEntity.ID,
+            message: 'Processing...',
+          };
+          
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            pushStatusUpdates: {
+              message: JSON.stringify(statusMessage),
+              sessionId: userPayload.sessionId
+            }
+          });
+          
+          LogStatus(`Re-attached session ${userPayload.sessionId} to conversation ${ConversationId}, but stream is inactive`);
+        }
+        
+        return lastStatusMessage;
+      } else {
+        LogStatus(`Conversation ${ConversationId} is not processing (Status: ${convoEntity.Status})`);
+        return null;
+      }
+    } catch (error) {
+      LogError(`Error re-attaching to conversation: ${error}`);
+      return null;
+    }
+  }
+
+  /**
    * Executes an analysis query with Skip
    * This is the primary entry point for general Skip conversations
    * 
@@ -1372,7 +1573,7 @@ cycle.`);
     );
 
     // Set the conversation status to 'Processing' when a request is initiated
-    await this.setConversationStatus(convoEntity, 'Processing', userPayload);
+    await this.setConversationStatus(convoEntity, 'Processing', userPayload, pubSub);
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -2196,7 +2397,7 @@ cycle.`);
 
     if (conversationDetailCount > 10) {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
 
       // At this point it is likely that we are stuck in a loop, so we stop here
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -2241,22 +2442,31 @@ cycle.`);
         }) => {
           LogStatus(JSON.stringify(message, null, 4));
           if (message.type === 'status_update') {
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                type: 'AskSkip',
-                status: 'OK',
-                conversationID: ConversationId,
-                ResponsePhase: message.value.responsePhase,
-                message: message.value.messages[0].content,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            const statusContent = message.value.messages[0].content;
+            
+            // Store the status in our active streams cache
+            activeStreams.updateStatus(ConversationId, statusContent, userPayload.sessionId);
+            
+            // Publish to all sessions listening to this conversation
+            const sessionIds = activeStreams.getSessionIds(ConversationId);
+            for (const sessionId of sessionIds) {
+              pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                message: JSON.stringify({
+                  type: 'AskSkip',
+                  status: 'OK',
+                  conversationID: ConversationId,
+                  ResponsePhase: message.value.responsePhase,
+                  message: statusContent,
+                }),
+                sessionId: sessionId,
+              });
+            }
           }
         }
       );
     } catch (error) {
       // Set conversation status to Available on error so user can try again
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
       
       // Log the error for debugging
       LogError(`Error in HandleSkipChatRequest sendPostRequest: ${error}`);
@@ -2339,7 +2549,7 @@ cycle.`);
       }
     } else {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
 
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
@@ -2511,7 +2721,7 @@ cycle.`);
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
     
     // Set conversation status back to Available since we need user input for the clarifying question
-    await this.setConversationStatus(convoEntity, 'Available', userPayload);
+    await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
     
     if (await convoDetailEntityAI.Save()) {
       return {
@@ -2908,13 +3118,42 @@ cycle.`);
     };
   }
 
-  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload): Promise<boolean> {
+  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload, pubSub?: PubSubEngine): Promise<boolean> {
     if (convoEntity.Status !== status) {
     convoEntity.Status = status;
 
     const convoSaveResult = await convoEntity.Save();
     if (!convoSaveResult) {
       LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
+    } else {
+      // If conversation is now Available (completed), remove it from active streams
+      if (status === 'Available') {
+        activeStreams.removeConversation(convoEntity.ID);
+        LogStatus(`Removed conversation ${convoEntity.ID} from active streams (status changed to Available)`);
+      } else if (status === 'Processing') {
+        // If conversation is starting to process, add the session to active streams
+        activeStreams.addSession(convoEntity.ID, userPayload.sessionId);
+        LogStatus(`Added session ${userPayload.sessionId} to active streams for conversation ${convoEntity.ID}`);
+      }
+      
+      if (pubSub) {
+      // Publish status update to notify frontend of conversation status change
+      const statusMessage = {
+        type: 'ConversationStatusUpdate',
+        conversationID: convoEntity.ID,
+        status: status,
+        timestamp: new Date().toISOString()
+      };
+      
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        pushStatusUpdates: {
+          message: JSON.stringify(statusMessage),
+          sessionId: userPayload.sessionId
+        }
+      });
+      
+      LogStatus(`Published conversation status update for ${convoEntity.ID}: ${status}`);
+      }
     }
     return convoSaveResult;
     }

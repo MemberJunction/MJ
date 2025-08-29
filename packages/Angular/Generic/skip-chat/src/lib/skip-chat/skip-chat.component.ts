@@ -299,6 +299,25 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       });
 
 
+      // Set up the push status subscription
+      this.setupPushStatusSubscription();
+    } catch (e) {
+      LogError(e);
+    }
+  }
+
+  protected LogVerbose(message: string) {
+    if (this.VerboseLogging) {
+      LogStatus(message);
+    }
+  }
+  
+  /**
+   * Sets up or re-establishes the push status subscription
+   * This is extracted as a separate method so it can be called after page reloads
+   */
+  protected setupPushStatusSubscription() {
+    try {
       // Directly subscribe to the push status updates from the GraphQLDataProvider. If SkipChat is running in an environment where someone else is NOT 
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
@@ -314,23 +333,20 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           this._providerPushStatusSub = undefined;
         }
       }
+      
       this._providerPushStatusSub = (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
         this.LogVerbose('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
           const statusObj = SafeJSONParse<any>(status.message);
-          if (statusObj && statusObj.type === 'AskSkip') {
-            this.HandlePushStatusUpdate(statusObj);  
+          if (statusObj) {
+            if (statusObj.type === 'AskSkip' || statusObj.type === 'ConversationStatusUpdate') {
+              this.HandlePushStatusUpdate(statusObj);  
+            }
           }
         }
       });
     } catch (e) {
-      LogError(e);
-    }
-  }
-
-  protected LogVerbose(message: string) {
-    if (this.VerboseLogging) {
-      LogStatus(message);
+      LogError(`Error setting up push status subscription: ${e}`);
     }
   }
 
@@ -341,7 +357,34 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
                    ResponsePhase: string, 
                    conversationID?: string; 
                    message?: string } = statusObj;
-      if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
+      
+      // Handle conversation status updates from the backend
+      if (obj.type === 'ConversationStatusUpdate' && obj.conversationID) {
+        // Find and update the conversation in our cached list
+        const conversation = this.Conversations.find(c => c.ID === obj.conversationID);
+        if (conversation && (obj.status === 'Processing' || obj.status === 'Available')) {
+          conversation.Status = obj.status;
+          
+          // If this is the currently selected conversation, update UI accordingly
+          if (obj.conversationID === this.SelectedConversation?.ID) {
+            if (obj.status === 'Processing') {
+              // Conversation started processing - ensure we show status message if we have one cached
+              const cachedStatus = this._statusMessagesByConversation[obj.conversationID];
+              if (cachedStatus) {
+                this.SetSkipStatusMessage(cachedStatus.message, 0, cachedStatus.startTime);
+              }
+            } else if (obj.status === 'Available') {
+              // Conversation finished processing - clear status message
+              this.SetSkipStatusMessage('', 0);
+              // Also clear from in-progress tracking
+              delete this._conversationsInProgress[obj.conversationID];
+              // Clear cached messages
+              delete this._statusMessagesByConversation[obj.conversationID];
+              delete this._temporaryMessagesByConversation[obj.conversationID];
+            }
+          }
+        }
+      } else if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
         if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
           // Cache the status message for this conversation regardless of whether it's selected
           if (obj.message && obj.message.length > 0) {
@@ -351,7 +394,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
               message: obj.message,
               startTime: existingStatus?.startTime || new Date()
             };
-            console.log(`[DEBUG] Cached status for conversation ${obj.conversationID}:`, this._statusMessagesByConversation[obj.conversationID]);
             this.LogVerbose(`Skip Chat: Cached status message for conversation ${obj.conversationID}: ${obj.message}`);
           }
           
@@ -359,7 +401,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           if (obj.conversationID === this.SelectedConversation?.ID) {
             if (obj.message && obj.message.length > 0) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
-              console.log(`[DEBUG] Updating display for selected conversation ${obj.conversationID} with message: ${obj.message}`);
               this.LogVerbose(`Skip Chat: Displaying Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
               // Use the cached start time to preserve the timer
               const cachedStatus = this._statusMessagesByConversation[obj.conversationID];
@@ -370,12 +411,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
             }
           }
           else {
-            console.log(`[DEBUG] Received status for non-selected conversation ${obj.conversationID} - cached for later`);
             this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation - cached for later`);
           }
         }
         else {
-          console.log(`[DEBUG] Received status for conversation ${obj.conversationID} but it's not in progress. In progress:`, this._conversationsInProgress);
           this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
         }
       }
@@ -427,7 +466,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
   protected InnerSetSkipStatusMessage(message: string, startTime?: Date) {
     const conversationId = this.SelectedConversation?.ID;
-    console.log(`[DEBUG] InnerSetSkipStatusMessage called for conversation ${conversationId} with message: "${message}", startTime:`, startTime);
     
     if (message && message.length > 0) {
       // Store the status message for the current conversation
@@ -438,13 +476,11 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           message,
           startTime: startTime || existingStatus?.startTime || new Date()
         };
-        console.log(`[DEBUG] Stored status for conversation ${conversationId}:`, this._statusMessagesByConversation[conversationId]);
       }
       
       if (!this._temporaryMessage) {
         const actualStartTime = startTime || (conversationId ? this._statusMessagesByConversation[conversationId]?.startTime : undefined) || new Date();
         this._temporaryMessage = <ConversationDetailEntity>(<any>{ ID: -1, Message: message, Role: 'ai', __mj_CreatedAt: actualStartTime }); // create a new object
-        console.log(`[DEBUG] Created new temporary message with startTime:`, actualStartTime);
         this.AddMessageToCurrentConversation(this._temporaryMessage, true, false);
         
         // Store the temporary message for this conversation
@@ -453,7 +489,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         }
       } else {
         this._temporaryMessage.Message = message;
-        console.log(`[DEBUG] Updated existing temporary message`);
         // we need to send a refresh signal to the component linked to this detail record
         const ref = (<any>this._temporaryMessage)._componentRef;
         if (ref) {
@@ -465,7 +500,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       this._AskSkipTextboxPlaceholder = this.ProcessingTextBoxPlaceholder;
     } 
     else {
-      console.log(`[DEBUG] Clearing temporary message for conversation ${conversationId}`);
       if (this._temporaryMessage) {
         // get rid of the temporary message
         this.RemoveMessageFromCurrentConversation(this._temporaryMessage);
@@ -479,7 +513,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       
       // Clear the status message cache when clearing the message
       if (conversationId && this._statusMessagesByConversation[conversationId]) {
-        console.log(`[DEBUG] Clearing cached status for conversation ${conversationId}`);
         delete this._statusMessagesByConversation[conversationId];
       }
       
@@ -518,27 +551,42 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   protected checkForProcessingConversations() {
     try {
       if (this.Conversations && this.Conversations.length > 0) {
+        let hasProcessingConversations = false;
+        
         // Check each conversation's status
         for (const convo of this.Conversations) {
           if (convo.Status === 'Processing') {
-            // This conversation is currently being processed
+            hasProcessingConversations = true;
+            
+            // Mark as in progress
+            this._conversationsInProgress[convo.ID] = true;
+            this._messageInProgress = true;
+            this.AllowSend = false;
+            
             // If this is the currently selected conversation, update the UI
             if (this.SelectedConversation && this.SelectedConversation.ID === convo.ID) {
               this.setProcessingStatus(convo.ID, true);
               this.startRequestStatusPolling(convo.ID);
               
-              // Restore the cached status message if available
-              const cachedStatus = this._statusMessagesByConversation[convo.ID];
-              const statusMessage = cachedStatus?.message || "Processing...";
-              const statusStartTime = cachedStatus?.startTime || convo.__mj_UpdatedAt;
-              
-              this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
+              // Don't overwrite if we're already handling this conversation
+              if (!this._temporaryMessage) {
+                // Restore the cached status message if available
+                const cachedStatus = this._statusMessagesByConversation[convo.ID];
+                const statusMessage = cachedStatus?.message || "Processing...";
+                const statusStartTime = cachedStatus?.startTime || convo.__mj_UpdatedAt;
+                
+                this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
+                
+                // Note: We don't request status here as SelectConversation will handle it
+                // This avoids duplicate requests to the backend
+              }
             }
-
-            this._conversationsInProgress[convo.ID] = true;
-            this._messageInProgress = true;
-            this.AllowSend = false;
           }
+        }
+        
+        // If we have processing conversations and no push subscription, set it up
+        if (hasProcessingConversations && !this._providerPushStatusSub) {
+          this.setupPushStatusSubscription();
         }
       }
     } catch (error) {
@@ -571,6 +619,56 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     if (this._requestStatusPollingIntervals[conversationId]) {
       this.clearInterval(this._requestStatusPollingIntervals[conversationId]);
       delete this._requestStatusPollingIntervals[conversationId];
+    }
+  }
+  
+  /**
+   * Requests the current status message from the backend for a processing conversation
+   * This is needed after page reloads when we lose the cached status messages
+   */
+  protected async requestCurrentConversationStatus(conversationId: string) {
+    try {
+      // Make sure we're subscribed to push updates if we aren't already
+      // This ensures we'll receive any ongoing status updates
+      if (!this._providerPushStatusSub) {
+        this.setupPushStatusSubscription();
+      }
+      
+      // Mark this conversation as in progress so we handle future updates properly
+      this._conversationsInProgress[conversationId] = true;
+      
+      // Call the backend to re-attach this session to the processing conversation
+      const gql = `query ReattachToProcessingConversation($conversationId: String!) {
+        ReattachToProcessingConversation(ConversationId: $conversationId)
+      }`;
+      
+      const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
+      const result = await gqlProvider.ExecuteGQL(gql, {
+        conversationId: conversationId
+      });
+      
+      if (result && result.ReattachToProcessingConversation) {
+        const lastStatusMessage = result.ReattachToProcessingConversation;
+        
+        // Update the cached status message with what we got from the backend
+        if (lastStatusMessage && lastStatusMessage !== 'Processing your request...') {
+          this._statusMessagesByConversation[conversationId] = {
+            message: lastStatusMessage,
+            startTime: this._statusMessagesByConversation[conversationId]?.startTime || new Date()
+          };
+          
+          // Update the display if this is the current conversation
+          if (conversationId === this.SelectedConversation?.ID) {
+            const cachedStatus = this._statusMessagesByConversation[conversationId];
+            this.SetSkipStatusMessage(lastStatusMessage, 0, cachedStatus?.startTime);
+          }
+        }
+      } else {
+        // Could not re-attach - conversation may no longer be processing
+      }
+      
+    } catch (error) {
+      LogError(`Error requesting conversation status: ${error}`);
     }
   }
 
@@ -696,6 +794,9 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   ngOnDestroy() {
+    // Clean up all message subscriptions
+    this.ClearMessages();
+    
     // Unsubscribe to prevent memory leaks
     if (this.paramsSubscription) {
       this.paramsSubscription.unsubscribe();
@@ -1267,8 +1368,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       
       // Check if this conversation is actually processing (regardless of DB status)
       if (conversation.Status === 'Processing' || this._conversationsInProgress[conversation.ID]) {
-        console.log(`[DEBUG] SelectConversation: Conversation ${conversation.ID} is processing (DB Status: ${conversation.Status}, InProgress: ${!!this._conversationsInProgress[conversation.ID]})`);
-        console.log(`[DEBUG] Cached status messages:`, this._statusMessagesByConversation);
         
         // This conversation is currently being processed
         this.setProcessingStatus(conversation.ID, true);
@@ -1276,12 +1375,17 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this._messageInProgress = true;
         this.AllowSend = false;
         
-        // Restore the cached status message if available
+        // Check if we have a cached status message (from before reload)
         const cachedStatus = this._statusMessagesByConversation[conversation.ID];
+        
+        if (!cachedStatus && conversation.Status === 'Processing') {
+          // After a page reload, we don't have cached status but the conversation is processing
+          // Request the current status from the backend
+          this.requestCurrentConversationStatus(conversation.ID);
+        }
+        
         const statusMessage = cachedStatus?.message || "Processing...";
         const statusStartTime = cachedStatus?.startTime || conversation.__mj_UpdatedAt;
-        
-        console.log(`[DEBUG] Restoring status for conversation ${conversation.ID}: message="${statusMessage}", startTime=`, statusStartTime);
         
         // Create the temporary status message after a brief delay to ensure DOM is ready
         this.setTimeout(() => {
@@ -1290,7 +1394,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           this.startRequestStatusPolling(conversation.ID);
         }, 100);
       } else {
-        console.log(`[DEBUG] SelectConversation: Conversation ${conversation.ID} is NOT processing (Status: ${conversation.Status})`);
+        // Conversation is not processing
       }
       
       InvokeManualResize(500);
@@ -1412,7 +1516,6 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           message: statusMessage,
           startTime: startTime
         };
-        console.log(`[DEBUG] sendPrompt: Initialized status for conversation ${convoID} with message="${statusMessage}", startTime:`, startTime);
       }
 
       this.SetSkipStatusMessage(statusMessage, 850, startTime);
@@ -1511,7 +1614,21 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   }
 
   public ClearMessages() {
-    console.log(`[DEBUG] ClearMessages called for conversation switch`);
+    // Clean up all message subscriptions before clearing
+    if (this.Messages && this.Messages.length > 0) {
+      this.Messages.forEach((message) => {
+        const subscriptions = (<any>message)._subscriptions;
+        if (subscriptions && Array.isArray(subscriptions)) {
+          subscriptions.forEach((sub: any) => {
+            if (sub && sub.unsubscribe) {
+              sub.unsubscribe();
+            }
+          });
+          (<any>message)._subscriptions = [];
+        }
+      });
+    }
+    
     this.Messages = []; // clear out the messages
     
     // Clear the temporary message reference (but keep the cached ones)
@@ -1578,6 +1695,17 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // Temporarily stop change detection for performance
       this.cdRef.detach();
 
+      // Clean up subscriptions before destroying the component
+      const subscriptions = (<any>messageDetail)._subscriptions;
+      if (subscriptions && Array.isArray(subscriptions)) {
+        subscriptions.forEach((sub: any) => {
+          if (sub && sub.unsubscribe) {
+            sub.unsubscribe();
+          }
+        });
+        (<any>messageDetail)._subscriptions = [];
+      }
+
       const index = this.askSkip.viewContainerRef.indexOf(ref.hostView);
       if (index !== -1) {
         this.askSkip.viewContainerRef.remove(index);
@@ -1620,25 +1748,28 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     // Pass the message details to the component instance
     const obj = componentRef.instance;
 
+    // Store subscriptions so we can clean them up later
+    const subscriptions: any[] = [];
+
     // bubble up events from the single message component to the parent component
-    obj.NavigateToMatchingReport.subscribe((reportId: string) => {
+    subscriptions.push(obj.NavigateToMatchingReport.subscribe((reportId: string) => {
       this.NavigateToMatchingReport.emit(reportId);
-    });
-    obj.NewReportCreated.subscribe((reportId: string) => {
+    }));
+    subscriptions.push(obj.NewReportCreated.subscribe((reportId: string) => {
       this.NewReportCreated.emit(reportId);
-    });
-    obj.DeleteMessageRequested.subscribe((message: ConversationDetailEntity) => {
+    }));
+    subscriptions.push(obj.DeleteMessageRequested.subscribe((message: ConversationDetailEntity) => {
       this.HandleMessageDeleteRequest(message);
-    });
-    obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
+    }));
+    subscriptions.push(obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
       this.HandleMessageEditRequest(message);
-    });
-    obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
+    }));
+    subscriptions.push(obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
       this.DrillDownEvent.emit(drillDownInfo);
-    });
-    obj.ArtifactSelected.subscribe((artifact: any) => {
+    }));
+    subscriptions.push(obj.ArtifactSelected.subscribe((artifact: any) => {
       this.onArtifactSelected(artifact);
-    });
+    }));
 
     obj.Provider = this.ProviderToUse;
     obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
@@ -1656,16 +1787,18 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     obj.ConversationProcessing = this.IsSkipProcessing(this.SelectedConversation!); 
 
     // Whenever the suggested question is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
-    obj.SuggestedQuestionSelected.subscribe((question: string) => {
+    subscriptions.push(obj.SuggestedQuestionSelected.subscribe((question: string) => {
       this.sendPrompt(question);
-    });
+    }));
     // Whenever the suggested answer is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
-    obj.SuggestedAnswerSelected.subscribe((answer: string) => {
+    subscriptions.push(obj.SuggestedAnswerSelected.subscribe((answer: string) => {
       this.sendPrompt(answer);
-    });
+    }));
 
     // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message
     (<any>messageDetail)._componentRef = componentRef;
+    // Store subscriptions so we can clean them up when the message is removed
+    (<any>messageDetail)._subscriptions = subscriptions;
 
     // Resume change detection
     if (stopChangeDetection) 
