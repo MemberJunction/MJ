@@ -19,6 +19,12 @@ export class ArtifactSelectionDialogComponent implements OnInit {
   artifacts: ConversationArtifactEntity[] = [];
   artifactVersions: ConversationArtifactVersionEntity[] = [];
   
+  // Paging State
+  currentPage = 0;
+  pageSize = 25;
+  totalArtifacts = 0;
+  hasMorePages = false;
+  
   // UI State
   isLoading = true;
   searchTerm = '';
@@ -51,16 +57,25 @@ export class ArtifactSelectionDialogComponent implements OnInit {
     try {
       const rv = new RunView();       
       
-      // Load artifacts
+      // Calculate StartRow for server-side paging
+      const startRow = this.currentPage * this.pageSize;
+      
+      // Load artifacts with paging
       const result = await rv.RunView<ConversationArtifactEntity>({
         ExtraFilter: this._artifactFilter,
         EntityName: 'MJ: Conversation Artifacts',
         OrderBy: '__mj_UpdatedAt DESC',
-        MaxRows: 1000
+        MaxRows: this.pageSize + 1, // Load one extra to check if more pages exist
+        StartRow: startRow,
+        ResultType: 'entity_object'
       });
 
       if (result.Success && result.Results) {
-        this.artifacts = result.Results;
+        // Check if we have more pages by seeing if we got the extra record
+        this.hasMorePages = result.Results.length > this.pageSize;
+        
+        // Remove the extra record if it exists
+        this.artifacts = result.Results.slice(0, this.pageSize);
       }
     } catch (error) {
       console.error('Error loading artifacts:', error);
@@ -71,6 +86,9 @@ export class ArtifactSelectionDialogComponent implements OnInit {
 
   private _artifactFilter: string | undefined= undefined;
   public async filterArtifacts() {
+    // Reset to first page when filters change
+    this.currentPage = 0;
+    
     // Filter by search term
     if (this.searchTerm) {
       const term = this.searchTerm.toLowerCase();
@@ -128,6 +146,29 @@ export class ArtifactSelectionDialogComponent implements OnInit {
   getNextVersionNumber(): number {
     if (this.artifactVersions.length === 0) return 1;
     return Math.max(...this.artifactVersions.map(v => v.Version)) + 1;
+  }
+
+  // Paging methods
+  async nextPage() {
+    if (this.hasMorePages) {
+      this.currentPage++;
+      await this.loadArtifacts();
+    }
+  }
+
+  async previousPage() {
+    if (this.currentPage > 0) {
+      this.currentPage--;
+      await this.loadArtifacts();
+    }
+  }
+
+  canGoNext(): boolean {
+    return this.hasMorePages;
+  }
+
+  canGoPrevious(): boolean {
+    return this.currentPage > 0;
   }
 
   canSave(): boolean {

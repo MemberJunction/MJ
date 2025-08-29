@@ -66,6 +66,29 @@
         <span>OR SELECT EXISTING</span>
     </div>
 
+    <!-- Paging Controls -->
+    <div class="paging-controls" style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0; padding: 5px 0;">
+        <button kendoButton 
+            (click)="previousPage()" 
+            [disabled]="!canGoPrevious()"
+            [themeColor]="'base'">
+            <i class="fa-solid fa-chevron-left"></i> Previous
+        </button>
+        <span class="page-info">
+            Page {{ currentPage + 1 }}
+            @if (hasMorePages) {
+                <span> of many</span>
+            }
+            ({{ artifacts.length }} items)
+        </span>
+        <button kendoButton 
+            (click)="nextPage()" 
+            [disabled]="!canGoNext()"
+            [themeColor]="'base'">
+            Next <i class="fa-solid fa-chevron-right"></i>
+        </button>
+    </div>
+
     <!-- Existing Artifacts -->
     <div class="artifacts-list">
         @if (isLoading) {
@@ -154,7 +177,6 @@
 </div>
 
 <kendo-dialog-actions>
-    <button kendoButton (click)="cancel()">Cancel</button>
     <button kendoButton 
     [themeColor]="'primary'" 
     (click)="save()"
@@ -162,4 +184,5 @@
     <i class="fa-solid fa-save"></i> 
     {{ getSaveButtonText() }}
     </button>
+    <button kendoButton (click)="cancel()">Cancel</button>
 </kendo-dialog-actions>
