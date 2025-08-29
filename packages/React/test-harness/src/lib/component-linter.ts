@@ -106,7 +106,8 @@ function getLineNumber(code: string, index: number): number {
 // These will be evaluated at TypeScript compile time and become static arrays
 const runQueryResultProps: readonly string[] = [
   'QueryID', 'QueryName', 'Success', 'Results', 'RowCount', 
-  'TotalRowCount', 'ExecutionTime', 'ErrorMessage'
+  'TotalRowCount', 'ExecutionTime', 'ErrorMessage', 'AppliedParameters',
+  'CacheHit', 'CacheKey', 'CacheTTLRemaining'
 ] as const satisfies readonly (keyof RunQueryResult)[];
 
 const runViewResultProps: readonly string[] = [
@@ -3802,56 +3803,12 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Track variables that hold RunView/RunQuery results
-        const resultVariables = new Map<string, { line: number; column: number; method: string }>();
+        // Array methods that would fail on a result object - keep for smart error detection
+        const arrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat'];
         
         traverse(ast, {
-          // First pass: identify RunView/RunQuery calls and their assigned variables
-          AwaitExpression(path: NodePath<t.AwaitExpression>) {
-            const callExpr = path.node.argument;
-            
-            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
-              const callee = callExpr.callee;
-              
-              // Check for utilities.rv.RunView or utilities.rq.RunQuery pattern
-              if (t.isMemberExpression(callee.object) && 
-                  t.isIdentifier(callee.object.object) && 
-                  callee.object.object.name === 'utilities') {
-                
-                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
-                const isRunView = method === 'RunView' || method === 'RunViews';
-                const isRunQuery = method === 'RunQuery';
-                
-                if (isRunView || isRunQuery) {
-                  // Check if this is being assigned to a variable
-                  const parent = path.parent;
-                  
-                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
-                    // const result = await utilities.rv.RunView(...)
-                    resultVariables.set(parent.id.name, {
-                      line: parent.id.loc?.start.line || 0,
-                      column: parent.id.loc?.start.column || 0,
-                      method: isRunView ? 'RunView' : 'RunQuery'
-                    });
-                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
-                    // result = await utilities.rv.RunView(...)
-                    resultVariables.set(parent.left.name, {
-                      line: parent.left.loc?.start.line || 0,
-                      column: parent.left.loc?.start.column || 0,
-                      method: isRunView ? 'RunView' : 'RunQuery'
-                    });
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        // Second pass: check for misuse of these result variables
-        traverse(ast, {
-          // Check for direct array operations
+          // Check for direct array operations on RunView/RunQuery results
           CallExpression(path: NodePath<t.CallExpression>) {
-            // Check for array methods being called on result objects
             if (t.isMemberExpression(path.node.callee) && 
                 t.isIdentifier(path.node.callee.object) &&
                 t.isIdentifier(path.node.callee.property)) {
@@ -3859,19 +3816,24 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               const objName = path.node.callee.object.name;
               const methodName = path.node.callee.property.name;
               
-              // Array methods that would fail on a result object
-              const arrayMethods = ['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat'];
-              
-              if (resultVariables.has(objName) && arrayMethods.includes(methodName)) {
-                const resultInfo = resultVariables.get(objName)!;
-                violations.push({
-                  rule: 'runview-runquery-result-direct-usage',
-                  severity: 'critical',
-                  line: path.node.loc?.start.line || 0,
-                  column: path.node.loc?.start.column || 0,
-                  message: `Cannot call array method "${methodName}" directly on ${resultInfo.method} result. Use "${objName}.Results.${methodName}(...)" instead. ${resultInfo.method} returns an object with { Success, Results, ... }, not an array.`,
-                  code: `${objName}.${methodName}(...)`
-                });
+              if (arrayMethods.includes(methodName)) {
+                // Use proper variable tracing instead of naive name matching
+                const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+                const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+                
+                if (isFromRunView || isFromRunQuery) {
+                  const methodType = isFromRunView ? 'RunView' : 'RunQuery';
+                  const ruleName = isFromRunView ? 'runview-result-invalid-usage' : 'runquery-result-invalid-usage';
+                  
+                  violations.push({
+                    rule: ruleName,
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Cannot call array method "${methodName}" directly on ${methodType} result. Use "${objName}.Results.${methodName}(...)" instead. ${methodType} returns an object with { Success, Results, ... }, not an array.`,
+                    code: `${objName}.${methodName}(...)`
+                  });
+                }
               }
             }
           },
@@ -3879,10 +3841,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
           // Check for direct usage in setState or as function arguments
           Identifier(path: NodePath<t.Identifier>) {
             const varName = path.node.name;
+            const parent = path.parent;
             
-            if (resultVariables.has(varName)) {
-              const resultInfo = resultVariables.get(varName)!;
-              const parent = path.parent;
+            // Use proper variable tracing
+            const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, varName, 'RunView');
+            const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, varName, 'RunQuery');
+            
+            if (isFromRunView || isFromRunQuery) {
+              const methodType = isFromRunView ? 'RunView' : 'RunQuery';
+              const ruleName = isFromRunView ? 'runview-result-invalid-usage' : 'runquery-result-invalid-usage';
               
               // Check if being passed to setState-like functions
               if (t.isCallExpression(parent) && path.node === parent.arguments[0]) {
@@ -3890,13 +3857,12 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 
                 // Check for setState patterns
                 if (t.isIdentifier(callee) && /^set[A-Z]/.test(callee.name)) {
-                  // Likely a setState function
                   violations.push({
-                    rule: 'runview-runquery-result-direct-usage',
+                    rule: ruleName,
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Passing ${resultInfo.method} result directly to setState. Use "${varName}.Results" or check "${varName}.Success" first. ${resultInfo.method} returns { Success, Results, ErrorMessage }, not the data array.`,
+                    message: `Passing ${methodType} result directly to setState. Use "${varName}.Results" or check "${varName}.Success" first. ${methodType} returns { Success, Results, ErrorMessage }, not the data array.`,
                     code: `${callee.name}(${varName})`
                   });
                 }
@@ -3906,11 +3872,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   const methodName = callee.property.name;
                   if (methodName === 'concat' || methodName === 'push' || methodName === 'unshift') {
                     violations.push({
-                      rule: 'runview-runquery-result-direct-usage',
+                      rule: ruleName,
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Passing ${resultInfo.method} result to array method. Use "${varName}.Results" instead of "${varName}".`,
+                      message: `Passing ${methodType} result to array method. Use "${varName}.Results" instead of "${varName}".`,
                       code: `...${methodName}(${varName})`
                     });
                   }
@@ -3929,12 +3895,49 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 // Pattern: Array.isArray(result) ? result : []
                 if (parent.test.arguments[0] === path.node && parent.consequent === path.node) {
                   violations.push({
-                    rule: 'runview-runquery-result-direct-usage',
+                    rule: ruleName,
                     severity: 'high',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `${resultInfo.method} result is never an array. Use "${varName}.Results || []" instead of "Array.isArray(${varName}) ? ${varName} : []".`,
+                    message: `${methodType} result is never an array. Use "${varName}.Results || []" instead of "Array.isArray(${varName}) ? ${varName} : []".`,
                     code: `Array.isArray(${varName}) ? ${varName} : []`
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for invalid property access on RunView/RunQuery results
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            if (t.isIdentifier(path.node.object) && t.isIdentifier(path.node.property)) {
+              const objName = path.node.object.name;
+              const propName = path.node.property.name;
+              
+              // Use proper variable tracing
+              const isFromRunView = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunView');
+              const isFromRunQuery = ComponentLinter.isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+              
+              if (isFromRunView || isFromRunQuery) {
+                const isValidViewProp = runViewResultProps.includes(propName as any);
+                const isValidQueryProp = runQueryResultProps.includes(propName as any);
+                
+                if (isFromRunQuery && !isValidQueryProp) {
+                  violations.push({
+                    rule: 'runquery-result-invalid-property',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid property "${propName}" on RunQuery result. Valid properties: ${runQueryResultProps.join(', ')}.`,
+                    code: `${objName}.${propName}`
+                  });
+                } else if (isFromRunView && !isValidViewProp) {
+                  violations.push({
+                    rule: 'runview-result-invalid-property',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid property "${propName}" on RunView result. Valid properties: ${runViewResultProps.join(', ')}.`,
+                    code: `${objName}.${propName}`
                   });
                 }
               }
@@ -3952,32 +3955,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Valid properties for RunQueryResult based on MJCore type definition
-        const validRunQueryResultProps = new Set([
-          'QueryID',           // string
-          'QueryName',         // string
-          'Success',           // boolean
-          'Results',           // any[]
-          'RowCount',          // number
-          'TotalRowCount',     // number
-          'ExecutionTime',     // number
-          'ErrorMessage',      // string
-          'AppliedParameters', // Record<string, any> (optional)
-          'CacheHit',          // boolean (optional)
-          'CacheKey',          // string (optional)
-          'CacheTTLRemaining'  // number (optional)
-        ]);
-        
-        // Valid properties for RunViewResult based on MJCore type definition
-        const validRunViewResultProps = new Set([
-          'Success',           // boolean
-          'Results',           // Array<T>
-          'UserViewRunID',     // string (optional)
-          'RowCount',          // number
-          'TotalRowCount',     // number
-          'ExecutionTime',     // number
-          'ErrorMessage'       // string
-        ]);
+        // Use shared property arrays from top of file - ensures consistency
+        const validRunQueryResultProps = new Set(runQueryResultProps);
+        const validRunViewResultProps = new Set(runViewResultProps);
         
         // Map of common incorrect properties to the correct property
         const incorrectToCorrectMap: Record<string, string> = {
