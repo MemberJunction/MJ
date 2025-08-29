@@ -255,7 +255,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close();
+    this.dialog.close(undefined);
   }
 
   async save() {

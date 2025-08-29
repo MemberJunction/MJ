@@ -16,6 +16,8 @@ import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
 import { TextImportDialogComponent } from './components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent, ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
+import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 // Interface for components loaded from files (not from database)
 interface FileLoadedComponent {
@@ -1149,7 +1151,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       return;
     }
     
-    if (!result) {
+    if (!result || !result.action) {
       console.log('User cancelled dialog');
       // User cancelled
       return;
@@ -1158,9 +1160,11 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     try {
       const artifact = result.artifact;
       let version: ConversationArtifactVersionEntity;
+      let lastVersion: ConversationArtifactVersionEntity | undefined;
 
       if (result.action === 'update-version' && result.versionToUpdate) {
         // Load and update existing version
+        lastVersion = result.versionToUpdate; // set to the same version as we'll grab its Configuration to parse lower down in the code
         version = result.versionToUpdate;
       } else {
         // Create new version
@@ -1178,17 +1182,27 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         });
 
         if (versionsResult.Success && versionsResult.Results && versionsResult.Results.length > 0) {
+          lastVersion = versionsResult.Results[0];
           version.Version = versionsResult.Results[0].Version + 1;
-        } else {
-          version.Version = 1;
+        } 
+        else {
+          throw new Error('No previous version found');
         }
       }
       
       // Store the complete spec in Configuration field
-      version.Configuration = JSON.stringify(currentSpec, null, 2);
-      
-      // Optionally store just the code in Content field for easier access
-      version.Content = currentSpec.code;
+      const fullResponse = JSON.parse(lastVersion!.Configuration) as SkipAPIAnalysisCompleteResponse;
+      fullResponse.componentOptions = [
+        {
+          AIRank: 1,
+          AIRankExplanation: "",
+          UserRankExplanation: "",
+          name: currentSpec.name,
+          option: currentSpec,
+          UserRank: 1
+        }
+      ];
+      version.Configuration = JSON.stringify(fullResponse, null, 2);
       
       // Add version comments
       const timestamp = new Date().toISOString();
@@ -1199,17 +1213,17 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       if (versionSaveResult) {
         const componentName = this.getComponentName(this.selectedComponent);
         console.log(`✅ Saved ${componentName} as artifact version ${version.Version}`);
-        
-        // Show success message (you could add a toast/notification here)
-        alert(`Component saved as artifact version ${version.Version}`);
-      } else {
+
+        MJNotificationService.Instance.CreateSimpleNotification(`${componentName} has been saved as artifact version ${version.Version}.`, 'success', 3500);
+      } 
+      else {
         console.error('Failed to save artifact version:', version.LatestResult?.Message);
-        alert('Failed to save artifact version. Check console for details.');
+        MJNotificationService.Instance.CreateSimpleNotification('Failed to save artifact version. Check console for details.', 'error', 5000);
       }
 
     } catch (error) {
       console.error('Error saving to artifact:', error);
-      alert('Error saving component to artifact. Check console for details.');
+      MJNotificationService.Instance.CreateSimpleNotification('Error saving component to artifact. Check console for details.', 'error', 5000);
     }
   }
 
