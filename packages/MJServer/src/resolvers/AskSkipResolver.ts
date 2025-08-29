@@ -75,6 +75,7 @@ class ActiveConversationStreams {
   private streams: Map<string, { 
     lastStatus: string, 
     lastUpdate: Date,
+    startTime: Date, // When processing actually started
     sessionIds: Set<string> // Track which sessions are listening
   }> = new Map();
 
@@ -96,9 +97,11 @@ class ActiveConversationStreams {
         existing.sessionIds.add(sessionId);
       }
     } else {
+      const now = new Date();
       this.streams.set(conversationId, {
         lastStatus: status,
-        lastUpdate: new Date(),
+        lastUpdate: now,
+        startTime: now, // Track when processing started
         sessionIds: sessionId ? new Set([sessionId]) : new Set()
       });
     }
@@ -109,15 +112,22 @@ class ActiveConversationStreams {
     return stream ? stream.lastStatus : null;
   }
 
+  getStartTime(conversationId: string): Date | null {
+    const stream = this.streams.get(conversationId);
+    return stream ? stream.startTime : null;
+  }
+
   addSession(conversationId: string, sessionId: string) {
     const stream = this.streams.get(conversationId);
     if (stream) {
       stream.sessionIds.add(sessionId);
     } else {
       // If no stream exists yet, create one with default status
+      const now = new Date();
       this.streams.set(conversationId, {
         lastStatus: 'Processing...',
-        lastUpdate: new Date(),
+        lastUpdate: now,
+        startTime: now, // Track when processing started
         sessionIds: new Set([sessionId])
       });
     }
@@ -173,6 +183,15 @@ const activeStreams = ActiveConversationStreams.getInstance();
 setInterval(() => {
   activeStreams.cleanupStaleStreams();
 }, 10 * 60 * 1000);
+
+@ObjectType()
+class ReattachConversationResponse {
+  @Field(() => String, { nullable: true })
+  lastStatusMessage?: string;
+
+  @Field(() => Date, { nullable: true })
+  startTime?: Date;
+}
 
 /**
  * Enumeration representing the different phases of a Skip response
@@ -1443,12 +1462,12 @@ cycle.`);
    * Re-attaches the current session to receive status updates for a processing conversation
    * This is needed after page reloads to resume receiving push notifications
    */
-  @Query(() => String)
+  @Query(() => ReattachConversationResponse)
   async ReattachToProcessingConversation(
     @Arg('ConversationId', () => String) ConversationId: string,
     @Ctx() { userPayload }: AppContext,
     @PubSub() pubSub: PubSubEngine
-  ): Promise<string | null> {
+  ): Promise<ReattachConversationResponse | null> {
     try {
       const md = new Metadata();
       const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
@@ -1477,8 +1496,9 @@ cycle.`);
         // Add this session to the active streams for this conversation
         activeStreams.addSession(ConversationId, userPayload.sessionId);
         
-        // Get the last known status message from our cache
+        // Get the last known status message and start time from our cache
         const lastStatusMessage = activeStreams.getStatus(ConversationId) || 'Processing...';
+        const startTime = activeStreams.getStartTime(ConversationId);
         
         // Check if the stream is still active
         const isStreamActive = activeStreams.isActive(ConversationId);
@@ -1501,6 +1521,12 @@ cycle.`);
           });
           
           LogStatus(`Re-attached session ${userPayload.sessionId} to active stream for conversation ${ConversationId}, last status: ${lastStatusMessage}`);
+          
+          // Return the status and start time
+          return {
+            lastStatusMessage,
+            startTime: startTime || convoEntity.__mj_UpdatedAt
+          };
         } else {
           // Stream is inactive or doesn't exist, just send default status
           const statusMessage = {
@@ -1519,9 +1545,13 @@ cycle.`);
           });
           
           LogStatus(`Re-attached session ${userPayload.sessionId} to conversation ${ConversationId}, but stream is inactive`);
+          
+          // Return default start time since stream is inactive
+          return {
+            lastStatusMessage: 'Processing...',
+            startTime: convoEntity.__mj_UpdatedAt
+          };
         }
-        
-        return lastStatusMessage;
       } else {
         LogStatus(`Conversation ${ConversationId} is not processing (Status: ${convoEntity.Status})`);
         return null;

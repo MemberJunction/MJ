@@ -639,7 +639,10 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       
       // Call the backend to re-attach this session to the processing conversation
       const gql = `query ReattachToProcessingConversation($conversationId: String!) {
-        ReattachToProcessingConversation(ConversationId: $conversationId)
+        ReattachToProcessingConversation(ConversationId: $conversationId) {
+          lastStatusMessage
+          startTime
+        }
       }`;
       
       const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
@@ -648,13 +651,15 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       });
       
       if (result && result.ReattachToProcessingConversation) {
-        const lastStatusMessage = result.ReattachToProcessingConversation;
+        const response = result.ReattachToProcessingConversation;
+        const lastStatusMessage = response.lastStatusMessage;
+        const startTime = response.startTime ? new Date(response.startTime) : null;
         
         // Update the cached status message with what we got from the backend
         if (lastStatusMessage && lastStatusMessage !== 'Processing your request...') {
           this._statusMessagesByConversation[conversationId] = {
             message: lastStatusMessage,
-            startTime: this._statusMessagesByConversation[conversationId]?.startTime || new Date()
+            startTime: startTime || this._statusMessagesByConversation[conversationId]?.startTime || new Date()
           };
           
           // Update the display if this is the current conversation
@@ -1379,20 +1384,32 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         const cachedStatus = this._statusMessagesByConversation[conversation.ID];
         
         if (!cachedStatus && conversation.Status === 'Processing') {
-          // After a page reload, we don't have cached status but the conversation is processing
-          // Request the current status from the backend
-          this.requestCurrentConversationStatus(conversation.ID);
+          // After a page reload or when switching to a conversation without cached status,
+          // request the current status from the backend and wait for it
+          this.requestCurrentConversationStatus(conversation.ID).then(() => {
+            // After getting the status from backend, set up the message with the correct start time
+            const updatedStatus = this._statusMessagesByConversation[conversation.ID];
+            if (updatedStatus) {
+              this.SetSkipStatusMessage(updatedStatus.message, 0, updatedStatus.startTime);
+            } else {
+              // Fallback if backend didn't return status
+              this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
+            }
+            // Start polling after the message is created
+            this.startRequestStatusPolling(conversation.ID);
+          });
+        } else {
+          // We have cached status, use it directly
+          const statusMessage = cachedStatus?.message || "Processing...";
+          const statusStartTime = cachedStatus?.startTime || conversation.__mj_UpdatedAt;
+          
+          // Create the temporary status message after a brief delay to ensure DOM is ready
+          this.setTimeout(() => {
+            this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
+            // Start polling after the temporary message is created
+            this.startRequestStatusPolling(conversation.ID);
+          }, 100);
         }
-        
-        const statusMessage = cachedStatus?.message || "Processing...";
-        const statusStartTime = cachedStatus?.startTime || conversation.__mj_UpdatedAt;
-        
-        // Create the temporary status message after a brief delay to ensure DOM is ready
-        this.setTimeout(() => {
-          this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
-          // Start polling after the temporary message is created
-          this.startRequestStatusPolling(conversation.ID);
-        }, 100);
       } else {
         // Conversation is not processing
       }
