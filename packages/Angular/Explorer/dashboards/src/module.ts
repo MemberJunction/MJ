@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
+import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
@@ -99,6 +100,7 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     IndicatorsModule,
     DropDownsModule,
     InputsModule,
+    DateInputsModule,
     LayoutModule,
     DialogsModule,
     WindowModule,

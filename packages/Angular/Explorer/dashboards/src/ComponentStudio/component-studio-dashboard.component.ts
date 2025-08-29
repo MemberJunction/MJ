@@ -1136,8 +1136,8 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     try {
       const dialogRef = this.dialogService.open({
         content: ArtifactSelectionDialogComponent,
-        width: 700,
-        height: 600,
+        width: 1000, // Increased from 700px by 300px
+        height: 900, // Increased from 600px by 300px
         appendTo: this.viewContainerRef
       });
 

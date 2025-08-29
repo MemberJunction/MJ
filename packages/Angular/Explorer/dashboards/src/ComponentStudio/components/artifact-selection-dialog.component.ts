@@ -28,9 +28,17 @@ export class ArtifactSelectionDialogComponent implements OnInit {
   // UI State
   isLoading = true;
   searchTerm = '';
-  showMyArtifactsOnly = false;
-  showComponentsOnly = true;
+  userEmail = '';
+  selectedArtifactType = '';
   showNewArtifactForm = false;
+  
+  // Artifact types for dropdown
+  artifactTypes = [
+    { text: 'All Types', value: '' },
+    { text: 'Component', value: 'Component' },
+    { text: 'Report', value: 'Report' },
+    { text: 'Dashboard', value: 'Dashboard' }
+  ];
   
   // Selection State
   selectedArtifact: ConversationArtifactEntity | null = null;
@@ -65,17 +73,18 @@ export class ArtifactSelectionDialogComponent implements OnInit {
         ExtraFilter: this._artifactFilter,
         EntityName: 'MJ: Conversation Artifacts',
         OrderBy: '__mj_UpdatedAt DESC',
-        MaxRows: this.pageSize + 1, // Load one extra to check if more pages exist
+        MaxRows: this.pageSize,
         StartRow: startRow,
         ResultType: 'entity_object'
       });
 
       if (result.Success && result.Results) {
-        // Check if we have more pages by seeing if we got the extra record
-        this.hasMorePages = result.Results.length > this.pageSize;
+        this.artifacts = result.Results;
         
-        // Remove the extra record if it exists
-        this.artifacts = result.Results.slice(0, this.pageSize);
+        // Calculate total pages using TotalRowCount from server
+        this.totalArtifacts = result.TotalRowCount || 0;
+        const totalPages = Math.ceil(this.totalArtifacts / this.pageSize);
+        this.hasMorePages = this.currentPage < totalPages - 1;
       }
     } catch (error) {
       console.error('Error loading artifacts:', error);
@@ -89,21 +98,29 @@ export class ArtifactSelectionDialogComponent implements OnInit {
     // Reset to first page when filters change
     this.currentPage = 0;
     
+    const filters: string[] = [];
+    
     // Filter by search term
-    if (this.searchTerm) {
+    if (this.searchTerm?.trim()) {
       const term = this.searchTerm.toLowerCase();
-      this._artifactFilter = `Name LIKE '%${term}%' OR Description LIKE '%${term}%'`;
-    } else {
-      this._artifactFilter = undefined;
+      filters.push(`(Name LIKE '%${term}%' OR Description LIKE '%${term}%')`);
     }
     
-    // Filter by user if needed
-    if (this.showMyArtifactsOnly && this.currentUser) {
+    // Filter by artifact type
+    if (this.selectedArtifactType) {
+      filters.push(`ArtifactTypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.selectedArtifactType}')`);
+    }
+    
+    // Filter by user email if provided
+    if (this.userEmail?.trim()) {
       const md = new Metadata();
       const schemaName = md.EntityByName("Conversations")?.SchemaName || "__mj";
-      const userFilter = `ConversationID IN(SELECT ID FROM ${schemaName}.vwConversations WHERE UserID='${this.currentUser.ID}')`;
-      this._artifactFilter = this._artifactFilter ? `${this._artifactFilter} AND ${userFilter}` : userFilter;
+      const userFilter = `ConversationID IN(SELECT ID FROM ${schemaName}.vwConversations WHERE [User] LIKE '%${this.userEmail.trim()}%')`;
+      filters.push(userFilter);
     }
+    
+    // Combine all filters
+    this._artifactFilter = filters.length > 0 ? filters.join(' AND ') : undefined;
 
     await this.loadArtifacts();
   }
@@ -169,6 +186,10 @@ export class ArtifactSelectionDialogComponent implements OnInit {
 
   canGoPrevious(): boolean {
     return this.currentPage > 0;
+  }
+
+  getTotalPages(): number {
+    return Math.ceil(this.totalArtifacts / this.pageSize);
   }
 
   canSave(): boolean {
