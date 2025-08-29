@@ -1384,31 +1384,29 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         const cachedStatus = this._statusMessagesByConversation[conversation.ID];
         
         if (!cachedStatus && conversation.Status === 'Processing') {
+          // Show a default message immediately while we fetch the real status
+          this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
+          
           // After a page reload or when switching to a conversation without cached status,
-          // request the current status from the backend and wait for it
+          // request the current status from the backend and update when ready
           this.requestCurrentConversationStatus(conversation.ID).then(() => {
-            // After getting the status from backend, set up the message with the correct start time
+            // After getting the status from backend, update the message with the correct start time
             const updatedStatus = this._statusMessagesByConversation[conversation.ID];
             if (updatedStatus) {
               this.SetSkipStatusMessage(updatedStatus.message, 0, updatedStatus.startTime);
-            } else {
-              // Fallback if backend didn't return status
-              this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
             }
-            // Start polling after the message is created
+            // Start polling after getting the real status
             this.startRequestStatusPolling(conversation.ID);
           });
         } else {
-          // We have cached status, use it directly
+          // We have cached status, use it directly and immediately
           const statusMessage = cachedStatus?.message || "Processing...";
           const statusStartTime = cachedStatus?.startTime || conversation.__mj_UpdatedAt;
           
-          // Create the temporary status message after a brief delay to ensure DOM is ready
-          this.setTimeout(() => {
-            this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
-            // Start polling after the temporary message is created
-            this.startRequestStatusPolling(conversation.ID);
-          }, 100);
+          // Set the status message immediately since we have cached data
+          this.SetSkipStatusMessage(statusMessage, 0, statusStartTime);
+          // Start polling immediately
+          this.startRequestStatusPolling(conversation.ID);
         }
       } else {
         // Conversation is not processing
