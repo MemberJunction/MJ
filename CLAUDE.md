@@ -2,7 +2,14 @@
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO `any` TYPES - EVER
+### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git commit` without the user explicitly asking you to**
+- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
+- **NEVER ask to commit** - wait for the user to request it
+- **ONLY commit what is staged** - never modify or add to staged changes
+- **NEVER commit work-in-progress** that isn't staged by the user
+
+### 2. NO `any` TYPES - EVER
 - **NEVER use `any` types in TypeScript code**
 - **ALWAYS ask the user** if you think you need to use `any`
 - The user will provide a proper typing solution in most cases
@@ -12,18 +19,6 @@
   - No `<any>` generic type arguments
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
-
-### 2. NO COMMITS WITHOUT EXPLICIT APPROVAL
-- **NEVER run `git commit` without the user explicitly asking you to**
-- You may:
-  - Stage changes with `git add`
-  - Show what would be committed with `git status` and `git diff --cached`
-  - Prepare commit messages
-- You may NOT:
-  - Run `git commit` unless the user says "commit" or "create a commit" or similar
-  - Push changes to remote
-  - Create pull requests without approval
-- **Why**: The user needs to review all changes before they become permanent
 
 ### 3. NO MODIFICATIONS TO MERGED PRs
 - **NEVER update title/description of merged PRs** without explicit approval each time

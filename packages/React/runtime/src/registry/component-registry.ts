@@ -244,6 +244,34 @@ export class ComponentRegistry {
   }
 
   /**
+   * Clear all components in a specific namespace
+   * @param namespace - Namespace to clear (default: 'Global')
+   * @returns Number of components removed
+   */
+  clearNamespace(namespace: string = 'Global'): number {
+    const toRemove: string[] = [];
+    for (const [key, entry] of this.registry) {
+      if (entry.metadata.namespace === namespace) {
+        toRemove.push(key);
+      }
+    }
+    for (const key of toRemove) {
+      this.registry.delete(key);
+    }
+    return toRemove.length;
+  }
+
+  /**
+   * Force clear all components and reset registry
+   * Used for development/testing scenarios
+   */
+  forceClear(): void {
+    this.stopCleanupTimer();
+    this.registry.clear();
+    console.log('🧹 Registry force cleared - all components removed');
+  }
+
+  /**
    * Gets the current size of the registry
    * @returns Number of registered components
    */

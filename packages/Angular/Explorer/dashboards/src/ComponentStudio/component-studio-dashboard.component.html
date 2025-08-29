@@ -32,6 +32,27 @@
             </div>
           }
         </div>
+        @if (selectedComponent && isRunning) {
+          <div class="export-dropdown" [class.open]="exportDropdownOpen">
+            <button kendoButton (click)="toggleExportDropdown()" [themeColor]="'primary'">
+              <span class="fa-solid fa-file-export"></span> Export
+              <span class="fa-solid fa-chevron-down" style="margin-left: 5px; font-size: 10px;"></span>
+            </button>
+            @if (exportDropdownOpen) {
+              <div class="dropdown-menu">
+                <button class="dropdown-item" (click)="exportToArtifact()">
+                  <i class="fa-solid fa-save"></i> Export to Artifact
+                </button>
+                <button class="dropdown-item" (click)="exportToFile()">
+                  <i class="fa-solid fa-file"></i> Export to File
+                </button>
+                <button class="dropdown-item" (click)="exportToClipboard()">
+                  <i class="fa-solid fa-clipboard"></i> Export to Clipboard
+                </button>
+              </div>
+            }
+          </div>
+        }
         <button kendoButton (click)="refreshData()" [disabled]="isLoading">
           <span class="fa-solid fa-sync"></span> Refresh
         </button>
