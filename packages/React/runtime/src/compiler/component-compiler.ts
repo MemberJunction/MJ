@@ -426,9 +426,15 @@ export class ComponentCompiler {
       console.warn('⚠️ No componentLibraries provided for LibraryRegistry initialization');
     }
 
-    // Filter out React and ReactDOM as they are always loaded by the runtime
+    // Filter out React, ReactDOM, and invalid library entries
     const filteredLibraries = libraries.filter(lib => {
-      const libNameLower = lib.name?.toLowerCase();
+      // Check if library object is valid
+      if (!lib || typeof lib !== 'object' || !lib.name) {
+        console.warn(`⚠️ Invalid library entry detected (missing name):`, lib);
+        return false;
+      }
+      
+      const libNameLower = lib.name.toLowerCase();
       if (libNameLower === 'react' || libNameLower === 'reactdom') {
         console.warn(`⚠️ Library '${lib.name}' is automatically loaded by the React runtime and should not be requested separately`);
         return false;
@@ -436,8 +442,10 @@ export class ComponentCompiler {
       return true;
     });
     
-    // Extract library names from the filtered libraries
-    const libraryNames = filteredLibraries.map(lib => lib.name);
+    // Extract library names from the filtered libraries (with extra safety)
+    const libraryNames = filteredLibraries
+      .map(lib => lib.name)
+      .filter(name => name && typeof name === 'string');
     
     if (this.config.debug) {
       console.log('📦 Using dependency-aware loading for libraries:', libraryNames);
