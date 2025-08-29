@@ -125,6 +125,7 @@ const configInfoSchema = z.object({
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
+  publicUrl: z.string().optional().default(process.env.MJAPI_PUBLIC_URL || ''), // Public URL for callbacks (e.g., ngrok URL when developing)
 
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),
@@ -183,6 +184,7 @@ export const {
   userEmailMap,
   apiKey,
   baseUrl,
+  publicUrl,
   mjCoreSchema: mj_core_schema,
   dbReadOnlyUsername,
   dbReadOnlyPassword,

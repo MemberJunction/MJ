@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take, firstValueFrom } from 'rxjs';
@@ -10,15 +10,13 @@ import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJMSALProvider() {
-  // This function ensures the class is included in the bundle
-  return MJMSALProvider;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 @RegisterClass(MJAuthBase, 'msal')
-export class MJMSALProvider extends MJAuthBase {
+export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   static readonly PROVIDER_TYPE = 'msal';
   type = MJMSALProvider.PROVIDER_TYPE;
 
@@ -291,5 +289,20 @@ export class MJMSALProvider extends MJAuthBase {
   validateConfig(_config: any): boolean {
     // MSAL configuration is handled by Angular module providers
     return true;
+  }
+  
+  ngOnDestroy(): void {
+    // Complete the destroying subject to clean up subscriptions
+    this._destroying$.next();
+    this._destroying$.complete();
+    
+    // Clear any cached promises
+    this._initPromise = null;
+    
+    // Complete behavior subjects
+    this._initializationCompleted$.complete();
+    this.isAuthenticated$.complete();
+    this.userProfile$.complete();
+    this.userEmail$.complete();
   }
 }

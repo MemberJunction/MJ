@@ -7,8 +7,6 @@ import OktaAuth, { OktaAuthOptions, IDToken, AccessToken } from '@okta/okta-auth
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJOktaProvider() {
-  // This function ensures the class is included in the bundle
-  return MJOktaProvider;
 }
 
 /**

@@ -7,8 +7,6 @@ import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
 export function LoadMJAuth0Provider() {
-  // This function ensures the class is included in the bundle
-  return MJAuth0Provider;
 }
 
 @Injectable({
