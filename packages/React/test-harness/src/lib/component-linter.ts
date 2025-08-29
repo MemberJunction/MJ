@@ -7,6 +7,7 @@ import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
+import { StylesTypeAnalyzer } from './styles-type-analyzer';
 
 export interface LintResult {
   success: boolean;
@@ -116,6 +117,16 @@ const runViewResultProps: readonly string[] = [
 ] as const satisfies readonly (keyof RunViewResult)[];
 
 export class ComponentLinter {
+  private static stylesAnalyzer: StylesTypeAnalyzer;
+  
+  // Get or create the styles analyzer instance
+  private static getStylesAnalyzer(): StylesTypeAnalyzer {
+    if (!ComponentLinter.stylesAnalyzer) {
+      ComponentLinter.stylesAnalyzer = new StylesTypeAnalyzer();
+    }
+    return ComponentLinter.stylesAnalyzer;
+  }
+  
   // Helper method to check if a statement contains a return
   private static containsReturn(node: t.Node): boolean {
     let hasReturn = false;
@@ -6055,6 +6066,154 @@ Correct pattern:
     },
     
     {
+      name: 'styles-invalid-path',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const analyzer = ComponentLinter.getStylesAnalyzer();
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Build the complete property chain first
+            let propertyChain: string[] = [];
+            let current: any = path.node;
+            
+            // Walk up from the deepest member expression to build the full chain
+            while (t.isMemberExpression(current)) {
+              if (t.isIdentifier(current.property)) {
+                propertyChain.unshift(current.property.name);
+              }
+              
+              if (t.isIdentifier(current.object)) {
+                propertyChain.unshift(current.object.name);
+                break;
+              }
+              
+              current = current.object;
+            }
+            
+            // Only process if this is a styles access
+            if (propertyChain[0] === 'styles') {
+              
+              // Validate the path
+              if (!analyzer.isValidPath(propertyChain)) {
+                const suggestions = analyzer.getSuggestionsForPath(propertyChain);
+                const accessPath = propertyChain.join('.');
+                
+                let message = `Invalid styles property path: "${accessPath}"`;
+                
+                if (suggestions.didYouMean) {
+                  message += `\n\nDid you mean: ${suggestions.didYouMean}?`;
+                }
+                
+                if (suggestions.correctPaths.length > 0) {
+                  message += `\n\nThe property "${propertyChain[propertyChain.length - 1]}" exists at:`;
+                  suggestions.correctPaths.forEach((p: string) => {
+                    message += `\n  - ${p}`;
+                  });
+                }
+                
+                if (suggestions.availableAtParent.length > 0) {
+                  const parentPath = propertyChain.slice(0, -1).join('.');
+                  message += `\n\nAvailable properties at ${parentPath}:`;
+                  message += `\n  ${suggestions.availableAtParent.slice(0, 5).join(', ')}`;
+                  if (suggestions.availableAtParent.length > 5) {
+                    message += ` (and ${suggestions.availableAtParent.length - 5} more)`;
+                  }
+                }
+                
+                // Get a contextual default value
+                const defaultValue = analyzer.getDefaultValueForPath(propertyChain);
+                message += `\n\nSuggested fix with safe access:\n  ${accessPath.replace(/\./g, '?.')} || ${defaultValue}`;
+                
+                violations.push({
+                  rule: 'styles-invalid-path',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: message,
+                  code: accessPath
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'styles-unsafe-access',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const analyzer = ComponentLinter.getStylesAnalyzer();
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Build the complete property chain first
+            let propertyChain: string[] = [];
+            let current: any = path.node;
+            let hasOptionalChaining = path.node.optional || false;
+            
+            // Walk up from the deepest member expression to build the full chain
+            while (t.isMemberExpression(current)) {
+              if (current.optional) {
+                hasOptionalChaining = true;
+              }
+              if (t.isIdentifier(current.property)) {
+                propertyChain.unshift(current.property.name);
+              }
+              
+              if (t.isIdentifier(current.object)) {
+                propertyChain.unshift(current.object.name);
+                break;
+              }
+              
+              current = current.object;
+            }
+            
+            // Only process if this is a styles access
+            if (propertyChain[0] === 'styles') {
+              
+              // Only check valid paths for safe access
+              if (analyzer.isValidPath(propertyChain)) {
+                // Check if this is a nested access without optional chaining or fallback
+                if (propertyChain.length > 2 && !hasOptionalChaining) {
+                  // Check if there's a fallback (|| operator)
+                  const parent = path.parent;
+                  const hasFallback = t.isLogicalExpression(parent) && parent.operator === '||';
+                  
+                  if (!hasFallback) {
+                    const accessPath = propertyChain.join('.');
+                    const defaultValue = analyzer.getDefaultValueForPath(propertyChain);
+                    
+                    violations.push({
+                      rule: 'styles-unsafe-access',
+                      severity: 'high',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Unsafe styles property access: "${accessPath}". While this path is valid, you should use optional chaining for safety.
+                      
+Example with optional chaining:
+  ${accessPath.replace(/\./g, '?.')} || ${defaultValue}
+  
+This prevents runtime errors if the styles object structure changes.`,
+                      code: accessPath
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'runquery-runview-spread-operator',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -7788,6 +7947,48 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
 //   TotalRowCount?: number,
 //   ExecutionTime?: number
 // }`
+          });
+          break;
+          
+        case 'styles-invalid-path':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
+            example: `// ❌ WRONG - Invalid property paths:
+styles.fontSize.small           // fontSize is not at root level
+styles.colors.background        // colors.background exists
+styles.spacing.small            // should be styles.spacing.sm
+
+// ✅ CORRECT - Valid property paths:
+styles.typography.fontSize.sm   // fontSize is under typography
+styles.colors.background        // correct path
+styles.spacing.sm               // correct size name
+
+// With safe access and fallbacks:
+styles?.typography?.fontSize?.sm || '14px'
+styles?.colors?.background || '#FFFFFF'
+styles?.spacing?.sm || '8px'`
+          });
+          break;
+          
+        case 'styles-unsafe-access':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use optional chaining for nested styles access to prevent runtime errors.',
+            example: `// ❌ UNSAFE - Direct nested access:
+const fontSize = styles.typography.fontSize.md;
+const borderRadius = styles.borders.radius.sm;
+
+// ✅ SAFE - With optional chaining and fallbacks:
+const fontSize = styles?.typography?.fontSize?.md || '14px';
+const borderRadius = styles?.borders?.radius?.sm || '6px';
+
+// Even better - destructure with defaults:
+const {
+  typography: {
+    fontSize: { md: fontSize = '14px' } = {}
+  } = {}
+} = styles || {};`
           });
           break;
       }

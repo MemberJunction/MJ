@@ -18,8 +18,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "ts-node-dev": "^2.0.0"
   },
   "dependencies": {
     "@memberjunction/react-runtime": "^2.94.0",
@@ -31,6 +30,7 @@
     "ora": "^5.4.1",
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
-    "@babel/types": "^7.23.0"
+    "@babel/types": "^7.23.0",
+    "typescript": "^5.4.5"
   }
 }
