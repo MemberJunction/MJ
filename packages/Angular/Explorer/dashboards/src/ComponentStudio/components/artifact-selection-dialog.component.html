@@ -6,55 +6,66 @@
     </kendo-dialog-titlebar>
 
     <div class="artifact-selection-content">
-        <!-- Search and Filters -->
-        <div class="filters-section">
-            <!-- Search -->
-            <kendo-textbox 
-                [(value)]="searchTerm"
-                (valueChange)="filterArtifacts()"
-                placeholder="Search artifacts by name or description..."
-                [clearButton]="true"
-                style="width: 100%; margin-bottom: 15px;">
-                <ng-template kendoTextBoxPrefixTemplate>
-                    <i class="fa-solid fa-search"></i>
-                </ng-template>
-            </kendo-textbox>
-            
-            <!-- Filters Row -->
-            <div class="filter-row" >
-                <!-- Artifact Type -->
-                <div>
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 13px;">Artifact Type</label>
-                    <kendo-dropdownlist
-                        [data]="artifactTypes"
-                        (valueChange)="filterArtifacts()"
-                        textField="text"
-                        valueField="value"
-                        style="width: 100%;">
-                    </kendo-dropdownlist>
-                </div>
-                
-                <!-- User Email -->
-                <div  >
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #555; font-size: 13px;">Filter by User</label>
-                    <kendo-textbox 
-                        [(value)]="userEmail"
-                        (valueChange)="filterArtifacts()"
-                        placeholder="Enter user email..."
-                        [clearButton]="true"
-                        style="width: 100%;">
-                        <ng-template kendoTextBoxPrefixTemplate>
-                            <i class="fa-solid fa-user"></i>
-                        </ng-template>
-                    </kendo-textbox>
-                </div>
+        <!-- Left Filter Panel -->
+        <div class="filter-panel" [style.width]="isFilterPanelCollapsed ? '40px' : '280px'">
+            <!-- Panel Header -->
+            <div class="panel-header">
+                @if (!isFilterPanelCollapsed) {
+                    <span>Filters</span>
+                }
+                <button kendoButton (click)="toggleFilterPanel()" 
+                        [fillMode]="'flat'"
+                        [class.filter-active]="getActiveFilterCount() > 0"
+                        [themeColor]="getActiveFilterCount() > 0 ? 'primary' : 'base'">
+                    <i class="fa-solid fa-filter"></i>
+                    @if (isFilterPanelCollapsed && getActiveFilterCount() > 0) {
+                        <span class="filter-count">{{ getActiveFilterCount() }}</span>
+                    }
+                </button>
             </div>
+
+            @if (!isFilterPanelCollapsed) {
+                <div class="filter-content">
+                    <!-- Search -->
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <input type="text" 
+                               [(ngModel)]="searchTerm"
+                               (input)="onSearchInput()"
+                               placeholder="Name or description..."
+                               class="filter-input">
+                    </div>
+
+                    <!-- Artifact Type -->
+                    <div class="filter-group">
+                        <label>Artifact Type</label>
+                        <select [(ngModel)]="selectedArtifactType" 
+                                (change)="onArtifactTypeChange()"
+                                class="filter-select">
+                            <option value="">All Types</option>
+                            <option value="Component">Component</option>
+                            <option value="Report">Report</option>
+                            <option value="Dashboard">Dashboard</option>
+                        </select>
+                    </div>
+                    
+                    <!-- User Email -->
+                    <div class="filter-group">
+                        <label>Filter by User</label>
+                        <input type="text" 
+                               [(ngModel)]="userEmail"
+                               (input)="filterArtifacts()"
+                               placeholder="Enter user email..."
+                               class="filter-input">
+                    </div>
+                </div>
+            }
         </div>
 
-        <!-- Existing Artifacts Section -->
-        <div class="existing-artifacts-section">
+        <!-- Main Content Area -->
+        <div class="main-content">
             <!-- Paging Controls -->
-            <div class="paging-controls" >
+            <div class="paging-controls">
                 <button kendoButton 
                     (click)="previousPage()" 
                     [disabled]="!canGoPrevious()"
@@ -76,12 +87,13 @@
             <!-- Existing Artifacts -->
             <div class="artifacts-list">
                 @if (isLoading) {
-                    <div class="loading">
-                        <i class="fa-solid fa-spinner fa-spin"></i> Loading artifacts...
+                    <div class="loading-state">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <p>Loading artifacts...</p>
                     </div>
                 } 
                 @else if (artifacts.length === 0) {
-                    <div class="no-artifacts">
+                    <div class="empty-state">
                         <i class="fa-solid fa-inbox"></i>
                         <p>No artifacts found</p>
                     </div>
@@ -91,109 +103,123 @@
                         <div class="artifact-item" 
                             [class.selected]="selectedArtifact?.ID === artifact.ID"
                             (click)="selectArtifact(artifact)">
-                            <div class="artifact-header">
-                                <div class="artifact-name">
-                                    <i class="fa-solid fa-file-code"></i>
-                                    {{ artifact.Name }}
+                            <div class="artifact-content">
+                                <div class="artifact-main">
+                                    <div class="artifact-name">
+                                        <i class="fa-solid fa-file-code"></i>
+                                        <span>{{ artifact.Name }}</span>
+                                    </div>
+                                    @if (artifact.Description) {
+                                        <div class="artifact-description">
+                                            {{ artifact.Description }}
+                                        </div>
+                                    }
                                 </div>
                                 <div class="artifact-meta">
-                                    <span class="artifact-type">{{ artifact.ArtifactType }}</span>
-                                    <span class="artifact-date">{{ artifact.__mj_UpdatedAt | date:'short' }}</span>
+                                    <div>{{ artifact.ArtifactType }}</div>
+                                    <div>{{ artifact.__mj_UpdatedAt | date:'short' }}</div>
                                 </div>
                             </div>
-                            @if (artifact.Description) {
-                                <div class="artifact-description">
-                                {{ artifact.Description }}
-                                </div>
-                            }
-                        
-                            <!-- Version Selection (shown when artifact is selected) -->
-                            @if (selectedArtifact?.ID === artifact.ID && artifactVersions.length > 0) {
-                                <div class="version-section">
-                                    <h4>Select Version Action:</h4>
-                                    <div class="version-options">
-                                        <label class="version-option">
-                                        <input type="radio" 
-                                            name="versionAction" 
-                                            value="new"
-                                            [(ngModel)]="versionAction"
-                                            (change)="selectedVersion = null">
-                                        <span>Create New Version (v{{ getNextVersionNumber() }})</span>
-                                        </label>
-                                        
-                                        <label class="version-option">
-                                        <input type="radio" 
-                                            name="versionAction" 
-                                            value="update"
-                                            [(ngModel)]="versionAction">
-                                        <span>Update Existing Version</span>
-                                        </label>
-                                        
-                                        @if (versionAction === 'update') {
-                                            <div class="version-list">
-                                                @for (version of artifactVersions; track version.ID) {
-                                                    <label class="version-item">
-                                                        <input type="radio" 
-                                                        name="selectedVersion"
-                                                        [value]="version"
-                                                        [(ngModel)]="selectedVersion">
-                                                        <span>
-                                                        Version {{ version.Version }}
-                                                        <small>({{ version.__mj_UpdatedAt | date:'short' }})</small>
-                                                        </span>
-                                                    </label>
-                                                }
-                                            </div>
-                                            
-                                            @if (selectedVersion) {
-                                                <div class="update-warning">
-                                                    <i class="fa-solid fa-exclamation-triangle"></i>
-                                                    <span>Warning: This will overwrite version {{ selectedVersion.Version }}</span>
-                                                </div>
-                                            }
-                                        }
-                                    </div>
-                                </div>
-                            }
                         </div>
                     }
                 }
             </div>
-        </div>
-        
-        <!-- Create New Artifact Section (at bottom) -->
-        <div class="create-new-section">
-            <div class="divider">
-                <span>OR CREATE NEW ARTIFACT</span>
-            </div>
             
-            <button kendoButton 
-            (click)="selectCreateNew()"
-            [themeColor]="'primary'"
-            style="width: 100%;">
-            <i class="fa-solid fa-plus"></i> Create New Artifact
-            </button>
-            
-            @if (showNewArtifactForm) {
-            <div class="new-artifact-form">
-                <kendo-textbox 
-                [(value)]="newArtifactName"
-                placeholder="Artifact name..."
-                style="width: 100%; margin: 10px 0;">
-                </kendo-textbox>
-                <kendo-textarea 
-                [(value)]="newArtifactDescription"
-                placeholder="Description (optional)..."
-                style="width: 100%; height: 60px;">
-                </kendo-textarea>
+            <!-- Create New Artifact Section (at bottom) -->
+            <div class="create-section">
+                <div class="divider">OR CREATE NEW ARTIFACT</div>
+                
+                <button kendoButton 
+                (click)="selectCreateNew()"
+                [themeColor]="'primary'"
+                class="create-btn">
+                <i class="fa-solid fa-plus"></i> Create New Artifact
+                </button>
+                
+                @if (showNewArtifactForm) {
+                    <div class="new-artifact-form">
+                        <kendo-textbox 
+                        [(value)]="newArtifactName"
+                        placeholder="Artifact name...">
+                        </kendo-textbox>
+                        <kendo-textarea 
+                        [(value)]="newArtifactDescription"
+                        placeholder="Description (optional)...">
+                        </kendo-textarea>
+                    </div>
+                }
             </div>
-            }
         </div>
+
+        <!-- Right Version Panel (only show when artifact selected) -->
+        @if (selectedArtifact) {
+            <div class="version-panel">
+                <div class="panel-header">
+                    <h4><i class="fa-solid fa-code-branch"></i> Version</h4>
+                </div>
+                
+                @if (artifactVersions.length > 0) {
+                    <div class="version-content">
+                        <div class="version-actions">
+                            <label>Action</label>
+                            <label class="radio-label">
+                                <input type="radio" 
+                                    name="versionAction" 
+                                    value="new"
+                                    [(ngModel)]="versionAction"
+                                    (change)="selectedVersion = null">
+                                <span>Create New Version (v{{ getNextVersionNumber() }})</span>
+                            </label>
+                            
+                            <label class="radio-label">
+                                <input type="radio" 
+                                    name="versionAction" 
+                                    value="update"
+                                    [(ngModel)]="versionAction">
+                                <span>Update Existing Version</span>
+                            </label>
+                        </div>
+                        
+                        @if (versionAction === 'update') {
+                            <div class="version-selection">
+                                <label>Select Version</label>
+                                @for (version of artifactVersions; track version.ID) {
+                                    <label class="version-item" 
+                                           [class.selected]="selectedVersion?.ID === version.ID">
+                                        <input type="radio" 
+                                            name="selectedVersion"
+                                            [value]="version"
+                                            [(ngModel)]="selectedVersion">
+                                        <div class="version-info">
+                                            <div class="version-number">Version {{ version.Version }}</div>
+                                            <div class="version-date">{{ version.__mj_UpdatedAt | date:'short' }}</div>
+                                        </div>
+                                    </label>
+                                }
+                            </div>
+                            
+                            @if (selectedVersion) {
+                                <div class="warning">
+                                    <i class="fa-solid fa-exclamation-triangle"></i>
+                                    <span>Warning: This will overwrite version {{ selectedVersion.Version }}</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                } @else {
+                    <div class="info-state">
+                        <i class="fa-solid fa-info-circle"></i>
+                        <p>No versions available for this artifact.</p>
+                        <p>A new version will be created.</p>
+                    </div>
+                }
+            </div>
+        }
     </div>
 
     <kendo-dialog-actions>
         <button kendoButton 
-            [themeColor]="'primary'" 
+            [themeColor]="versionAction === 'update' && selectedVersion ? 'warning' : 'primary'" 
             (click)="save()"
             [disabled]="!canSave()">
             <i class="fa-solid fa-save"></i> 

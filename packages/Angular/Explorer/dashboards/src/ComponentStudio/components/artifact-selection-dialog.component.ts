@@ -1,7 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import { ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
+import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 export interface ArtifactSelectionResult {
   artifact: ConversationArtifactEntity;
@@ -14,7 +16,7 @@ export interface ArtifactSelectionResult {
   templateUrl: './artifact-selection-dialog.component.html',
   styleUrl: './artifact-selection-dialog.component.css'
 })
-export class ArtifactSelectionDialogComponent implements OnInit {
+export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   // Data
   artifacts: ConversationArtifactEntity[] = [];
   artifactVersions: ConversationArtifactVersionEntity[] = [];
@@ -31,14 +33,8 @@ export class ArtifactSelectionDialogComponent implements OnInit {
   userEmail = '';
   selectedArtifactType = '';
   showNewArtifactForm = false;
+  isFilterPanelCollapsed = false;
   
-  // Artifact types for dropdown
-  artifactTypes = [
-    { text: 'All Types', value: '' },
-    { text: 'Component', value: 'Component' },
-    { text: 'Report', value: 'Report' },
-    { text: 'Dashboard', value: 'Dashboard' }
-  ];
   
   // Selection State
   selectedArtifact: ConversationArtifactEntity | null = null;
@@ -51,13 +47,29 @@ export class ArtifactSelectionDialogComponent implements OnInit {
   
   private metadata = new Metadata();
   private currentUser: UserInfo | null = null;
+  private destroy$ = new Subject<void>();
+  private searchSubject = new Subject<string>();
 
   constructor(
     public dialog: DialogRef
   ) {}
 
   async ngOnInit() {
+    // Setup search debouncing
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.filterArtifacts();
+    });
+    
     await this.filterArtifacts();
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   async loadArtifacts() {
@@ -190,6 +202,30 @@ export class ArtifactSelectionDialogComponent implements OnInit {
 
   getTotalPages(): number {
     return Math.ceil(this.totalArtifacts / this.pageSize);
+  }
+
+  toggleFilterPanel() {
+    this.isFilterPanelCollapsed = !this.isFilterPanelCollapsed;
+  }
+
+  onSearchInput() {
+    this.searchSubject.next(this.searchTerm);
+  }
+
+  onArtifactTypeChange() {
+    // Clear selected artifact when type changes
+    this.selectedArtifact = null;
+    this.selectedVersion = null;
+    this.artifactVersions = [];
+    this.filterArtifacts();
+  }
+
+  getActiveFilterCount(): number {
+    let count = 0;
+    if (this.searchTerm?.trim()) count++;
+    if (this.selectedArtifactType) count++;
+    if (this.userEmail?.trim()) count++;
+    return count;
   }
 
   canSave(): boolean {
