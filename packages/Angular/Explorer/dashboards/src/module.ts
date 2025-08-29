@@ -50,6 +50,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
 // Component Studio Components
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
 import { TextImportDialogComponent } from './ComponentStudio/components/text-import-dialog.component';
+import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
@@ -89,7 +90,8 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     PerformanceHeatmapComponent,
     // Component Studio Components
     ComponentStudioDashboardComponent,
-    TextImportDialogComponent
+    TextImportDialogComponent,
+    ArtifactSelectionDialogComponent
   ],
   imports: [
     CommonModule,

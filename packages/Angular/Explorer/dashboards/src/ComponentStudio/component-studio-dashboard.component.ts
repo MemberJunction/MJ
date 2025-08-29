@@ -2,15 +2,20 @@ import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import { ComponentEntityExtended } from '@memberjunction/core-entities';
+import { 
+  ComponentEntityExtended, 
+  ConversationArtifactEntity, 
+  ConversationArtifactVersionEntity 
+} from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { ReactComponentEvent } from '@memberjunction/ng-react';
+import { ReactComponentEvent, MJReactComponent } from '@memberjunction/ng-react';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
 import { TextImportDialogComponent } from './components/text-import-dialog.component';
+import { ArtifactSelectionDialogComponent, ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
 
 // Interface for components loaded from files (not from database)
 interface FileLoadedComponent {
@@ -86,8 +91,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
   
-  // Import dropdown state
+  // Dropdown states
   public importDropdownOpen = false;
+  public exportDropdownOpen = false;
   
   // Text import dialog reference
   private textImportDialog?: DialogRef;
@@ -501,13 +507,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   private startComponent(component: DisplayComponent): void {
+    // Clear registries BEFORE starting new component for fresh load
+    if (!this.isRunning) {
+      // Only clear if not already running (switching components handles this in stopComponent)
+      MJReactComponent.forceClearRegistries();
+    }
+    
     this.selectedComponent = component;
     this.componentSpec = this.getComponentSpec(component);
     this.isRunning = true;
     this.currentError = null; // Clear any previous errors
     this.isDetailsPaneCollapsed = true; // Start with details collapsed
     this.initializeEditors(); // Initialize spec and code editors
-    console.log('Running component:', this.getComponentName(component));
+    console.log('Running component (fresh):', this.getComponentName(component));
     try {
       this.cdr.detectChanges();
     } catch (error) {
@@ -520,6 +532,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.selectedComponent = null;
     this.componentSpec = null;
     this.currentError = null;
+    
+    // CLEAR ALL REGISTRIES for fresh component loads
+    MJReactComponent.forceClearRegistries();
+    console.log('Component Studio: Cleared all registries for fresh component testing');
+    
     try {
       this.cdr.detectChanges();
     }
@@ -605,6 +622,18 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   // Import handling methods
   public toggleImportDropdown(): void {
     this.importDropdownOpen = !this.importDropdownOpen;
+    // Close export dropdown if open
+    if (this.importDropdownOpen) {
+      this.exportDropdownOpen = false;
+    }
+  }
+
+  public toggleExportDropdown(): void {
+    this.exportDropdownOpen = !this.exportDropdownOpen;
+    // Close import dropdown if open
+    if (this.exportDropdownOpen) {
+      this.importDropdownOpen = false;
+    }
   }
   
   public closeImportDropdown(): void {
@@ -613,11 +642,19 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   
   @HostListener('document:click', ['$event'])
   public onDocumentClick(event: MouseEvent): void {
-    // Close dropdown if clicking outside
+    // Close dropdowns if clicking outside
     const target = event.target as HTMLElement;
-    const dropdown = target.closest('.import-dropdown');
-    if (!dropdown && this.importDropdownOpen) {
+    
+    // Check import dropdown
+    const importDropdown = target.closest('.import-dropdown');
+    if (!importDropdown && this.importDropdownOpen) {
       this.importDropdownOpen = false;
+    }
+    
+    // Check export dropdown
+    const exportDropdown = target.closest('.export-dropdown');
+    if (!exportDropdown && this.exportDropdownOpen) {
+      this.exportDropdownOpen = false;
     }
   }
   
@@ -871,6 +908,10 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         // Rebuild code sections from updated spec
         this.buildCodeSections();
         
+        // Clear registries to ensure fresh component load
+        MJReactComponent.forceClearRegistries();
+        console.log('Cleared registries after applying spec changes');
+        
         // If component is running, update it without full refresh
         if (this.isRunning) {
           this.updateRunningComponent();
@@ -928,6 +969,10 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         
         // Update the runtime spec
         this.componentSpec = spec;
+        
+        // Clear registries to ensure fresh component load
+        MJReactComponent.forceClearRegistries();
+        console.log('Cleared registries after applying code changes');
         
         // If component is running, update it without full refresh
         if (this.isRunning) {
@@ -1046,6 +1091,220 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     // Initialize editors when switching to spec or code tabs
     // Both tabs now need initialization since there's no separate Run tab
     this.initializeEditors();
+  }
+
+  /**
+   * Export the current component to an artifact
+   */
+  public async exportToArtifact(): Promise<void> {
+    console.log('exportToArtifact called');
+    
+    if (!this.selectedComponent || !this.componentSpec) {
+      console.error('No component selected or spec available');
+      return;
+    }
+
+    console.log('Component and spec available, proceeding...');
+
+    // Close the dropdown
+    this.exportDropdownOpen = false;
+    
+    // Small delay to ensure dropdown is closed before opening dialog
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Get the current spec - use edited version if available
+    let currentSpec: ComponentSpec;
+    
+    // Check if user has made edits
+    if (this.isEditingSpec || this.isEditingCode) {
+      // Parse the edited spec to get the latest version
+      try {
+        currentSpec = JSON.parse(this.editableSpec);
+      } catch (parseError) {
+        console.error('Invalid JSON in spec editor, using original spec');
+        currentSpec = this.componentSpec;
+      }
+    } else {
+      currentSpec = this.componentSpec;
+    }
+
+    // Open the artifact selection dialog
+    console.log('Opening artifact selection dialog...');
+    
+    let result: ArtifactSelectionResult | undefined;
+    
+    try {
+      const dialogRef = this.dialogService.open({
+        content: ArtifactSelectionDialogComponent,
+        width: 700,
+        height: 600,
+        appendTo: this.viewContainerRef
+      });
+
+      console.log('Dialog opened, waiting for result...');
+      result = await dialogRef.result.toPromise() as ArtifactSelectionResult | undefined;
+      console.log('Dialog result:', result);
+    } catch (error) {
+      console.error('Error opening dialog:', error);
+      return;
+    }
+    
+    if (!result) {
+      console.log('User cancelled dialog');
+      // User cancelled
+      return;
+    }
+
+    try {
+      const artifact = result.artifact;
+      let version: ConversationArtifactVersionEntity;
+
+      if (result.action === 'update-version' && result.versionToUpdate) {
+        // Load and update existing version
+        version = result.versionToUpdate;
+      } else {
+        // Create new version
+        version = await this.metadata.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions');
+        version.ConversationArtifactID = artifact.ID;
+        
+        // Get next version number
+        const rv = new RunView();
+        const versionsResult = await rv.RunView<ConversationArtifactVersionEntity>({
+          EntityName: 'MJ: Conversation Artifact Versions',
+          ExtraFilter: `ConversationArtifactID = '${artifact.ID}'`,
+          OrderBy: 'Version DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        });
+
+        if (versionsResult.Success && versionsResult.Results && versionsResult.Results.length > 0) {
+          version.Version = versionsResult.Results[0].Version + 1;
+        } else {
+          version.Version = 1;
+        }
+      }
+      
+      // Store the complete spec in Configuration field
+      version.Configuration = JSON.stringify(currentSpec, null, 2);
+      
+      // Optionally store just the code in Content field for easier access
+      version.Content = currentSpec.code;
+      
+      // Add version comments
+      const timestamp = new Date().toISOString();
+      const actionText = result.action === 'update-version' ? 'Updated' : 'Created';
+      version.Comments = `${actionText} from Component Studio at ${timestamp}`;
+
+      const versionSaveResult = await version.Save();
+      if (versionSaveResult) {
+        const componentName = this.getComponentName(this.selectedComponent);
+        console.log(`✅ Saved ${componentName} as artifact version ${version.Version}`);
+        
+        // Show success message (you could add a toast/notification here)
+        alert(`Component saved as artifact version ${version.Version}`);
+      } else {
+        console.error('Failed to save artifact version:', version.LatestResult?.Message);
+        alert('Failed to save artifact version. Check console for details.');
+      }
+
+    } catch (error) {
+      console.error('Error saving to artifact:', error);
+      alert('Error saving component to artifact. Check console for details.');
+    }
+  }
+
+  /**
+   * Export the current component to a file
+   */
+  public exportToFile(): void {
+    if (!this.selectedComponent || !this.componentSpec) {
+      console.error('No component selected or spec available');
+      return;
+    }
+
+    // Close the dropdown
+    this.exportDropdownOpen = false;
+
+    // Get the current spec - use edited version if available
+    let currentSpec: ComponentSpec;
+    
+    if (this.isEditingSpec || this.isEditingCode) {
+      try {
+        currentSpec = JSON.parse(this.editableSpec);
+      } catch (parseError) {
+        console.error('Invalid JSON in spec editor, using original spec');
+        currentSpec = this.componentSpec;
+      }
+    } else {
+      currentSpec = this.componentSpec;
+    }
+
+    // Create filename from component name - replace spaces and special chars with dashes
+    const componentName = this.getComponentName(this.selectedComponent);
+    const filename = componentName.replace(/\s+/g, '-').replace(/[^a-z0-9\-]/gi, '-').toLowerCase() + '.json';
+
+    // Create a blob with the JSON content
+    const jsonContent = JSON.stringify(currentSpec, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log(`✅ Exported ${componentName} to ${filename}`);
+  }
+
+  /**
+   * Export the current component to clipboard
+   */
+  public async exportToClipboard(): Promise<void> {
+    if (!this.selectedComponent || !this.componentSpec) {
+      console.error('No component selected or spec available');
+      return;
+    }
+
+    // Close the dropdown
+    this.exportDropdownOpen = false;
+
+    // Get the current spec - use edited version if available
+    let currentSpec: ComponentSpec;
+    
+    if (this.isEditingSpec || this.isEditingCode) {
+      try {
+        currentSpec = JSON.parse(this.editableSpec);
+      } catch (parseError) {
+        console.error('Invalid JSON in spec editor, using original spec');
+        currentSpec = this.componentSpec;
+      }
+    } else {
+      currentSpec = this.componentSpec;
+    }
+
+    // Copy to clipboard
+    const jsonContent = JSON.stringify(currentSpec, null, 2);
+    
+    try {
+      await navigator.clipboard.writeText(jsonContent);
+      
+      const componentName = this.getComponentName(this.selectedComponent);
+      console.log(`✅ Copied ${componentName} spec to clipboard`);
+      
+      // Show success message (you could add a toast/notification here)
+      alert('Component specification copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      alert('Failed to copy to clipboard. Please try again.');
+    }
   }
 }
 

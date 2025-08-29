@@ -27,7 +27,7 @@
         display: flex;
         gap: 8px;
         
-        .import-dropdown {
+        .import-dropdown, .export-dropdown {
           position: relative;
           
           .dropdown-menu {
