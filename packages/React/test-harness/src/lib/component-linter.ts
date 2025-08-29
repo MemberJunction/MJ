@@ -5767,6 +5767,377 @@ Correct pattern:
         
         return violations;
       }
+    },
+    
+    // New rules for catching RunQuery/RunView result access patterns
+    {
+      name: 'runquery-runview-ternary-array-check',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    // const result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    // result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for Array.isArray(result) ? result : [] pattern
+        traverse(ast, {
+          ConditionalExpression(path: NodePath<t.ConditionalExpression>) {
+            const test = path.node.test;
+            const consequent = path.node.consequent;
+            const alternate = path.node.alternate;
+            
+            // Check for Array.isArray(variable) pattern
+            if (t.isCallExpression(test) &&
+                t.isMemberExpression(test.callee) &&
+                t.isIdentifier(test.callee.object) &&
+                test.callee.object.name === 'Array' &&
+                t.isIdentifier(test.callee.property) &&
+                test.callee.property.name === 'isArray' &&
+                test.arguments.length === 1 &&
+                t.isIdentifier(test.arguments[0])) {
+              
+              const varName = test.arguments[0].name;
+              
+              // Check if this variable is a RunQuery/RunView result
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+                
+                // Check if the consequent is the same variable and alternate is []
+                if (t.isIdentifier(consequent) && 
+                    consequent.name === varName &&
+                    t.isArrayExpression(alternate) &&
+                    alternate.elements.length === 0) {
+                  
+                  violations.push({
+                    rule: 'runquery-runview-ternary-array-check',
+                    severity: 'critical',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `${resultInfo.method} never returns an array directly. The pattern "Array.isArray(${varName}) ? ${varName} : []" will always evaluate to [] because ${varName} is an object with { Success, Results, ErrorMessage }.
+
+Correct patterns:
+  // Option 1: Simple with fallback
+  ${varName}.Results || []
+  
+  // Option 2: Check success first
+  if (${varName}.Success) {
+    setData(${varName}.Results || []);
+  } else {
+    console.error('Failed:', ${varName}.ErrorMessage);
+    setData([]);
+  }`,
+                    code: `Array.isArray(${varName}) ? ${varName} : []`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-direct-setstate',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for passing result directly to setState functions
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check if this is a setState function call
+            if (t.isIdentifier(callee)) {
+              const funcName = callee.name;
+              
+              // Common setState patterns
+              const setStatePatterns = [
+                /^set[A-Z]/, // setData, setChartData, setItems, etc.
+                /^update[A-Z]/, // updateData, updateItems, etc.
+              ];
+              
+              const isSetStateFunction = setStatePatterns.some(pattern => pattern.test(funcName));
+              
+              if (isSetStateFunction && path.node.arguments.length > 0) {
+                const firstArg = path.node.arguments[0];
+                
+                // Check if the argument is a ternary with Array.isArray check
+                if (t.isConditionalExpression(firstArg)) {
+                  const test = firstArg.test;
+                  const consequent = firstArg.consequent;
+                  const alternate = firstArg.alternate;
+                  
+                  // Check for Array.isArray(variable) ? variable : []
+                  if (t.isCallExpression(test) &&
+                      t.isMemberExpression(test.callee) &&
+                      t.isIdentifier(test.callee.object) &&
+                      test.callee.object.name === 'Array' &&
+                      t.isIdentifier(test.callee.property) &&
+                      test.callee.property.name === 'isArray' &&
+                      test.arguments.length === 1 &&
+                      t.isIdentifier(test.arguments[0])) {
+                    
+                    const varName = test.arguments[0].name;
+                    
+                    if (resultVariables.has(varName) &&
+                        t.isIdentifier(consequent) &&
+                        consequent.name === varName) {
+                      
+                      const resultInfo = resultVariables.get(varName)!;
+                      
+                      violations.push({
+                        rule: 'runquery-runview-direct-setstate',
+                        severity: 'critical',
+                        line: firstArg.loc?.start.line || 0,
+                        column: firstArg.loc?.start.column || 0,
+                        message: `Passing ${resultInfo.method} result with incorrect Array.isArray check to ${funcName}. This will always pass an empty array because ${resultInfo.method} returns an object, not an array.
+
+Correct pattern:
+  if (${varName}.Success) {
+    ${funcName}(${varName}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${varName}.ErrorMessage);
+    ${funcName}([]);
+  }
+  
+  // Or simpler:
+  ${funcName}(${varName}.Results || []);`,
+                        code: `${funcName}(Array.isArray(${varName}) ? ${varName} : [])`
+                      });
+                    }
+                  }
+                }
+                
+                // Check if passing result directly (not accessing .Results)
+                if (t.isIdentifier(firstArg) && resultVariables.has(firstArg.name)) {
+                  const resultInfo = resultVariables.get(firstArg.name)!;
+                  
+                  violations.push({
+                    rule: 'runquery-runview-direct-setstate',
+                    severity: 'critical',
+                    line: firstArg.loc?.start.line || 0,
+                    column: firstArg.loc?.start.column || 0,
+                    message: `Passing ${resultInfo.method} result object directly to ${funcName}. The result is an object { Success, Results, ErrorMessage }, not the data array.
+
+Correct pattern:
+  if (${firstArg.name}.Success) {
+    ${funcName}(${firstArg.name}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${firstArg.name}.ErrorMessage);
+    ${funcName}([]);
+  }`,
+                    code: `${funcName}(${firstArg.name})`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-spread-operator',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for spread operator usage
+        traverse(ast, {
+          SpreadElement(path: NodePath<t.SpreadElement>) {
+            if (t.isIdentifier(path.node.argument)) {
+              const varName = path.node.argument.name;
+              
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+                
+                violations.push({
+                  rule: 'runquery-runview-spread-operator',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Cannot use spread operator on ${resultInfo.method} result object. Use ...${varName}.Results to spread the data array.
+
+Correct pattern:
+  const allData = [...existingData, ...${varName}.Results];
+  
+  // Or with null safety:
+  const allData = [...existingData, ...(${varName}.Results || [])];`,
+                  code: `...${varName}`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
