@@ -1,5 +1,6 @@
 {
   "name": "DataExportPanel",
+  "namespace": "Generic/UI/Export",
   "location": "embedded",
   "code": "@file:../code/data-export-panel.js",
   "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",

@@ -561,6 +561,27 @@ export class ComponentRegistryService {
     this.compiledComponentCache.clear();
     this.componentReferences.clear();
   }
+
+  /**
+   * Force clear all compiled components
+   * Used for Component Studio to ensure fresh loads
+   */
+  forceClearAll(): void {
+    this.compiledComponentCache.clear();
+    this.componentReferences.clear();
+    console.log('🧹 Component cache force cleared');
+  }
+
+  /**
+   * Reset the singleton instance
+   * Forces new instance creation on next access
+   */
+  static reset(): void {
+    if (ComponentRegistryService.instance) {
+      ComponentRegistryService.instance.forceClearAll();
+      ComponentRegistryService.instance = null;
+    }
+  }
   
   /**
    * Generate a cache key for a component

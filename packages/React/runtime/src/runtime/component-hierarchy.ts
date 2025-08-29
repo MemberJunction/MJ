@@ -7,7 +7,8 @@
 import { 
   CompilationResult,
   CompileOptions,
-  RuntimeContext
+  RuntimeContext,
+  CompiledComponent
 } from '../types';
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -94,31 +95,97 @@ export class ComponentHierarchyRegistrar {
     const errors: ComponentRegistrationError[] = [];
     const warnings: string[] = [];
 
-    // Register the root component
-    const rootResult = await this.registerSingleComponent(
-      rootSpec,
-      { styles, namespace, version, allowOverride, allLibraries: options.allLibraries }
-    );
-
-    if (rootResult.success) {
-      registeredComponents.push(rootSpec.name);
-    } else {
-      errors.push(rootResult.error!);
-      if (!continueOnError) {
-        return { success: false, registeredComponents, errors, warnings };
+    // PHASE 1: Compile all components first (but defer factory execution)
+    const compiledMap = new Map<string, CompiledComponent>();
+    const specMap = new Map<string, ComponentSpec>();
+    
+    // Helper to compile a component without calling its factory
+    const compileOnly = async (spec: ComponentSpec): Promise<{ success: boolean; error?: ComponentRegistrationError }> => {
+      if (!spec.code) return { success: true };
+      
+      try {
+        const compileOptions: CompileOptions = {
+          componentName: spec.name,
+          componentCode: spec.code,
+          styles,
+          libraries: spec.libraries,
+          dependencies: spec.dependencies,
+          allLibraries: options.allLibraries
+        };
+        
+        const result = await this.compiler.compile(compileOptions);
+        if (result.success && result.component) {
+          compiledMap.set(spec.name, result.component);
+          specMap.set(spec.name, spec);
+          return { success: true };
+        } else {
+          return {
+            success: false,
+            error: {
+              componentName: spec.name,
+              error: result.error?.message || 'Unknown compilation error',
+              phase: 'compilation'
+            }
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            componentName: spec.name,
+            error: error instanceof Error ? error.message : String(error),
+            phase: 'compilation'
+          }
+        };
+      }
+    };
+    
+    // Compile all components in hierarchy
+    const compileQueue = [rootSpec];
+    const visited = new Set<string>();
+    
+    while (compileQueue.length > 0) {
+      const spec = compileQueue.shift()!;
+      if (visited.has(spec.name)) continue;
+      visited.add(spec.name);
+      
+      const result = await compileOnly(spec);
+      if (!result.success) {
+        errors.push(result.error!);
+        if (!continueOnError) {
+          return { success: false, registeredComponents, errors, warnings };
+        }
+      }
+      
+      if (spec.dependencies) {
+        compileQueue.push(...spec.dependencies);
       }
     }
-
-    // Register child components recursively
-    const childComponents = rootSpec.dependencies || [];
-    if (childComponents.length > 0) {
-      const childResult = await this.registerChildComponents(
-        childComponents,
-        { styles, namespace, version, continueOnError, allowOverride, allLibraries: options.allLibraries },
-        registeredComponents,
-        errors,
-        warnings
+    
+    // PHASE 2: Execute all factories with components available
+    for (const [name, compiled] of compiledMap) {
+      const spec = specMap.get(name)!;
+      
+      // Build components object from all registered components
+      const components: Record<string, any> = {};
+      for (const [depName, depCompiled] of compiledMap) {
+        // Call factory to get ComponentObject, then extract React component
+        const depObject = depCompiled.factory(this.runtimeContext, styles);
+        components[depName] = depObject.component;
+      }
+      
+      // Now call factory with components available
+      const componentObject = compiled.factory(this.runtimeContext, styles, components);
+      
+      // Register in registry
+      this.registry.register(
+        spec.name,
+        componentObject,
+        spec.namespace || namespace,
+        version
       );
+      
+      registeredComponents.push(spec.name);
     }
 
     return {
@@ -198,15 +265,14 @@ export class ComponentHierarchyRegistrar {
       }
 
       // Call the factory to create the ComponentObject
-      const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
-
-      // Debug logging to verify ComponentObject structure
-      console.log(`📦 Registering ComponentObject for ${spec.name}:`, {
-        hasComponent: 'component' in componentObject,
-        componentType: typeof componentObject.component,
-        hasPrint: 'print' in componentObject,
-        hasRefresh: 'refresh' in componentObject
+      // IMPORTANT: We don't pass components here because child components may not be registered yet
+      // Components are resolved later when the component is actually rendered
+      console.log(`🏭 Calling factory for ${spec.name} with runtime context:`, {
+        hasReact: !!this.runtimeContext.React,
+        hasReactDOM: !!this.runtimeContext.ReactDOM,
+        libraryKeys: Object.keys(this.runtimeContext.libraries || {})
       });
+      const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
       // Register the full ComponentObject (not just the React component)
       this.registry.register(

@@ -1,128 +1,194 @@
-# Current Session State - React Runtime Export Functionality
+# MemberJunction React Runtime Testing & Development
 
-## Session Context
-**Date**: 2025-08-26
-**Branch**: an-dev-agents-2
-**Working Directory**: /Users/amith/Dropbox/develop/Mac/MJ/packages/React/runtime
+## 🚨 CRITICAL: Git Commit Rules 🚨
 
-## Completed Work
+**NEVER commit without explicit user approval**
+- Each commit requires ONE-TIME explicit approval from the user
+- Never ask to commit - wait for the user to request it
+- When committing, ONLY include what the user has staged
+- Never modify or add to staged changes
+- Never commit work-in-progress that isn't staged
 
-### 1. React Runtime Debug Logging Fixes
-- Fixed unsafe window object logging that could cause JSON serialization errors in `component-compiler.ts`
-- Changed line 426-428 to only log matching property names instead of full window object
-- Changed line 323 to use cleaner logging format
-- Debug mode defaults to `false` in compiler configuration
+## Overview
+This document describes the React runtime architecture and the iterative testing workflow for improving component generation, validation, and execution in the MemberJunction ecosystem.
 
-### 2. DataExportPanel Improvements
-- Fixed export to include ALL data rows instead of truncating at 20
-- Added pagination support for PDFs with many rows
-- Re-adds headers on new pages for better readability
-- Removed the "... and X more rows" text that was cutting off data
-- Removed screenshot capture of AI Insights panel - now only uses markdown text
+## Architecture Components
 
-### 3. Standardized Export Functionality Across Components
-Successfully replaced custom export implementations with DataExportPanel in 7 components:
+### 1. React Runtime (`packages/React/runtime`)
+**Purpose**: Platform-agnostic React component compiler and execution environment
 
-#### Components Updated:
-1. **financial-analytics-dashboard.js** - Original implementation with DataExportPanel
-2. **ai-prompts-cluster.js** - Replaced CSV export button with DataExportPanel
-3. **win-loss-analysis.js** - Replaced custom CSV export with DataExportPanel
-4. **deal-velocity-metrics.js** - Replaced custom CSV export with DataExportPanel
-5. **ai-detail-table.js** - Replaced export button with DataExportPanel
+**Key Classes**:
+- **ComponentCompiler**: 
+  - Transpiles JSX to JavaScript using Babel
+  - Handles library loading with dependency resolution
+  - Wraps components with error boundaries and method registration
+  - Manages both core libraries (React, ReactDOM) and third-party libraries
 
-All component spec files were updated to include `@include:data-export-panel.spec.json` dependency.
+- **ComponentRegistry**: 
+  - Stores compiled components with namespace and version support
+  - Provides LRU cache management
+  - Enables component lookup and retrieval
 
-## Latest Fixes (2025-08-26 continued)
+- **ComponentHierarchyRegistrar**: 
+  - Registers entire component trees with dependencies
+  - Resolves inter-component references
+  - Handles library injection into component closures
 
-### Export Issues Resolved
+- **Resource Management**:
+  - ReactRootManager: Manages React root lifecycle
+  - ResourceManager: Tracks timeouts, intervals, and subscriptions
+  - Automatic cleanup on component unmount
 
-1. **Fixed Column Mapping Issue**:
-   - Changed from `field/header` to `key/label` format that DataExportPanel expects
-   - This fixed the undefined headers and empty rows in CSV/Excel exports
+**Distribution**: 
+- Node.js module for server/build-time use
+- UMD bundle (`dist/runtime.umd.js`) for browser execution
 
-2. **Added Runtime Validation**:
-   - DataExportPanel now validates column structure and warns about issues
-   - Validates data structure and warns if keys don't match columns
-   - Provides helpful console warnings for debugging
+### 2. React Test Harness (`packages/React/test-harness`)
+**Purpose**: Browser-based testing and validation of React components using Playwright
 
-3. **Moved Export Button to Header**:
-   - Relocated from controls panel to top-right header area
-   - Better UI/UX with dropdown having proper space to display
+**Key Features**:
+- **ComponentRunner**: 
+  - Executes components in real Chrome browser via Playwright
+  - Injects MJ utilities (RunView, RunQuery, AI tools) into browser context
+  - Captures errors, warnings, and console output
+  - Detects render loops and infinite recursion
 
-4. **Fixed PDF Export with Cluster Visualization**:
-   - Made PDF export more robust - continues with data table if visualization capture fails
-   - Fixed indentation issues in export code
-   - Added proper error handling for html2canvas failures
-   - Returns container div instead of SVG directly (html2canvas handles this better)
+- **ComponentLinter**: 
+  - 20+ validation rules for component code quality
+  - Detects common React anti-patterns
+  - Validates data access patterns (RunView/RunQuery usage)
+  - Checks library and component dependencies
+  - Provides fix suggestions for violations
 
-## Files Modified in This Session
+- **Library Loading**:
+  - Loads libraries from CDN URLs specified in metadata
+  - Handles transitive dependencies (e.g., dayjs for antd)
+  - Validates library availability in browser context
 
-### React Runtime
-- `/packages/React/runtime/src/compiler/component-compiler.ts`
-- `/packages/React/runtime/src/index.ts`
-- `/packages/React/runtime/src/registry/component-registry-service.ts`
-- `/packages/React/runtime/src/registry/component-resolver.ts`
-- `/packages/React/runtime/src/types/index.ts`
+### 3. Angular/React Bridge (`packages/Angular/Generic/react`)
+**Purpose**: Host React components within Angular applications
 
-### Metadata Components
-- `/metadata/components/code/data-export-panel.js`
-- `/metadata/components/code/financial-analytics-dashboard.js`
-- `/metadata/components/code/ai-prompts-cluster.js`
-- `/metadata/components/code/ai-prompts-cluster-controls.js`
-- `/metadata/components/code/win-loss-analysis.js`
-- `/metadata/components/code/deal-velocity-metrics.js`
-- `/metadata/components/code/ai-detail-table.js`
+**Key Component - MJReactComponent**:
+- **Lifecycle Management**:
+  - Bootstraps React on first use
+  - Creates/destroys React roots properly
+  - Handles Angular OnPush change detection
 
-### Component Specs
-- `/metadata/components/spec/data-export-panel.spec.json`
-- `/metadata/components/spec/financial-analytics-dashboard.spec.json`
-- `/metadata/components/spec/ai-prompts-cluster.spec.json`
-- `/metadata/components/spec/win-loss-analysis.spec.json`
-- `/metadata/components/spec/deal-velocity-metrics.spec.json`
-- `/metadata/components/spec/ai-detail-table.spec.json`
+- **Auto-initialization**:
+  - Utilities (RunView, RunQuery, AI tools) created if not provided
+  - Styles generated using SetupStyles() if not provided
+  - Ensures components always have required dependencies
 
-### Component Registry
-- `/metadata/components/.components.json`
-- `/metadata/component-libraries/.component-libraries.json`
+- **State Management**:
+  - Implements SavedUserSettings pattern for persistence
+  - Emits events for state changes and user actions
+  - Supports two-way data binding with Angular
 
-## Last Commit
-```
-commit 13a148462
-Message: fix: Improve React runtime debug logging and export functionality
-- Fixed unsafe window object logging
-- DataExportPanel includes all data rows
-- Removed AI Insights screenshot capture
-```
+- **Method System**:
+  - Exposes component methods for runtime introspection
+  - Standard methods: getCurrentDataState(), validate(), isDirty(), reset()
+  - Custom method invocation via invokeMethod()
 
-## Next Steps
-1. Review console output when clicking export button in ai-prompts-cluster
-2. Identify why DataExportPanel might not be responding
-3. Check if the component is properly loaded in the registry
-4. Verify the data preparation and props passing
+## Testing Workflow
 
-## Important Notes
-- DO NOT commit without explicit user approval
-- All export components now use DataExportPanel for consistency
-- Export supports CSV, Excel, and PDF formats where appropriate
-- Custom styling maintained through customStyles prop
+### Process
+1. **Generation**: Skip agent generates component specifications (JSON)
+2. **Testing**: Component spec is executed in test harness
+3. **Analysis**: Identify failure patterns and root causes
+4. **Improvement**: Enhance linter rules, generator logic, or runtime robustness
 
-## Debug Commands to Run
-```javascript
-// In browser console when on ai-prompts-cluster page:
-// 1. Check if DataExportPanel is available
-console.log(window.components?.DataExportPanel);
+### Improvement Areas
 
-// 2. Check export data preparation
-// Click the export button and watch for these logs:
-// - "🔍 [AIPromptsCluster] Component loading check:"
-// - "🔍 [AIPromptsCluster] prepareExportData called"
-// - "🔍 [AIPromptsClusterControls] DataExportPanel check:"
-// - "🔍 [AIPromptsClusterControls] Export started"
-```
+#### A. Linter Enhancements
+When to improve: Catching patterns that cause runtime failures
+- Add new validation rules
+- Enhance existing rule accuracy
+- Improve error messages and fix suggestions
+- Add pattern detection for common mistakes
 
-## Session Recovery
-To continue this work in a new session:
-1. Ensure you're on branch: `an-dev-agents-2`
-2. Working directory: `/Users/amith/Dropbox/develop/Mac/MJ/packages/React/runtime`
-3. The export button issue in ai-prompts-cluster.js needs resolution
-4. Console logging is already in place for debugging
+#### B. Generator Improvements (Skip)
+When to improve: Systematic generation issues
+- Update generation templates
+- Add missing pattern implementations
+- Fix incorrect API usage
+- Improve data access patterns
+
+#### C. Runtime Enhancements
+When to improve: Execution failures or poor developer experience
+- Better error recovery
+- Clearer error messages
+- Additional safety checks
+- Performance optimizations
+- Missing functionality
+
+### Common Issue Patterns
+
+#### Data Access Issues
+- Missing data requirements in spec
+- Incorrect RunView/RunQuery parameters
+- Undefined utilities or missing context
+- Synchronous access to async data
+
+#### Component Structure Issues
+- Invalid JSX syntax
+- Missing return statements
+- Incorrect hook usage
+- Component naming conflicts
+
+#### Library/Dependency Issues
+- Missing library declarations
+- Incorrect global variable names
+- Circular dependencies
+- Version conflicts
+
+#### State Management Issues
+- Direct state mutations
+- Missing useState declarations
+- Incorrect savedUserSettings usage
+- Event handler binding problems
+
+## Debug Strategies
+
+### For "No Data Available" Issues
+1. Check if utilities are properly passed to component
+2. Verify RunView/RunQuery calls have correct parameters
+3. Ensure data requirements match actual data access
+4. Check for loading state management
+5. Verify error handling doesn't swallow data
+
+### For Rendering Issues
+1. Check for infinite loops in useEffect
+2. Verify conditional rendering logic
+3. Ensure proper JSX structure
+4. Check for missing return statements
+5. Validate prop types and availability
+
+### For Library Issues
+1. Verify library is declared in spec
+2. Check CDN URLs are valid
+3. Ensure global variables match
+4. Check for dependency conflicts
+5. Validate library usage patterns
+
+## Recent Improvements
+
+### Linter Rules Added
+- `no-import-statements`: Prevents ES6 imports in components
+- `no-export-statements`: Prevents exports from components  
+- `no-require-statements`: Prevents require/dynamic imports
+- `component-not-in-dependencies`: Detects missing component dependencies
+- `validate-component-references`: Ensures referenced components exist
+
+### Runtime Improvements
+- Prevention of component self-destructuring in dependencies
+- Better library dependency resolution
+- Enhanced error messages for data access failures
+- Render loop detection with configurable thresholds
+- Improved memory cleanup with resource tracking
+
+### Generator Patterns (for Skip team)
+- Always declare utilities in component parameters
+- Include all referenced components in dependencies
+- Specify library requirements with correct global names
+- Implement proper loading states
+- Use error boundaries for resilience

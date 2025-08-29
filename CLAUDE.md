@@ -2,7 +2,14 @@
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO `any` TYPES - EVER
+### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git commit` without the user explicitly asking you to**
+- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
+- **NEVER ask to commit** - wait for the user to request it
+- **ONLY commit what is staged** - never modify or add to staged changes
+- **NEVER commit work-in-progress** that isn't staged by the user
+
+### 2. NO `any` TYPES - EVER
 - **NEVER use `any` types in TypeScript code**
 - **ALWAYS ask the user** if you think you need to use `any`
 - The user will provide a proper typing solution in most cases
@@ -12,18 +19,6 @@
   - No `<any>` generic type arguments
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
-
-### 2. NO COMMITS WITHOUT EXPLICIT APPROVAL
-- **NEVER run `git commit` without the user explicitly asking you to**
-- You may:
-  - Stage changes with `git add`
-  - Show what would be committed with `git status` and `git diff --cached`
-  - Prepare commit messages
-- You may NOT:
-  - Run `git commit` unless the user says "commit" or "create a commit" or similar
-  - Push changes to remote
-  - Create pull requests without approval
-- **Why**: The user needs to review all changes before they become permanent
 
 ### 3. NO MODIFICATIONS TO MERGED PRs
 - **NEVER update title/description of merged PRs** without explicit approval each time
@@ -357,6 +352,49 @@ module.exports = {
 - **Production High Load**: max: 100, min: 10
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
+
+## MJAPI Public URL Configuration
+
+When MJAPI needs to communicate with remote services (like Skip API), it sends a callback URL so the remote service can make requests back to MJAPI. By default, this URL is constructed from `baseUrl`, `graphqlPort`, and `graphqlRootPath` (e.g., `http://localhost:4000/`).
+
+For development scenarios where MJAPI is running locally but needs to communicate with remote services, you can configure a public URL that remote services can reach:
+
+### Configuration Methods
+
+#### 1. Environment Variable (Recommended for Development)
+```bash
+# Using ngrok
+ngrok http 4000
+# Output: Forwarding https://abc123.ngrok.io -> http://localhost:4000
+
+# Set the environment variable (include the full path if graphqlRootPath is not '/')
+export MJAPI_PUBLIC_URL=https://abc123.ngrok.io
+# OR if graphqlRootPath is '/graphql'
+export MJAPI_PUBLIC_URL=https://abc123.ngrok.io/graphql
+
+# Start MJAPI
+npm run start:api
+```
+
+#### 2. Configuration File
+Add to your `mj.config.cjs` or `.mjrc` file:
+```javascript
+module.exports = {
+  publicUrl: 'https://your-public-url.com',  // Include full path if needed
+  // ... other configuration
+};
+```
+
+### How It Works
+- When `publicUrl` is configured, MJAPI will use it as the `callingServerURL` when communicating with remote services
+- If `publicUrl` is not set, MJAPI constructs the URL as: `${baseUrl}:${graphqlPort}${graphqlRootPath}`
+- The `publicUrl` should include the complete path including any root path (e.g., `/graphql` if that's your GraphQL endpoint)
+- This ensures backward compatibility while enabling hybrid development scenarios
+
+### Use Cases
+- **Local Development with Remote Services**: Test local MJAPI changes against production Skip API
+- **Webhook Testing**: Receive callbacks from remote services during development
+- **Hybrid Deployments**: Mix local and cloud services during development/testing
 
 ## MetadataSync Package
 

@@ -26,7 +26,8 @@ import {
   resourceManager,
   reactRootManager,
   ResolvedComponents,
-  SetupStyles
+  SetupStyles,
+  ComponentRegistryService
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
@@ -240,14 +241,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         this.componentVersion
       );
       
-      console.log(`🔍 Retrieved from registry for ${this.component.name}:`, {
-        exists: !!componentWrapper,
-        type: typeof componentWrapper,
-        hasComponent: componentWrapper && 'component' in componentWrapper,
-        componentType: componentWrapper && componentWrapper.component ? typeof componentWrapper.component : 'N/A',
-        keys: componentWrapper ? Object.keys(componentWrapper) : []
-      });
-      
       if (!componentWrapper) {
         throw new Error(`Component ${this.component.name} was not found in registry after registration`);
       }
@@ -262,13 +255,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
       }
       
-      // React.forwardRef components are not plain functions, they're special React elements
-      // We need to check if it's a valid React element type instead of just checking for function
-      const isValidComponent = typeof componentWrapper.component === 'function' || 
-                               (componentWrapper.component && (componentWrapper.component as any).$$typeof);
-      
-      if (!isValidComponent) {
-        throw new Error(`Component is not a valid React component for ${this.component.name}: ${typeof componentWrapper.component}`);
+      // Now that we use a regular HOC wrapper, components should always be functions
+      if (typeof componentWrapper.component !== 'function') {
+        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
       }
       
       this.compiledComponent = componentWrapper;
@@ -462,12 +451,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
     
-    // ForwardRef components and regular functions are both valid
-    const isValidComponent = typeof this.compiledComponent.component === 'function' || 
-                           (this.compiledComponent.component && (this.compiledComponent.component as any).$$typeof);
-    
-    if (!isValidComponent) {
-      LogError(`Component is not a valid React component for ${this.component.name}: ${typeof this.compiledComponent.component}`);
+    // Components should be functions after HOC wrapping
+    if (typeof this.compiledComponent.component !== 'function') {
+      LogError(`Component is not a function for ${this.component.name}: ${typeof this.compiledComponent.component}`);
       return;
     }
 
@@ -786,6 +772,23 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     } else if (typeof window !== 'undefined' && window.print) {
       window.print();
     }
+  }
+
+  /**
+   * Force clear component registries
+   * Used by Component Studio for fresh loads
+   * This is a static method that can be called without a component instance
+   */
+  public static forceClearRegistries(): void {
+    // Clear React runtime's component registry service
+    ComponentRegistryService.reset();
+    
+    // Clear any cached hierarchy registrar
+    if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
+      (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
+    }
+    
+    console.log('🧹 All component registries cleared for fresh load');
   }
 
 }

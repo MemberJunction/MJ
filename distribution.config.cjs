@@ -261,6 +261,7 @@ const config = {
   userEmailMap: process.env.USER_EMAIL_MAP,
   apiKey: process.env.MJ_API_KEY,
   baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
+  publicUrl: process.env.MJAPI_PUBLIC_URL, // Public URL for callbacks (e.g., ngrok URL when developing)
   
   /**
    * Authentication Provider Configuration
