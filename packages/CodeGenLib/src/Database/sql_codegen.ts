@@ -134,7 +134,14 @@ export class SQLCodeGenBase {
                 batchSize: 5, 
                 enableSQLLoggingForNewOrModifiedEntities: true
             }); // enable sql logging for NEW entities....
-            if (!genResult.Success) {
+            
+            // Log failed entities if any
+            if (genResult.FailedEntities && genResult.FailedEntities.length > 0) {
+                logError(`Warning: ${genResult.FailedEntities.length} entities were skipped due to missing primary keys: ${genResult.FailedEntities.join(', ')}`);
+            }
+            
+            if (!genResult.Success && (!genResult.FailedEntities || genResult.FailedEntities.length === 0)) {
+                // Only fail completely if there were no primary key issues (other errors)
                 failSpinner('Failed to generate entity SQL files');
                 return false;
             }
@@ -152,7 +159,13 @@ export class SQLCodeGenBase {
                     batchSize: 1, // Process sequentially to maintain dependency order
                     enableSQLLoggingForNewOrModifiedEntities: true
                 });
-                if (!cascadeGenResult.Success) {
+                
+                // Log failed entities if any
+                if (cascadeGenResult.FailedEntities && cascadeGenResult.FailedEntities.length > 0) {
+                    logError(`Warning: ${cascadeGenResult.FailedEntities.length} cascade entities were skipped due to missing primary keys: ${cascadeGenResult.FailedEntities.join(', ')}`);
+                }
+                
+                if (!cascadeGenResult.Success && (!cascadeGenResult.FailedEntities || cascadeGenResult.FailedEntities.length === 0)) {
                     failSpinner('Failed to regenerate cascade delete SPs');
                     return false;
                 }
@@ -171,7 +184,13 @@ export class SQLCodeGenBase {
                 writeFiles: true,
                 enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
             });
-            if (!genResult2.Success) {
+            
+            // Log failed entities if any (even for permissions-only generation)
+            if (genResult2.FailedEntities && genResult2.FailedEntities.length > 0) {
+                logError(`Warning: ${genResult2.FailedEntities.length} excluded entities were skipped due to missing primary keys: ${genResult2.FailedEntities.join(', ')}`);
+            }
+            
+            if (!genResult2.Success && (!genResult2.FailedEntities || genResult2.FailedEntities.length === 0)) {
                 failSpinner('Failed to generate permissions for excluded entities');
                 return false;
             }
@@ -314,6 +333,9 @@ export class SQLCodeGenBase {
      * @param directory The directory to save the generated SQL files to
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
+    // Track entities that fail primary key validation to prevent cascading SQL errors
+    private failedEntities: Set<string> = new Set();
+
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
         pool: sql.ConnectionPool, 
         entities: EntityInfo[], 
@@ -323,11 +345,12 @@ export class SQLCodeGenBase {
         skipExecution: boolean, 
         batchSize?: number, 
         enableSQLLoggingForNewOrModifiedEntities?: boolean
-    }): Promise<{Success: boolean, Files: string[]}> {
+    }): Promise<{Success: boolean, Files: string[], FailedEntities: string[]}> {
         if (!options.batchSize)
             options.batchSize = 5; // default to 5 if not specified
 
         const files: string[] = [];
+        const failedEntityNames: string[] = [];
         try {
             let bFail: boolean = false;
             const totalEntities = options.entities.length;
@@ -338,7 +361,9 @@ export class SQLCodeGenBase {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
                         logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
-                        return {Success: false, Files: []};
+                        this.failedEntities.add(e.ID); // Track failed entity
+                        failedEntityNames.push(e.Name);
+                        return {Success: false, Files: [], EntityName: e.Name};
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
                         pool: options.pool,
@@ -359,11 +384,11 @@ export class SQLCodeGenBase {
                 });
             }
 
-            return {Success: !bFail, Files: files};
+            return {Success: !bFail, Files: files, FailedEntities: failedEntityNames};
         }
         catch (err) {
             logError(err as string);
-            return {Success: false, Files: files};
+            return {Success: false, Files: files, FailedEntities: failedEntityNames};
         }
     }
 
