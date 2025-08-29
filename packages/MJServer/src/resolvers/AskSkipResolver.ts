@@ -1059,6 +1059,8 @@ cycle.`);
       organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
+      // Favors public URL for conciseness or when behind a proxy for local development
+      // otherwise uses base URL and GraphQL port/path from configuration
       callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
       callingServerAPIKey: accessToken ? apiKey : undefined,
       callingServerAccessToken: accessToken ? accessToken.Token : undefined
