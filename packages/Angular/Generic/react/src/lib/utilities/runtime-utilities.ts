@@ -36,11 +36,14 @@ import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
  */
 @RegisterClass(RuntimeUtilities, 'RuntimeUtilities')
 export class RuntimeUtilities {
+  private debug: boolean = false;
+  
   /**
    * Builds the complete utilities object for React components
    * This is the main method that components will use
    */
-  public buildUtilities(): ComponentUtilities {
+  public buildUtilities(debug: boolean = false): ComponentUtilities {
+    this.debug = debug;
     const md = new Metadata();
     return this.SetupUtilities(md);
   }
@@ -140,8 +143,17 @@ export class RuntimeUtilities {
         // Run a single query and return the results
         try {
           const result = await rq.RunQuery(params);
+          if (result.Success) {
+            console.log(`✅ RunQuery succeeded: ${result.RowCount} rows returned`);
+            if (this.debug) {
+              console.log('RunQuery result:', result);
+            }
+          } else {
+            console.error(`❌ RunQuery failed: ${result.ErrorMessage}`);
+          }
           return result;
         } catch (error) {
+          console.error(`❌ RunQuery threw exception:`, error);
           LogError(error);
           throw error; // Re-throw to handle it in the caller
         }
@@ -155,8 +167,17 @@ export class RuntimeUtilities {
         // Run a single view and return the results
         try {
           const result = await rv.RunView(params);
+          if (result.Success) {
+            console.log(`✅ RunView succeeded for ${params.EntityName}: ${result.TotalRowCount} rows returned`);
+            if (this.debug) {
+              console.log('RunView result:', result);
+            }
+          } else {
+            console.error(`❌ RunView failed for ${params.EntityName}: ${result.ErrorMessage}`);
+          }
           return result;
         } catch (error) {
+          console.error(`❌ RunView threw exception:`, error);
           LogError(error);
           throw error; // Re-throw to handle it in the caller
         }
@@ -165,8 +186,15 @@ export class RuntimeUtilities {
         // Runs multiple views and returns the results
         try {
           const results = await rv.RunViews(params);
+          const entityNames = params.map(p => p.EntityName).join(', ');
+          const totalRows = results.reduce((sum, r) => sum + (r.TotalRowCount || 0), 0);
+          console.log(`✅ RunViews succeeded for [${entityNames}]: ${totalRows} total rows returned`);
+          if (this.debug) {
+            console.log('RunViews results:', results);
+          }
           return results;
         } catch (error) {
+          console.error(`❌ RunViews threw exception:`, error);
           LogError(error);
           throw error; // Re-throw to handle it in the caller
         }
