@@ -365,22 +365,26 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         if (conversation && (obj.status === 'Processing' || obj.status === 'Available')) {
           conversation.Status = obj.status;
           
-          // If this is the currently selected conversation, update UI accordingly
-          if (obj.conversationID === this.SelectedConversation?.ID) {
-            if (obj.status === 'Processing') {
-              // Conversation started processing - ensure we show status message if we have one cached
+          // Handle status changes
+          if (obj.status === 'Processing') {
+            // Conversation started processing
+            if (obj.conversationID === this.SelectedConversation?.ID) {
+              // If this is the currently selected conversation, ensure we show status message
               const cachedStatus = this._statusMessagesByConversation[obj.conversationID];
               if (cachedStatus) {
                 this.SetSkipStatusMessage(cachedStatus.message, 0, cachedStatus.startTime);
               }
-            } else if (obj.status === 'Available') {
-              // Conversation finished processing - clear status message
+            }
+          } else if (obj.status === 'Available') {
+            // Conversation finished processing - clear its tracking data
+            delete this._conversationsInProgress[obj.conversationID];
+            this._processingStatus[obj.conversationID] = false; // Set to false instead of deleting
+            delete this._statusMessagesByConversation[obj.conversationID];
+            delete this._temporaryMessagesByConversation[obj.conversationID];
+            
+            // Only clear the UI status message if this is the currently selected conversation
+            if (obj.conversationID === this.SelectedConversation?.ID) {
               this.SetSkipStatusMessage('', 0);
-              // Also clear from in-progress tracking
-              delete this._conversationsInProgress[obj.conversationID];
-              // Clear cached messages
-              delete this._statusMessagesByConversation[obj.conversationID];
-              delete this._temporaryMessagesByConversation[obj.conversationID];
             }
           }
         }
@@ -560,6 +564,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
             
             // Mark as in progress
             this._conversationsInProgress[convo.ID] = true;
+            this._processingStatus[convo.ID] = true; // Also update processing status for UI
             this._messageInProgress = true;
             this.AllowSend = false;
             
@@ -737,13 +742,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this.cdRef.detach();
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
-          // so we do nothing here other than update the status.
-          this.setProcessingStatus(convoID, false);
+          // so we just mark it for reload, don't update processing status
           //the next time the user selects this convo, we will fetch messages
           //from the server rather than using the ones in cache
           this._conversationsToReload[convoID] = true;
         } 
         else {
+          // Only update processing status for the selected conversation
           this.setProcessingStatus(convoID, false);
 
           if (this.SelectedConversation.Name === 'New Chat' || this.SelectedConversation.Name?.trim().length === 0 || this.SelectedConversation.Name !== conversation.Name)  {
@@ -781,6 +786,8 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
 
         this.AllowSend = true;
         this._conversationsInProgress[convoID] = false;
+        // Set processing status to false for this conversation
+        this._processingStatus[convoID] = false;
         this._messageInProgress = false;
 
         // now tell Angular to resume its change detection
@@ -789,9 +796,12 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
         //InvokeManualResize();
 
-        this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
-        // now set focus on the input box
-        this.askSkipInput.nativeElement.focus();
+        // Only clear the status message if this is the currently selected conversation
+        if (convoID === this.SelectedConversation?.ID) {
+          this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
+          // now set focus on the input box
+          this.askSkipInput.nativeElement.focus();
+        }
       }
     } catch (error) {
       LogError(`Error checking request status for conversation with ID ${convoID}: ${error}`);
@@ -1547,13 +1557,13 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       if (skipResult?.Success) {
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
-          // so we do nothing here other than update the status.
-          this.setProcessingStatus(convoID, false);
+          // so we just mark it for reload, don't update processing status
           //the next time the user selects this convo, we will fetch messages
           //from the server rather than using the ones in cache
           this._conversationsToReload[convoID] = true;
         } 
         else {
+          // Only update processing status for the selected conversation
           this.setProcessingStatus(convoID, false);
           const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result);
 
@@ -1599,12 +1609,15 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         }
       }
 
-      if (this.SelectedConversation) {
+      // Only update processing status if this is the currently selected conversation
+      if (this.SelectedConversation && this.SelectedConversation.ID === convoID) {
         this.setProcessingStatus(this.SelectedConversation.ID, false);
       }
 
       this.AllowSend = true;
       this._conversationsInProgress[convoID] = false;
+      // Set processing status to false for this conversation
+      this._processingStatus[convoID] = false;
       this._messageInProgress = false;
 
       // now tell Angular to resume its change detection
@@ -1613,9 +1626,12 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
       //InvokeManualResize();
 
-      this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
-      // now set focus on the input box
-      this.askSkipInput.nativeElement.focus();
+      // Only clear the status message if this is the currently selected conversation
+      if (convoID === this.SelectedConversation?.ID) {
+        this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
+        // now set focus on the input box
+        this.askSkipInput.nativeElement.focus();
+      }
     }
   }
 
@@ -2472,6 +2488,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
       // Clear processing state
       this.setProcessingStatus(this.SelectedConversation.ID, false);
       this._conversationsInProgress[this.SelectedConversation.ID] = false;
+      this._processingStatus[this.SelectedConversation.ID] = false;
       this._messageInProgress = false;
       this.AllowSend = true;
       
