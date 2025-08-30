@@ -159,11 +159,7 @@ export const contextFunction =
     );
 
     if (Metadata.Provider.Entities.length === 0 ) {
-      console.warn('No entities found in global/shared metadata');
-    }
-    else {
-      // we are okay
-      console.log('Entities found in global/shared metadata');
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
     }
 
     // now create a new instance of SQLServerDataProvider for each request
