@@ -1196,8 +1196,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/tab-navigation.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Tab Navigation\n\n### Purpose\nProvides tab-based navigation for switching between different views.\n\n### Features\n- Multiple tab support\n- Active tab indication\n- Tab change callbacks\n- Responsive layout",
       "TechnicalDesign": "## Implementation\n\n### Props\n- tabs: Array of tab configurations\n- activeTab: Currently active tab\n- onTabChange: Tab selection callback"
     },
@@ -1205,8 +1205,8 @@
       "ID": "A4FD56DF-352D-4EA9-9619-F0318D932449"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.294Z",
-      "checksum": "f742e759048c6cefdb378e26ee3eb81391d1cdb3c7b177d23911b285dcc654e6"
+      "lastModified": "2025-08-30T02:41:26.352Z",
+      "checksum": "e84dbea3911ce59a12f99f6f1b8cdfde47b1e35eaba4d94da39429a810af5330"
     }
   },
   {
@@ -1218,8 +1218,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/overview-tab.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Overview Tab\n\n### Purpose\nDisplays summary information and key metrics in the overview tab.\n\n### Features\n- Summary cards\n- Key metrics display\n- Recent activity\n- Quick actions",
       "TechnicalDesign": "## Implementation\n\n### Props\n- data: Overview data object\n- metrics: Key metrics to display\n- onAction: Action handler"
     },
@@ -1227,8 +1227,8 @@
       "ID": "6D3868E3-E374-42F5-88E3-315183ED141D"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.310Z",
-      "checksum": "410cb7cc929e587c53f2a422597a51f53b3bd3c3739814769b35b4ed728dbb65"
+      "lastModified": "2025-08-30T02:33:25.533Z",
+      "checksum": "94da6abb2ef3637903268d62674842280eb3d621e2e7b4015c31d00bfd944237"
     }
   },
   {
@@ -1240,8 +1240,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/timeline-tab.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Timeline Tab\n\n### Purpose\nDisplays chronological timeline of events and activities.\n\n### Features\n- Chronological event display\n- Event filtering\n- Date range selection\n- Event type icons",
       "TechnicalDesign": "## Implementation\n\n### Props\n- events: Array of timeline events\n- dateRange: Date filter range\n- filters: Event type filters"
     },
@@ -1249,8 +1249,8 @@
       "ID": "36FF4254-CA53-48F8-8B5A-D56124A9890A"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.328Z",
-      "checksum": "09ad17de26bcd24b07c931d1bc89fac68ced0245028707c14af54fcb99a7f937"
+      "lastModified": "2025-08-30T02:41:26.371Z",
+      "checksum": "92386ec15b52ebec3818a4ed27ca881d6b9ced4f71577a632729bc2d227b488c"
     }
   },
   {
@@ -1262,8 +1262,8 @@
       "Type": "Table",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/contacts-tab.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Contacts Tab\n\n### Purpose\nDisplays and manages contact information in a tabular format.\n\n### Features\n- Contact list display\n- Search and filter\n- Sort by columns\n- Contact details view",
       "TechnicalDesign": "## Implementation\n\n### Props\n- contacts: Array of contact records\n- onContactSelect: Contact selection handler\n- filters: Active filters"
     },
@@ -1271,8 +1271,8 @@
       "ID": "9F9D8195-FFAB-4373-A081-4DB11AD4B313"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.344Z",
-      "checksum": "5cc17089852734e80770bcdf620c9e9a1482148f4538d69a904f4a86593e99a9"
+      "lastModified": "2025-08-30T02:33:59.303Z",
+      "checksum": "29bbc0d32ab7b68be4449f39398746cf97602c6efd75d4c9243159eaff3a7370"
     }
   },
   {
@@ -1284,8 +1284,8 @@
       "Type": "Table",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/deals-tab.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Deals Tab\n\n### Purpose\nDisplays and manages deal/opportunity information.\n\n### Features\n- Deal pipeline view\n- Deal value and stage\n- Progress tracking\n- Quick actions",
       "TechnicalDesign": "## Implementation\n\n### Props\n- deals: Array of deal records\n- onDealSelect: Deal selection handler\n- viewMode: Display mode (list/cards)"
     },
@@ -1293,8 +1293,8 @@
       "ID": "F07042F2-82E7-4B5F-B308-CE32A0B55D65"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.362Z",
-      "checksum": "38de447a50fbaddec182d2cef9793af6b6e77aaf0d4778b89ff8eac4a649b1ee"
+      "lastModified": "2025-08-30T02:41:26.387Z",
+      "checksum": "519f686af541a995fa2ad0810cdf1a82994756fb3bb1c31ec731cfc66236968a"
     }
   },
   {
@@ -1306,8 +1306,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/insights-tab.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Insights Tab\n\n### Purpose\nProvides analytical insights and recommendations.\n\n### Features\n- AI-generated insights\n- Trend analysis\n- Recommendations\n- Performance metrics",
       "TechnicalDesign": "## Implementation\n\n### Props\n- insights: Array of insight items\n- metrics: Performance metrics\n- onInsightAction: Action handler for insights"
     },
@@ -1315,8 +1315,8 @@
       "ID": "FF789802-937E-432F-8640-566B9765C7D3"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.375Z",
-      "checksum": "7936dc8e6939be9181eb41d3c3f95685423a66fa52d5c8a8f8c463d5ac52afd6"
+      "lastModified": "2025-08-30T02:35:58.559Z",
+      "checksum": "eea0ea25500ee984bda40b41ec166ed43b27d526bfddf3748e668309e5c6ff1e"
     }
   },
   {
@@ -1416,8 +1416,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/details-panel.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Details Panel\n\n### Purpose\nSlide-out panel for displaying detailed information.\n\n### Features\n- Slide-in/out animation\n- Tabbed content\n- Close button\n- Responsive layout",
       "TechnicalDesign": "## Implementation\n\n### Props\n- data: Detail data object\n- isOpen: Panel open state\n- onClose: Close handler"
     },
@@ -1425,8 +1425,8 @@
       "ID": "2A325BAF-B1B7-4494-B73C-0C158B58B3B6"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.587Z",
-      "checksum": "e81f8e0c75e312cc186540fd513d0d974d324dbb76593a523f8161a3148fa80a"
+      "lastModified": "2025-08-30T02:32:23.209Z",
+      "checksum": "a39aa89c465ebd7c11142bd20cbe17e1e8898ca7c59d36394271725e1145bcaf"
     }
   },
   {
@@ -1438,8 +1438,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/overview-cards.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Overview Cards\n\n### Purpose\nDisplays summary information in card format.\n\n### Features\n- Multiple metric cards\n- Color-coded indicators\n- Trend arrows\n- Click actions",
       "TechnicalDesign": "## Implementation\n\n### Props\n- cards: Array of card configurations\n- onCardClick: Card click handler"
     },
@@ -1447,8 +1447,8 @@
       "ID": "2D19BF47-4E7A-4AA1-B2B9-60501E059A52"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.605Z",
-      "checksum": "e0d8fa254d8fa65a9c2c632b5cbb8105002982cce98505fdaaf3c37fb7cbeff0"
+      "lastModified": "2025-08-30T02:30:17.620Z",
+      "checksum": "4fae72a2cae8dee8627837ce359212c188ca5bb5f9e3e3360b135000d8079f7e"
     }
   },
   {
@@ -1460,8 +1460,8 @@
       "Type": "Chart",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/win-rate-by-owner.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Win Rate By Owner\n\n### Purpose\nVisualize win rates by deal owner/sales rep.\n\n### Features\n- Bar chart visualization\n- Owner performance comparison\n- Win/loss ratios\n- Sortable by metrics",
       "TechnicalDesign": "## Implementation\n\n### Props\n- ownerData: Array of owner performance metrics\n- sortBy: Sort field\n- onOwnerClick: Owner selection handler"
     },
@@ -1469,8 +1469,8 @@
       "ID": "3B4C4BAF-DECE-4CBB-B8C0-7D1855B74248"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.622Z",
-      "checksum": "c9e617180864e37f7d9de78ef3393e8996b55dde8f7ca2f815242f9c991dc402"
+      "lastModified": "2025-08-30T02:36:34.191Z",
+      "checksum": "44a9f7480d1bdf3f75853601109890ed8ddca64f8ed5cdd9686b8783c5b23a1a"
     }
   },
   {
@@ -1482,8 +1482,8 @@
       "Type": "Chart",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/loss-reasons.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Loss Reasons\n\n### Purpose\nAnalyze and display reasons for lost deals.\n\n### Features\n- Categorized loss reasons\n- Frequency analysis\n- Pie/bar chart options\n- Drill-down capability",
       "TechnicalDesign": "## Implementation\n\n### Props\n- lossData: Array of loss reason categories\n- chartType: Chart display type\n- onReasonClick: Reason selection handler"
     },
@@ -1491,8 +1491,8 @@
       "ID": "DB21D074-FF07-45FE-A4E4-A49FF3E834B6"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.639Z",
-      "checksum": "116d5ff891ca768300c913080410576b12a17a9f8c62992efc0803771ccafd4a"
+      "lastModified": "2025-08-30T02:37:01.562Z",
+      "checksum": "744724d8074e0de103d05c45b2bac16423a8bc409d9fabd50d91f49f094273d9"
     }
   },
   {
@@ -1504,8 +1504,8 @@
       "Type": "Chart",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/factor-analysis.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Factor Analysis\n\n### Purpose\nAnalyze factors contributing to wins and losses.\n\n### Features\n- Multi-factor comparison\n- Correlation analysis\n- Heat map visualization\n- Statistical insights",
       "TechnicalDesign": "## Implementation\n\n### Props\n- factors: Array of factor data\n- correlations: Correlation matrix\n- onFactorSelect: Factor selection handler"
     },
@@ -1513,8 +1513,8 @@
       "ID": "BA8D5132-64E5-412B-A1B1-F5BC1D64F938"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.657Z",
-      "checksum": "a20d5b5f20a5c68bdc04911f86e621195607b288f4c5b9f0e768c899d3b4e060"
+      "lastModified": "2025-08-30T02:41:26.442Z",
+      "checksum": "a865f3f240988e92e268d3df7034ef58c6e243f6e6d0e2a41d9389a3b198b740"
     }
   },
   {
@@ -1548,8 +1548,8 @@
       "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
-      "Status": "Published",
-      "Specification": "@file:spec/insights-panel.spec.json",
+      "Status": "Deprecated",
+      "Specification": "{}",
       "FunctionalRequirements": "## Insights Panel\n\n### Purpose\nDisplay actionable insights and recommendations.\n\n### Features\n- AI-generated recommendations\n- Priority ranking\n- Action items\n- Success metrics",
       "TechnicalDesign": "## Implementation\n\n### Props\n- insights: Array of insight items\n- priority: Priority filter\n- onActionClick: Action handler"
     },
@@ -1557,8 +1557,8 @@
       "ID": "9790872E-55C5-4ED9-9F4A-55078EC02359"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:55.813Z",
-      "checksum": "a5ef3206270568fa3c4457983bb1eaa6f924ddd529c1f8f2e74ded89dffa88b8"
+      "lastModified": "2025-08-30T02:35:26.609Z",
+      "checksum": "23f53639db3ae26d07867020d5cdb980d70a8f7242adca6f679e9228abeaa7d6"
     }
   },
   {
@@ -1975,8 +1975,8 @@
       "ID": "D08BCD9D-B26F-4C96-87E7-436DE63F18FF"
     },
     "sync": {
-      "lastModified": "2025-08-28T10:31:37.466Z",
-      "checksum": "49389eacdb26568370b631e9ac42d8ab18797c91adcfd9e1f723b4b8d9aa6a3f"
+      "lastModified": "2025-08-30T02:06:57.926Z",
+      "checksum": "0799257a8b6b65cc4af4bad5e0def06fecd9e39df26589848d08a28011a8af59"
     }
   }
 ]
