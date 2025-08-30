@@ -2310,6 +2310,99 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                           message,
                           code: `${propName}: ...`
                         });
+                      } else {
+                        // Property name is valid, now check its type
+                        const value = prop.value;
+                        
+                        // Helper to check if a node could evaluate to a string
+                        const isStringLike = (node: t.Node): boolean => {
+                          return t.isStringLiteral(node) || 
+                                 t.isTemplateLiteral(node) || 
+                                 t.isBinaryExpression(node) || // String concatenation
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function call
+                                 t.isMemberExpression(node); // Property access
+                        };
+                        
+                        // Helper to check if a node could evaluate to a number
+                        const isNumberLike = (node: t.Node): boolean => {
+                          return t.isNumericLiteral(node) ||
+                                 t.isBinaryExpression(node) || // Math operations
+                                 t.isUnaryExpression(node) || // Negative numbers, etc
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function call
+                                 t.isMemberExpression(node); // Property access
+                        };
+                        
+                        // Helper to check if a node is array-like
+                        const isArrayLike = (node: t.Node): boolean => {
+                          return t.isArrayExpression(node) ||
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function returning array
+                                 t.isMemberExpression(node) || // Property access
+                                 t.isConditionalExpression(node); // Ternary
+                        };
+                        
+                        // Helper to check if a node is object-like (but not array)
+                        const isObjectLike = (node: t.Node): boolean => {
+                          if (t.isArrayExpression(node)) return false;
+                          return t.isObjectExpression(node) ||
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function returning object
+                                 t.isMemberExpression(node) || // Property access
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isSpreadElement(node); // Spread syntax (though this is the problem case)
+                        };
+                        
+                        // Validate types based on property name
+                        if (propName === 'ExtraFilter' || propName === 'OrderBy' || propName === 'EntityName') {
+                          // These must be strings
+                          if (!isStringLike(value)) {
+                            let exampleValue = '';
+                            if (propName === 'ExtraFilter') {
+                              exampleValue = `"Status = 'Active' AND Type = 'Customer'"`;
+                            } else if (propName === 'OrderBy') {
+                              exampleValue = `"CreatedAt DESC"`;
+                            } else if (propName === 'EntityName') {
+                              exampleValue = `"Products"`;
+                            }
+                            
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property '${propName}' must be a string, not ${t.isObjectExpression(value) ? 'an object' : t.isArrayExpression(value) ? 'an array' : 'a non-string value'}. Example: ${propName}: ${exampleValue}`,
+                              code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`
+                            });
+                          }
+                        } else if (propName === 'Fields') {
+                          // Fields must be an array of strings (or a string that we'll interpret as comma-separated)
+                          if (!isArrayLike(value) && !isStringLike(value)) {
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property 'Fields' must be an array of field names or a comma-separated string. Example: Fields: ['ID', 'Name', 'Status'] or Fields: 'ID, Name, Status'`,
+                              code: `Fields: ${prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                            });
+                          }
+                        } else if (propName === 'MaxRows' || propName === 'StartRow') {
+                          // These must be numbers
+                          if (!isNumberLike(value)) {
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
+                              code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                            });
+                          }
+                        }
                       }
                     }
                   }
@@ -2417,6 +2510,92 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         message,
                         code: `${propName}: ...`
                       });
+                    } else {
+                      // Property name is valid, now check its type
+                      const value = prop.value;
+                      
+                      // Helper to check if a node could evaluate to a string
+                      const isStringLike = (node: t.Node): boolean => {
+                        return t.isStringLiteral(node) || 
+                               t.isTemplateLiteral(node) || 
+                               t.isBinaryExpression(node) || // String concatenation
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function call
+                               t.isMemberExpression(node); // Property access
+                      };
+                      
+                      // Helper to check if a node could evaluate to a number
+                      const isNumberLike = (node: t.Node): boolean => {
+                        return t.isNumericLiteral(node) ||
+                               t.isBinaryExpression(node) || // Math operations
+                               t.isUnaryExpression(node) || // Negative numbers, etc
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function call
+                               t.isMemberExpression(node); // Property access
+                      };
+                      
+                      // Helper to check if a node is object-like (but not array)
+                      const isObjectLike = (node: t.Node): boolean => {
+                        if (t.isArrayExpression(node)) return false;
+                        return t.isObjectExpression(node) ||
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function returning object
+                               t.isMemberExpression(node) || // Property access
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isSpreadElement(node); // Spread syntax
+                      };
+                      
+                      // Validate types based on property name
+                      if (propName === 'QueryID' || propName === 'QueryName' || propName === 'CategoryID' || propName === 'CategoryPath') {
+                        // These must be strings
+                        if (!isStringLike(value)) {
+                          let exampleValue = '';
+                          if (propName === 'QueryID') {
+                            exampleValue = `"550e8400-e29b-41d4-a716-446655440000"`;
+                          } else if (propName === 'QueryName') {
+                            exampleValue = `"Sales by Region"`;
+                          } else if (propName === 'CategoryID') {
+                            exampleValue = `"123e4567-e89b-12d3-a456-426614174000"`;
+                          } else if (propName === 'CategoryPath') {
+                            exampleValue = `"/Reports/Sales/"`;
+                          }
+                          
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property '${propName}' must be a string. Example: ${propName}: ${exampleValue}`,
+                            code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`
+                          });
+                        }
+                      } else if (propName === 'Parameters') {
+                        // Parameters must be an object (Record<string, any>)
+                        if (!isObjectLike(value)) {
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property 'Parameters' must be an object containing key-value pairs. Example: Parameters: { startDate: '2024-01-01', status: 'Active' }`,
+                            code: `Parameters: ${t.isArrayExpression(value) ? '[...]' : t.isStringLiteral(value) ? '"..."' : '...'}`
+                          });
+                        }
+                      } else if (propName === 'MaxRows' || propName === 'StartRow') {
+                        // These must be numbers
+                        if (!isNumberLike(value)) {
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
+                            code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                          });
+                        }
+                      }
                     }
                   }
                 }
