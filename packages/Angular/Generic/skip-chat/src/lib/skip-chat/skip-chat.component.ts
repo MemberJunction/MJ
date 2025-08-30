@@ -1334,9 +1334,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this.DataContext = convoAny._DataContext;
       } else {
         this.DataContext = new DataContext();
-        const start = new Date().getTime();
         await this.DataContext.LoadMetadata(this.DataContextID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
-        LogStatus('Skip Chat: Time to load data context: ' + (new Date().getTime() - start) + 'ms');
         // cache it for later
         convoAny._DataContext = this.DataContext;
       }

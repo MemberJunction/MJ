@@ -87,7 +87,8 @@ export class RuntimeUtilities {
 
           console.log(`🤖  ExecutePrompt succeeded!`);
           if (this.debug) {
-            console.log('    ExecutePrompt result:', result);
+            console.log('     > params', params);
+            console.log('     > result:', result);
           }
 
           return {
@@ -121,7 +122,8 @@ export class RuntimeUtilities {
           const numEmbeddings: number = Array.isArray(params.textToEmbed) ? result.embeddings?.length : 1;
           console.log(`🤖  EmbedText succeeded! ${numEmbeddings} embeddings returned`);
           if (this.debug) {
-            console.log('    EmbedText result:', result);
+            console.log('     > params', params);
+            console.log('     > result:', result);
           }
           return {
             result: result.embeddings,
@@ -156,7 +158,8 @@ export class RuntimeUtilities {
           if (result.Success) {
             console.log(`✅ RunQuery "${params.QueryName}" succeeded: ${result.RowCount} rows returned`);
             if (this.debug) {
-              console.log('RunQuery result:', result);
+              console.log('     > params', params);
+              console.log('     > result:', result);
             }
           } else {
             console.error(`❌ RunQuery failed: ${result.ErrorMessage}`);
@@ -180,7 +183,8 @@ export class RuntimeUtilities {
           if (result.Success) {
             console.log(`✅ RunView succeeded for ${params.EntityName}: ${result.TotalRowCount} rows returned`);
             if (this.debug) {
-              console.log('RunView result:', result);
+              console.log('     > params', params);
+              console.log('     > result:', result);
             }
           } else {
             console.error(`❌ RunView failed for ${params.EntityName}: ${result.ErrorMessage}`);
@@ -200,7 +204,8 @@ export class RuntimeUtilities {
           const totalRows = results.reduce((sum, r) => sum + (r.TotalRowCount || 0), 0);
           console.log(`✅ RunViews succeeded for [${entityNames}]: ${totalRows} total rows returned`);
           if (this.debug) {
-            console.log('RunViews results:', results);
+            console.log('     > params', params);
+            console.log('     > results:', results);
           }
           return results;
         } catch (error) {
