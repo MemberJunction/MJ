@@ -84,7 +84,12 @@ export class RuntimeUtilities {
             preferredModels: params.preferredModels,
             modelPower: params.modelPower
           });
-          
+
+          console.log(`🤖  ExecutePrompt succeeded!`);
+          if (this.debug) {
+            console.log('    ExecutePrompt result:', result);
+          }
+
           return {
             success: result.success,
             result: result.result || '',
@@ -112,7 +117,12 @@ export class RuntimeUtilities {
           if (result.error) {
             throw new Error(result.error || 'Failed to generate embeddings');
           }
-          
+
+          const numEmbeddings: number = Array.isArray(params.textToEmbed) ? result.embeddings?.length : 1;
+          console.log(`🤖  EmbedText succeeded! ${numEmbeddings} embeddings returned`);
+          if (this.debug) {
+            console.log('    EmbedText result:', result);
+          }
           return {
             result: result.embeddings,
             modelName: result.modelName,
@@ -144,7 +154,7 @@ export class RuntimeUtilities {
         try {
           const result = await rq.RunQuery(params);
           if (result.Success) {
-            console.log(`✅ RunQuery succeeded: ${result.RowCount} rows returned`);
+            console.log(`✅ RunQuery "${params.QueryName}" succeeded: ${result.RowCount} rows returned`);
             if (this.debug) {
               console.log('RunQuery result:', result);
             }
