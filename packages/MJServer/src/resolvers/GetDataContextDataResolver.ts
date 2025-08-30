@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, ObjectType, Query } from "type-graphql";
 import { AppContext } from "../types.js";
 import { DataContext } from "@memberjunction/data-context";
-import { GetReadOnlyDataSource } from "../util.js";
+import { GetReadOnlyDataSource, GetReadOnlyProvider } from "../util.js";
 import { Metadata } from "@memberjunction/core";
 import { DataContextItemEntity } from "@memberjunction/core-entities";
 
@@ -53,7 +53,7 @@ export class GetDataContextDataResolver {
             const ds = GetReadOnlyDataSource(appCtx.dataSources, {
                 allowFallbackToReadWrite: true,
             })
-            const md = new Metadata();
+            const md = GetReadOnlyProvider(appCtx.providers, {allowFallbackToReadWrite: true});
             const dciData = await md.GetEntityObject<DataContextItemEntity>("Data Context Items", appCtx.userPayload.userRecord);
             if (await dciData.Load(DataContextItemID)) {
                 const dci = DataContext.CreateDataContextItem(); // use class factory to get whatever lowest level sub-class is registered

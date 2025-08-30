@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { loadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetReadOnlyProvider } from '../util.js';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -279,7 +280,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
 
     return {
@@ -334,7 +335,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Query(() => [SqlLoggingSession])
   async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {
     await this.checkOwnerAccess(context);
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
 
     return sessions.map(session => ({
@@ -399,7 +400,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     // Check max active sessions
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
     if (activeSessions.length >= (config.sqlLogging.maxActiveSessions ?? 5)) {
       throw new Error(`Maximum number of active SQL logging sessions (${config.sqlLogging.maxActiveSessions}) reached`);
@@ -480,7 +481,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     @Ctx() context: AppContext
   ): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     
     // Get the actual session from the private map to call dispose
     const sessionMap = (provider as any)._sqlLoggingSessions as Map<string, any>;
@@ -517,7 +518,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Mutation(() => Boolean)
   async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     await provider.DisposeAllSqlLoggingSessions();
     return true;
   }
@@ -607,7 +608,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     // Find the session
-    const provider = Metadata.Provider as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
     const session = sessions.find(s => s.id === sessionId);
     

@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
-import { UserPayload } from '../types.js';
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { AIPromptEntityExtended, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -9,6 +9,7 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class AIPromptRunResult {
@@ -87,6 +88,7 @@ export class RunAIPromptResolver extends ResolverBase {
      * @private
      */
     private async executeAIPrompt(
+        p: DatabaseProviderBase,
         promptId: string,
         userPayload: UserPayload,
         data?: string,
@@ -152,11 +154,9 @@ export class RunAIPromptResolver extends ResolverBase {
                     executionTimeMs: Date.now() - startTime
                 };
             }
-            
-            const md = new Metadata();
-            
+
             // Load the AI prompt entity
-            const promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts', currentUser);
+            const promptEntity = await p.GetEntityObject<AIPromptEntityExtended>('AI Prompts', currentUser);
             await promptEntity.Load(promptId);
             
             if (!promptEntity.IsSaved) {
@@ -283,7 +283,7 @@ export class RunAIPromptResolver extends ResolverBase {
     @Mutation(() => AIPromptRunResult)
     async RunAIPrompt(
         @Arg('promptId') promptId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('data', { nullable: true }) data?: string,
         @Arg('overrideModelId', { nullable: true }) overrideModelId?: string,
         @Arg('overrideVendorId', { nullable: true }) overrideVendorId?: string,
@@ -305,7 +305,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
         @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
+        const p = GetReadWriteProvider(providers);
         return this.executeAIPrompt(
+            p,
             promptId,
             userPayload,
             data,
@@ -339,7 +341,7 @@ export class RunAIPromptResolver extends ResolverBase {
     @Query(() => AIPromptRunResult)
     async RunAIPromptSystemUser(
         @Arg('promptId') promptId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('data', { nullable: true }) data?: string,
         @Arg('overrideModelId', { nullable: true }) overrideModelId?: string,
         @Arg('overrideVendorId', { nullable: true }) overrideVendorId?: string,
@@ -361,7 +363,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
         @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
+        const p = GetReadWriteProvider(providers);
         return this.executeAIPrompt(
+            p,
             promptId,
             userPayload,
             data,

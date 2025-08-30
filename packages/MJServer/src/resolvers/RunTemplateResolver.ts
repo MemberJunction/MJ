@@ -1,10 +1,11 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { UserPayload } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { TemplateContentEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class TemplateRunResult {
@@ -26,7 +27,7 @@ export class RunTemplateResolver extends ResolverBase {
     @Mutation(() => TemplateRunResult)
     async RunTemplate(
         @Arg('templateId') templateId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('contextData', { nullable: true }) contextData?: string
     ): Promise<TemplateRunResult> {
         const startTime = Date.now();
@@ -58,10 +59,9 @@ export class RunTemplateResolver extends ResolverBase {
                 };
             }
             
-            const md = new Metadata();
-            
+            const p = GetReadWriteProvider(providers);
             // Load the template entity
-            const templateEntity = await md.GetEntityObject<TemplateEntityExtended>('Templates', currentUser);
+            const templateEntity = await p.GetEntityObject<TemplateEntityExtended>('Templates', currentUser);
             await templateEntity.Load(templateId);
             
             if (!templateEntity.IsSaved) {

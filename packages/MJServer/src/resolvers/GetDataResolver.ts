@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
-import { GetReadOnlyDataSource } from '../util.js';
+import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import sql from 'mssql';
  
 @InputType() 
@@ -169,7 +169,7 @@ export class GetDataResolver {
     @Ctx() context: AppContext
     ): Promise<SimpleEntityResultType> {
         try { 
-            const md = new Metadata();
+            const md = GetReadOnlyProvider(context.providers);
             const result = md.Entities.map((e) => {
                 return { 
                     ID: e.ID, 

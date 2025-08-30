@@ -15,6 +15,7 @@ import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
+import { Metadata } from '@memberjunction/core';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -156,6 +157,14 @@ export const contextFunction =
       requestDomain?.hostname ? requestDomain.hostname : undefined,
       apiKey 
     );
+
+    if (Metadata.Provider.Entities.length === 0 ) {
+      console.warn('No entities found in global/shared metadata');
+    }
+    else {
+      // we are okay
+      console.log('Entities found in global/shared metadata');
+    }
 
     // now create a new instance of SQLServerDataProvider for each request
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);

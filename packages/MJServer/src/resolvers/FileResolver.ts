@@ -51,14 +51,13 @@ export class FileResolver extends FileResolverBase {
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
-    const md = new Metadata();
-    const user = this.GetUserFromPayload(context.userPayload);
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
-    fileEntity.CheckPermissions(EntityPermissionType.Create, true);
-
     // Check to see if there's already an object with that name
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
+    const user = this.GetUserFromPayload(context.userPayload);
+    const fileEntity = await provider.GetEntityObject<FileEntity>('Files', user);
+    const providerEntity = await provider.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+    fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
     const [sameName] = await this.findBy(
       provider,
       'Files',
@@ -108,7 +107,7 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     // if the name is changing, rename the target object as well
-    const md = new Metadata();
+    const md = GetReadOnlyProvider(context.providers);
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
@@ -136,7 +135,7 @@ export class FileResolver extends FileResolverBase {
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
-    const md = new Metadata();
+    const md = GetReadOnlyProvider(context.providers);
     const userInfo = this.GetUserFromPayload(context.userPayload);
 
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);

@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
@@ -59,7 +59,7 @@ import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
-import { sendPostRequest } from '../util.js';
+import { GetReadWriteProvider, sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -479,7 +479,7 @@ export class AskSkipResolver {
     @Arg('ConversationId', () => String) ConversationId: string,
     @Arg('EntityName', () => String) EntityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) compositeKey: CompositeKeyInputType,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     // In this function we're simply going to call the Skip API and pass along the message from the user
@@ -498,14 +498,14 @@ export class AskSkipResolver {
       );  
     }
 
-    const md = new Metadata();
+    const md = GetReadWriteProvider(providers);
     const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipChatInitialObjectLoading(
       dataSource,
       ConversationId,
       UserQuestion,
       user,
       userPayload,
-      md,
+      md as unknown as Metadata,
       null
     );
 
@@ -558,7 +558,7 @@ export class AskSkipResolver {
    */
   @Mutation(() => AskSkipResultType)
   async ExecuteAskSkipLearningCycle(
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
   ) {
       const skipConfigInfo = configInfo.askSkip;
@@ -612,7 +612,7 @@ export class AskSkipResolver {
       }
 
       // Get the Skip agent ID
-      const md = new Metadata();
+      const md = GetReadWriteProvider(providers);
       const skipAgent = AIEngine.Instance.GetAgentByName('Skip');
       if (!skipAgent) {
         throw new Error("Skip agent not found in AIEngine");
@@ -1467,11 +1467,11 @@ cycle.`);
   @Query(() => ReattachConversationResponse)
   async ReattachToProcessingConversation(
     @Arg('ConversationId', () => String) ConversationId: string,
-    @Ctx() { userPayload }: AppContext,
+    @Ctx() { userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ): Promise<ReattachConversationResponse | null> {
     try {
-      const md = new Metadata();
+      const md = GetReadWriteProvider(providers);
       const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
       if (!user) {
         LogError(`User ${userPayload.email} not found in UserCache`);
@@ -1581,13 +1581,13 @@ cycle.`);
   async ExecuteAskSkipAnalysisQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,
     @Arg('ConversationId', () => String) ConversationId: string,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine,
     @Arg('DataContextId', () => String, { nullable: true }) DataContextId?: string,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean,
     @Arg('StartTime', () => Date, { nullable: true }) StartTime?: Date
   ) {
-    const md = new Metadata();
+    const md = GetReadWriteProvider(providers);
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
@@ -1600,7 +1600,7 @@ cycle.`);
       UserQuestion,
       user,
       userPayload,
-      md,
+      md as unknown as Metadata,
       DataContextId
     );
 
@@ -1625,7 +1625,7 @@ cycle.`);
       ConversationId,
       userPayload,
       pubSub,
-      md,
+      md as unknown as Metadata,
       convoEntity,
       convoDetailEntity,
       dataContext,
