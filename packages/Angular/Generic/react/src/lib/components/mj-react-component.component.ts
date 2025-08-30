@@ -126,6 +126,7 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
+  @Input() debug: boolean = false;
   
   // Auto-initialize utilities if not provided
   private _utilities: any;
@@ -137,8 +138,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities();
-      console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
+      this._utilities = runtimeUtils.buildUtilities(this.debug);
+      if (this.debug) {
+        console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
+      }
     }
     return this._utilities;
   }
@@ -153,7 +156,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Lazy initialization - only create default styles when needed
     if (!this._styles) {
       this._styles = SetupStyles();
-      console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
+      if (this.debug) {
+        console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
+      }
     }
     return this._styles;
   }
@@ -201,6 +206,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   async ngAfterViewInit() {
+    // Set debug flag on the bridge service
+    this.reactBridge.debug = this.debug;
+    
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
     await this.initializeComponent();
@@ -338,7 +346,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const resolver = this.adapter.getResolver();
     
     // Debug: Log what dependencies we're trying to resolve
-    console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
+    if (this.debug) {
+      console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
+    }
     
     // Use the runtime's resolver which now handles registry-based components
     const resolved = await resolver.resolveComponents(
@@ -347,7 +357,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       Metadata.Provider.CurrentUser // Pass current user context for database operations
     );
     
-    console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
+    if (this.debug) {
+      console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
+    }
     return resolved;
   }
 
@@ -360,13 +372,17 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const version = this.component.version || this.generateComponentHash(this.component);
     this.componentVersion = version;  // Store for use in resolver
     
-    console.log(`Registering ${this.component.name}@${version}`);
+    if (this.debug) {
+      console.log(`Registering ${this.component.name}@${version}`);
+    }
     
     // Check if already registered to avoid duplication
     const registry = this.adapter.getRegistry();
     const existingComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
     if (existingComponent) {
-      console.log(`Component ${this.component.name}@${version} already registered`);
+      if (this.debug) {
+        console.log(`Component ${this.component.name}@${version} already registered`);
+      }
       return;
     }
     
@@ -397,7 +413,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       throw new Error(`Component registration failed: ${errors}`);
     }
     
-    console.log(`Registered ${result.registeredComponents.length} components`);
+    if (this.debug) {
+      console.log(`Registered ${result.registeredComponents.length} components`);
+    }
   }
 
   /**

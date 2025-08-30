@@ -7,6 +7,7 @@ import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
+import { StylesTypeAnalyzer } from './styles-type-analyzer';
 
 export interface LintResult {
   success: boolean;
@@ -116,6 +117,16 @@ const runViewResultProps: readonly string[] = [
 ] as const satisfies readonly (keyof RunViewResult)[];
 
 export class ComponentLinter {
+  private static stylesAnalyzer: StylesTypeAnalyzer;
+  
+  // Get or create the styles analyzer instance
+  private static getStylesAnalyzer(): StylesTypeAnalyzer {
+    if (!ComponentLinter.stylesAnalyzer) {
+      ComponentLinter.stylesAnalyzer = new StylesTypeAnalyzer();
+    }
+    return ComponentLinter.stylesAnalyzer;
+  }
+  
   // Helper method to check if a statement contains a return
   private static containsReturn(node: t.Node): boolean {
     let hasReturn = false;
@@ -5767,6 +5778,525 @@ Correct pattern:
         
         return violations;
       }
+    },
+    
+    // New rules for catching RunQuery/RunView result access patterns
+    {
+      name: 'runquery-runview-ternary-array-check',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    // const result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    // result = await utilities.rv.RunView(...)
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for Array.isArray(result) ? result : [] pattern
+        traverse(ast, {
+          ConditionalExpression(path: NodePath<t.ConditionalExpression>) {
+            const test = path.node.test;
+            const consequent = path.node.consequent;
+            const alternate = path.node.alternate;
+            
+            // Check for Array.isArray(variable) pattern
+            if (t.isCallExpression(test) &&
+                t.isMemberExpression(test.callee) &&
+                t.isIdentifier(test.callee.object) &&
+                test.callee.object.name === 'Array' &&
+                t.isIdentifier(test.callee.property) &&
+                test.callee.property.name === 'isArray' &&
+                test.arguments.length === 1 &&
+                t.isIdentifier(test.arguments[0])) {
+              
+              const varName = test.arguments[0].name;
+              
+              // Check if this variable is a RunQuery/RunView result
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+                
+                // Check if the consequent is the same variable and alternate is []
+                if (t.isIdentifier(consequent) && 
+                    consequent.name === varName &&
+                    t.isArrayExpression(alternate) &&
+                    alternate.elements.length === 0) {
+                  
+                  violations.push({
+                    rule: 'runquery-runview-ternary-array-check',
+                    severity: 'critical',
+                    line: test.loc?.start.line || 0,
+                    column: test.loc?.start.column || 0,
+                    message: `${resultInfo.method} never returns an array directly. The pattern "Array.isArray(${varName}) ? ${varName} : []" will always evaluate to [] because ${varName} is an object with { Success, Results, ErrorMessage }.
+
+Correct patterns:
+  // Option 1: Simple with fallback
+  ${varName}.Results || []
+  
+  // Option 2: Check success first
+  if (${varName}.Success) {
+    setData(${varName}.Results || []);
+  } else {
+    console.error('Failed:', ${varName}.ErrorMessage);
+    setData([]);
+  }`,
+                    code: `Array.isArray(${varName}) ? ${varName} : []`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-direct-setstate',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls and their assigned variables
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              // Check for utilities.rv.RunView/RunViews or utilities.rq.RunQuery pattern
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  // Check if this is being assigned to a variable
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+                    resultVariables.set(parent.left.name, {
+                      line: parent.left.loc?.start.line || 0,
+                      column: parent.left.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.left.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for passing result directly to setState functions
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check if this is a setState function call
+            if (t.isIdentifier(callee)) {
+              const funcName = callee.name;
+              
+              // Common setState patterns
+              const setStatePatterns = [
+                /^set[A-Z]/, // setData, setChartData, setItems, etc.
+                /^update[A-Z]/, // updateData, updateItems, etc.
+              ];
+              
+              const isSetStateFunction = setStatePatterns.some(pattern => pattern.test(funcName));
+              
+              if (isSetStateFunction && path.node.arguments.length > 0) {
+                const firstArg = path.node.arguments[0];
+                
+                // Check if the argument is a ternary with Array.isArray check
+                if (t.isConditionalExpression(firstArg)) {
+                  const test = firstArg.test;
+                  const consequent = firstArg.consequent;
+                  const alternate = firstArg.alternate;
+                  
+                  // Check for Array.isArray(variable) ? variable : []
+                  if (t.isCallExpression(test) &&
+                      t.isMemberExpression(test.callee) &&
+                      t.isIdentifier(test.callee.object) &&
+                      test.callee.object.name === 'Array' &&
+                      t.isIdentifier(test.callee.property) &&
+                      test.callee.property.name === 'isArray' &&
+                      test.arguments.length === 1 &&
+                      t.isIdentifier(test.arguments[0])) {
+                    
+                    const varName = test.arguments[0].name;
+                    
+                    if (resultVariables.has(varName) &&
+                        t.isIdentifier(consequent) &&
+                        consequent.name === varName) {
+                      
+                      const resultInfo = resultVariables.get(varName)!;
+                      
+                      violations.push({
+                        rule: 'runquery-runview-direct-setstate',
+                        severity: 'critical',
+                        line: firstArg.loc?.start.line || 0,
+                        column: firstArg.loc?.start.column || 0,
+                        message: `Passing ${resultInfo.method} result with incorrect Array.isArray check to ${funcName}. This will always pass an empty array because ${resultInfo.method} returns an object, not an array.
+
+Correct pattern:
+  if (${varName}.Success) {
+    ${funcName}(${varName}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${varName}.ErrorMessage);
+    ${funcName}([]);
+  }
+  
+  // Or simpler:
+  ${funcName}(${varName}.Results || []);`,
+                        code: `${funcName}(Array.isArray(${varName}) ? ${varName} : [])`
+                      });
+                    }
+                  }
+                }
+                
+                // Check if passing result directly (not accessing .Results)
+                if (t.isIdentifier(firstArg) && resultVariables.has(firstArg.name)) {
+                  const resultInfo = resultVariables.get(firstArg.name)!;
+                  
+                  violations.push({
+                    rule: 'runquery-runview-direct-setstate',
+                    severity: 'critical',
+                    line: firstArg.loc?.start.line || 0,
+                    column: firstArg.loc?.start.column || 0,
+                    message: `Passing ${resultInfo.method} result object directly to ${funcName}. The result is an object { Success, Results, ErrorMessage }, not the data array.
+
+Correct pattern:
+  if (${firstArg.name}.Success) {
+    ${funcName}(${firstArg.name}.Results || []);
+  } else {
+    console.error('Failed to load data:', ${firstArg.name}.ErrorMessage);
+    ${funcName}([]);
+  }`,
+                    code: `${funcName}(${firstArg.name})`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'styles-invalid-path',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const analyzer = ComponentLinter.getStylesAnalyzer();
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Build the complete property chain first
+            let propertyChain: string[] = [];
+            let current: any = path.node;
+            
+            // Walk up from the deepest member expression to build the full chain
+            while (t.isMemberExpression(current)) {
+              if (t.isIdentifier(current.property)) {
+                propertyChain.unshift(current.property.name);
+              }
+              
+              if (t.isIdentifier(current.object)) {
+                propertyChain.unshift(current.object.name);
+                break;
+              }
+              
+              current = current.object;
+            }
+            
+            // Only process if this is a styles access
+            if (propertyChain[0] === 'styles') {
+              
+              // Validate the path
+              if (!analyzer.isValidPath(propertyChain)) {
+                const suggestions = analyzer.getSuggestionsForPath(propertyChain);
+                const accessPath = propertyChain.join('.');
+                
+                let message = `Invalid styles property path: "${accessPath}"`;
+                
+                if (suggestions.didYouMean) {
+                  message += `\n\nDid you mean: ${suggestions.didYouMean}?`;
+                }
+                
+                if (suggestions.correctPaths.length > 0) {
+                  message += `\n\nThe property "${propertyChain[propertyChain.length - 1]}" exists at:`;
+                  suggestions.correctPaths.forEach((p: string) => {
+                    message += `\n  - ${p}`;
+                  });
+                }
+                
+                if (suggestions.availableAtParent.length > 0) {
+                  const parentPath = propertyChain.slice(0, -1).join('.');
+                  message += `\n\nAvailable properties at ${parentPath}:`;
+                  message += `\n  ${suggestions.availableAtParent.slice(0, 5).join(', ')}`;
+                  if (suggestions.availableAtParent.length > 5) {
+                    message += ` (and ${suggestions.availableAtParent.length - 5} more)`;
+                  }
+                }
+                
+                // Get a contextual default value
+                const defaultValue = analyzer.getDefaultValueForPath(propertyChain);
+                message += `\n\nSuggested fix with safe access:\n  ${accessPath.replace(/\./g, '?.')} || ${defaultValue}`;
+                
+                violations.push({
+                  rule: 'styles-invalid-path',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: message,
+                  code: accessPath
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'styles-unsafe-access',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        const analyzer = ComponentLinter.getStylesAnalyzer();
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Build the complete property chain first
+            let propertyChain: string[] = [];
+            let current: any = path.node;
+            let hasOptionalChaining = path.node.optional || false;
+            
+            // Walk up from the deepest member expression to build the full chain
+            while (t.isMemberExpression(current)) {
+              if (current.optional) {
+                hasOptionalChaining = true;
+              }
+              if (t.isIdentifier(current.property)) {
+                propertyChain.unshift(current.property.name);
+              }
+              
+              if (t.isIdentifier(current.object)) {
+                propertyChain.unshift(current.object.name);
+                break;
+              }
+              
+              current = current.object;
+            }
+            
+            // Only process if this is a styles access
+            if (propertyChain[0] === 'styles') {
+              
+              // Only check valid paths for safe access
+              if (analyzer.isValidPath(propertyChain)) {
+                // Check if this is a nested access without optional chaining or fallback
+                if (propertyChain.length > 2 && !hasOptionalChaining) {
+                  // Check if there's a fallback (|| operator)
+                  const parent = path.parent;
+                  const hasFallback = t.isLogicalExpression(parent) && parent.operator === '||';
+                  
+                  if (!hasFallback) {
+                    const accessPath = propertyChain.join('.');
+                    const defaultValue = analyzer.getDefaultValueForPath(propertyChain);
+                    
+                    violations.push({
+                      rule: 'styles-unsafe-access',
+                      severity: 'high',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Unsafe styles property access: "${accessPath}". While this path is valid, you should use optional chaining for safety.
+                      
+Example with optional chaining:
+  ${accessPath.replace(/\./g, '?.')} || ${defaultValue}
+  
+This prevents runtime errors if the styles object structure changes.`,
+                      code: accessPath
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
+      name: 'runquery-runview-spread-operator',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Track variables that hold RunView/RunQuery results
+        const resultVariables = new Map<string, {
+          line: number;
+          column: number;
+          method: 'RunView' | 'RunViews' | 'RunQuery';
+          varName: string;
+        }>();
+        
+        // First pass: identify all RunView/RunQuery calls
+        traverse(ast, {
+          AwaitExpression(path: NodePath<t.AwaitExpression>) {
+            const callExpr = path.node.argument;
+            
+            if (t.isCallExpression(callExpr) && t.isMemberExpression(callExpr.callee)) {
+              const callee = callExpr.callee;
+              
+              if (t.isMemberExpression(callee.object) && 
+                  t.isIdentifier(callee.object.object) && 
+                  callee.object.object.name === 'utilities' &&
+                  t.isIdentifier(callee.object.property)) {
+                
+                const subObject = callee.object.property.name;
+                const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+                
+                let methodType: 'RunView' | 'RunViews' | 'RunQuery' | null = null;
+                if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+                  methodType = method as 'RunView' | 'RunViews';
+                } else if (subObject === 'rq' && method === 'RunQuery') {
+                  methodType = 'RunQuery';
+                }
+                
+                if (methodType) {
+                  const parent = path.parent;
+                  
+                  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+                    resultVariables.set(parent.id.name, {
+                      line: parent.id.loc?.start.line || 0,
+                      column: parent.id.loc?.start.column || 0,
+                      method: methodType,
+                      varName: parent.id.name
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        // Second pass: check for spread operator usage
+        traverse(ast, {
+          SpreadElement(path: NodePath<t.SpreadElement>) {
+            if (t.isIdentifier(path.node.argument)) {
+              const varName = path.node.argument.name;
+              
+              if (resultVariables.has(varName)) {
+                const resultInfo = resultVariables.get(varName)!;
+                
+                violations.push({
+                  rule: 'runquery-runview-spread-operator',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Cannot use spread operator on ${resultInfo.method} result object. Use ...${varName}.Results to spread the data array.
+
+Correct pattern:
+  const allData = [...existingData, ...${varName}.Results];
+  
+  // Or with null safety:
+  const allData = [...existingData, ...(${varName}.Results || [])];`,
+                  code: `...${varName}`
+                });
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -7417,6 +7947,48 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
 //   TotalRowCount?: number,
 //   ExecutionTime?: number
 // }`
+          });
+          break;
+          
+        case 'styles-invalid-path':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
+            example: `// ❌ WRONG - Invalid property paths:
+styles.fontSize.small           // fontSize is not at root level
+styles.colors.background        // colors.background exists
+styles.spacing.small            // should be styles.spacing.sm
+
+// ✅ CORRECT - Valid property paths:
+styles.typography.fontSize.sm   // fontSize is under typography
+styles.colors.background        // correct path
+styles.spacing.sm               // correct size name
+
+// With safe access and fallbacks:
+styles?.typography?.fontSize?.sm || '14px'
+styles?.colors?.background || '#FFFFFF'
+styles?.spacing?.sm || '8px'`
+          });
+          break;
+          
+        case 'styles-unsafe-access':
+          suggestions.push({
+            violation: violation.rule,
+            suggestion: 'Use optional chaining for nested styles access to prevent runtime errors.',
+            example: `// ❌ UNSAFE - Direct nested access:
+const fontSize = styles.typography.fontSize.md;
+const borderRadius = styles.borders.radius.sm;
+
+// ✅ SAFE - With optional chaining and fallbacks:
+const fontSize = styles?.typography?.fontSize?.md || '14px';
+const borderRadius = styles?.borders?.radius?.sm || '6px';
+
+// Even better - destructure with defaults:
+const {
+  typography: {
+    fontSize: { md: fontSize = '14px' } = {}
+  } = {}
+} = styles || {};`
           });
           break;
       }

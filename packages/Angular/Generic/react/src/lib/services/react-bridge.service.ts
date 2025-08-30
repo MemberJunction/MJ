@@ -26,6 +26,9 @@ export class ReactBridgeService implements OnDestroy {
   private firstComponentAttempted = false;
   private maxWaitTime = 5000; // Maximum 5 seconds wait time
   private checkInterval = 200; // Check every 200ms
+  
+  // Debug flag that can be set by components
+  public debug: boolean = false;
 
   constructor(private adapter: AngularAdapterService) {
     // Bootstrap React immediately on service initialization
@@ -42,7 +45,9 @@ export class ReactBridgeService implements OnDestroy {
   private async bootstrapReact(): Promise<void> {
     try {
       await this.adapter.initialize();
-      console.log('React ecosystem pre-loaded successfully');
+      if (this.debug) {
+        console.log('React ecosystem pre-loaded successfully');
+      }
     } catch (error) {
       console.error('Failed to pre-load React ecosystem:', error);
     }
@@ -63,7 +68,9 @@ export class ReactBridgeService implements OnDestroy {
 
     if (isFirstComponent) {
       // First component - check periodically until React is ready
-      console.log('First React component loading - checking for React initialization');
+      if (this.debug) {
+        console.log('First React component loading - checking for React initialization');
+      }
       
       const startTime = Date.now();
       
@@ -79,7 +86,9 @@ export class ReactBridgeService implements OnDestroy {
               testRoot.unmount();
               // React is ready!
               this.reactReadySubject.next(true);
-              console.log(`React is fully ready after ${Date.now() - startTime}ms`);
+              if (this.debug) {
+                console.log(`React is fully ready after ${Date.now() - startTime}ms`);
+              }
               return;
             }
           }

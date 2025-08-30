@@ -172,6 +172,12 @@ export class JsonPreprocessor {
     }
     
     if (!await fs.pathExists(filePath)) {
+      // Log error details before throwing
+      console.error(`\n❌ INCLUDE FILE NOT FOUND`);
+      console.error(`   Referenced file: ${filePath}`);
+      console.error(`   Reference type: @include`);
+      console.error(`   Tip: Check that the file path is correct relative to the including file\n`);
+      
       throw new Error(`Include file not found: ${filePath}`);
     }
     
@@ -195,9 +201,13 @@ export class JsonPreprocessor {
    */
   private async loadFileContent(filePath: string): Promise<any> {
     if (!await fs.pathExists(filePath)) {
-      // Return the original @file reference if file doesn't exist
-      // This matches the behavior of SyncEngine.processFieldValue
-      return `@file:${path.relative(path.dirname(filePath), filePath)}`;
+      // Log error details before throwing
+      console.error(`\n❌ FILE NOT FOUND`);
+      console.error(`   Referenced file: ${filePath}`);
+      console.error(`   Reference type: @file:`);
+      console.error(`   Tip: Check that the file path is correct and the file exists\n`);
+      
+      throw new Error(`File not found: ${filePath} (referenced via @file:)`);
     }
 
     try {
@@ -219,8 +229,14 @@ export class JsonPreprocessor {
         return await fs.readFile(filePath, 'utf-8');
       }
     } catch (error) {
-      // On error, return the original @file reference
-      return `@file:${path.relative(path.dirname(filePath), filePath)}`;
+      // Log error details before re-throwing
+      console.error(`\n❌ FILE LOAD ERROR`);
+      console.error(`   Failed to load file: ${filePath}`);
+      console.error(`   Error: ${error}`);
+      console.error(`   Tip: Check file permissions and that the file is not corrupted\n`);
+      
+      // Re-throw with enhanced context
+      throw new Error(`Failed to load file content from ${filePath}: ${error}`);
     }
   }
 

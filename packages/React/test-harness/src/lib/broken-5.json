@@ -1,0 +1,653 @@
+{
+  "functionalRequirements": "### Business Objectives\nProvide insight into product popularity/impact based on invoice data\n\n### Functional Requirements\n- Bar chart with products on x-axis showing invoice volume\n- Clear Y-axis labels showing invoice count/money value\n- Option to toggle between invoice count and monetary total\n- Legend explaining chart types\n- Time period selector for filtering",
+  "title": "Product Invoice Volume Analysis",
+  "type": "chart",
+  "name": "ProductInvoiceVolumeChart",
+  "userExplanation": "This chart shows product performance based on invoice volume, allowing analysis by count or value with time filters.",
+  "dataRequirements": {
+    "mode": "queries",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Master catalog of products and services offered by the organization",
+        "displayFields": [
+          "ID",
+          "ProductName",
+          "UnitPrice"
+        ],
+        "filterFields": [
+          "ID",
+          "ProductName"
+        ],
+        "sortFields": [
+          "ProductName"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": true
+          },
+          {
+            "name": "ProductName",
+            "sequence": 3,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": false
+          },
+          {
+            "name": "UnitPrice",
+            "sequence": 6,
+            "defaultInView": false,
+            "type": "decimal",
+            "allowsNull": false
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Individual line items that appear on an invoice",
+        "displayFields": [
+          "ID",
+          "InvoiceID",
+          "ProductID",
+          "Quantity",
+          "UnitPrice"
+        ],
+        "filterFields": [
+          "ProductID",
+          "InvoiceID"
+        ],
+        "sortFields": [
+          "InvoiceID",
+          "ProductID"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": false,
+            "isPrimaryKey": true
+          },
+          {
+            "name": "InvoiceID",
+            "sequence": 2,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": false
+          },
+          {
+            "name": "ProductID",
+            "sequence": 3,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": true
+          },
+          {
+            "name": "Quantity",
+            "sequence": 5,
+            "defaultInView": false,
+            "type": "decimal",
+            "allowsNull": false
+          },
+          {
+            "name": "UnitPrice",
+            "sequence": 6,
+            "defaultInView": false,
+            "type": "decimal",
+            "allowsNull": false
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "name": "ProductInvoiceVolumeTrend",
+        "categoryPath": "Skip/Analytics/Products",
+        "description": "Aggregates invoice volumes by product over time with date filtering",
+        "fields": [
+          {
+            "name": "ProductName",
+            "type": "nvarchar",
+            "description": "Name of the product"
+          },
+          {
+            "name": "InvoiceCount",
+            "type": "int",
+            "description": "Count of invoices for the product"
+          },
+          {
+            "name": "InvoiceDate",
+            "type": "datetime",
+            "description": "Date of the invoice",
+            "defaultInView": false
+          }
+        ],
+        "newQuerySQL": "SELECT p.ProductName, COUNT(il.Quantity) AS InvoiceCount, SUM(il.Quantity * il.UnitPrice) AS TotalRevenue FROM CRM.vwProducts p INNER JOIN CRM.vwInvoiceLineItems il ON p.ID = il.ProductID GROUP BY p.ProductName HAVING COUNT(il.Quantity) > 0 ORDER BY InvoiceCount DESC"
+      }
+    ],
+    "description": "Data requirements for product invoice volume analysis chart"
+  },
+  "description": "Interactive bar chart displaying product performance through invoice volume analysis with toggle options for count vs monetary value and time-based filtering.",
+  "location": "embedded",
+  "technicalDesign": "## Component Architecture\n\n### Main Component: ProductInvoiceVolumeChart\nThis is the root component that orchestrates the entire visualization. It manages the application state including the current view mode (count vs revenue), selected time period, and coordinates data flow between child components.\n\n### Child Components:\n1. **ChartContainer**: Core visualization component using ECharts for the bar chart display\n2. **ToggleControl**: Switch component for toggling between invoice count and revenue views\n3. **DateRangeFilter**: Date picker component for time-based filtering\n4. **LegendDisplay**: Custom legend component explaining chart metrics\n5. **ExportButton**: Component for exporting chart data in various formats\n\n### State Management:\n- All components manage their own UI state internally\n- ChartContainer manages chart interactions and tooltips\n- ToggleControl manages toggle state between count/revenue\n- DateRangeFilter manages date selection state\n- Parent component coordinates data flow and external events\n\n### Data Flow:\n1. ProductInvoiceVolumeChart receives data via props\n2. Child components receive filtered data based on current settings\n3. User interactions trigger events back to parent\n4. Chart updates reflect current state of filters and toggles\n\n### Implementation Details:\n- Uses ECharts for powerful interactive charting\n- Responsive design with mobile-first approach\n- Optimized rendering for large datasets\n- Accessibility features for screen readers\n- Export capabilities for PNG/SVG formats",
+  "dependencies": [
+    {
+      "name": "ChartContainer",
+      "title": "ECharts Bar Chart Container",
+      "description": "Core visualization component using ECharts to display interactive bar charts with hover tooltips and responsive design",
+      "type": "chart",
+      "location": "embedded",
+      "functionalRequirements": "Display bar chart with products on x-axis and volume metrics on y-axis. Support hover tooltips, responsive resizing, and interactive features like zoom/pan.",
+      "technicalDesign": "## ChartContainer Component\n- Uses ECharts library for powerful bar chart rendering\n- Manages chart options, data series, and responsive behavior\n- Handles hover tooltips showing product name and current metric value\n- Supports responsive design with automatic resizing\n- Includes zoom and pan capabilities for large datasets\n- Provides export functionality for chart images",
+      "dataRequirements": {
+        "mode": "queries",
+        "description": "Chart data requirements using the ProductInvoiceVolumeTrend query",
+        "queries": [
+          {
+            "name": "ProductInvoiceVolumeTrend",
+            "categoryPath": "Skip/Analytics/Products",
+            "description": "Query providing product names and volume metrics for chart display",
+            "fields": [
+              {
+                "name": "ProductName",
+                "type": "nvarchar",
+                "description": "Name of the product"
+              },
+              {
+                "name": "InvoiceCount",
+                "type": "int",
+                "description": "Count of invoices for the product"
+              },
+              {
+                "name": "InvoiceDate",
+                "type": "datetime",
+                "description": "Date of the invoice",
+                "defaultInView": false
+              }
+            ]
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "chartData",
+          "type": "Array<{ProductName: string, value: number}>",
+          "required": true,
+          "description": "Chart data array with product names and corresponding metric values"
+        },
+        {
+          "name": "chartTitle",
+          "type": "string",
+          "required": false,
+          "defaultValue": "Product Performance",
+          "description": "Title displayed above the chart"
+        },
+        {
+          "name": "yAxisLabel",
+          "type": "string",
+          "required": false,
+          "defaultValue": "Count",
+          "description": "Label for the y-axis based on current view mode"
+        },
+        {
+          "name": "showGrid",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": true,
+          "description": "Whether to display grid lines on the chart"
+        }
+      ],
+      "events": [
+        {
+          "name": "onChartClick",
+          "description": "Triggered when user clicks on a chart bar",
+          "parameters": [
+            {
+              "name": "productName",
+              "type": "string",
+              "description": "Name of the clicked product"
+            }
+          ]
+        },
+        {
+          "name": "onChartHover",
+          "description": "Triggered when user hovers over chart elements",
+          "parameters": [
+            {
+              "name": "productData",
+              "type": "object",
+              "description": "Data object for the hovered product"
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<ChartContainer chartData={chartData} chartTitle=\"Product Invoice Analysis\" yAxisLabel=\"Invoice Count\" />",
+      "libraries": [
+        {
+          "name": "ECharts",
+          "globalVariable": "echarts",
+          "version": "5.4.3"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "DealVelocityTrendChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Displays historical trends of deal velocity across stages over time",
+          "relevance": 0.8416143606164626
+        },
+        {
+          "name": "DealVelocityDistributionChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Displays statistical distribution of deal velocities using box plots",
+          "relevance": 0.8196146556955073
+        },
+        {
+          "name": "DealVelocityMetrics",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics",
+          "relevance": 0.7195261467777393
+        }
+      ],
+      "code": "function ChartContainer({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  chartData = [],\n  chartTitle = \"Product Performance\",\n  yAxisLabel = \"Count\",\n  showGrid = true\n}) {\n  const [chartInstance, setChartInstance] = useState(null);\n  const [containerRef, setContainerRef] = useState(null);\n\n  const initializeChart = useCallback(() => {\n    if (!containerRef || !chartData.length) return;\n\n    const option = {\n      title: {\n        text: chartTitle,\n        left: 'center',\n        textStyle: {\n          color: '#333',\n          fontSize: 16,\n          fontWeight: 'bold'\n        }\n      },\n      tooltip: {\n        trigger: 'axis',\n        axisPointer: {\n          type: 'shadow'\n        },\n        formatter: (params) => {\n          const data = params[0];\n          return `${data.name}<br/>${yAxisLabel}: ${data.value}`;\n        }\n      },\n      grid: {\n        left: '3%',\n        right: '4%',\n        bottom: '3%',\n        top: '15%',\n        containLabel: true,\n        show: showGrid,\n        borderColor: '#e0e0e0'\n      },\n      xAxis: {\n        type: 'category',\n        data: chartData.map(item => item.ProductName),\n        axisLabel: {\n          rotate: 45,\n          fontSize: 12,\n          color: '#666'\n        },\n        axisTick: {\n          alignWithLabel: true\n        }\n      },\n      yAxis: {\n        type: 'value',\n        name: yAxisLabel,\n        nameTextStyle: {\n          color: '#666',\n          padding: [0, 0, 0, 50]\n        },\n        axisLabel: {\n          color: '#666'\n        },\n        splitLine: {\n          show: showGrid,\n          lineStyle: {\n            color: '#e0e0e0',\n            type: 'dashed'\n          }\n        }\n      },\n      series: [{\n        name: chartTitle,\n        type: 'bar',\n        data: chartData.map(item => ({\n          value: item.value,\n          name: item.ProductName\n        })),\n        itemStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: '#83bff6' },\n            { offset: 0.5, color: '#188df0' },\n            { offset: 1, color: '#188df0' }\n          ])\n        },\n        emphasis: {\n          itemStyle: {\n            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n              { offset: 0, color: '#2378f7' },\n              { offset: 0.7, color: '#1264cc' },\n              { offset: 1, color: '#1254a3' }\n            ])\n          }\n        }\n      }],\n      dataZoom: [\n        {\n          type: 'inside',\n          start: 0,\n          end: 100\n        },\n        {\n          type: 'slider',\n          start: 0,\n          end: 100\n        }\n      ],\n      toolbox: {\n        feature: {\n          saveAsImage: {\n            title: 'Save as Image',\n            pixelRatio: 2\n          },\n          dataZoom: {\n            title: {\n              zoom: 'Area Zoom',\n              back: 'Area Zoom Reset'\n            }\n          },\n          restore: {\n            title: 'Restore'\n          }\n        },\n        right: 20,\n        top: 10\n      }\n    };\n\n    const chart = echarts.init(containerRef);\n    chart.setOption(option);\n    \n    chart.on('click', (params) => {\n      if (params.componentType === 'series' && params.data) {\n        callbacks?.onChartClick?.(params.data.name);\n      }\n    });\n\n    chart.on('mouseover', (params) => {\n      if (params.componentType === 'series' && params.data) {\n        callbacks?.onChartHover?.({\n          productName: params.data.name,\n          value: params.data.value\n        });\n      }\n    });\n\n    setChartInstance(chart);\n\n    return () => {\n      chart.dispose();\n    };\n  }, [containerRef, chartData, chartTitle, yAxisLabel, showGrid]);\n\n  useEffect(() => {\n    const cleanup = initializeChart();\n    return cleanup;\n  }, [initializeChart]);\n\n  useEffect(() => {\n    if (!chartInstance || !containerRef) return;\n\n    const resizeObserver = new ResizeObserver(() => {\n      chartInstance.resize();\n    });\n\n    resizeObserver.observe(containerRef);\n\n    return () => {\n      resizeObserver.disconnect();\n    };\n  }, [chartInstance, containerRef]);\n\n  const updateChart = useCallback(() => {\n    if (!chartInstance || !chartData.length) return;\n\n    const option = {\n      title: { text: chartTitle },\n      xAxis: { data: chartData.map(item => item.ProductName) },\n      series: [{\n        data: chartData.map(item => ({\n          value: item.value,\n          name: item.ProductName\n        }))\n      }],\n      yAxis: {\n        name: yAxisLabel\n      },\n      grid: {\n        show: showGrid\n      }\n    };\n\n    chartInstance.setOption(option);\n  }, [chartInstance, chartData, chartTitle, yAxisLabel, showGrid]);\n\n  useEffect(() => {\n    updateChart();\n  }, [updateChart]);\n\n  return (\n    <div \n      ref={setContainerRef}\n      style={{\n        width: '100%',\n        height: '100%',\n        minHeight: '400px',\n        backgroundColor: '#ffffff',\n        borderRadius: '8px',\n        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',\n        padding: '20px'\n      }}\n    />\n  );\n}"
+    },
+    {
+      "name": "ToggleControl",
+      "title": "Metric Toggle Switch",
+      "description": "Switch control component for toggling between invoice count and revenue views",
+      "type": "form",
+      "location": "embedded",
+      "functionalRequirements": "Provide toggle switch between 'Invoice Count' and 'Revenue' views with clear labeling and smooth transitions",
+      "technicalDesign": "## ToggleControl Component\n- Clean switch interface using Material-UI toggle buttons\n- Clear labeling for count vs revenue modes\n- Emits events when toggle state changes\n- Manages own toggle state internally",
+      "properties": [
+        {
+          "name": "initialMode",
+          "type": "'count' | 'revenue'",
+          "required": false,
+          "defaultValue": "count",
+          "description": "Initial toggle position"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": false,
+          "defaultValue": "View By",
+          "description": "Label text displayed above the toggle"
+        }
+      ],
+      "events": [
+        {
+          "name": "onModeChange",
+          "description": "Triggered when toggle state changes",
+          "parameters": [
+            {
+              "name": "mode",
+              "type": "'count' | 'revenue'",
+              "description": "Current selected mode"
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<ToggleControl initialMode=\"count\" onModeChange={handleModeChange} />",
+      "libraries": [
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "5.15.2"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "SalesFunnelVisualization",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Interactive sales funnel visualization with conversion metrics and drill-down capabilities",
+          "relevance": 0.7212214159846313
+        },
+        {
+          "name": "FunnelChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Sub-component of SalesFunnelVisualization that renders the funnel visualization",
+          "relevance": 0.6747978626096702
+        },
+        {
+          "name": "InvoiceStatusDashboard",
+          "namespace": "CRM/Finance",
+          "version": "1.0.0",
+          "description": "Track invoice statuses, payment timelines, and accounts receivable aging with actionable insights and collection metrics",
+          "relevance": 0.6716322907774231
+        },
+        {
+          "name": "USAccountHeatmap",
+          "namespace": "CRM/Geography",
+          "version": "1.0.0",
+          "description": "Interactive choropleth map showing account distribution across US states with drill-down capability",
+          "relevance": 0.6593105977459633
+        },
+        {
+          "name": "EntityFilter",
+          "namespace": "Admin/Entities",
+          "version": "1.0.0",
+          "description": "Collapsible filter panel for filtering entities by various criteria",
+          "relevance": 0.7680379683822622
+        }
+      ],
+      "code": "function ToggleControl({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  initialMode = 'count',\n  label = 'View By'\n}) {\n  const [selectedMode, setSelectedMode] = React.useState(\n    savedUserSettings?.selectedMode || initialMode\n  );\n\n  const handleToggle = (event, newMode) => {\n    if (newMode !== null) {\n      setSelectedMode(newMode);\n      onSaveUserSettings?.({\n        ...savedUserSettings,\n        selectedMode: newMode\n      });\n      callbacks?.onModeChange?.(newMode);\n    }\n  };\n\n  const ToggleButtonGroup = MaterialUI.ToggleButtonGroup;\n  const ToggleButton = MaterialUI.ToggleButton;\n  const Typography = MaterialUI.Typography;\n  const Box = MaterialUI.Box;\n\n  return (\n    <Box sx={{ marginBottom: 2 }}>\n      {label && (\n        <Typography variant=\"h6\" sx={{ marginBottom: 1 }}>\n          {label}\n        </Typography>\n      )}\n      <ToggleButtonGroup\n        value={selectedMode}\n        exclusive\n        onChange={handleToggle}\n        aria-label=\"Toggle view mode\"\n      >\n        <ToggleButton value=\"count\" aria-label=\"Count mode\">\n          Count\n        </ToggleButton>\n        <ToggleButton value=\"revenue\" aria-label=\"Revenue mode\">\n          Revenue\n        </ToggleButton>\n      </ToggleButtonGroup>\n    </Box>\n  );\n}"
+    },
+    {
+      "name": "DateRangeFilter",
+      "title": "Date Range Filter Control",
+      "description": "Date picker component for selecting time periods to filter invoice data",
+      "type": "form",
+      "location": "embedded",
+      "functionalRequirements": "Allow users to select start and end dates to filter invoice data, with preset ranges like 'Last 30 days', 'Last 90 days', etc.",
+      "technicalDesign": "## DateRangeFilter Component\n- Uses Material-UI date pickers for date selection\n- Provides preset date range options for quick filtering\n- Manages date range state internally\n- Emits events when date range changes",
+      "properties": [
+        {
+          "name": "initialStartDate",
+          "type": "Date",
+          "required": false,
+          "description": "Initial start date for filtering"
+        },
+        {
+          "name": "initialEndDate",
+          "type": "Date",
+          "required": false,
+          "description": "Initial end date for filtering"
+        },
+        {
+          "name": "presets",
+          "type": "Array<{label: string, days: number}>",
+          "required": false,
+          "defaultValue": "[{label: 'Last 30 days', days: 30}, {label: 'Last 90 days', days: 90}]",
+          "description": "Preset date ranges for quick selection"
+        }
+      ],
+      "events": [
+        {
+          "name": "onDateRangeChange",
+          "description": "Triggered when date range is updated",
+          "parameters": [
+            {
+              "name": "startDate",
+              "type": "Date"
+            },
+            {
+              "name": "endDate",
+              "type": "Date"
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<DateRangeFilter initialStartDate={startDate} initialEndDate={endDate} onDateRangeChange={handleDateRangeChange} />",
+      "libraries": [
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "5.15.2"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "InvoiceStatusDashboard",
+          "namespace": "CRM/Finance",
+          "version": "1.0.0",
+          "description": "Track invoice statuses, payment timelines, and accounts receivable aging with actionable insights and collection metrics",
+          "relevance": 0.7156959677326293
+        },
+        {
+          "name": "RecentDealsList",
+          "namespace": "CRM/Sales",
+          "version": "1.0.0",
+          "description": "Displays a list of the most recent deals with stage indicators and key metrics",
+          "relevance": 0.697749201929431
+        },
+        {
+          "name": "TimelineTab",
+          "namespace": "CRM/Customer",
+          "version": "1.0.0",
+          "description": "Timeline tab showing customer interaction history",
+          "relevance": 0.8112687098542519
+        },
+        {
+          "name": "AIPerformanceDashboard",
+          "namespace": "AI/Analytics/Performance",
+          "version": "1.0.0",
+          "description": "Comprehensive dashboard for analyzing AI agent and prompt performance with time-series charts, cost analysis, and drill-down capabilities",
+          "relevance": 0.7092632576344865
+        },
+        {
+          "name": "DealVelocityChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Interactive line chart showing deal velocity metrics over time with multiple view modes",
+          "relevance": 0.6569254174603464
+        }
+      ],
+      "code": "/**\n * DateRangeFilter Component\n * Date picker component for selecting time periods to filter invoice data\n */\n\nfunction DateRangeFilter({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  initialStartDate,\n  initialEndDate,\n  presets = [\n    { label: 'Last 30 days', days: 30 },\n    { label: 'Last 90 days', days: 90 },\n    { label: 'Last 180 days', days: 180 },\n    { label: 'This year', days: 365 }\n  ]\n}) {\n  const [startDate, setStartDate] = useState(() => {\n    if (initialStartDate) return initialStartDate;\n    if (savedUserSettings?.startDate) return new Date(savedUserSettings.startDate);\n    \n    // Default to 30 days ago\n    const date = new Date();\n    date.setDate(date.getDate() - 30);\n    return date;\n  });\n  \n  const [endDate, setEndDate] = useState(() => {\n    if (initialEndDate) return initialEndDate;\n    if (savedUserSettings?.endDate) return new Date(savedUserSettings.endDate);\n    return new Date();\n  });\n\n  const handleStartDateChange = (date) => {\n    setStartDate(date);\n    callbacks?.onDateRangeChange?.(date, endDate);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: date?.toISOString()\n    });\n  };\n\n  const handleEndDateChange = (date) => {\n    setEndDate(date);\n    callbacks?.onDateRangeChange?.(startDate, date);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      endDate: date?.toISOString()\n    });\n  };\n\n  const handlePresetClick = (days) => {\n    const end = new Date();\n    const start = new Date();\n    start.setDate(start.getDate() - days);\n    \n    setStartDate(start);\n    setEndDate(end);\n    callbacks?.onDateRangeChange?.(start, end);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: start.toISOString(),\n      endDate: end.toISOString()\n    });\n  };\n\n  const { Box, Typography, Button, Paper, TextField } = MaterialUI;\n  const { DesktopDatePicker } = MaterialUI;\n\n  return (\n    <Paper \n      elevation={1} \n      sx={{ \n        p: 2, \n        display: 'flex', \n        flexDirection: 'column', \n        gap: 2,\n        ...styles?.paper\n      }}\n    >\n      <Typography variant=\"h6\" gutterBottom>\n        Date Range Filter\n      </Typography>\n      \n      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>\n        <DesktopDatePicker\n          label=\"Start Date\"\n          value={startDate}\n          onChange={handleStartDateChange}\n          maxDate={endDate}\n          renderInput={(params) => <TextField {...params} />}\n        />\n        \n        <DesktopDatePicker\n          label=\"End Date\"\n          value={endDate}\n          onChange={handleEndDateChange}\n          minDate={startDate}\n          maxDate={new Date()}\n          renderInput={(params) => <TextField {...params} />}\n        />\n      </Box>\n\n      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>\n        {presets.map((preset) => (\n          <Button\n            key={preset.label}\n            variant=\"outlined\"\n            size=\"small\"\n            onClick={() => handlePresetClick(preset.days)}\n          >\n            {preset.label}\n          </Button>\n        ))}\n      </Box>\n    </Paper>\n  );\n}",
+      "testsPassed": false
+    },
+    {
+      "name": "LegendDisplay",
+      "title": "Chart Legend Component",
+      "description": "Custom legend component explaining chart metrics and color coding",
+      "type": "chart",
+      "location": "embedded",
+      "functionalRequirements": "Display clear legend explaining what the bar colors represent, units of measurement, and any chart-specific information",
+      "technicalDesign": "## LegendDisplay Component\n- Clean, responsive legend display\n- Explains color coding and units\n- Updates based on current view mode (count vs revenue)\n- Compact design that doesn't interfere with chart display",
+      "properties": [
+        {
+          "name": "mode",
+          "type": "'count' | 'revenue'",
+          "required": true,
+          "description": "Current view mode to determine legend text"
+        },
+        {
+          "name": "position",
+          "type": "'top' | 'bottom' | 'left' | 'right'",
+          "required": false,
+          "defaultValue": "bottom",
+          "description": "Position of the legend relative to the chart"
+        }
+      ],
+      "exampleUsage": "<LegendDisplay mode=\"count\" position=\"bottom\" />",
+      "relevantExamples": [
+        {
+          "name": "AIModelAnalytics",
+          "namespace": "AI",
+          "version": "1.0.0",
+          "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
+          "relevance": 0.7738249909350852
+        },
+        {
+          "name": "KPIGauges",
+          "namespace": "CRM/Finance",
+          "version": "1.0.0",
+          "description": "Gauge charts showing key performance indicators",
+          "relevance": 0.7603651075655811
+        },
+        {
+          "name": "DealVelocityDistributionChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Displays statistical distribution of deal velocities using box plots",
+          "relevance": 0.7326766234653661
+        },
+        {
+          "name": "DealVelocityChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Interactive line chart showing deal velocity metrics over time with multiple view modes",
+          "relevance": 0.7272471638968272
+        },
+        {
+          "name": "TrendChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Time series chart showing velocity trends",
+          "relevance": 0.7221925909150861
+        }
+      ],
+      "code": "function LegendDisplay({ mode, position = 'bottom', utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  const [items, setItems] = useState([]);\n  const [isLoading, setIsLoading] = useState(true);\n\n  const loadLegendData = async () => {\n    const result = await utilities.rq.RunQuery({\n      QueryName: 'GetColorScheme',\n      Parameters: { mode },\n    });\n    \n    if (result.Success) {\n      setItems(result.Results);\n    }\n    setIsLoading(false);\n  };\n\n  useState(() => {\n    loadLegendData();\n  }, []);\n\n  const getLegendItems = useMemo(() => {\n    if (isLoading) return [];\n    \n    return items.map(item => ({\n      label: mode === 'count' ? `${item.metric} tickets` : `$${item.metric} revenue`,\n      color: item.color,\n      value: item.metric\n    }));\n  }, [items, mode, isLoading]);\n\n  const getContainerStyle = () => {\n    const base = {\n      display: 'flex',\n      flexDirection: 'row',\n      gap: '16px',\n      flexWrap: 'wrap',\n      alignItems: 'center',\n      background: styles.colors.background,\n      border: `1px solid ${styles.colors.border}`,\n      borderRadius: '4px',\n      padding: '12px 16px',\n      fontSize: styles.typography.fontSize.small,\n    };\n\n    switch (position) {\n      case 'top':\n        return {\n          ...base,\n          marginBottom: '16px',\n        };\n      case 'bottom':\n        return {\n          ...base,\n          marginTop: '16px',\n        };\n      case 'left':\n        return {\n          ...base,\n          flexDirection: 'column',\n          alignItems: 'flex-start',\n          marginRight: '16px',\n          maxWidth: '200px',\n        };\n      case 'right':\n        return {\n          ...base,\n          flexDirection: 'column',\n          alignItems: 'flex-start',\n          marginLeft: '16px',\n          maxWidth: '200px',\n        };\n      default:\n        return base;\n    }\n  };\n\n  if (isLoading) {\n    return <div style={getContainerStyle()}>Loading legend...</div>;\n  }\n\n  return (\n    <div style={getContainerStyle()}>\n      {getLegendItems.map((item, index) => (\n        <div key={index} style={{\n          display: 'flex',\n          alignItems: 'center',\n          gap: '8px',\n          whiteSpace: 'nowrap'\n        }}>\n          <div style={{\n            width: '12px',\n            height: '12px',\n            borderRadius: '2px',\n            backgroundColor: item.color,\n            flexShrink: 0\n          }} />\n          <span style={{\n            color: styles.colors.text,\n            fontSize: styles.typography.fontSize.small\n          }}>\n            {item.label}\n          </span>\n        </div>\n      ))}\n    </div>\n  );\n}",
+      "testsPassed": false
+    },
+    {
+      "name": "ExportButton",
+      "title": "Chart Export Control",
+      "description": "Export functionality for downloading chart data as PNG, SVG, or CSV formats",
+      "type": "form",
+      "location": "embedded",
+      "functionalRequirements": "Provide export options for the current chart view including PNG image, SVG vector, and CSV data download",
+      "technicalDesign": "## ExportButton Component\n- Dropdown menu with export options\n- Uses html2canvas for PNG export\n- Direct SVG download from ECharts\n- CSV data export with current filters applied\n- Manages export state and loading indicators",
+      "properties": [
+        {
+          "name": "chartRef",
+          "type": "object",
+          "required": true,
+          "description": "Reference to the ECharts instance for export functionality"
+        },
+        {
+          "name": "data",
+          "type": "Array",
+          "required": true,
+          "description": "Current chart data for CSV export"
+        },
+        {
+          "name": "filename",
+          "type": "string",
+          "required": false,
+          "defaultValue": "product-analysis",
+          "description": "Base filename for exported files"
+        }
+      ],
+      "events": [
+        {
+          "name": "onExportStart",
+          "description": "Triggered when export process begins"
+        },
+        {
+          "name": "onExportComplete",
+          "description": "Triggered when export is finished"
+        }
+      ],
+      "exampleUsage": "<ExportButton chartRef={chartRef} data={chartData} filename=\"product-analysis\" />",
+      "libraries": [
+        {
+          "name": "html2canvas",
+          "globalVariable": "html2canvas",
+          "version": "1.4.1"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "DataExportPanel",
+          "namespace": "Generic/UI/Export",
+          "version": "1.0.0",
+          "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
+          "relevance": 0.7708378080802694
+        }
+      ],
+      "code": "function ExportButton({ chartRef, data, filename = 'product-analysis', utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  const [isMenuVisible, setIsMenuVisible] = useState(false);\n  const [isExporting, setIsExporting] = useState(false);\n  const [exportType, setExportType] = useState(null);\n\n  const toggleMenu = () => {\n    setIsMenuVisible(!isMenuVisible);\n  };\n\n  const handleExport = async (type) => {\n    setIsExporting(true);\n    setExportType(type);\n    callbacks?.onExportStart?.();\n\n    try {\n      switch (type) {\n        case 'png':\n          await exportAsPNG();\n          break;\n        case 'svg':\n          exportAsSVG();\n          break;\n        case 'csv':\n          exportAsCSV();\n          break;\n      }\n    } catch (error) {\n      console.error('Export failed:', error);\n    } finally {\n      setIsExporting(false);\n      setExportType(null);\n      setIsMenuVisible(false);\n      callbacks?.onExportComplete?.();\n    }\n  };\n\n  const exportAsPNG = async () => {\n    if (!chartRef?.current) return;\n    \n    const canvas = await html2canvas(chartRef.current);\n    const url = canvas.toDataURL('image/png');\n    downloadFile(url, `${filename}.png`, 'image/png');\n  };\n\n  const exportAsSVG = () => {\n    if (!chartRef?.current) return;\n    \n    const chart = chartRef.current.getEchartsInstance();\n    const svg = chart.renderToSVGString();\n    const blob = new Blob([svg], { type: 'image/svg+xml' });\n    const url = URL.createObjectURL(blob);\n    downloadFile(url, `${filename}.svg`, 'image/svg+xml');\n  };\n\n  const exportAsCSV = () => {\n    if (!data || data.length === 0) return;\n\n    const headers = Object.keys(data[0]);\n    const csvContent = [\n      headers.join(','),\n      ...data.map(row => \n        headers.map(header => {\n          const value = row[header];\n          return typeof value === 'string' && value.includes(',') ? `\"${value}\"` : value;\n        }).join(',')\n      )\n    ].join('\\n');\n\n    const blob = new Blob([csvContent], { type: 'text/csv' });\n    const url = URL.createObjectURL(blob);\n    downloadFile(url, `${filename}.csv`, 'text/csv');\n  };\n\n  const downloadFile = (url, fileName, mimeType) => {\n    const link = document.createElement('a');\n    link.href = url;\n    link.download = fileName;\n    link.style.display = 'none';\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n    \n    if (url.startsWith('blob:')) {\n      URL.revokeObjectURL(url);\n    }\n  };\n\n  const menuItems = [\n    { key: 'png', label: 'Export as PNG' },\n    { key: 'svg', label: 'Export as SVG' },\n    { key: 'csv', label: 'Export as CSV' }\n  ];\n\n  return (\n    <div style={styles.exportButtonWrapper || { position: 'relative', display: 'inline-block' }}>\n      <button\n        onClick={toggleMenu}\n        disabled={isExporting}\n        style={styles.exportButton || {\n          padding: '8px 16px',\n          backgroundColor: '#1677ff',\n          color: 'white',\n          border: 'none',\n          borderRadius: '4px',\n          cursor: 'pointer',\n          display: 'flex',\n          alignItems: 'center',\n          gap: '4px'\n        }}\n      >\n        {isExporting ? 'Exporting...' : 'Export'}\n        <span style={{ marginLeft: '4px' }}>▼</span>\n      </button>\n      \n      {isMenuVisible && (\n        <div style={styles.exportMenu || {\n          position: 'absolute',\n          top: '100%',\n          right: 0,\n          backgroundColor: 'white',\n          border: '1px solid #d9d9d9',\n          borderRadius: '4px',\n          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',\n          zIndex: 1000,\n          minWidth: '150px',\n          marginTop: '4px'\n        }}>\n          {menuItems.map(item => (\n            <button\n              key={item.key}\n              onClick={() => handleExport(item.key)}\n              disabled={isExporting && exportType === item.key}\n              style={styles.exportMenuItem || {\n                display: 'block',\n                width: '100%',\n                padding: '8px 16px',\n                textAlign: 'left',\n                backgroundColor: 'transparent',\n                border: 'none',\n                cursor: 'pointer',\n                fontSize: '14px',\n                color: isExporting && exportType === item.key ? '#999' : '#333'\n              }}\n              onMouseEnter={(e) => {\n                e.target.style.backgroundColor = '#f5f5f5';\n              }}\n              onMouseLeave={(e) => {\n                e.target.style.backgroundColor = 'transparent';\n              }}\n            >\n              {item.label}\n            </button>\n          ))}\n        </div>\n      )}\n    </div>\n  );\n}"
+    }
+  ],
+  "properties": [
+    {
+      "name": "initialDateRange",
+      "type": "{start: Date, end: Date}",
+      "required": false,
+      "description": "Initial date range for filtering invoice data"
+    },
+    {
+      "name": "defaultViewMode",
+      "type": "'count' | 'revenue'",
+      "required": false,
+      "defaultValue": "count",
+      "description": "Default view mode for the chart (count or revenue)"
+    },
+    {
+      "name": "showExport",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "description": "Whether to show export functionality"
+    }
+  ],
+  "events": [
+    {
+      "name": "onViewModeChange",
+      "description": "Triggered when user switches between count and revenue views",
+      "parameters": [
+        {
+          "name": "mode",
+          "type": "'count' | 'revenue'",
+          "description": "Current view mode"
+        }
+      ]
+    },
+    {
+      "name": "onDateRangeChange",
+      "description": "Triggered when date range filter is updated",
+      "parameters": [
+        {
+          "name": "startDate",
+          "type": "Date"
+        },
+        {
+          "name": "endDate",
+          "type": "Date"
+        }
+      ]
+    },
+    {
+      "name": "onProductSelect",
+      "description": "Triggered when user clicks on a product bar",
+      "parameters": [
+        {
+          "name": "productName",
+          "type": "string",
+          "description": "Name of the selected product"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<ProductInvoiceVolumeChart initialDateRange={{start: new Date('2024-01-01'), end: new Date()}} defaultViewMode=\"count\" showExport={true} />",
+  "libraries": [
+    {
+      "name": "ECharts",
+      "globalVariable": "echarts",
+      "version": "5.4.3"
+    },
+    {
+      "name": "@mui/material",
+      "globalVariable": "MaterialUI",
+      "version": "5.15.2"
+    },
+    {
+      "name": "html2canvas",
+      "globalVariable": "html2canvas",
+      "version": "1.4.1"
+    },
+    {
+      "name": "dayjs",
+      "globalVariable": "dayjs",
+      "version": "1.11.10"
+    }
+  ],
+  "code": "function ProductInvoiceVolumeChart({utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings}) {\n  const {ChartContainer, ToggleControl, DateRangeFilter, LegendDisplay, ExportButton} = components;\n  const theme = MaterialUI.useTheme();\n\n  // State management\n  const [loading, setLoading] = React.useState(true);\n  const [error, setError] = React.useState(null);\n  const [chartData, setChartData] = React.useState([]);\n  const [viewMode, setViewMode] = React.useState(savedUserSettings?.viewMode || 'count');\n  const [dateRange, setDateRange] = React.useState({\n    start: savedUserSettings?.startDate || dayjs().subtract(30, 'days').toDate(),\n    end: savedUserSettings?.endDate || dayjs().toDate()\n  });\n\n  const chartRef = React.useRef(null);\n\n  // Load data\n  React.useEffect(() => {\n    const loadData = async () => {\n      try {\n        setLoading(true);\n        setError(null);\n        \n        const result = await utilities.rq.RunQuery({\n          QueryName: \"ProductInvoiceVolumeTrend\"\n        });\n\n        if (result.Success) {\n          setChartData(result.Results || []);\n        } else {\n          setError('Failed to load data');\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    };\n\n    loadData();\n  }, []);\n\n  // Process chart data based on view mode\n  const processedChartData = React.useMemo(() => {\n    if (!chartData || chartData.length === 0) return [];\n    \n    return chartData.map(item => ({\n      ProductName: item.ProductName,\n      value: viewMode === 'count' ? item.InvoiceCount : item.TotalRevenue\n    }));\n  }, [chartData, viewMode]);\n\n  // Handle view mode change\n  const handleViewModeChange = (newMode) => {\n    setViewMode(newMode);\n    callbacks?.onViewModeChange?.(newMode);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      viewMode: newMode\n    });\n  };\n\n  // Handle date range change\n  const handleDateRangeChange = (startDate, endDate) => {\n    const newRange = { start: startDate, end: endDate };\n    setDateRange(newRange);\n    callbacks?.onDateRangeChange?.(startDate, endDate);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: startDate,\n      endDate: endDate\n    });\n  };\n\n  // Handle product selection\n  const handleProductSelect = (productName) => {\n    callbacks?.onProductSelect?.(productName);\n  };\n\n  const yAxisLabel = viewMode === 'count' ? 'Invoice Count' : 'Revenue ($)';\n  const chartTitle = viewMode === 'count' \n    ? 'Product Invoice Volume (Count)'\n    : 'Product Invoice Volume (Revenue)';\n\n  return (\n    <MaterialUI.Box>\n      <MaterialUI.Typography variant=\"h5\" gutterBottom>\n        Product Invoice Volume Analysis\n      </MaterialUI.Typography>\n      \n      <MaterialUI.Box>\n        <MaterialUI.Grid container spacing={3} alignItems=\"center\">\n          <MaterialUI.Grid item xs={12} sm={4}>\n            <ToggleControl\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              initialMode={viewMode}\n              onModeChange={handleViewModeChange}\n            />\n          </MaterialUI.Grid>\n          <MaterialUI.Grid item xs={12} sm={5}>\n            <DateRangeFilter\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              initialStartDate={dateRange.start}\n              initialEndDate={dateRange.end}\n              onDateRangeChange={handleDateRangeChange}\n            />\n          </MaterialUI.Grid>\n          <MaterialUI.Grid item xs={12} sm={3}>\n            <LegendDisplay\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              mode={viewMode}\n              position=\"right\"\n            />\n          </MaterialUI.Grid>\n        </MaterialUI.Grid>\n      </MaterialUI.Box>\n\n      <MaterialUI.Box>\n        {loading && (\n          <MaterialUI.Box display=\"flex\" justifyContent=\"center\" p={3}>\n            <MaterialUI.CircularProgress />\n          </MaterialUI.Box>\n        )}\n        \n        {error && (\n          <MaterialUI.Alert severity=\"error\">\n            {error}\n          </MaterialUI.Alert>\n        )}\n        \n        {!loading && !error && processedChartData.length > 0 && (\n          <ChartContainer\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n            chartData={processedChartData}\n            chartTitle={chartTitle}\n            yAxisLabel={yAxisLabel}\n            onChartClick={handleProductSelect}\n          />\n        )}\n        \n        {!loading && !error && processedChartData.length === 0 && (\n          <MaterialUI.Box display=\"flex\" justifyContent=\"center\" p={3}>\n            <MaterialUI.Typography variant=\"h6\" color=\"textSecondary\">\n              No data available for the selected period\n            </MaterialUI.Typography>\n          </MaterialUI.Box>\n        )}\n      </MaterialUI.Box>\n\n      {!loading && !error && (savedUserSettings?.showExport !== false) && (\n        <MaterialUI.Box mt={2}>\n          <ExportButton\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n            chartRef={chartRef}\n            data={processedChartData}\n            filename={`product-invoice-volume-${viewMode}`}\n          />\n        </MaterialUI.Box>\n      )}\n    </MaterialUI.Box>\n  );\n}"
+}

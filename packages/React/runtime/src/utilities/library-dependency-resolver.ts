@@ -420,15 +420,33 @@ export class LibraryDependencyResolver {
     const errors: string[] = [];
     const warnings: string[] = [];
 
+    // Filter out null, undefined, and non-string values from requestedLibs
+    const validRequestedLibs = requestedLibs.filter(lib => {
+      if (!lib || typeof lib !== 'string') {
+        const warning = `Invalid library name: ${lib} (type: ${typeof lib})`;
+        warnings.push(warning);
+        if (this.debug || options?.debug) {
+          console.warn(`⚠️ ${warning}`);
+        }
+        return false;
+      }
+      return true;
+    });
+
     if (this.debug || options?.debug) {
       console.log('🔍 Getting load order for requested libraries:');
-      console.log('  📝 Requested:', requestedLibs);
+      console.log('  📝 Requested (raw):', requestedLibs);
+      console.log('  📝 Requested (valid):', validRequestedLibs);
       console.log('  📚 Total available libraries:', allLibs.length);
     }
 
     // Build a map for quick lookup (case-insensitive)
     const libMap = new Map<string, ComponentLibraryEntity[]>();
     for (const lib of allLibs) {
+      if (!lib?.Name) {
+        warnings.push(`Library with missing name found in available libraries`);
+        continue;
+      }
       const key = lib.Name.toLowerCase();
       if (!libMap.has(key)) {
         libMap.set(key, []);
@@ -438,7 +456,7 @@ export class LibraryDependencyResolver {
 
     // Collect all libraries needed (requested + their dependencies)
     const needed = new Set<string>();
-    const toProcess = [...requestedLibs];
+    const toProcess = [...validRequestedLibs];
     const processed = new Set<string>();
     const versionRequirements = new Map<string, VersionRequirement[]>();
     let depth = 0;
@@ -446,6 +464,17 @@ export class LibraryDependencyResolver {
 
     while (toProcess.length > 0 && depth < maxDepth) {
       const current = toProcess.shift()!;
+      
+      // Extra safety check for null/undefined
+      if (!current || typeof current !== 'string') {
+        const warning = `Unexpected invalid library name during processing: ${current}`;
+        warnings.push(warning);
+        if (this.debug || options?.debug) {
+          console.warn(`⚠️ ${warning}`);
+        }
+        continue;
+      }
+      
       if (processed.has(current)) continue;
 
       processed.add(current);

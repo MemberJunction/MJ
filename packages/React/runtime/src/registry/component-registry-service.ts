@@ -129,14 +129,23 @@ export class ComponentRegistryService {
     // Load all libraries from metadata engine
     const allLibraries = this.componentEngine.ComponentLibraries || [];
     
-    const compilationResult = await this.compiler.compile({
-      componentName: component.Name,
-      componentCode: spec.code,
-      libraries: spec.libraries,
-      allLibraries
-    });
+    let compilationResult;
+    try {
+      compilationResult = await this.compiler.compile({
+        componentName: component.Name,
+        componentCode: spec.code,
+        libraries: spec.libraries,
+        allLibraries
+      });
+    }
+    catch (compileEx) {
+      // log then throw
+      console.error(`🔴 Error compiling component ${component.Name}`,compileEx);
+      throw compileEx;
+    }
     
     if (!compilationResult.success) {
+      console.error(`🔴 Error compiling component ${component.Name}`, compilationResult, 'Code', spec.code);
       throw new Error(`Failed to compile component ${component.Name}: ${compilationResult.error}`);
     }
     

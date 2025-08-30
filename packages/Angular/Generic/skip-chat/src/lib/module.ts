@@ -17,13 +17,6 @@ import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 /*********************************************/
-// Plotly
-import { PlotlyViaCDNModule } from 'angular-plotly.js';
-PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'    
-
-
-/*********************************************/
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
 
@@ -39,8 +32,6 @@ import { SkipChatComponent } from './skip-chat/skip-chat.component';
 import { SkipSingleMessageComponent } from './skip-single-message/skip-single-message.component';
 import { SkipDynamicReportWrapperComponent } from './dynamic-report/skip-dynamic-report-wrapper';
 import { SkipDynamicLinearReportComponent } from './dynamic-report/linear-report';
-import { SkipDynamicChartComponent } from './dynamic-report/dynamic-chart';
-import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { SkipDynamicUIComponentComponent } from './dynamic-report/dynamic-ui-component';
 import { SkipSplitPanelComponent } from './split-panel/skip-split-panel.component';
@@ -54,8 +45,6 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     SkipSingleMessageComponent,
     SkipDynamicLinearReportComponent,
     SkipDynamicReportWrapperComponent,
-    SkipDynamicChartComponent,
-    SkipDynamicGridComponent,
     SkipDynamicUIComponentComponent,
     SkipSplitPanelComponent,
     SkipArtifactViewerComponent,
@@ -75,7 +64,6 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     DropDownsModule,
     GridModule,
     ButtonsModule,
-    PlotlyViaCDNModule,
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
@@ -89,8 +77,6 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     SkipSingleMessageComponent,
     SkipDynamicLinearReportComponent,
     SkipDynamicReportWrapperComponent,
-    SkipDynamicChartComponent,
-    SkipDynamicGridComponent,
     SkipDynamicUIComponentComponent,
     SkipSplitPanelComponent,
     SkipArtifactViewerComponent,

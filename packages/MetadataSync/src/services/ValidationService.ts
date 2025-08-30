@@ -634,9 +634,27 @@ export class ValidationService {
   /**
    * Validates @file: references
    */
-  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string): Promise<void> {
+  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string, visitedFiles?: Set<string>): Promise<void> {
     const dir = path.dirname(sourceFile);
     const resolvedPath = path.resolve(dir, filePath);
+
+    // Initialize visited files set if not provided (for circular reference detection)
+    const visited = visitedFiles || new Set<string>();
+    
+    // Check for circular references
+    if (visited.has(resolvedPath)) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: fieldName,
+        file: sourceFile,
+        message: `Circular @file reference detected: "${filePath}"`,
+        details: `Path ${resolvedPath} is already being processed`,
+        suggestion: 'Restructure your file references to avoid circular dependencies',
+      });
+      return;
+    }
 
     if (!fs.existsSync(resolvedPath)) {
       this.addError({
@@ -651,10 +669,38 @@ export class ValidationService {
       return;
     }
 
-    // Read the file and check for {@include} references
+    // Add to visited set
+    visited.add(resolvedPath);
+
+    // Read the file and check for references
     try {
       const content = fs.readFileSync(resolvedPath, 'utf-8');
+      
+      // Check for {@include} references in all file types
       await this.validateIncludeReferences(content, resolvedPath, new Set([resolvedPath]));
+      
+      // If it's a JSON file, parse and validate nested @ references
+      if (resolvedPath.endsWith('.json')) {
+        try {
+          const jsonContent = JSON.parse(content);
+          
+          // Check if JSON contains @include directives that need preprocessing
+          const jsonString = JSON.stringify(jsonContent);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+          
+          if (hasIncludes) {
+            await this.validateJsonIncludes(jsonContent, resolvedPath);
+          }
+          
+          // Recursively validate all @ references in the JSON structure
+          await this.validateJsonReferences(jsonContent, resolvedPath, entityName, visited);
+        } catch (parseError) {
+          // Not valid JSON or error parsing, treat as text file (already validated {@include} above)
+          if (this.options.verbose) {
+            console.log(`File ${resolvedPath} is not valid JSON, treating as text file`);
+          }
+        }
+      }
     } catch (error) {
       this.addError({
         type: 'reference',
@@ -1249,6 +1295,131 @@ export class ValidationService {
           message: `Failed to read {@include} file: "${trimmedPath}"`,
           details: error instanceof Error ? error.message : String(error),
         });
+      }
+    }
+  }
+
+  /**
+   * Validates @include directives in JSON files
+   */
+  private async validateJsonIncludes(jsonContent: any, sourceFile: string): Promise<void> {
+    // Process based on data type
+    if (Array.isArray(jsonContent)) {
+      for (const item of jsonContent) {
+        if (typeof item === 'string' && item.startsWith('@include:')) {
+          const includePath = item.substring(9).trim();
+          await this.validateIncludeFile(includePath, sourceFile);
+        } else if (item && typeof item === 'object') {
+          await this.validateJsonIncludes(item, sourceFile);
+        }
+      }
+    } else if (jsonContent && typeof jsonContent === 'object') {
+      for (const [key, value] of Object.entries(jsonContent)) {
+        if (key === '@include' || key.startsWith('@include.')) {
+          let includeFile: string;
+          if (typeof value === 'string') {
+            includeFile = value;
+          } else if (value && typeof value === 'object' && 'file' in value) {
+            includeFile = (value as any).file;
+          } else {
+            this.addError({
+              type: 'reference',
+              severity: 'error',
+              file: sourceFile,
+              message: `Invalid @include directive format for key "${key}"`,
+              suggestion: 'Use either a string path or an object with a "file" property',
+            });
+            continue;
+          }
+          await this.validateIncludeFile(includeFile, sourceFile);
+        } else if (value && typeof value === 'object') {
+          await this.validateJsonIncludes(value, sourceFile);
+        }
+      }
+    }
+  }
+
+  /**
+   * Validates a single include file path
+   */
+  private async validateIncludeFile(includePath: string, sourceFile: string): Promise<void> {
+    const dir = path.dirname(sourceFile);
+    const resolvedPath = path.resolve(dir, includePath);
+    
+    if (!fs.existsSync(resolvedPath)) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        file: sourceFile,
+        message: `@include file not found: "${includePath}"`,
+        suggestion: `Create file at: ${resolvedPath}`,
+      });
+    }
+  }
+
+  /**
+   * Recursively validates all @ references in a JSON structure
+   */
+  private async validateJsonReferences(
+    obj: any,
+    sourceFile: string,
+    entityName: string,
+    visitedFiles: Set<string>,
+    parentContext?: { entity: string; field: string }
+  ): Promise<void> {
+    if (obj === null || obj === undefined) {
+      return;
+    }
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        await this.validateJsonReferences(item, sourceFile, entityName, visitedFiles, parentContext);
+      }
+    } else if (typeof obj === 'object') {
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'string' && this.isValidReference(value)) {
+          // Process different reference types
+          if (value.startsWith('@file:')) {
+            const filePath = value.substring(6);
+            // Recursively validate the file reference (with circular detection)
+            await this.validateFileReference(filePath, sourceFile, entityName, key, visitedFiles);
+          } else if (value.startsWith('@lookup:')) {
+            // Parse and validate lookup reference
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              await this.validateLookupReference(parsed, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@template:')) {
+            const templatePath = value.substring(10);
+            await this.validateTemplateReference(templatePath, sourceFile, entityName, key);
+          } else if (value.startsWith('@parent:')) {
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              this.validateParentReference(parsed.value, parentContext, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@root:')) {
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              this.validateRootReference(parsed.value, parentContext, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@env:')) {
+            const envVar = value.substring(5);
+            if (!process.env[envVar]) {
+              this.addWarning({
+                type: 'validation',
+                severity: 'warning',
+                entity: entityName,
+                field: key,
+                file: sourceFile,
+                message: `Environment variable "${envVar}" is not currently set`,
+                suggestion: `Ensure this variable is set before running push operations`,
+              });
+            }
+          }
+        } else if (value && typeof value === 'object') {
+          // Recursively process nested objects
+          await this.validateJsonReferences(value, sourceFile, entityName, visitedFiles, parentContext);
+        }
       }
     }
   }

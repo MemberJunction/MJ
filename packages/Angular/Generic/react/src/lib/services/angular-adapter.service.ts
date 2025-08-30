@@ -13,10 +13,10 @@ import {
   CompileOptions,
   RuntimeContext,
   ExternalLibraryConfig,
-  LibraryConfiguration
+  LibraryConfiguration,
+  SetupStyles
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
-import { DEFAULT_STYLES } from '../default-styles';
 import { ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
@@ -160,7 +160,7 @@ export class AngularAdapterService {
     // Apply default styles if not provided
     const optionsWithDefaults = {
       ...options,
-      styles: options.styles || DEFAULT_STYLES
+      styles: options.styles || SetupStyles()
     };
 
     return this.runtime!.compiler.compile(optionsWithDefaults);
