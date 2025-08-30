@@ -7,12 +7,6 @@ import { RouterModule } from '@angular/router';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 /*********************************************/
-// Plotly
-import { PlotlyViaCDNModule } from 'angular-plotly.js';
-PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
-
-/*********************************************/
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
 
@@ -85,7 +79,6 @@ import { SkipChatWrapperComponent } from './lib/skip-chat-wrapper/skip-chat-wrap
     DropDownsModule,
     MemberJunctionSharedModule,
     GridModule,
-    PlotlyViaCDNModule,
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
