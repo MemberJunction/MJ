@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ai-test-harness",
-  "version": "2.94.0",
+  "version": "2.95.0",
   "description": "MemberJunction AI Test Harness - A reusable component for testing AI agents and prompts with beautiful UX",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -31,13 +31,13 @@
     "@angular/animations": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.94.0",
-    "@memberjunction/core-entities": "2.94.0",
-    "@memberjunction/graphql-dataprovider": "2.94.0",
-    "@memberjunction/ng-container-directives": "2.94.0",
-    "@memberjunction/ng-code-editor": "2.94.0",
-    "@memberjunction/ng-notifications": "2.94.0",
-    "@memberjunction/ng-shared": "2.94.0",
+    "@memberjunction/core": "2.95.0",
+    "@memberjunction/core-entities": "2.95.0",
+    "@memberjunction/graphql-dataprovider": "2.95.0",
+    "@memberjunction/ng-container-directives": "2.95.0",
+    "@memberjunction/ng-code-editor": "2.95.0",
+    "@memberjunction/ng-notifications": "2.95.0",
+    "@memberjunction/ng-shared": "2.95.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",

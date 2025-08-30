@@ -1,5 +1,17 @@
 # @memberjunction/ng-react
 
+## 2.95.0
+
+### Patch Changes
+
+- 3cd7db6: fix rendering issue
+- Updated dependencies [3cd7db6]
+- Updated dependencies [a54c014]
+- Updated dependencies [85985bd]
+  - @memberjunction/react-runtime@2.95.0
+  - @memberjunction/core@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+
 ## 2.94.0
 
 ### Minor Changes

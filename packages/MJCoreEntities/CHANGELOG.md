@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+- Updated dependencies [85985bd]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+  - @memberjunction/global@2.95.0
+
 ## 2.94.0
 
 ### Patch Changes

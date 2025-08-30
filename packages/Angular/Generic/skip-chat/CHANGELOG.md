@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.95.0
+
+### Patch Changes
+
+- 4b52f29: Skip Chat UI improvements and auth provider fixes
+
+  - **Skip Chat UI Enhancements**:
+
+    - Fixed timer display persistence when switching between conversations
+    - Prevented clock icon from disappearing when other conversations complete
+    - Eliminated delay when displaying status messages on conversation switch
+    - Fixed status message and timer persistence across page refreshes
+    - Preserved whitespace formatting in chat messages
+    - Updated chat input style to match MS Teams design
+    - Fixed text overflow issues under buttons in chat input area
+
+  - **Auth Provider Improvements**:
+
+    - Simplified Load function implementation across auth providers (Auth0, MSAL,
+      Okta)
+
+  - **MJAPI Configuration**:
+    - Added configurable public URL support for MJAPI callbacks to enable hybrid
+      development scenarios
+
+- Updated dependencies [3cd7db6]
+- Updated dependencies [a54c014]
+- Updated dependencies [85985bd]
+  - @memberjunction/ng-react@2.95.0
+  - @memberjunction/core@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+  - @memberjunction/ng-base-types@2.95.0
+  - @memberjunction/ng-code-editor@2.95.0
+  - @memberjunction/ng-container-directives@2.95.0
+  - @memberjunction/ng-data-context@2.95.0
+  - @memberjunction/ng-notifications@2.95.0
+  - @memberjunction/ng-resource-permissions@2.95.0
+  - @memberjunction/graphql-dataprovider@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/data-context@2.95.0
+  - @memberjunction/skip-types@2.95.0
+  - @memberjunction/global@2.95.0
+
 ## 2.94.0
 
 ### Patch Changes

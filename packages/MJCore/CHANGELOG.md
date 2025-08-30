@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.95.0
+
+### Patch Changes
+
+- a54c014: duck typing
+  - @memberjunction/global@2.95.0
+
 ## 2.94.0
 
 ### Patch Changes

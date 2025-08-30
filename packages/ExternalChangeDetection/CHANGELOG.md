@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/sqlserver-dataprovider@2.95.0
+  - @memberjunction/global@2.95.0
+
 ## 2.94.0
 
 ### Patch Changes
