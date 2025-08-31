@@ -2314,12 +2314,32 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                         // Property name is valid, now check its type
                         const value = prop.value;
                         
+                        // Helper to check if a node is null or undefined
+                        const isNullOrUndefined = (node: t.Node): boolean => {
+                          return t.isNullLiteral(node) || 
+                                 (t.isIdentifier(node) && node.name === 'undefined');
+                        };
+                        
                         // Helper to check if a node could evaluate to a string
-                        const isStringLike = (node: t.Node): boolean => {
+                        const isStringLike = (node: t.Node, depth: number = 0): boolean => {
+                          // Prevent infinite recursion
+                          if (depth > 3) return false;
+                          
+                          // Special handling for ternary operators - check both branches
+                          if (t.isConditionalExpression(node)) {
+                            const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
+                            const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
+                            return consequentOk && alternateOk;
+                          }
+                          
+                          // Explicitly reject object and array expressions
+                          if (t.isObjectExpression(node) || t.isArrayExpression(node)) {
+                            return false;
+                          }
+                          
                           return t.isStringLiteral(node) || 
                                  t.isTemplateLiteral(node) || 
                                  t.isBinaryExpression(node) || // String concatenation
-                                 t.isConditionalExpression(node) || // Ternary
                                  t.isIdentifier(node) || // Variable
                                  t.isCallExpression(node) || // Function call
                                  t.isMemberExpression(node); // Property access
@@ -2358,8 +2378,9 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                         
                         // Validate types based on property name
                         if (propName === 'ExtraFilter' || propName === 'OrderBy' || propName === 'EntityName') {
-                          // These must be strings
-                          if (!isStringLike(value)) {
+                          // These must be strings (ExtraFilter and OrderBy can also be null/undefined)
+                          const allowNullUndefined = propName === 'ExtraFilter' || propName === 'OrderBy';
+                          if (!isStringLike(value) && !(allowNullUndefined && isNullOrUndefined(value))) {
                             let exampleValue = '';
                             if (propName === 'ExtraFilter') {
                               exampleValue = `"Status = 'Active' AND Type = 'Customer'"`;
@@ -2514,12 +2535,32 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       // Property name is valid, now check its type
                       const value = prop.value;
                       
+                      // Helper to check if a node is null or undefined
+                      const isNullOrUndefined = (node: t.Node): boolean => {
+                        return t.isNullLiteral(node) || 
+                               (t.isIdentifier(node) && node.name === 'undefined');
+                      };
+                      
                       // Helper to check if a node could evaluate to a string
-                      const isStringLike = (node: t.Node): boolean => {
+                      const isStringLike = (node: t.Node, depth: number = 0): boolean => {
+                        // Prevent infinite recursion
+                        if (depth > 3) return false;
+                        
+                        // Special handling for ternary operators - check both branches
+                        if (t.isConditionalExpression(node)) {
+                          const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
+                          const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
+                          return consequentOk && alternateOk;
+                        }
+                        
+                        // Explicitly reject object and array expressions
+                        if (t.isObjectExpression(node) || t.isArrayExpression(node)) {
+                          return false;
+                        }
+                        
                         return t.isStringLiteral(node) || 
                                t.isTemplateLiteral(node) || 
                                t.isBinaryExpression(node) || // String concatenation
-                               t.isConditionalExpression(node) || // Ternary
                                t.isIdentifier(node) || // Variable
                                t.isCallExpression(node) || // Function call
                                t.isMemberExpression(node); // Property access
