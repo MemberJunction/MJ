@@ -1,179 +1,555 @@
 {
-  "functionalRequirements": "### Business Objectives\nProvide insight into product popularity/impact based on invoice data\n\n### Functional Requirements\n- Bar chart with products on x-axis showing invoice volume\n- Clear Y-axis labels showing invoice count/money value\n- Option to toggle between invoice count and monetary total\n- Legend explaining chart types\n- Time period selector for filtering",
-  "title": "Product Invoice Volume Analysis",
-  "type": "chart",
-  "name": "ProductInvoiceVolumeChart",
-  "userExplanation": "This chart shows product performance based on invoice volume, allowing analysis by count or value with time filters.",
+  "functionalRequirements": "## Business Objectives:\n- Enable quick access to account details and related contacts\n- Support efficient data exploration through sorting and drill-down\n\n## Functional Requirements:\n1. **Sortable Account List** with columns: Account Name, Created Date, Industry, Status\n2. **Interactive Drill-Down Panel** that:\n   - Shows full account details (address, website, key metrics)\n   - Displays related contacts with name, role, email, and phone\n3. **Visual Hierarchy** with:\n   - Collapsible/Expandable account entries\n   - Highlighting for priority accounts/statuses\n4. **Search Functionality** for filtering accounts (optional enhancement)",
+  "title": "Account Overview with Contacts",
+  "type": "dashboard",
+  "name": "AccountOverviewPanel",
+  "userExplanation": "AccountOverviewPanel provides a dynamic view of all accounts with sorting, drill-down capabilities into account details, and related contact information. The panel helps users manage client relationships by showing essential account data and contact lists in a single view.",
   "dataRequirements": {
-    "mode": "queries",
+    "mode": "views",
+    "description": "Account overview with contact relationships using direct entity views for efficient data access and sorting",
     "entities": [
       {
-        "name": "Products",
-        "description": "Master catalog of products and services offered by the organization",
+        "name": "Accounts",
+        "description": "Stores information about customer organizations and companies",
         "displayFields": [
           "ID",
-          "ProductName",
-          "UnitPrice"
+          "AccountName",
+          "__mj_CreatedAt",
+          "Industry",
+          "AccountStatus"
         ],
         "filterFields": [
-          "ID",
-          "ProductName"
+          "AccountName",
+          "Industry",
+          "AccountStatus",
+          "ID"
         ],
         "sortFields": [
-          "ProductName"
+          "AccountName",
+          "__mj_CreatedAt",
+          "Industry",
+          "AccountStatus",
+          "ID"
+        ],
+        "usageContext": "Primary entity for account list display and drill-down details",
+        "permissionLevelNeeded": [
+          "read"
         ],
         "fieldMetadata": [
           {
             "name": "ID",
             "sequence": 1,
-            "defaultInView": true,
             "type": "int",
             "allowsNull": false,
-            "isPrimaryKey": true
+            "isPrimaryKey": true,
+            "defaultInView": true
           },
           {
-            "name": "ProductName",
-            "sequence": 3,
-            "defaultInView": false,
+            "name": "AccountName",
+            "sequence": 2,
             "type": "nvarchar",
-            "allowsNull": false
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "defaultInView": false
           },
           {
-            "name": "UnitPrice",
-            "sequence": 6,
+            "name": "__mj_CreatedAt",
+            "sequence": 21,
+            "type": "datetimeoffset",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "defaultInView": false
+          },
+          {
+            "name": "Industry",
+            "sequence": 3,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "defaultInView": false
+          },
+          {
+            "name": "AccountStatus",
+            "sequence": 19,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
             "defaultInView": false,
-            "type": "decimal",
-            "allowsNull": false
+            "possibleValues": [
+              "Active",
+              "Inactive",
+              "On Hold",
+              "Closed"
+            ]
           }
-        ],
-        "permissionLevelNeeded": [
-          "read"
         ]
       },
       {
-        "name": "Invoice Line Items",
-        "description": "Individual line items that appear on an invoice",
+        "name": "Contacts",
+        "description": "Stores information about individual people associated with accounts",
         "displayFields": [
           "ID",
-          "InvoiceID",
-          "ProductID",
-          "Quantity",
-          "UnitPrice"
+          "FullName",
+          "Title",
+          "Email",
+          "Phone",
+          "AccountID"
         ],
         "filterFields": [
-          "ProductID",
-          "InvoiceID"
+          "AccountID",
+          "FullName",
+          "Email",
+          "ID"
         ],
         "sortFields": [
-          "InvoiceID",
-          "ProductID"
+          "FullName",
+          "Title",
+          "Email",
+          "ID"
+        ],
+        "usageContext": "Related contacts for drill-down display when viewing account details",
+        "permissionLevelNeeded": [
+          "read"
         ],
         "fieldMetadata": [
           {
             "name": "ID",
             "sequence": 1,
-            "defaultInView": true,
             "type": "int",
             "allowsNull": false,
-            "isPrimaryKey": true
+            "isPrimaryKey": true,
+            "defaultInView": true
           },
           {
-            "name": "InvoiceID",
-            "sequence": 2,
-            "defaultInView": false,
-            "type": "int",
-            "allowsNull": false
-          },
-          {
-            "name": "ProductID",
-            "sequence": 3,
-            "defaultInView": false,
-            "type": "int",
-            "allowsNull": true
-          },
-          {
-            "name": "Quantity",
-            "sequence": 5,
-            "defaultInView": false,
-            "type": "decimal",
-            "allowsNull": false
-          },
-          {
-            "name": "UnitPrice",
+            "name": "FullName",
             "sequence": 6,
-            "defaultInView": false,
-            "type": "decimal",
-            "allowsNull": false
-          }
-        ],
-        "permissionLevelNeeded": [
-          "read"
-        ]
-      }
-    ],
-    "queries": [
-      {
-        "name": "ProductInvoiceVolumeTrend",
-        "categoryPath": "Skip/Analytics/Products",
-        "description": "Aggregates invoice volumes by product over time with date filtering",
-        "fields": [
-          {
-            "name": "ProductName",
             "type": "nvarchar",
-            "description": "Name of the product"
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "defaultInView": false
           },
           {
-            "name": "InvoiceCount",
+            "name": "Title",
+            "sequence": 7,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "defaultInView": false
+          },
+          {
+            "name": "Email",
+            "sequence": 9,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "defaultInView": false
+          },
+          {
+            "name": "Phone",
+            "sequence": 10,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "defaultInView": false
+          },
+          {
+            "name": "AccountID",
+            "sequence": 2,
             "type": "int",
-            "description": "Count of invoices for the product"
-          },
-          {
-            "name": "InvoiceDate",
-            "type": "datetime",
-            "description": "Date of the invoice",
+            "allowsNull": true,
+            "isPrimaryKey": false,
             "defaultInView": false
           }
-        ],
-        "newQuerySQL": "SELECT p.ProductName, COUNT(il.Quantity) AS InvoiceCount, SUM(il.Quantity * il.UnitPrice) AS TotalRevenue FROM CRM.vwProducts p INNER JOIN CRM.vwInvoiceLineItems il ON p.ID = il.ProductID GROUP BY p.ProductName HAVING COUNT(il.Quantity) > 0 ORDER BY InvoiceCount DESC"
+        ]
       }
-    ],
-    "description": "Data requirements for product invoice volume analysis chart"
+    ]
   },
-  "description": "Interactive bar chart displaying product performance through invoice volume analysis with toggle options for count vs monetary value and time-based filtering.",
-  "location": "embedded",
-  "technicalDesign": "## Component Architecture\n\n### Main Component: ProductInvoiceVolumeChart\nThis is the root component that orchestrates the entire visualization. It manages the application state including the current view mode (count vs revenue), selected time period, and coordinates data flow between child components.\n\n### Child Components:\n1. **ChartContainer**: Core visualization component using ECharts for the bar chart display\n2. **ToggleControl**: Switch component for toggling between invoice count and revenue views\n3. **DateRangeFilter**: Date picker component for time-based filtering\n4. **LegendDisplay**: Custom legend component explaining chart metrics\n5. **ExportButton**: Component for exporting chart data in various formats\n\n### State Management:\n- All components manage their own UI state internally\n- ChartContainer manages chart interactions and tooltips\n- ToggleControl manages toggle state between count/revenue\n- DateRangeFilter manages date selection state\n- Parent component coordinates data flow and external events\n\n### Data Flow:\n1. ProductInvoiceVolumeChart receives data via props\n2. Child components receive filtered data based on current settings\n3. User interactions trigger events back to parent\n4. Chart updates reflect current state of filters and toggles\n\n### Implementation Details:\n- Uses ECharts for powerful interactive charting\n- Responsive design with mobile-first approach\n- Optimized rendering for large datasets\n- Accessibility features for screen readers\n- Export capabilities for PNG/SVG formats",
+  "description": "A comprehensive dashboard component that provides a sortable list of accounts with expandable details and related contact information for efficient client relationship management.",
+  "technicalDesign": "## Component Architecture\n\nThe AccountOverviewPanel is a sophisticated dashboard component that manages account data visualization and contact relationships. The component hierarchy follows a modular design pattern with built-in data loading capabilities:\n\n### Main Components:\n1. **AccountOverviewPanel** (Root) - Orchestrates the entire dashboard experience with internal data loading\n2. **AccountListComponent** - Displays sortable account table with expandable rows and internal data loading\n3. **ContactListComponent** - Displays related contacts with internal data loading based on selected account\n\n### State Management:\n- Uses local state for UI interactions (expanded rows, selected account)\n- Data loading state managed internally when props not provided\n- All sorting/filtering state managed within components\n- Error states and loading indicators for async data loading\n\n### Data Loading Strategy:\n- **Root Component**: Accepts optional accounts and contacts props\n- **Internal Loading**: When props not provided, uses RunView() to load from Accounts and Contacts entities\n- **Lazy Loading**: Contacts are loaded only when an account is selected\n- **Caching**: Recent data is cached to prevent unnecessary re-fetching\n\n### Data Flow:\n- Parent component can optionally provide data via props for testing or pre-loaded scenarios\n- Child components handle their own data loading when props not provided\n- Events bubble up through callback functions for user actions\n- All entities use the exact field names and types specified in dataRequirements\n\n### Key Features:\n- Expandable account rows for quick preview\n- Full drill-down capability with detailed panels\n- Responsive design that adapts to screen size\n- Keyboard navigation support for accessibility\n- Graceful handling of loading and error states\n- Optional props support for integration flexibility\n\n### Data Requirements Compliance:\n- **Accounts Entity**: Uses ID, AccountName, __mj_CreatedAt, Industry, AccountStatus fields\n- **Contacts Entity**: Uses ID, FullName, Title, Email, Phone, AccountID fields\n- **Primary Keys**: ID fields used consistently for selection and relationships\n- **Filtering**: AccountID used to filter contacts by selected account",
+  "libraries": [
+    {},
+    {},
+    {}
+  ],
+  "properties": [
+    {
+      "name": "accounts",
+      "type": "Array<{ID: number, AccountName: string, __mj_CreatedAt: string, Industry: string, AccountStatus: string}>",
+      "required": false,
+      "description": "Optional array of account records to display. If not provided, component will load data internally"
+    },
+    {
+      "name": "contacts",
+      "type": "Array<{ID: number, FullName: string, Title: string, Email: string, Phone: string, AccountID: number}>",
+      "required": false,
+      "description": "Optional array of contact records. If not provided, component will load related contacts internally"
+    },
+    {
+      "name": "initialSortField",
+      "type": "string",
+      "required": false,
+      "defaultValue": "AccountName",
+      "description": "Initial field to sort the account list by"
+    },
+    {
+      "name": "initialSortDirection",
+      "type": "string",
+      "required": false,
+      "defaultValue": "asc",
+      "possibleValues": [
+        "asc",
+        "desc"
+      ],
+      "description": "Initial sort direction for the account list"
+    },
+    {
+      "name": "showContactCount",
+      "type": "boolean",
+      "required": false,
+      "defaultValue": true,
+      "description": "Whether to show the contact count badge on each account row"
+    }
+  ],
+  "events": [
+    {
+      "name": "onAccountSelect",
+      "description": "Triggered when a user selects an account for detailed view",
+      "parameters": [
+        {
+          "name": "accountId",
+          "type": "number",
+          "description": "The ID of the selected account"
+        },
+        {
+          "name": "accountData",
+          "type": "object",
+          "description": "The complete account data object"
+        }
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Triggered when the user changes the sort configuration",
+      "parameters": [
+        {
+          "name": "sortField",
+          "type": "string",
+          "description": "The field being sorted by"
+        },
+        {
+          "name": "sortDirection",
+          "type": "string",
+          "description": "The direction of sort (asc/desc)"
+        }
+      ]
+    },
+    {
+      "name": "onFilterChange",
+      "description": "Triggered when filtering is applied to the account list",
+      "parameters": [
+        {
+          "name": "filterModel",
+          "type": "object",
+          "description": "The current filter configuration applied"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<AccountOverviewPanel\n  accounts={accountsData}\n  contacts={contactsData}\n  initialSortField=\"AccountName\"\n  initialSortDirection=\"asc\"\n  showContactCount={true}\n  onAccountSelect={(accountId, accountData) => handleAccountSelection(accountId, accountData)}\n  onSortChange={(sortField, sortDirection) => handleSortChange(sortField, sortDirection)}\n  onFilterChange={(filterModel) => handleFilterChange(filterModel)}\n/>",
   "dependencies": [
     {
-      "name": "ChartContainer",
-      "title": "ECharts Bar Chart Container",
-      "description": "Core visualization component using ECharts to display interactive bar charts with hover tooltips and responsive design",
-      "type": "chart",
-      "location": "embedded",
-      "functionalRequirements": "Display bar chart with products on x-axis and volume metrics on y-axis. Support hover tooltips, responsive resizing, and interactive features like zoom/pan.",
-      "technicalDesign": "## ChartContainer Component\n- Uses ECharts library for powerful bar chart rendering\n- Manages chart options, data series, and responsive behavior\n- Handles hover tooltips showing product name and current metric value\n- Supports responsive design with automatic resizing\n- Includes zoom and pan capabilities for large datasets\n- Provides export functionality for chart images",
+      "name": "AccountListComponent",
+      "description": "Displays a sortable, filterable table of accounts with expandable rows",
+      "type": "table",
+      "functionalRequirements": "Display accounts in a grid format with support for sorting, filtering, and row expansion. Each row should show key account information and allow users to expand for additional details.",
+      "technicalDesign": "## AccountListComponent\n\n### Purpose:\nProvides a responsive data table for displaying account information with advanced features.\n\n### Key Features:\n- Column sorting (AccountName, Created Date, Industry, Status)\n- Row expansion for quick preview\n- Contact count badge display\n- Keyboard navigation support\n- Status-based row styling\n\n### Data Requirements:\n- Uses Accounts entity with fields: ID, AccountName, __mj_CreatedAt, Industry, AccountStatus\n- Primary key: ID (used for row identification and selection)\n- Display fields: AccountName, __mj_CreatedAt, Industry, AccountStatus\n- Sort fields: All display fields plus ID for stability\n\n### State Management:\n- Manages sort state internally\n- Tracks expanded rows via row ID\n- Emits events for selection and sort changes\n\n### Data Loading:\n- Accepts optional accounts prop, falls back to internal loading via RunView()\n- Handles loading states and error states gracefully\n\n### Styling:\n- Uses Material-UI DataGrid for consistent look\n- Custom cell renderers for status badges and dates\n- Responsive design with breakpoint handling",
       "dataRequirements": {
-        "mode": "queries",
-        "description": "Chart data requirements using the ProductInvoiceVolumeTrend query",
-        "queries": [
+        "mode": "views",
+        "description": "Account list component data requirements",
+        "entities": [
           {
-            "name": "ProductInvoiceVolumeTrend",
-            "categoryPath": "Skip/Analytics/Products",
-            "description": "Query providing product names and volume metrics for chart display",
-            "fields": [
+            "name": "Accounts",
+            "description": "Stores information about customer organizations and companies",
+            "displayFields": [
+              "ID",
+              "AccountName",
+              "__mj_CreatedAt",
+              "Industry",
+              "AccountStatus"
+            ],
+            "filterFields": [
+              "AccountName",
+              "Industry",
+              "AccountStatus",
+              "ID"
+            ],
+            "sortFields": [
+              "AccountName",
+              "__mj_CreatedAt",
+              "Industry",
+              "AccountStatus",
+              "ID"
+            ],
+            "usageContext": "Primary data source for account list display",
+            "permissionLevelNeeded": [
+              "read"
+            ],
+            "fieldMetadata": [
               {
-                "name": "ProductName",
-                "type": "nvarchar",
-                "description": "Name of the product"
-              },
-              {
-                "name": "InvoiceCount",
+                "name": "ID",
+                "sequence": 1,
                 "type": "int",
-                "description": "Count of invoices for the product"
+                "allowsNull": false,
+                "isPrimaryKey": true,
+                "defaultInView": true
               },
               {
-                "name": "InvoiceDate",
-                "type": "datetime",
-                "description": "Date of the invoice",
+                "name": "AccountName",
+                "sequence": 2,
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "__mj_CreatedAt",
+                "sequence": 21,
+                "type": "datetimeoffset",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "Industry",
+                "sequence": 3,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "AccountStatus",
+                "sequence": 19,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "possibleValues": [
+                  "Active",
+                  "Inactive",
+                  "On Hold",
+                  "Closed"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "accounts",
+          "type": "Array<{ID: number, AccountName: string, __mj_CreatedAt: string, Industry: string, AccountStatus: string}>",
+          "required": false,
+          "description": "Optional array of account records. If not provided, component will load data internally via RunView()"
+        },
+        {
+          "name": "initialSortField",
+          "type": "string",
+          "required": false,
+          "defaultValue": "AccountName",
+          "description": "Initial field to sort the table by"
+        },
+        {
+          "name": "initialSortDirection",
+          "type": "string",
+          "required": false,
+          "defaultValue": "asc",
+          "possibleValues": [
+            "asc",
+            "desc"
+          ],
+          "description": "Initial sort direction for the table"
+        },
+        {
+          "name": "showContactCount",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": true,
+          "description": "Whether to show the contact count badge on each row"
+        }
+      ],
+      "events": [
+        {
+          "name": "onAccountSelect",
+          "description": "Triggered when a user clicks on an account row",
+          "parameters": [
+            {
+              "name": "accountId",
+              "type": "number",
+              "description": "The ID of the selected account"
+            },
+            {
+              "name": "accountData",
+              "type": "object",
+              "description": "The complete account data object"
+            }
+          ]
+        },
+        {
+          "name": "onSortChange",
+          "description": "Triggered when the user changes the sort configuration",
+          "parameters": [
+            {
+              "name": "sortField",
+              "type": "string",
+              "description": "The field being sorted by"
+            },
+            {
+              "name": "sortDirection",
+              "type": "string",
+              "description": "The direction of sort (asc/desc)"
+            }
+          ]
+        },
+        {
+          "name": "onFilterChange",
+          "description": "Triggered when filtering is applied",
+          "parameters": [
+            {
+              "name": "filterModel",
+              "type": "object",
+              "description": "The current filter configuration"
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<AccountListComponent\n  accounts={accountsData} // optional - will load internally if not provided\n  initialSortField=\"AccountName\"\n  initialSortDirection=\"asc\"\n  showContactCount={true}\n  onAccountSelect={(accountId, accountData) => handleAccountSelection(accountId, accountData)}\n  onSortChange={(sortField, sortDirection) => handleSortChange(sortField, sortDirection)}\n  onFilterChange={(filterModel) => handleFilterChange(filterModel)}\n/>",
+      "libraries": [
+        {
+          "name": "ag-grid-react",
+          "globalVariable": "AgGridReact",
+          "version": "^31.0.1"
+        },
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "^5.15.2"
+        }
+      ],
+      "location": "embedded",
+      "relevantExamples": [
+        {
+          "namespace": "",
+          "version": "",
+          "relevance": 0.792460330123208
+        },
+        {
+          "namespace": "",
+          "version": "",
+          "relevance": 0.7658607169720894
+        },
+        {
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6825996459148533
+        },
+        {
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6825079169342982
+        },
+        {
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6748654183574997
+        }
+      ],
+      "code": "function AccountListComponent({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  accounts: propAccounts,\n  initialSortField,\n  initialSortDirection,\n  showContactCount\n}) {\n  const [accounts, setAccounts] = useState(propAccounts);\n  const [loading, setLoading] = useState(!propAccounts);\n  const [error, setError] = useState(null);\n  const [sortField, setSortField] = useState(initialSortField || savedUserSettings?.sortField || 'AccountName');\n  const [sortDirection, setSortDirection] = useState(initialSortDirection || savedUserSettings?.sortDirection || 'asc');\n  const [expandedRows, setExpandedRows] = useState(savedUserSettings?.expandedRows || {});\n  const [filterModel, setFilterModel] = useState(savedUserSettings?.filterModel || {});\n\n  const { Box, Typography, CircularProgress, Paper, Chip, IconButton } = MaterialUI;\n\n  // Load accounts if not provided\n  useEffect(() => {\n    async function loadAccounts() {\n      if (accounts) return;\n      \n      setLoading(true);\n      try {\n        const result = await utilities.rv.RunView({\n          EntityName: 'Accounts',\n          Fields: ['ID', 'AccountName', '__mj_CreatedAt', 'Industry', 'AccountStatus']\n        });\n        \n        if (result.Success) {\n          setAccounts(result.Results);\n        } else {\n          setError(result.ErrorMessage || 'Failed to load accounts');\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    }\n    \n    loadAccounts();\n  }, []);\n\n  // Handle sort change\n  const handleSortChange = (field, direction) => {\n    setSortField(field);\n    setSortDirection(direction);\n    \n    // Save user preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortField: field,\n      sortDirection: direction\n    });\n    \n    // Notify parent\n    callbacks.onSortChange?.(field, direction);\n  };\n\n  // Handle account selection\n  const handleAccountSelect = (account) => {\n    callbacks.onAccountSelect?.(account.ID, account);\n  };\n\n  // Handle filter change\n  const handleFilterChange = (newFilterModel) => {\n    setFilterModel(newFilterModel);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      filterModel: newFilterModel\n    });\n    callbacks.onFilterChange?.(newFilterModel);\n  };\n\n  // Toggle row expansion\n  const toggleRowExpansion = (accountId) => {\n    const newExpanded = {\n      ...expandedRows,\n      [accountId]: !expandedRows[accountId]\n    };\n    setExpandedRows(newExpanded);\n    \n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      expandedRows: newExpanded\n    });\n  };\n\n  // Memoize sorted accounts\n  const sortedAccounts = useMemo(() => {\n    if (!accounts) return [];\n    \n    return [...accounts].sort((a, b) => {\n      let valueA = a[sortField];\n      let valueB = b[sortField];\n      \n      // Handle null/undefined values\n      if (valueA === null || valueA === undefined) valueA = '';\n      if (valueB === null || valueB === undefined) valueB = '';\n      \n      // Convert dates for comparison\n      if (sortField === '__mj_CreatedAt') {\n        valueA = new Date(valueA).getTime();\n        valueB = new Date(valueB).getTime();\n      }\n      \n      // Convert to strings for comparison\n      const strA = String(valueA).toLowerCase();\n      const strB = String(valueB).toLowerCase();\n      \n      if (sortDirection === 'asc') {\n        return strA > strB ? 1 : -1;\n      } else {\n        return strA < strB ? 1 : -1;\n      }\n    });\n  }, [accounts, sortField, sortDirection]);\n\n  // Memoize display data\n  const displayData = useMemo(() => {\n    // Apply filters\n    let filtered = sortedAccounts;\n    \n    Object.entries(filterModel).forEach(([field, value]) => {\n        if (value) {\n            filtered = filtered.filter(account => \n                String(account[field] || '').toLowerCase().includes(String(value).toLowerCase())\n            );\n        }\n    });\n    \n    return filtered;\n  }, [sortedAccounts, filterModel]);\n\n  // Loading state\n  if (loading) {\n    return (\n      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>\n        <CircularProgress />\n      </Box>\n    );\n  }\n\n  // Error state\n  if (error) {\n    return (\n      <Box sx={{ p: 3 }}>\n        <Typography color=\"error\">Error loading accounts: {error}</Typography>\n      </Box>\n    );\n  }\n\n  return (\n    <Box sx={{ width: '100%', height: '100%' }}>\n      <Paper sx={{ width: '100%', mb: 2 }}>\n        <Box sx={{ p: 2 }}>\n          {/* Headers */}\n          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px 150px 100px', gap: 1, mb: 2 }}>\n            <Box \n              sx={{ \n                cursor: 'pointer', \n                fontWeight: 'bold',\n                color: sortField === 'AccountName' ? 'primary.main' : 'inherit'\n              }}\n              onClick={() => handleSortChange('AccountName', sortField === 'AccountName' && sortDirection === 'asc' ? 'desc' : 'asc')}\n            >\n              Account Name {sortField === 'AccountName' && (sortDirection === 'asc' ? '↑' : '↓')}\n            </Box>\n            <Box \n              sx={{ \n                cursor: 'pointer', \n                fontWeight: 'bold',\n                color: sortField === '__mj_CreatedAt' ? 'primary.main' : 'inherit'\n              }}\n              onClick={() => handleSortChange('__mj_CreatedAt', sortField === '__mj_CreatedAt' && sortDirection === 'asc' ? 'desc' : 'asc')}\n            >\n              Created {sortField === '__mj_CreatedAt' && (sortDirection === 'asc' ? '↑' : '↓')}\n            </Box>\n            <Box \n              sx={{ \n                cursor: 'pointer', \n                fontWeight: 'bold',\n                color: sortField === 'Industry' ? 'primary.main' : 'inherit'\n              }}\n              onClick={() => handleSortChange('Industry', sortField === 'Industry' && sortDirection === 'asc' ? 'desc' : 'asc')}\n            >\n              Industry {sortField === 'Industry' && (sortDirection === 'asc' ? '↑' : '↓')}\n            </Box>\n            <Box \n              sx={{ \n                cursor: 'pointer', \n                fontWeight: 'bold',\n                color: sortField === 'AccountStatus' ? 'primary.main' : 'inherit'\n              }}\n              onClick={() => handleSortChange('AccountStatus', sortField === 'AccountStatus' && sortDirection === 'asc' ? 'desc' : 'asc')}\n            >\n              Status {sortField === 'AccountStatus' && (sortDirection === 'asc' ? '↑' : '↓')}\n            </Box>\n            <Box sx={{ fontWeight: 'bold' }}>\n              {showContactCount ? 'Contacts' : ''}\n            </Box>\n          </Box>\n\n          {/* Filter inputs */}\n          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px 150px 100px', gap: 1, mb: 2 }}>\n            <input\n              placeholder=\"Filter Account Name...\"\n              value={filterModel.AccountName || ''}\n              onChange={(e) => handleFilterChange({ ...filterModel, AccountName: e.target.value })}\n              style={{ padding: '4px 8px' }}\n            />\n            <input\n              placeholder=\"Filter Industry...\"\n              value={filterModel.Industry || ''}\n              onChange={(e) => handleFilterChange({ ...filterModel, Industry: e.target.value })}\n              style={{ padding: '4px 8px' }}\n            />\n            <select value={filterModel.AccountStatus || ''} onChange={(e) => handleFilterChange({ ...filterModel, AccountStatus: e.target.value })} style={{ padding: '4px 8px', height: '30px' }}>\n              <option value=\"\">All</option>\n              <option value=\"Active\">Active</option>\n              <option value=\"Inactive\">Inactive</option>\n              <option value=\"On Hold\">On Hold</option>\n              <option value=\"Closed\">Closed</option>\n            </select>\n            <Box /> {/* Spacer */}\n            <Box /> {/* Contacts column has no filter */}\n          </Box>\n\n          {/* Account rows */}\n          {displayData.map((account) => (\n            <Box key={account.ID}>\n              <Box \n                sx={{ \n                  display: 'grid', \n                  gridTemplateColumns: '1fr 150px 150px 150px 100px', \n                  gap: 1, \n                  p: 1, \n                  my: 1,\n                  border: '1px solid #e0e0e0',\n                  borderRadius: 1,\n                  backgroundColor: account.AccountStatus === 'Active' ? '#f5f5f5' : \n                                  account.AccountStatus === 'Inactive' ? '#ffefef' :\n                                  '#fff',\n                  cursor: 'pointer',\n                  '&:hover': { backgroundColor: '#e3f2fd' }\n                }}\n                onClick={() => handleAccountSelect(account)}\n              >\n                <Box>\n                  <strong>{account.AccountName}</strong>\n                </Box>\n                <Box>\n                  {new Date(account.__mj_CreatedAt).toLocaleDateString()}\n                </Box>\n                <Box>\n                  {account.Industry || '-'}\n                </Box>\n                <Box>\n                  <Chip \n                    label={account.AccountStatus || 'Unknown'} \n                    size=\"small\" \n                    color={\n                      account.AccountStatus === 'Active' ? 'success' :\n                      account.AccountStatus === 'Inactive' ? 'error' :\n                      account.AccountStatus === 'On Hold' ? 'warning' :\n                      'default'\n                    }\n                  />\n                </Box>\n                <Box>\n                  {showContactCount && (\n                    <Chip label=\"?\" size=\"small\" variant=\"outlined\" sx={{ ml: 1 }} />\n                  )}\n                  <IconButton \n                    size=\"small\" \n                    onClick={(e) => {\n                      e.stopPropagation();\n                      toggleRowExpansion(account.ID);\n                    }}\n                    sx={{ ml: 1 }}\n                  >\n                    {expandedRows[account.ID] ? '−' : '+'}\n                  </IconButton>\n                </Box>\n              </Box>\n\n              {/* Expanded row content */}\n              {expandedRows[account.ID] && (\n                <Box sx={{ ml: 4, mb: 2, p: 2, borderLeft: '2px solid #e0e0e0' }}>\n                  <Typography variant=\"body2\">\n                    <strong>Created:</strong> {new Date(account.__mj_CreatedAt).toLocaleString()}\n                  </Typography>\n                  <Typography variant=\"body2\">\n                    <strong>Status:</strong> {account.AccountStatus}\n                  </Typography>\n                  <Typography variant=\"body2\">\n                    <strong>Industry:</strong> {account.Industry || 'Not specified'}\n                  </Typography>\n                </Box>\n              )}\n            </Box>\n          ))}\n          \n          {displayData.length === 0 && (\n            <Box sx={{ textAlign: 'center', py: 4 }}>\n              <Typography color=\"textSecondary\">\n                No accounts found matching the current filters.\n              </Typography>\n            </Box>\n          )}\n        </Box>\n      </Paper>\n\n      {/* Summary */}\n      <Typography variant=\"body2\" color=\"textSecondary\" sx={{ mt: 2 }}>\n        Showing {displayData.length} of {accounts?.length || 0} accounts\n      </Typography>\n    </Box>\n  );\n}"
+    },
+    {
+      "name": "ContactListComponent",
+      "description": "Displays a list of contacts associated with a specific account",
+      "type": "table",
+      "functionalRequirements": "Display contact information in a clean, readable format showing name, title, email, and phone for contacts related to a specific account.",
+      "technicalDesign": "## ContactListComponent\n\n### Purpose:\nShows related contacts for a selected account with clear contact information display.\n\n### Key Features:\n- Clean table layout with contact details\n- Responsive design for mobile and desktop\n- Email and phone links for direct contact\n- Role/Title display for context\n- Empty state handling when no contacts exist\n\n### Data Requirements:\n- Uses Contacts entity with fields: ID, FullName, Title, Email, Phone, AccountID\n- Primary key: ID (used for unique identification)\n- Display fields: FullName, Title, Email, Phone\n- Filter field: AccountID (used to filter contacts by account)\n\n### Data Loading:\n- Accepts optional contacts prop, falls back to internal loading via RunView() with AccountID filter\n- Handles loading states gracefully\n\n### Display Logic:\n- Shows contact name prominently\n- Displays title/role in secondary focus\n- Email addresses are clickable mailto: links\n- Phone numbers are clickable tel: links\n- Handles missing data gracefully\n\n### Styling:\n- Uses Material-UI Table components\n- Consistent spacing and typography\n- Hover effects for interactive elements\n- Mobile-responsive with horizontal scroll on small screens",
+      "dataRequirements": {
+        "mode": "views",
+        "description": "Contact list component data requirements",
+        "entities": [
+          {
+            "name": "Contacts",
+            "description": "Stores information about individual people associated with accounts",
+            "displayFields": [
+              "ID",
+              "FullName",
+              "Title",
+              "Email",
+              "Phone",
+              "AccountID"
+            ],
+            "filterFields": [
+              "AccountID",
+              "FullName",
+              "Email",
+              "ID"
+            ],
+            "sortFields": [
+              "FullName",
+              "Title",
+              "Email",
+              "ID"
+            ],
+            "usageContext": "Contact information display for selected account",
+            "permissionLevelNeeded": [
+              "read"
+            ],
+            "fieldMetadata": [
+              {
+                "name": "ID",
+                "sequence": 1,
+                "type": "int",
+                "allowsNull": false,
+                "isPrimaryKey": true,
+                "defaultInView": true
+              },
+              {
+                "name": "FullName",
+                "sequence": 6,
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "Title",
+                "sequence": 7,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "Email",
+                "sequence": 9,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "Phone",
+                "sequence": 10,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false
+              },
+              {
+                "name": "AccountID",
+                "sequence": 2,
+                "type": "int",
+                "allowsNull": true,
+                "isPrimaryKey": false,
                 "defaultInView": false
               }
             ]
@@ -182,472 +558,95 @@
       },
       "properties": [
         {
-          "name": "chartData",
-          "type": "Array<{ProductName: string, value: number}>",
-          "required": true,
-          "description": "Chart data array with product names and corresponding metric values"
-        },
-        {
-          "name": "chartTitle",
-          "type": "string",
+          "name": "contacts",
+          "type": "Array<{ID: number, FullName: string, Title: string, Email: string, Phone: string, AccountID: number}>",
           "required": false,
-          "defaultValue": "Product Performance",
-          "description": "Title displayed above the chart"
+          "description": "Optional array of contact records. If not provided, component will load via RunView() with AccountID filter"
         },
         {
-          "name": "yAxisLabel",
-          "type": "string",
+          "name": "accountId",
+          "type": "number",
           "required": false,
-          "defaultValue": "Count",
-          "description": "Label for the y-axis based on current view mode"
+          "description": "The account ID these contacts are associated with. Used for internal loading when contacts prop not provided"
         },
         {
-          "name": "showGrid",
+          "name": "showTitle",
           "type": "boolean",
           "required": false,
           "defaultValue": true,
-          "description": "Whether to display grid lines on the chart"
+          "description": "Whether to show the contact title/role column"
+        },
+        {
+          "name": "showEmail",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": true,
+          "description": "Whether to show the email column"
+        },
+        {
+          "name": "showPhone",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": true,
+          "description": "Whether to show the phone column"
         }
       ],
       "events": [
         {
-          "name": "onChartClick",
-          "description": "Triggered when user clicks on a chart bar",
+          "name": "onContactSelect",
+          "description": "Triggered when a user clicks on a contact",
           "parameters": [
             {
-              "name": "productName",
-              "type": "string",
-              "description": "Name of the clicked product"
-            }
-          ]
-        },
-        {
-          "name": "onChartHover",
-          "description": "Triggered when user hovers over chart elements",
-          "parameters": [
-            {
-              "name": "productData",
-              "type": "object",
-              "description": "Data object for the hovered product"
-            }
-          ]
-        }
-      ],
-      "exampleUsage": "<ChartContainer chartData={chartData} chartTitle=\"Product Invoice Analysis\" yAxisLabel=\"Invoice Count\" />",
-      "libraries": [
-        {
-          "name": "ECharts",
-          "globalVariable": "echarts",
-          "version": "5.4.3"
-        }
-      ],
-      "relevantExamples": [
-        {
-          "name": "DealVelocityTrendChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Displays historical trends of deal velocity across stages over time",
-          "relevance": 0.8416143606164626
-        },
-        {
-          "name": "DealVelocityDistributionChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Displays statistical distribution of deal velocities using box plots",
-          "relevance": 0.8196146556955073
-        },
-        {
-          "name": "DealVelocityMetrics",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics",
-          "relevance": 0.7195261467777393
-        }
-      ],
-      "code": "function ChartContainer({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  chartData = [],\n  chartTitle = \"Product Performance\",\n  yAxisLabel = \"Count\",\n  showGrid = true\n}) {\n  const [chartInstance, setChartInstance] = useState(null);\n  const [containerRef, setContainerRef] = useState(null);\n\n  const initializeChart = useCallback(() => {\n    if (!containerRef || !chartData.length) return;\n\n    const option = {\n      title: {\n        text: chartTitle,\n        left: 'center',\n        textStyle: {\n          color: '#333',\n          fontSize: 16,\n          fontWeight: 'bold'\n        }\n      },\n      tooltip: {\n        trigger: 'axis',\n        axisPointer: {\n          type: 'shadow'\n        },\n        formatter: (params) => {\n          const data = params[0];\n          return `${data.name}<br/>${yAxisLabel}: ${data.value}`;\n        }\n      },\n      grid: {\n        left: '3%',\n        right: '4%',\n        bottom: '3%',\n        top: '15%',\n        containLabel: true,\n        show: showGrid,\n        borderColor: '#e0e0e0'\n      },\n      xAxis: {\n        type: 'category',\n        data: chartData.map(item => item.ProductName),\n        axisLabel: {\n          rotate: 45,\n          fontSize: 12,\n          color: '#666'\n        },\n        axisTick: {\n          alignWithLabel: true\n        }\n      },\n      yAxis: {\n        type: 'value',\n        name: yAxisLabel,\n        nameTextStyle: {\n          color: '#666',\n          padding: [0, 0, 0, 50]\n        },\n        axisLabel: {\n          color: '#666'\n        },\n        splitLine: {\n          show: showGrid,\n          lineStyle: {\n            color: '#e0e0e0',\n            type: 'dashed'\n          }\n        }\n      },\n      series: [{\n        name: chartTitle,\n        type: 'bar',\n        data: chartData.map(item => ({\n          value: item.value,\n          name: item.ProductName\n        })),\n        itemStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: '#83bff6' },\n            { offset: 0.5, color: '#188df0' },\n            { offset: 1, color: '#188df0' }\n          ])\n        },\n        emphasis: {\n          itemStyle: {\n            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n              { offset: 0, color: '#2378f7' },\n              { offset: 0.7, color: '#1264cc' },\n              { offset: 1, color: '#1254a3' }\n            ])\n          }\n        }\n      }],\n      dataZoom: [\n        {\n          type: 'inside',\n          start: 0,\n          end: 100\n        },\n        {\n          type: 'slider',\n          start: 0,\n          end: 100\n        }\n      ],\n      toolbox: {\n        feature: {\n          saveAsImage: {\n            title: 'Save as Image',\n            pixelRatio: 2\n          },\n          dataZoom: {\n            title: {\n              zoom: 'Area Zoom',\n              back: 'Area Zoom Reset'\n            }\n          },\n          restore: {\n            title: 'Restore'\n          }\n        },\n        right: 20,\n        top: 10\n      }\n    };\n\n    const chart = echarts.init(containerRef);\n    chart.setOption(option);\n    \n    chart.on('click', (params) => {\n      if (params.componentType === 'series' && params.data) {\n        callbacks?.onChartClick?.(params.data.name);\n      }\n    });\n\n    chart.on('mouseover', (params) => {\n      if (params.componentType === 'series' && params.data) {\n        callbacks?.onChartHover?.({\n          productName: params.data.name,\n          value: params.data.value\n        });\n      }\n    });\n\n    setChartInstance(chart);\n\n    return () => {\n      chart.dispose();\n    };\n  }, [containerRef, chartData, chartTitle, yAxisLabel, showGrid]);\n\n  useEffect(() => {\n    const cleanup = initializeChart();\n    return cleanup;\n  }, [initializeChart]);\n\n  useEffect(() => {\n    if (!chartInstance || !containerRef) return;\n\n    const resizeObserver = new ResizeObserver(() => {\n      chartInstance.resize();\n    });\n\n    resizeObserver.observe(containerRef);\n\n    return () => {\n      resizeObserver.disconnect();\n    };\n  }, [chartInstance, containerRef]);\n\n  const updateChart = useCallback(() => {\n    if (!chartInstance || !chartData.length) return;\n\n    const option = {\n      title: { text: chartTitle },\n      xAxis: { data: chartData.map(item => item.ProductName) },\n      series: [{\n        data: chartData.map(item => ({\n          value: item.value,\n          name: item.ProductName\n        }))\n      }],\n      yAxis: {\n        name: yAxisLabel\n      },\n      grid: {\n        show: showGrid\n      }\n    };\n\n    chartInstance.setOption(option);\n  }, [chartInstance, chartData, chartTitle, yAxisLabel, showGrid]);\n\n  useEffect(() => {\n    updateChart();\n  }, [updateChart]);\n\n  return (\n    <div \n      ref={setContainerRef}\n      style={{\n        width: '100%',\n        height: '100%',\n        minHeight: '400px',\n        backgroundColor: '#ffffff',\n        borderRadius: '8px',\n        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',\n        padding: '20px'\n      }}\n    />\n  );\n}"
-    },
-    {
-      "name": "ToggleControl",
-      "title": "Metric Toggle Switch",
-      "description": "Switch control component for toggling between invoice count and revenue views",
-      "type": "form",
-      "location": "embedded",
-      "functionalRequirements": "Provide toggle switch between 'Invoice Count' and 'Revenue' views with clear labeling and smooth transitions",
-      "technicalDesign": "## ToggleControl Component\n- Clean switch interface using Material-UI toggle buttons\n- Clear labeling for count vs revenue modes\n- Emits events when toggle state changes\n- Manages own toggle state internally",
-      "properties": [
-        {
-          "name": "initialMode",
-          "type": "'count' | 'revenue'",
-          "required": false,
-          "defaultValue": "count",
-          "description": "Initial toggle position"
-        },
-        {
-          "name": "label",
-          "type": "string",
-          "required": false,
-          "defaultValue": "View By",
-          "description": "Label text displayed above the toggle"
-        }
-      ],
-      "events": [
-        {
-          "name": "onModeChange",
-          "description": "Triggered when toggle state changes",
-          "parameters": [
-            {
-              "name": "mode",
-              "type": "'count' | 'revenue'",
-              "description": "Current selected mode"
-            }
-          ]
-        }
-      ],
-      "exampleUsage": "<ToggleControl initialMode=\"count\" onModeChange={handleModeChange} />",
-      "libraries": [
-        {
-          "name": "@mui/material",
-          "globalVariable": "MaterialUI",
-          "version": "5.15.2"
-        }
-      ],
-      "relevantExamples": [
-        {
-          "name": "SalesFunnelVisualization",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Interactive sales funnel visualization with conversion metrics and drill-down capabilities",
-          "relevance": 0.7212214159846313
-        },
-        {
-          "name": "FunnelChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Sub-component of SalesFunnelVisualization that renders the funnel visualization",
-          "relevance": 0.6747978626096702
-        },
-        {
-          "name": "InvoiceStatusDashboard",
-          "namespace": "CRM/Finance",
-          "version": "1.0.0",
-          "description": "Track invoice statuses, payment timelines, and accounts receivable aging with actionable insights and collection metrics",
-          "relevance": 0.6716322907774231
-        },
-        {
-          "name": "USAccountHeatmap",
-          "namespace": "CRM/Geography",
-          "version": "1.0.0",
-          "description": "Interactive choropleth map showing account distribution across US states with drill-down capability",
-          "relevance": 0.6593105977459633
-        },
-        {
-          "name": "EntityFilter",
-          "namespace": "Admin/Entities",
-          "version": "1.0.0",
-          "description": "Collapsible filter panel for filtering entities by various criteria",
-          "relevance": 0.7680379683822622
-        }
-      ],
-      "code": "function ToggleControl({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  initialMode = 'count',\n  label = 'View By'\n}) {\n  const [selectedMode, setSelectedMode] = React.useState(\n    savedUserSettings?.selectedMode || initialMode\n  );\n\n  const handleToggle = (event, newMode) => {\n    if (newMode !== null) {\n      setSelectedMode(newMode);\n      onSaveUserSettings?.({\n        ...savedUserSettings,\n        selectedMode: newMode\n      });\n      callbacks?.onModeChange?.(newMode);\n    }\n  };\n\n  const ToggleButtonGroup = MaterialUI.ToggleButtonGroup;\n  const ToggleButton = MaterialUI.ToggleButton;\n  const Typography = MaterialUI.Typography;\n  const Box = MaterialUI.Box;\n\n  return (\n    <Box sx={{ marginBottom: 2 }}>\n      {label && (\n        <Typography variant=\"h6\" sx={{ marginBottom: 1 }}>\n          {label}\n        </Typography>\n      )}\n      <ToggleButtonGroup\n        value={selectedMode}\n        exclusive\n        onChange={handleToggle}\n        aria-label=\"Toggle view mode\"\n      >\n        <ToggleButton value=\"count\" aria-label=\"Count mode\">\n          Count\n        </ToggleButton>\n        <ToggleButton value=\"revenue\" aria-label=\"Revenue mode\">\n          Revenue\n        </ToggleButton>\n      </ToggleButtonGroup>\n    </Box>\n  );\n}"
-    },
-    {
-      "name": "DateRangeFilter",
-      "title": "Date Range Filter Control",
-      "description": "Date picker component for selecting time periods to filter invoice data",
-      "type": "form",
-      "location": "embedded",
-      "functionalRequirements": "Allow users to select start and end dates to filter invoice data, with preset ranges like 'Last 30 days', 'Last 90 days', etc.",
-      "technicalDesign": "## DateRangeFilter Component\n- Uses Material-UI date pickers for date selection\n- Provides preset date range options for quick filtering\n- Manages date range state internally\n- Emits events when date range changes",
-      "properties": [
-        {
-          "name": "initialStartDate",
-          "type": "Date",
-          "required": false,
-          "description": "Initial start date for filtering"
-        },
-        {
-          "name": "initialEndDate",
-          "type": "Date",
-          "required": false,
-          "description": "Initial end date for filtering"
-        },
-        {
-          "name": "presets",
-          "type": "Array<{label: string, days: number}>",
-          "required": false,
-          "defaultValue": "[{label: 'Last 30 days', days: 30}, {label: 'Last 90 days', days: 90}]",
-          "description": "Preset date ranges for quick selection"
-        }
-      ],
-      "events": [
-        {
-          "name": "onDateRangeChange",
-          "description": "Triggered when date range is updated",
-          "parameters": [
-            {
-              "name": "startDate",
-              "type": "Date"
+              "name": "contactId",
+              "type": "number",
+              "description": "The ID of the selected contact"
             },
             {
-              "name": "endDate",
-              "type": "Date"
+              "name": "contactData",
+              "type": "object",
+              "description": "The complete contact data object"
             }
           ]
         }
       ],
-      "exampleUsage": "<DateRangeFilter initialStartDate={startDate} initialEndDate={endDate} onDateRangeChange={handleDateRangeChange} />",
+      "exampleUsage": "<ContactListComponent\n  contacts={filteredContacts} // optional - will load internally if not provided\n  accountId={selectedAccountId}\n  showTitle={true}\n  showEmail={true}\n  showPhone={true}\n  onContactSelect={(contactId, contactData) => handleContactSelection(contactId, contactData)}\n/>",
       "libraries": [
         {
           "name": "@mui/material",
           "globalVariable": "MaterialUI",
-          "version": "5.15.2"
+          "version": "^5.15.2"
         }
       ],
-      "relevantExamples": [
-        {
-          "name": "InvoiceStatusDashboard",
-          "namespace": "CRM/Finance",
-          "version": "1.0.0",
-          "description": "Track invoice statuses, payment timelines, and accounts receivable aging with actionable insights and collection metrics",
-          "relevance": 0.7156959677326293
-        },
-        {
-          "name": "RecentDealsList",
-          "namespace": "CRM/Sales",
-          "version": "1.0.0",
-          "description": "Displays a list of the most recent deals with stage indicators and key metrics",
-          "relevance": 0.697749201929431
-        },
-        {
-          "name": "TimelineTab",
-          "namespace": "CRM/Customer",
-          "version": "1.0.0",
-          "description": "Timeline tab showing customer interaction history",
-          "relevance": 0.8112687098542519
-        },
-        {
-          "name": "AIPerformanceDashboard",
-          "namespace": "AI/Analytics/Performance",
-          "version": "1.0.0",
-          "description": "Comprehensive dashboard for analyzing AI agent and prompt performance with time-series charts, cost analysis, and drill-down capabilities",
-          "relevance": 0.7092632576344865
-        },
-        {
-          "name": "DealVelocityChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Interactive line chart showing deal velocity metrics over time with multiple view modes",
-          "relevance": 0.6569254174603464
-        }
-      ],
-      "code": "/**\n * DateRangeFilter Component\n * Date picker component for selecting time periods to filter invoice data\n */\n\nfunction DateRangeFilter({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  initialStartDate,\n  initialEndDate,\n  presets = [\n    { label: 'Last 30 days', days: 30 },\n    { label: 'Last 90 days', days: 90 },\n    { label: 'Last 180 days', days: 180 },\n    { label: 'This year', days: 365 }\n  ]\n}) {\n  const [startDate, setStartDate] = useState(() => {\n    if (initialStartDate) return initialStartDate;\n    if (savedUserSettings?.startDate) return new Date(savedUserSettings.startDate);\n    \n    // Default to 30 days ago\n    const date = new Date();\n    date.setDate(date.getDate() - 30);\n    return date;\n  });\n  \n  const [endDate, setEndDate] = useState(() => {\n    if (initialEndDate) return initialEndDate;\n    if (savedUserSettings?.endDate) return new Date(savedUserSettings.endDate);\n    return new Date();\n  });\n\n  const handleStartDateChange = (date) => {\n    setStartDate(date);\n    callbacks?.onDateRangeChange?.(date, endDate);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: date?.toISOString()\n    });\n  };\n\n  const handleEndDateChange = (date) => {\n    setEndDate(date);\n    callbacks?.onDateRangeChange?.(startDate, date);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      endDate: date?.toISOString()\n    });\n  };\n\n  const handlePresetClick = (days) => {\n    const end = new Date();\n    const start = new Date();\n    start.setDate(start.getDate() - days);\n    \n    setStartDate(start);\n    setEndDate(end);\n    callbacks?.onDateRangeChange?.(start, end);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: start.toISOString(),\n      endDate: end.toISOString()\n    });\n  };\n\n  const { Box, Typography, Button, Paper, TextField } = MaterialUI;\n  const { DesktopDatePicker } = MaterialUI;\n\n  return (\n    <Paper \n      elevation={1} \n      sx={{ \n        p: 2, \n        display: 'flex', \n        flexDirection: 'column', \n        gap: 2,\n        ...styles?.paper\n      }}\n    >\n      <Typography variant=\"h6\" gutterBottom>\n        Date Range Filter\n      </Typography>\n      \n      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>\n        <DesktopDatePicker\n          label=\"Start Date\"\n          value={startDate}\n          onChange={handleStartDateChange}\n          maxDate={endDate}\n          renderInput={(params) => <TextField {...params} />}\n        />\n        \n        <DesktopDatePicker\n          label=\"End Date\"\n          value={endDate}\n          onChange={handleEndDateChange}\n          minDate={startDate}\n          maxDate={new Date()}\n          renderInput={(params) => <TextField {...params} />}\n        />\n      </Box>\n\n      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>\n        {presets.map((preset) => (\n          <Button\n            key={preset.label}\n            variant=\"outlined\"\n            size=\"small\"\n            onClick={() => handlePresetClick(preset.days)}\n          >\n            {preset.label}\n          </Button>\n        ))}\n      </Box>\n    </Paper>\n  );\n}",
-      "testsPassed": false
-    },
-    {
-      "name": "LegendDisplay",
-      "title": "Chart Legend Component",
-      "description": "Custom legend component explaining chart metrics and color coding",
-      "type": "chart",
       "location": "embedded",
-      "functionalRequirements": "Display clear legend explaining what the bar colors represent, units of measurement, and any chart-specific information",
-      "technicalDesign": "## LegendDisplay Component\n- Clean, responsive legend display\n- Explains color coding and units\n- Updates based on current view mode (count vs revenue)\n- Compact design that doesn't interfere with chart display",
-      "properties": [
-        {
-          "name": "mode",
-          "type": "'count' | 'revenue'",
-          "required": true,
-          "description": "Current view mode to determine legend text"
-        },
-        {
-          "name": "position",
-          "type": "'top' | 'bottom' | 'left' | 'right'",
-          "required": false,
-          "defaultValue": "bottom",
-          "description": "Position of the legend relative to the chart"
-        }
-      ],
-      "exampleUsage": "<LegendDisplay mode=\"count\" position=\"bottom\" />",
       "relevantExamples": [
         {
-          "name": "AIModelAnalytics",
-          "namespace": "AI",
-          "version": "1.0.0",
-          "description": "Analytics panel with charts showing prompt usage distribution, performance metrics, and time series",
-          "relevance": 0.7738249909350852
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6524639649759691
         },
         {
-          "name": "KPIGauges",
-          "namespace": "CRM/Finance",
-          "version": "1.0.0",
-          "description": "Gauge charts showing key performance indicators",
-          "relevance": 0.7603651075655811
+          "namespace": "",
+          "version": "",
+          "relevance": 0.7050251069463181
         },
         {
-          "name": "DealVelocityDistributionChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Displays statistical distribution of deal velocities using box plots",
-          "relevance": 0.7326766234653661
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6428048308489857
         },
         {
-          "name": "DealVelocityChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Interactive line chart showing deal velocity metrics over time with multiple view modes",
-          "relevance": 0.7272471638968272
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6419770029499149
         },
         {
-          "name": "TrendChart",
-          "namespace": "CRM/Analytics",
-          "version": "1.0.0",
-          "description": "Time series chart showing velocity trends",
-          "relevance": 0.7221925909150861
+          "namespace": "",
+          "version": "",
+          "relevance": 0.6391293509742175
         }
       ],
-      "code": "function LegendDisplay({ mode, position = 'bottom', utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  const [items, setItems] = useState([]);\n  const [isLoading, setIsLoading] = useState(true);\n\n  const loadLegendData = async () => {\n    const result = await utilities.rq.RunQuery({\n      QueryName: 'GetColorScheme',\n      Parameters: { mode },\n    });\n    \n    if (result.Success) {\n      setItems(result.Results);\n    }\n    setIsLoading(false);\n  };\n\n  useState(() => {\n    loadLegendData();\n  }, []);\n\n  const getLegendItems = useMemo(() => {\n    if (isLoading) return [];\n    \n    return items.map(item => ({\n      label: mode === 'count' ? `${item.metric} tickets` : `$${item.metric} revenue`,\n      color: item.color,\n      value: item.metric\n    }));\n  }, [items, mode, isLoading]);\n\n  const getContainerStyle = () => {\n    const base = {\n      display: 'flex',\n      flexDirection: 'row',\n      gap: '16px',\n      flexWrap: 'wrap',\n      alignItems: 'center',\n      background: styles.colors.background,\n      border: `1px solid ${styles.colors.border}`,\n      borderRadius: '4px',\n      padding: '12px 16px',\n      fontSize: styles.typography.fontSize.small,\n    };\n\n    switch (position) {\n      case 'top':\n        return {\n          ...base,\n          marginBottom: '16px',\n        };\n      case 'bottom':\n        return {\n          ...base,\n          marginTop: '16px',\n        };\n      case 'left':\n        return {\n          ...base,\n          flexDirection: 'column',\n          alignItems: 'flex-start',\n          marginRight: '16px',\n          maxWidth: '200px',\n        };\n      case 'right':\n        return {\n          ...base,\n          flexDirection: 'column',\n          alignItems: 'flex-start',\n          marginLeft: '16px',\n          maxWidth: '200px',\n        };\n      default:\n        return base;\n    }\n  };\n\n  if (isLoading) {\n    return <div style={getContainerStyle()}>Loading legend...</div>;\n  }\n\n  return (\n    <div style={getContainerStyle()}>\n      {getLegendItems.map((item, index) => (\n        <div key={index} style={{\n          display: 'flex',\n          alignItems: 'center',\n          gap: '8px',\n          whiteSpace: 'nowrap'\n        }}>\n          <div style={{\n            width: '12px',\n            height: '12px',\n            borderRadius: '2px',\n            backgroundColor: item.color,\n            flexShrink: 0\n          }} />\n          <span style={{\n            color: styles.colors.text,\n            fontSize: styles.typography.fontSize.small\n          }}>\n            {item.label}\n          </span>\n        </div>\n      ))}\n    </div>\n  );\n}",
-      "testsPassed": false
-    },
-    {
-      "name": "ExportButton",
-      "title": "Chart Export Control",
-      "description": "Export functionality for downloading chart data as PNG, SVG, or CSV formats",
-      "type": "form",
-      "location": "embedded",
-      "functionalRequirements": "Provide export options for the current chart view including PNG image, SVG vector, and CSV data download",
-      "technicalDesign": "## ExportButton Component\n- Dropdown menu with export options\n- Uses html2canvas for PNG export\n- Direct SVG download from ECharts\n- CSV data export with current filters applied\n- Manages export state and loading indicators",
-      "properties": [
-        {
-          "name": "chartRef",
-          "type": "object",
-          "required": true,
-          "description": "Reference to the ECharts instance for export functionality"
-        },
-        {
-          "name": "data",
-          "type": "Array",
-          "required": true,
-          "description": "Current chart data for CSV export"
-        },
-        {
-          "name": "filename",
-          "type": "string",
-          "required": false,
-          "defaultValue": "product-analysis",
-          "description": "Base filename for exported files"
-        }
-      ],
-      "events": [
-        {
-          "name": "onExportStart",
-          "description": "Triggered when export process begins"
-        },
-        {
-          "name": "onExportComplete",
-          "description": "Triggered when export is finished"
-        }
-      ],
-      "exampleUsage": "<ExportButton chartRef={chartRef} data={chartData} filename=\"product-analysis\" />",
-      "libraries": [
-        {
-          "name": "html2canvas",
-          "globalVariable": "html2canvas",
-          "version": "1.4.1"
-        }
-      ],
-      "relevantExamples": [
-        {
-          "name": "DataExportPanel",
-          "namespace": "Generic/UI/Export",
-          "version": "1.0.0",
-          "description": "Reusable component for exporting data to CSV, Excel (XLSX), and PDF formats with optional UI",
-          "relevance": 0.7708378080802694
-        }
-      ],
-      "code": "function ExportButton({ chartRef, data, filename = 'product-analysis', utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {\n  const [isMenuVisible, setIsMenuVisible] = useState(false);\n  const [isExporting, setIsExporting] = useState(false);\n  const [exportType, setExportType] = useState(null);\n\n  const toggleMenu = () => {\n    setIsMenuVisible(!isMenuVisible);\n  };\n\n  const handleExport = async (type) => {\n    setIsExporting(true);\n    setExportType(type);\n    callbacks?.onExportStart?.();\n\n    try {\n      switch (type) {\n        case 'png':\n          await exportAsPNG();\n          break;\n        case 'svg':\n          exportAsSVG();\n          break;\n        case 'csv':\n          exportAsCSV();\n          break;\n      }\n    } catch (error) {\n      console.error('Export failed:', error);\n    } finally {\n      setIsExporting(false);\n      setExportType(null);\n      setIsMenuVisible(false);\n      callbacks?.onExportComplete?.();\n    }\n  };\n\n  const exportAsPNG = async () => {\n    if (!chartRef?.current) return;\n    \n    const canvas = await html2canvas(chartRef.current);\n    const url = canvas.toDataURL('image/png');\n    downloadFile(url, `${filename}.png`, 'image/png');\n  };\n\n  const exportAsSVG = () => {\n    if (!chartRef?.current) return;\n    \n    const chart = chartRef.current.getEchartsInstance();\n    const svg = chart.renderToSVGString();\n    const blob = new Blob([svg], { type: 'image/svg+xml' });\n    const url = URL.createObjectURL(blob);\n    downloadFile(url, `${filename}.svg`, 'image/svg+xml');\n  };\n\n  const exportAsCSV = () => {\n    if (!data || data.length === 0) return;\n\n    const headers = Object.keys(data[0]);\n    const csvContent = [\n      headers.join(','),\n      ...data.map(row => \n        headers.map(header => {\n          const value = row[header];\n          return typeof value === 'string' && value.includes(',') ? `\"${value}\"` : value;\n        }).join(',')\n      )\n    ].join('\\n');\n\n    const blob = new Blob([csvContent], { type: 'text/csv' });\n    const url = URL.createObjectURL(blob);\n    downloadFile(url, `${filename}.csv`, 'text/csv');\n  };\n\n  const downloadFile = (url, fileName, mimeType) => {\n    const link = document.createElement('a');\n    link.href = url;\n    link.download = fileName;\n    link.style.display = 'none';\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n    \n    if (url.startsWith('blob:')) {\n      URL.revokeObjectURL(url);\n    }\n  };\n\n  const menuItems = [\n    { key: 'png', label: 'Export as PNG' },\n    { key: 'svg', label: 'Export as SVG' },\n    { key: 'csv', label: 'Export as CSV' }\n  ];\n\n  return (\n    <div style={styles.exportButtonWrapper || { position: 'relative', display: 'inline-block' }}>\n      <button\n        onClick={toggleMenu}\n        disabled={isExporting}\n        style={styles.exportButton || {\n          padding: '8px 16px',\n          backgroundColor: '#1677ff',\n          color: 'white',\n          border: 'none',\n          borderRadius: '4px',\n          cursor: 'pointer',\n          display: 'flex',\n          alignItems: 'center',\n          gap: '4px'\n        }}\n      >\n        {isExporting ? 'Exporting...' : 'Export'}\n        <span style={{ marginLeft: '4px' }}>▼</span>\n      </button>\n      \n      {isMenuVisible && (\n        <div style={styles.exportMenu || {\n          position: 'absolute',\n          top: '100%',\n          right: 0,\n          backgroundColor: 'white',\n          border: '1px solid #d9d9d9',\n          borderRadius: '4px',\n          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',\n          zIndex: 1000,\n          minWidth: '150px',\n          marginTop: '4px'\n        }}>\n          {menuItems.map(item => (\n            <button\n              key={item.key}\n              onClick={() => handleExport(item.key)}\n              disabled={isExporting && exportType === item.key}\n              style={styles.exportMenuItem || {\n                display: 'block',\n                width: '100%',\n                padding: '8px 16px',\n                textAlign: 'left',\n                backgroundColor: 'transparent',\n                border: 'none',\n                cursor: 'pointer',\n                fontSize: '14px',\n                color: isExporting && exportType === item.key ? '#999' : '#333'\n              }}\n              onMouseEnter={(e) => {\n                e.target.style.backgroundColor = '#f5f5f5';\n              }}\n              onMouseLeave={(e) => {\n                e.target.style.backgroundColor = 'transparent';\n              }}\n            >\n              {item.label}\n            </button>\n          ))}\n        </div>\n      )}\n    </div>\n  );\n}"
+      "code": "function ContactListComponent({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  contacts: propContacts,\n  accountId,\n  showTitle = true,\n  showEmail = true,\n  showPhone = true\n}) {\n  const [contacts, setContacts] = useState(propContacts);\n  const [loading, setLoading] = useState(!propContacts);\n  const [error, setError] = useState(null);\n\n  useEffect(() => {\n    if (propContacts) {\n      setContacts(propContacts);\n      setLoading(false);\n      return;\n    }\n\n    if (!accountId) {\n      setContacts([]);\n      setLoading(false);\n      return;\n    }\n\n    const loadContacts = async () => {\n      setLoading(true);\n      setError(null);\n      \n      try {\n        const result = await utilities.rv.RunView({\n          EntityName: 'Contacts',\n          ExtraFilter: `AccountID = ${accountId}`,\n          Fields: ['ID', 'FullName', 'Title', 'Email', 'Phone']\n        });\n\n        if (result.Success) {\n          setContacts(result.Results || []);\n        } else {\n          setError('Failed to load contacts');\n          setContacts([]);\n        }\n      } catch (err) {\n        setError('Error loading contacts');\n        setContacts([]);\n      } finally {\n        setLoading(false);\n      }\n    };\n\n    loadContacts();\n  }, [propContacts, accountId]);\n\n  const handleContactClick = (contact) => () => {\n    if (callbacks && callbacks.onContactSelect) {\n      callbacks.onContactSelect(contact.ID, contact);\n    }\n  };\n\n  if (loading) {\n    return (\n      <div style={{ padding: '16px', textAlign: 'center' }}>\n        <MaterialUI.Typography>Loading contacts...</MaterialUI.Typography>\n      </div>\n    );\n  }\n\n  if (error) {\n    return (\n      <div style={{ padding: '16px', textAlign: 'center' }}>\n        <MaterialUI.Typography color=\"error\">{error}</MaterialUI.Typography>\n      </div>\n    );\n  }\n\n  if (!contacts || contacts.length === 0) {\n    return (\n      <div style={{ padding: '16px', textAlign: 'center' }}>\n        <MaterialUI.Typography variant=\"body1\" color=\"text.secondary\">\n          No contacts found\n        </MaterialUI.Typography>\n      </div>\n    );\n  }\n\n  return (\n    <div style={{ width: '100%', overflowX: 'auto' }}>\n      <MaterialUI.Table size=\"small\">\n        <MaterialUI.TableHead>\n          <MaterialUI.TableRow>\n            <MaterialUI.TableCell>Name</MaterialUI.TableCell>\n            {showTitle && <MaterialUI.TableCell>Title</MaterialUI.TableCell>}\n            {showEmail && <MaterialUI.TableCell>Email</MaterialUI.TableCell>}\n            {showPhone && <MaterialUI.TableCell>Phone</MaterialUI.TableCell>}\n          </MaterialUI.TableRow>\n        </MaterialUI.TableHead>\n        <MaterialUI.TableBody>\n          {contacts.map((contact) => (\n            <MaterialUI.TableRow\n              key={contact.ID}\n              hover\n              onClick={handleContactClick(contact)}\n              sx={{ cursor: 'pointer' }}\n            >\n              <MaterialUI.TableCell>\n                {contact.FullName || '-'}\n              </MaterialUI.TableCell>\n              {showTitle && (\n                <MaterialUI.TableCell>\n                  {contact.Title || '-'}\n                </MaterialUI.TableCell>\n              )}\n              {showEmail && (\n                <MaterialUI.TableCell>\n                  {contact.Email ? (\n                    <a href={`mailto:${contact.Email}`} style={{ color: 'inherit' }}>\n                      {contact.Email}\n                    </a>\n                  ) : '-'}\n                </MaterialUI.TableCell>\n              )}\n              {showPhone && (\n                <MaterialUI.TableCell>\n                  {contact.Phone ? (\n                    <a href={`tel:${contact.Phone}`} style={{ color: 'inherit' }}>\n                      {contact.Phone}\n                    </a>\n                  ) : '-'}\n                </MaterialUI.TableCell>\n              )}\n            </MaterialUI.TableRow>\n          ))}\n        </MaterialUI.TableBody>\n      </MaterialUI.Table>\n    </div>\n  );\n}"
     }
   ],
-  "properties": [
-    {
-      "name": "initialDateRange",
-      "type": "{start: Date, end: Date}",
-      "required": false,
-      "description": "Initial date range for filtering invoice data"
-    },
-    {
-      "name": "defaultViewMode",
-      "type": "'count' | 'revenue'",
-      "required": false,
-      "defaultValue": "count",
-      "description": "Default view mode for the chart (count or revenue)"
-    },
-    {
-      "name": "showExport",
-      "type": "boolean",
-      "required": false,
-      "defaultValue": true,
-      "description": "Whether to show export functionality"
-    }
-  ],
-  "events": [
-    {
-      "name": "onViewModeChange",
-      "description": "Triggered when user switches between count and revenue views",
-      "parameters": [
-        {
-          "name": "mode",
-          "type": "'count' | 'revenue'",
-          "description": "Current view mode"
-        }
-      ]
-    },
-    {
-      "name": "onDateRangeChange",
-      "description": "Triggered when date range filter is updated",
-      "parameters": [
-        {
-          "name": "startDate",
-          "type": "Date"
-        },
-        {
-          "name": "endDate",
-          "type": "Date"
-        }
-      ]
-    },
-    {
-      "name": "onProductSelect",
-      "description": "Triggered when user clicks on a product bar",
-      "parameters": [
-        {
-          "name": "productName",
-          "type": "string",
-          "description": "Name of the selected product"
-        }
-      ]
-    }
-  ],
-  "exampleUsage": "<ProductInvoiceVolumeChart initialDateRange={{start: new Date('2024-01-01'), end: new Date()}} defaultViewMode=\"count\" showExport={true} />",
-  "libraries": [
-    {
-      "name": "ECharts",
-      "globalVariable": "echarts",
-      "version": "5.4.3"
-    },
-    {
-      "name": "@mui/material",
-      "globalVariable": "MaterialUI",
-      "version": "5.15.2"
-    },
-    {
-      "name": "html2canvas",
-      "globalVariable": "html2canvas",
-      "version": "1.4.1"
-    },
-    {
-      "name": "dayjs",
-      "globalVariable": "dayjs",
-      "version": "1.11.10"
-    }
-  ],
-  "code": "function ProductInvoiceVolumeChart({utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings}) {\n  const {ChartContainer, ToggleControl, DateRangeFilter, LegendDisplay, ExportButton} = components;\n  const theme = MaterialUI.useTheme();\n\n  // State management\n  const [loading, setLoading] = React.useState(true);\n  const [error, setError] = React.useState(null);\n  const [chartData, setChartData] = React.useState([]);\n  const [viewMode, setViewMode] = React.useState(savedUserSettings?.viewMode || 'count');\n  const [dateRange, setDateRange] = React.useState({\n    start: savedUserSettings?.startDate || dayjs().subtract(30, 'days').toDate(),\n    end: savedUserSettings?.endDate || dayjs().toDate()\n  });\n\n  const chartRef = React.useRef(null);\n\n  // Load data\n  React.useEffect(() => {\n    const loadData = async () => {\n      try {\n        setLoading(true);\n        setError(null);\n        \n        const result = await utilities.rq.RunQuery({\n          QueryName: \"ProductInvoiceVolumeTrend\"\n        });\n\n        if (result.Success) {\n          setChartData(result.Results || []);\n        } else {\n          setError('Failed to load data');\n        }\n      } catch (err) {\n        setError(err.message);\n      } finally {\n        setLoading(false);\n      }\n    };\n\n    loadData();\n  }, []);\n\n  // Process chart data based on view mode\n  const processedChartData = React.useMemo(() => {\n    if (!chartData || chartData.length === 0) return [];\n    \n    return chartData.map(item => ({\n      ProductName: item.ProductName,\n      value: viewMode === 'count' ? item.InvoiceCount : item.TotalRevenue\n    }));\n  }, [chartData, viewMode]);\n\n  // Handle view mode change\n  const handleViewModeChange = (newMode) => {\n    setViewMode(newMode);\n    callbacks?.onViewModeChange?.(newMode);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      viewMode: newMode\n    });\n  };\n\n  // Handle date range change\n  const handleDateRangeChange = (startDate, endDate) => {\n    const newRange = { start: startDate, end: endDate };\n    setDateRange(newRange);\n    callbacks?.onDateRangeChange?.(startDate, endDate);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      startDate: startDate,\n      endDate: endDate\n    });\n  };\n\n  // Handle product selection\n  const handleProductSelect = (productName) => {\n    callbacks?.onProductSelect?.(productName);\n  };\n\n  const yAxisLabel = viewMode === 'count' ? 'Invoice Count' : 'Revenue ($)';\n  const chartTitle = viewMode === 'count' \n    ? 'Product Invoice Volume (Count)'\n    : 'Product Invoice Volume (Revenue)';\n\n  return (\n    <MaterialUI.Box>\n      <MaterialUI.Typography variant=\"h5\" gutterBottom>\n        Product Invoice Volume Analysis\n      </MaterialUI.Typography>\n      \n      <MaterialUI.Box>\n        <MaterialUI.Grid container spacing={3} alignItems=\"center\">\n          <MaterialUI.Grid item xs={12} sm={4}>\n            <ToggleControl\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              initialMode={viewMode}\n              onModeChange={handleViewModeChange}\n            />\n          </MaterialUI.Grid>\n          <MaterialUI.Grid item xs={12} sm={5}>\n            <DateRangeFilter\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              initialStartDate={dateRange.start}\n              initialEndDate={dateRange.end}\n              onDateRangeChange={handleDateRangeChange}\n            />\n          </MaterialUI.Grid>\n          <MaterialUI.Grid item xs={12} sm={3}>\n            <LegendDisplay\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n              mode={viewMode}\n              position=\"right\"\n            />\n          </MaterialUI.Grid>\n        </MaterialUI.Grid>\n      </MaterialUI.Box>\n\n      <MaterialUI.Box>\n        {loading && (\n          <MaterialUI.Box display=\"flex\" justifyContent=\"center\" p={3}>\n            <MaterialUI.CircularProgress />\n          </MaterialUI.Box>\n        )}\n        \n        {error && (\n          <MaterialUI.Alert severity=\"error\">\n            {error}\n          </MaterialUI.Alert>\n        )}\n        \n        {!loading && !error && processedChartData.length > 0 && (\n          <ChartContainer\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n            chartData={processedChartData}\n            chartTitle={chartTitle}\n            yAxisLabel={yAxisLabel}\n            onChartClick={handleProductSelect}\n          />\n        )}\n        \n        {!loading && !error && processedChartData.length === 0 && (\n          <MaterialUI.Box display=\"flex\" justifyContent=\"center\" p={3}>\n            <MaterialUI.Typography variant=\"h6\" color=\"textSecondary\">\n              No data available for the selected period\n            </MaterialUI.Typography>\n          </MaterialUI.Box>\n        )}\n      </MaterialUI.Box>\n\n      {!loading && !error && (savedUserSettings?.showExport !== false) && (\n        <MaterialUI.Box mt={2}>\n          <ExportButton\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n            chartRef={chartRef}\n            data={processedChartData}\n            filename={`product-invoice-volume-${viewMode}`}\n          />\n        </MaterialUI.Box>\n      )}\n    </MaterialUI.Box>\n  );\n}"
+  "code": "function AccountOverviewPanel({ \n  utilities, \n  styles, \n  components, \n  callbacks, \n  savedUserSettings, \n  onSaveUserSettings,\n  accounts: propAccounts,\n  contacts: propContacts,\n  initialSortField = 'AccountName',\n  initialSortDirection = 'asc',\n  showContactCount = true\n}) {\n  const { useState, useEffect, useMemo } = React;\n  const { AccountListComponent, ContactListComponent } = components;\n\n  // State management\n  const [accounts, setAccounts] = useState(propAccounts || []);\n  const [contacts, setContacts] = useState(propContacts || []);\n  const [selectedAccountId, setSelectedAccountId] = useState(savedUserSettings?.selectedAccountId);\n  const [loading, setLoading] = useState(!propAccounts);\n  const [error, setError] = useState(null);\n  const [sortField, setSortField] = useState(savedUserSettings?.sortField || initialSortField);\n  const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || initialSortDirection);\n\n  // Load accounts if not provided\n  useEffect(() => {\n    if (!propAccounts) {\n      loadAccounts();\n    } else {\n      setAccounts(propAccounts);\n      setLoading(false);\n    }\n  }, []);\n\n  // Filter contacts by selected account\n  const filteredContacts = useMemo(() => {\n    if (!selectedAccountId) return [];\n    return contacts.filter(contact => contact.AccountID === selectedAccountId);\n  }, [contacts, selectedAccountId]);\n\n  // Load accounts from API\n  const loadAccounts = async () => {\n    try {\n      setLoading(true);\n      const result = await utilities.rv.RunView({\n        EntityName: 'Accounts',\n        Fields: ['ID', 'AccountName', '__mj_CreatedAt', 'Industry', 'AccountStatus'],\n        OrderBy: sortField,\n        ResultType: sortDirection\n      });\n\n      if (result.Success) {\n        setAccounts(result.Results);\n      } else {\n        setError('Failed to load accounts');\n      }\n    } catch (err) {\n      setError('Error loading accounts: ' + err.message);\n    } finally {\n      setLoading(false);\n    }\n  };\n\n  // Load contacts if not provided\n  const loadContacts = async () => {\n    if (!propContacts) {\n      const result = await utilities.rv.RunView({\n        EntityName: 'Contacts',\n        Fields: ['ID', 'FullName', 'Title', 'Email', 'Phone', 'AccountID']\n      });\n\n      if (result.Success) {\n        setContacts(result.Results);\n      }\n    }\n  };\n\n  // Load contacts on mount\n  useEffect(() => {\n    loadContacts();\n  }, []);\n\n  // Handle account selection\n  const handleAccountSelect = (accountId, accountData) => {\n    setSelectedAccountId(accountId);\n    \n    // Save preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      selectedAccountId: accountId\n    });\n  };\n\n  // Handle sort change\n  const handleSortChange = (newSortField, newSortDirection) => {\n    setSortField(newSortField);\n    setSortDirection(newSortDirection);\n    \n    // Save preference\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortField: newSortField,\n      sortDirection: newSortDirection\n    });\n  };\n\n  // Handle filter change\n  const handleFilterChange = (filterModel) => {\n    // Filter functionality is handled internally by AccountListComponent\n  };\n\n  return (\n    <div style={{\n      display: 'flex',\n      height: '100vh',\n      gap: '16px',\n      padding: '16px',\n      fontFamily: '-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif'\n    }}>\n      <div style={{\n        flex: 2,\n        display: 'flex',\n        flexDirection: 'column',\n        background: '#fff',\n        borderRadius: '8px',\n        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',\n        overflow: 'hidden'\n      }}>\n        <div style={{\n          padding: '16px 20px',\n          borderBottom: '1px solid #e8e8e8',\n          background: '#fafafa'\n        }}>\n          <h2 style={{\n            margin: 0,\n            fontSize: '20px',\n            fontWeight: 600,\n            color: '#262626'\n          }}>Accounts Overview</h2>\n          <p style={{\n            margin: '4px 0 0',\n            fontSize: '14px',\n            color: '#666'\n          }}>Total: {accounts.length} organizations</p>\n        </div>\n        <div style={{\n          flex: 1,\n          overflow: 'hidden'\n        }}>\n          {loading ? (\n            <div style={{\n              display: 'flex',\n              alignItems: 'center',\n              justifyContent: 'center',\n              height: '100%'\n            }}>\n              <div style={{\n                width: '40px',\n                height: '40px',\n                border: '3px solid #f3f3f3',\n                borderTop: '3px solid #3498db',\n                borderRadius: '50%',\n                animation: 'spin 1s linear infinite'\n              }}></div>\n              <style>{'@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'}</style>\n              <span style={{\n                marginLeft: '12px',\n                color: '#666'\n              }}>Loading accounts...</span>\n            </div>\n          ) : error ? (\n            <div style={{\n              display: 'flex',\n              alignItems: 'center',\n              justifyContent: 'center',\n              height: '100%',\n              color: '#ff4d4f',\n              fontSize: '16px'\n            }}>{error}</div>\n          ) : (\n            <AccountListComponent\n              accounts={accounts}\n              initialSortField={sortField}\n              initialSortDirection={sortDirection}\n              showContactCount={showContactCount}\n              onAccountSelect={handleAccountSelect}\n              onSortChange={handleSortChange}\n              onFilterChange={handleFilterChange}\n              utilities={utilities}\n              styles={styles}\n              components={components}\n              callbacks={callbacks}\n              savedUserSettings={savedUserSettings}\n              onSaveUserSettings={onSaveUserSettings}\n            />\n          )}\n        </div>\n      </div>\n      <div style={{\n        flex: 1,\n        background: '#fff',\n        borderRadius: '8px',\n        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',\n        overflow: 'hidden'\n      }}>\n        <div style={{\n          padding: '16px 20px',\n          borderBottom: '1px solid #e8e8e8',\n          background: '#fafafa'\n        }}>\n          <h3 style={{\n            margin: 0,\n            fontSize: '18px',\n            fontWeight: 600,\n            color: '#262626'\n          }}>{selectedAccountId ? 'Related Contacts' : 'No Account Selected'}</h3>\n          <p style={{\n            margin: '4px 0 0',\n            fontSize: '14px',\n            color: '#666'\n          }}>{selectedAccountId ? `${filteredContacts.length} contacts found` : 'Select an account to view contacts'}</p>\n        </div>\n        <div style={{\n          flex: 1,\n          overflow: 'auto'\n        }}>\n          <ContactListComponent\n            contacts={filteredContacts.length > 0 ? filteredContacts : (propContacts || undefined)}\n            accountId={selectedAccountId}\n            showTitle={true}\n            showEmail={true}\n            showPhone={true}\n            utilities={utilities}\n            styles={styles}\n            components={components}\n            callbacks={callbacks}\n            savedUserSettings={savedUserSettings}\n            onSaveUserSettings={onSaveUserSettings}\n          />\n        </div>\n      </div>\n    </div>\n  );\n}"
 }

@@ -39,18 +39,20 @@ export class AngularAdapterService {
    * Initialize the React runtime with Angular-specific configuration
    * @param config Optional library configuration
    * @param additionalLibraries Optional additional libraries to merge
+   * @param options Optional options including debug flag
    * @returns Promise resolving when runtime is ready
    */
   async initialize(
     config?: LibraryConfiguration,
-    additionalLibraries?: ExternalLibraryConfig[]
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
   ): Promise<void> {
     if (this.runtime) {
       return; // Already initialized
     }
 
     // Load React ecosystem with optional additional libraries
-    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries);
+    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries, options);
     
     // Create runtime context
     this.runtimeContext = {

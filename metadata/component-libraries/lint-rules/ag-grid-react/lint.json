@@ -1,0 +1,85 @@
+{
+  "libraryName": "ag-grid-react",
+  "globalVariable": "AgGridReact",
+  "description": "Lint rules for AG-Grid React component library",
+  "componentAccess": {
+    "pattern": "namespace",
+    "description": "AG-Grid React exports components as properties on the global AgGridReact object",
+    "components": {
+      "AgGridReact": {
+        "correctAccess": "AgGridReact.AgGridReact",
+        "description": "The main grid component is accessed as AgGridReact.AgGridReact, not directly as AgGridReact"
+      }
+    }
+  },
+  "rules": [
+    {
+      "id": "ag-grid-react-component-access",
+      "description": "Validates correct access pattern for AG-Grid React components",
+      "severity": "critical",
+      "message": "AG-Grid React component must be accessed as AgGridReact.AgGridReact",
+      "patterns": {
+        "detect": [
+          {
+            "type": "ReactCreateElement",
+            "match": "React.createElement(AgGridReact,",
+            "invalid": true,
+            "fix": "React.createElement(AgGridReact.AgGridReact,",
+            "jsxSuggestion": "<AgGridReact.AgGridReact"
+          },
+          {
+            "type": "JSXElement", 
+            "match": "<AgGridReact ",
+            "invalid": true,
+            "fix": "<AgGridReact.AgGridReact "
+          }
+        ],
+        "valid": [
+          {
+            "type": "ReactCreateElement",
+            "match": "React.createElement(AgGridReact.AgGridReact,"
+          },
+          {
+            "type": "JSXElement",
+            "match": "<AgGridReact.AgGridReact"
+          }
+        ]
+      },
+      "errorMessage": "Invalid AG-Grid React component usage. The component is exported as a property on the AgGridReact global object.\n\nIncorrect: React.createElement(AgGridReact, ...)\nCorrect: React.createElement(AgGridReact.AgGridReact, ...)\n\nThis is because the UMD bundle exports the component as window.AgGridReact.AgGridReact, not directly as window.AgGridReact.",
+      "documentation": "https://www.ag-grid.com/react-data-grid/getting-started/"
+    },
+    {
+      "id": "ag-grid-prefer-jsx",
+      "description": "Suggests using JSX syntax instead of React.createElement for better readability",
+      "severity": "medium",
+      "message": "Consider using JSX syntax for AG-Grid React components",
+      "patterns": {
+        "detect": [
+          {
+            "type": "ReactCreateElement",
+            "match": "React.createElement(AgGridReact.AgGridReact,",
+            "suggest": "<AgGridReact.AgGridReact"
+          }
+        ]
+      },
+      "errorMessage": "Consider using JSX syntax for better readability.\n\nCurrent: React.createElement(AgGridReact.AgGridReact, {...})\nSuggested: <AgGridReact.AgGridReact {...} />",
+      "documentation": "https://www.ag-grid.com/react-data-grid/getting-started/"
+    }
+  ],
+  "validators": {
+    "checkComponentAccess": {
+      "description": "Ensures AG-Grid React components are accessed with the correct namespace pattern",
+      "implementation": "@file:check-component-access.js"
+    }
+  },
+  "initialization": {
+    "requiresStyles": true,
+    "stylesheets": [
+      "ag-grid.css",
+      "ag-theme-material.css"
+    ],
+    "dependencies": {
+      "ag-grid-community": "Required base library for AG-Grid functionality"
+    }
+  }
+}

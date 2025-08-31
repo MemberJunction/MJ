@@ -477,14 +477,15 @@
       "Dependencies": {
         "ag-grid": "^31.0.1"
       },
-      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid"
+      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid",
+      "LintRules": "@file:lint-rules/ag-grid-react/lint.json"
     },
     "primaryKey": {
       "ID": "BFD00569-1E06-450E-BFD0-FBD19EFF9BB6"
     },
     "sync": {
-      "lastModified": "2025-08-30T19:45:19.388Z",
-      "checksum": "d437add298cd82f897a8120d4ec4ec6320d227ef7d339b3a72da720283317e46"
+      "lastModified": "2025-08-31T23:35:26.312Z",
+      "checksum": "b0348e1d7d64a7059da2aef65b5290730f89b8e97d6e6b3f476f1adf45f3cbb5"
     }
   },
   {

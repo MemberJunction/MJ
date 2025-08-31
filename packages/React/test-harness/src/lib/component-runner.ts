@@ -461,8 +461,21 @@ export class ComponentRunner {
             static getDerivedStateFromError(error: any) {
               // Capture the actual error message IMMEDIATELY
               (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+              
+              // Check if this is a minified React error
+              const errorMessage = error.message || error.toString();
+              let enhancedMessage = errorMessage;
+              
+              if (errorMessage.includes('Minified React error')) {
+                // Extract error number if present
+                const match = errorMessage.match(/#(\d+)/);
+                if (match) {
+                  enhancedMessage = `React Error #${match[1]} - Visit https://react.dev/errors/${match[1]} for details. ${errorMessage}`;
+                }
+              }
+              
               (window as any).__testHarnessRuntimeErrors.push({
-                message: error.message || error.toString(),
+                message: enhancedMessage,
                 stack: error.stack,
                 type: 'react-render-error',
                 phase: 'component-render'
@@ -472,8 +485,8 @@ export class ComponentRunner {
             }
             
             componentDidCatch(error: any, errorInfo: any) {
-              console.error('React Error Boundary caught:', error, errorInfo);
-              // Update the last error with component stack info
+              // Don't log here - it creates duplicate messages
+              // Just update the last error with component stack info
               const errors = (window as any).__testHarnessRuntimeErrors || [];
               if (errors.length > 0) {
                 const lastError = errors[errors.length - 1];
@@ -486,11 +499,8 @@ export class ComponentRunner {
             render() {
               if (this.state.hasError) {
                 // DON'T re-throw - this causes "Script error"
-                // Instead, render an error message
-                return (window as any).React.createElement('div', 
-                  { style: { color: 'red', padding: '20px' } },
-                  'Component failed to render: ' + (this.state.error?.message || 'Unknown error')
-                );
+                // Instead, render a simple error indicator
+                return null; // Don't render anything - the error is already captured
               }
               return this.props.children;
             }
@@ -711,7 +721,13 @@ export class ComponentRunner {
    * Component-specific libraries are loaded by the runtime's ComponentCompiler
    */
   private async loadRuntimeLibraries(page: any, debug: boolean = false) {
-    // Helper function to load scripts with timeout (Recommendation #3)
+    // Import getCoreRuntimeLibraries to get the correct URLs for React libraries
+    // We can't use LibraryLoader.loadAllLibraries() here because it expects to run in a browser
+    // environment with window/document, but we're in Node.js with Playwright
+    const { getCoreRuntimeLibraries } = await import('@memberjunction/react-runtime');
+    const coreLibraries = getCoreRuntimeLibraries(debug);
+    
+    // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
       try {
         await Promise.race([
@@ -725,12 +741,15 @@ export class ComponentRunner {
       }
     };
     
-    // Load React and ReactDOM with timeout protection
-    await loadScriptWithTimeout('https://unpkg.com/react@18/umd/react.development.js');
-    await loadScriptWithTimeout('https://unpkg.com/react-dom@18/umd/react-dom.development.js');
-    
-    // Load Babel for JSX transformation with timeout
-    await loadScriptWithTimeout('https://unpkg.com/@babel/standalone/babel.min.js');
+    // Load the core libraries (React, ReactDOM, Babel) into the Playwright page context
+    for (const lib of coreLibraries) {
+      if (lib.cdnUrl) {
+        await loadScriptWithTimeout(lib.cdnUrl);
+        if (debug) {
+          console.log(`  ✓ Loaded ${lib.displayName} (${lib.globalVariable})`);
+        }
+      }
+    }
     
     // Load the real MemberJunction React Runtime UMD bundle
     const fs = await import('fs');

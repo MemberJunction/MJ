@@ -65,10 +65,12 @@ export class LibraryLoader {
    * This is the main method that should be used by test harness and Angular wrapper
    * @param config Optional full library configuration to replace the default
    * @param additionalLibraries Optional additional libraries to merge with the configuration
+   * @param options Optional options including debug mode flag
    */
   static async loadAllLibraries(
     config?: LibraryConfiguration, 
-    additionalLibraries?: ExternalLibraryConfig[]
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
   ): Promise<LibraryLoadResult> {
     if (config) {
       StandardLibraryManager.setConfiguration(config);
@@ -87,15 +89,15 @@ export class LibraryLoader {
       StandardLibraryManager.setConfiguration(mergedConfig);
     }
     
-    return this.loadLibrariesFromConfig();
+    return this.loadLibrariesFromConfig(undefined, options?.debug);
   }
 
   /**
    * Load libraries based on the current configuration
    */
-  static async loadLibrariesFromConfig(options?: ConfigLoadOptions): Promise<LibraryLoadResult> {
+  static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
     // Always load core runtime libraries first
-    const coreLibraries = getCoreRuntimeLibraries();
+    const coreLibraries = getCoreRuntimeLibraries(debug);
     const corePromises = coreLibraries.map(lib => 
       this.loadScript(lib.cdnUrl, lib.globalVariable)
     );

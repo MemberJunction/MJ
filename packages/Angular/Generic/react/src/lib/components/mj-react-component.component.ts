@@ -126,7 +126,7 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
-  @Input() debug: boolean = false;
+  @Input() debug: boolean = true;
   
   // Auto-initialize utilities if not provided
   private _utilities: any;

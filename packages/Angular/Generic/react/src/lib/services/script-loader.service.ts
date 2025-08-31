@@ -124,11 +124,13 @@ export class ScriptLoaderService implements OnDestroy {
    * Load common React libraries and UI frameworks
    * @param config Optional library configuration
    * @param additionalLibraries Optional additional libraries to merge
+   * @param options Optional options including debug flag
    * @returns Promise resolving to React ecosystem objects
    */
   async loadReactEcosystem(
     config?: LibraryConfiguration,
-    additionalLibraries?: ExternalLibraryConfig[]
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
   ): Promise<{
     React: any;
     ReactDOM: any;
@@ -136,7 +138,7 @@ export class ScriptLoaderService implements OnDestroy {
     libraries: any;
   }> {
     // Use the new LibraryLoader from react-runtime for consistency
-    const result = await LibraryLoader.loadAllLibraries(config, additionalLibraries);
+    const result = await LibraryLoader.loadAllLibraries(config, additionalLibraries, options);
     
     // The LibraryLoader handles all the loading, but we need to ensure
     // ReactDOM.createRoot is available for Angular's specific needs
