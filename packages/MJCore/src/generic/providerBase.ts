@@ -24,17 +24,42 @@ import { RunView, RunViewParams } from "../views/runView";
  */
 export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
     try {
-        const newObject = new AllMetadata();
+        const newObject = MetadataFromSimpleObjectWithoutUser(data, md);
         newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
 
-        // we now have to loop through the AllMetadataArray and use that info to build the metadata object with proper strongly typed object instances
+        return newObject;
+    }
+    catch (e) {
+        LogError(e);
+    }
+}
+
+/**
+ * Creates a new instance of AllMetadata from a simple object, but does NOT set the CurrentUser property
+ * Handles deserialization and proper instantiation of all metadata classes.
+ * @param data - The raw metadata object to convert
+ * @param md - The metadata provider for context
+ * @returns A fully populated AllMetadata instance with proper type instances
+ */
+export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProvider): AllMetadata {
+    try {
+        const returnMetadata: AllMetadata = new AllMetadata();
+        // now iterate through the AllMetadataMapping array and construct the return type
         for (let m of AllMetadataArrays) {
-            if (data.hasOwnProperty(m.key)) {
-                newObject[m.key] = data[m.key].map((d: any) => new m.class(d, md));
+            let simpleKey = m.key;
+            if (!data.hasOwnProperty(simpleKey)) {
+                simpleKey = simpleKey.substring(3); // remove the All prefix
+            }
+            if (data.hasOwnProperty(simpleKey)) {
+                // at this point, only do this particular property if we have a match, it is either prefixed with All or not
+                // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
+                // so we need to check for both which is what the above is doing.
+
+                // Build the array of the correct type and initialize with the simple object
+                returnMetadata[m.key] = data[simpleKey].map((d: any) => new m.class(d, md));
             }
         }
-
-        return newObject;
+        return returnMetadata;
     }
     catch (e) {
         LogError(e);
@@ -329,6 +354,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return true;
     }
 
+    protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
+        // we need to create a copy but can't do it the standard way becuase we need object instances
+        // for various things like EntityInfo
+        const newmd = MetadataFromSimpleObjectWithoutUser(toClone, this);
+        newmd.CurrentUser = this.CurrentUser;
+        return newmd;
+    }
+
     /**
      * Copies metadata from the global provider to the local instance.
      * This is used to ensure that the local instance has the latest metadata
@@ -337,7 +370,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
             if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = structuredClone(Metadata.Provider.AllMetadata);
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
                 return true;
             }
             return false;
@@ -428,23 +461,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // rather than just plain JavaScript objects that we have in the allMetadata object.
 
                 // build the base return type
-                const returnMetadata: AllMetadata = new AllMetadata();
-                returnMetadata.CurrentUser = await this.GetCurrentUser(); // set the current user
-                // now iterate through the AllMetadataMapping array and construct the return type
-                for (let m of AllMetadataArrays) {
-                    let simpleKey = m.key;
-                    if (!simpleMetadata.hasOwnProperty(simpleKey)) {
-                        simpleKey = simpleKey.substring(3); // remove the All prefix
-                    }
-                    if (simpleMetadata.hasOwnProperty(simpleKey)) {
-                        // at this point, only do this particular property if we have a match, it is either prefixed with All or not
-                        // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
-                        // so we need to check for both which is what the above is doing.
+                const returnMetadata = MetadataFromSimpleObjectWithoutUser(simpleMetadata, this);
+                returnMetadata.CurrentUser = await this.GetCurrentUser();
 
-                        // Build the array of the correct type and initialize with the simple object
-                        returnMetadata[m.key] = simpleMetadata[simpleKey].map((d: any) => new m.class(d, this));
-                    }
-                }
                 return returnMetadata;
             }
             else {
