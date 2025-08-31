@@ -477,7 +477,8 @@
       "Dependencies": {
         "ag-grid": "^31.0.1"
       },
-      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid"
+      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid",
+      "LintRules": "@file:lint-rules/ag-grid-react/lint.json"
     },
     "primaryKey": {
       "ID": "BFD00569-1E06-450E-BFD0-FBD19EFF9BB6"
