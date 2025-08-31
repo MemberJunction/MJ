@@ -1,5 +1,5 @@
 // DealList Sub-component
-const DealList = ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function DealList ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const handleSort = (field) => {
     const newOrder = sortConfig?.field === field && sortConfig?.order === 'asc' ? 'desc' : 'asc';
     if (onSort) {

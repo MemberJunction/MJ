@@ -1,5 +1,5 @@
 // RepDetailsPanel Sub-component
-const RepDetailsPanel = ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function RepDetailsPanel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [activeTab, setActiveTab] = useState('details');
 
   return (

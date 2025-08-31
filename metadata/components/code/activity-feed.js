@@ -1,5 +1,5 @@
 // ActivityFeed Sub-component
-const ActivityFeed = ({ items, onItemClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function ActivityFeed ({ items, onItemClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   return (
     <div style={{
       backgroundColor: '#fff',

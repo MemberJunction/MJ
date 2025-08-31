@@ -1,5 +1,5 @@
 // WinLossChart Sub-component
-const WinLossChart = ({ winLossData, period, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function WinLossChart ({ winLossData, period, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

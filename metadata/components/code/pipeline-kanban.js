@@ -1,5 +1,4 @@
-// PipelineKanban Sub-component
-const PipelineKanban = ({ stages, deals, onDealClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function PipelineKanban ({ stages, deals, onDealClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const getStageColor = (stageName) => {
     const colors = {
       'Prospecting': '#6f42c1',
