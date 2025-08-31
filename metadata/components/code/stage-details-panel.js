@@ -1,5 +1,5 @@
 // StageDetailsPanel Sub-component
-const StageDetailsPanel = ({ stage, deals, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function StageDetailsPanel ({ stage, deals, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [sortBy, setSortBy] = useState('value');
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterText, setFilterText] = useState('');

@@ -1,5 +1,4 @@
-// MetricsPanel Sub-component
-const MetricsPanel = ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function MetricsPanel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [activeTab, setActiveTab] = useState('details');
 
   return (

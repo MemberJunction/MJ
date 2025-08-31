@@ -81,30 +81,30 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
   }
 
   @Query(() => UserFavoriteResult)
-  async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {userPayload}: AppContext) {
-    const md = new Metadata();
+  async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {providers, userPayload}: AppContext) {
+    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
 
-    const e = md.Entities.find((e) => e.ID === params.EntityID);
+    const e = p.Entities.find((e) => e.ID === params.EntityID);
     if (e)
       return {
         EntityID: params.EntityID,
         UserID: params.UserID,
         CompositeKey: pk,
-        IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, pk, userPayload.userRecord),
+        IsFavorite: await p.GetRecordFavoriteStatus(params.UserID, e.Name, pk, userPayload.userRecord),
         Success: true,
       };
     else throw new Error(`Entity ID:${params.EntityID} not found`);
   }
 
   @Mutation(() => UserFavoriteResult)
-  SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload }: AppContext) {
-    const md = new Metadata();
+  async SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload, providers }: AppContext) {
+    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
-    const e = md.Entities.find((e) => e.ID === params.EntityID);
+    const e = p.Entities.find((e) => e.ID === params.EntityID);
     const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);
     if (e) {
-      md.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
+      await p.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {
         Success: true,
         EntityID: params.EntityID,
@@ -113,65 +113,6 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         IsFavorite: params.IsFavorite,
       };
     } else throw new Error(`Entity ID:${params.EntityID} not found`);
-  }
-
-  private GetTestData() {
-    return [
-      {
-        firstName: 'John',
-        lastName: 'Doe',
-        title: 'Software Engineer II',
-        email: 'amith+john.doe@nagarajan.org',
-        age: 25,
-        address: {
-          street: '123 Main St',
-          city: 'Springfield',
-          state: 'IL',
-          zip: '62701',
-        },
-        recommendedArticles: [
-          {
-            title: 'How to Write Better Code',
-            url: 'https://example.com/article1',
-          },
-          {
-            title: 'The Art of Debugging',
-            url: 'https://example.com/article2',
-          },
-          {
-            title: 'Using Templates Effectively',
-            url: 'https://example.com/article3',
-          },
-        ],
-      },
-      {
-        firstName: 'Jane',
-        lastName: 'Smith',
-        title: 'Executive Vice President of Software Development',
-        email: 'amith+jane.smith@nagarajan.org',
-        age: 30,
-        address: {
-          street: '456 Elm St',
-          city: 'Chicago',
-          state: 'IL',
-          zip: '62702',
-        },
-        recommendedArticles: [
-          {
-            title: 'Exemplifying the Importance of Code Reviews',
-            url: 'https://example.com/article1',
-          },
-          {
-            title: 'AI and Software Development: A New Frontier',
-            url: 'https://example.com/article2',
-          },
-          {
-            title: 'Gardening Tips for Fun Loving Software Developers',
-            url: 'https://example.com/article3',
-          },
-        ],
-      },
-    ];
   }
 }
 

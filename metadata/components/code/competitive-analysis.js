@@ -1,5 +1,5 @@
 // CompetitiveAnalysis Sub-component
-const CompetitiveAnalysis = ({ data, columns, onRowClick, sortConfig, onSort, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function CompetitiveAnalysis ({ data, columns, onRowClick, sortConfig, onSort, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const handleSort = (column) => {
     if (onSort) {
       const newOrder = sortConfig?.column === column && sortConfig?.order === 'asc' ? 'desc' : 'asc';

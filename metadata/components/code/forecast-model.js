@@ -1,5 +1,5 @@
 // ForecastModel Sub-component
-const ForecastModel = ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function ForecastModel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [activeTab, setActiveTab] = useState('details');
 
   return (

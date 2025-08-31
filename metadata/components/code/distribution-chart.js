@@ -1,5 +1,5 @@
 // DistributionChart Sub-component
-const DistributionChart = ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function DistributionChart ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

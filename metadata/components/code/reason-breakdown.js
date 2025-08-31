@@ -1,5 +1,5 @@
 // ReasonBreakdown Sub-component
-const ReasonBreakdown = ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function ReasonBreakdown ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

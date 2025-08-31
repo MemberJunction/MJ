@@ -15,6 +15,7 @@ import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
+import { Metadata } from '@memberjunction/core';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -156,6 +157,10 @@ export const contextFunction =
       requestDomain?.hostname ? requestDomain.hostname : undefined,
       apiKey 
     );
+
+    if (Metadata.Provider.Entities.length === 0 ) {
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
+    }
 
     // now create a new instance of SQLServerDataProvider for each request
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);

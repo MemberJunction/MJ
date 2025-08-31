@@ -2310,6 +2310,99 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                           message,
                           code: `${propName}: ...`
                         });
+                      } else {
+                        // Property name is valid, now check its type
+                        const value = prop.value;
+                        
+                        // Helper to check if a node could evaluate to a string
+                        const isStringLike = (node: t.Node): boolean => {
+                          return t.isStringLiteral(node) || 
+                                 t.isTemplateLiteral(node) || 
+                                 t.isBinaryExpression(node) || // String concatenation
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function call
+                                 t.isMemberExpression(node); // Property access
+                        };
+                        
+                        // Helper to check if a node could evaluate to a number
+                        const isNumberLike = (node: t.Node): boolean => {
+                          return t.isNumericLiteral(node) ||
+                                 t.isBinaryExpression(node) || // Math operations
+                                 t.isUnaryExpression(node) || // Negative numbers, etc
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function call
+                                 t.isMemberExpression(node); // Property access
+                        };
+                        
+                        // Helper to check if a node is array-like
+                        const isArrayLike = (node: t.Node): boolean => {
+                          return t.isArrayExpression(node) ||
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function returning array
+                                 t.isMemberExpression(node) || // Property access
+                                 t.isConditionalExpression(node); // Ternary
+                        };
+                        
+                        // Helper to check if a node is object-like (but not array)
+                        const isObjectLike = (node: t.Node): boolean => {
+                          if (t.isArrayExpression(node)) return false;
+                          return t.isObjectExpression(node) ||
+                                 t.isIdentifier(node) || // Variable
+                                 t.isCallExpression(node) || // Function returning object
+                                 t.isMemberExpression(node) || // Property access
+                                 t.isConditionalExpression(node) || // Ternary
+                                 t.isSpreadElement(node); // Spread syntax (though this is the problem case)
+                        };
+                        
+                        // Validate types based on property name
+                        if (propName === 'ExtraFilter' || propName === 'OrderBy' || propName === 'EntityName') {
+                          // These must be strings
+                          if (!isStringLike(value)) {
+                            let exampleValue = '';
+                            if (propName === 'ExtraFilter') {
+                              exampleValue = `"Status = 'Active' AND Type = 'Customer'"`;
+                            } else if (propName === 'OrderBy') {
+                              exampleValue = `"CreatedAt DESC"`;
+                            } else if (propName === 'EntityName') {
+                              exampleValue = `"Products"`;
+                            }
+                            
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property '${propName}' must be a string, not ${t.isObjectExpression(value) ? 'an object' : t.isArrayExpression(value) ? 'an array' : 'a non-string value'}. Example: ${propName}: ${exampleValue}`,
+                              code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`
+                            });
+                          }
+                        } else if (propName === 'Fields') {
+                          // Fields must be an array of strings (or a string that we'll interpret as comma-separated)
+                          if (!isArrayLike(value) && !isStringLike(value)) {
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property 'Fields' must be an array of field names or a comma-separated string. Example: Fields: ['ID', 'Name', 'Status'] or Fields: 'ID, Name, Status'`,
+                              code: `Fields: ${prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                            });
+                          }
+                        } else if (propName === 'MaxRows' || propName === 'StartRow') {
+                          // These must be numbers
+                          if (!isNumberLike(value)) {
+                            violations.push({
+                              rule: 'runview-runquery-valid-properties',
+                              severity: 'critical',
+                              line: prop.loc?.start.line || 0,
+                              column: prop.loc?.start.column || 0,
+                              message: `${methodName} property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
+                              code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                            });
+                          }
+                        }
                       }
                     }
                   }
@@ -2417,6 +2510,92 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         message,
                         code: `${propName}: ...`
                       });
+                    } else {
+                      // Property name is valid, now check its type
+                      const value = prop.value;
+                      
+                      // Helper to check if a node could evaluate to a string
+                      const isStringLike = (node: t.Node): boolean => {
+                        return t.isStringLiteral(node) || 
+                               t.isTemplateLiteral(node) || 
+                               t.isBinaryExpression(node) || // String concatenation
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function call
+                               t.isMemberExpression(node); // Property access
+                      };
+                      
+                      // Helper to check if a node could evaluate to a number
+                      const isNumberLike = (node: t.Node): boolean => {
+                        return t.isNumericLiteral(node) ||
+                               t.isBinaryExpression(node) || // Math operations
+                               t.isUnaryExpression(node) || // Negative numbers, etc
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function call
+                               t.isMemberExpression(node); // Property access
+                      };
+                      
+                      // Helper to check if a node is object-like (but not array)
+                      const isObjectLike = (node: t.Node): boolean => {
+                        if (t.isArrayExpression(node)) return false;
+                        return t.isObjectExpression(node) ||
+                               t.isIdentifier(node) || // Variable
+                               t.isCallExpression(node) || // Function returning object
+                               t.isMemberExpression(node) || // Property access
+                               t.isConditionalExpression(node) || // Ternary
+                               t.isSpreadElement(node); // Spread syntax
+                      };
+                      
+                      // Validate types based on property name
+                      if (propName === 'QueryID' || propName === 'QueryName' || propName === 'CategoryID' || propName === 'CategoryPath') {
+                        // These must be strings
+                        if (!isStringLike(value)) {
+                          let exampleValue = '';
+                          if (propName === 'QueryID') {
+                            exampleValue = `"550e8400-e29b-41d4-a716-446655440000"`;
+                          } else if (propName === 'QueryName') {
+                            exampleValue = `"Sales by Region"`;
+                          } else if (propName === 'CategoryID') {
+                            exampleValue = `"123e4567-e89b-12d3-a456-426614174000"`;
+                          } else if (propName === 'CategoryPath') {
+                            exampleValue = `"/Reports/Sales/"`;
+                          }
+                          
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property '${propName}' must be a string. Example: ${propName}: ${exampleValue}`,
+                            code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`
+                          });
+                        }
+                      } else if (propName === 'Parameters') {
+                        // Parameters must be an object (Record<string, any>)
+                        if (!isObjectLike(value)) {
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property 'Parameters' must be an object containing key-value pairs. Example: Parameters: { startDate: '2024-01-01', status: 'Active' }`,
+                            code: `Parameters: ${t.isArrayExpression(value) ? '[...]' : t.isStringLiteral(value) ? '"..."' : '...'}`
+                          });
+                        }
+                      } else if (propName === 'MaxRows' || propName === 'StartRow') {
+                        // These must be numbers
+                        if (!isNumberLike(value)) {
+                          violations.push({
+                            rule: 'runview-runquery-valid-properties',
+                            severity: 'critical',
+                            line: prop.loc?.start.line || 0,
+                            column: prop.loc?.start.column || 0,
+                            message: `RunQuery property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
+                            code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`
+                          });
+                        }
+                      }
                     }
                   }
                 }
@@ -3096,6 +3275,214 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       column: path.node.loc?.start.column || 0,
                       message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                     });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'validate-dependency-props',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build a map of dependency components to their specs
+        const dependencySpecs = new Map<string, ComponentSpec>();
+        
+        // Process embedded dependencies
+        if (componentSpec?.dependencies && Array.isArray(componentSpec.dependencies)) {
+          for (const dep of componentSpec.dependencies) {
+            if (dep && dep.name) {
+              if (dep.location === 'registry') {
+                const match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
+                if (!match) {
+                  // the specified registry component was not found, we can't lint for it, but we should put a warning
+                  console.warn('Dependency component not found in registry', dep);
+                }
+                else {
+                  dependencySpecs.set(dep.name, match.spec);
+                }
+              }
+              else {
+                // Embedded dependencies have their spec inline
+                dependencySpecs.set(dep.name, dep);
+              }
+            }
+            else {
+              // we have an invalid dep in the spec, not a fatal error but we should log this
+              console.warn(`Invalid dependency in component spec`, dep);
+            }
+          }
+        }
+        
+        // For registry dependencies, we'd need ComponentMetadataEngine
+        // But since this is a static lint check, we'll focus on embedded deps
+        // Registry components would need async loading which doesn't fit the current sync pattern
+        
+        // Now traverse JSX to find component usage
+        traverse(ast, {
+          JSXElement(path: NodePath<t.JSXElement>) {
+            const openingElement = path.node.openingElement;
+            
+            // Check if this is one of our dependency components
+            if (t.isJSXIdentifier(openingElement.name)) {
+              const componentName = openingElement.name.name;
+              const depSpec = dependencySpecs.get(componentName);
+              
+              if (depSpec) {
+                // Collect props being passed
+                const passedProps = new Set<string>();
+                const passedPropNodes = new Map<string, t.JSXAttribute>();
+                
+                for (const attr of openingElement.attributes) {
+                  if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+                    const propName = attr.name.name;
+                    passedProps.add(propName);
+                    passedPropNodes.set(propName, attr);
+                  }
+                }
+                
+                // Check required custom props
+                if (depSpec.properties && Array.isArray(depSpec.properties)) {
+                  const requiredProps: string[] = [];
+                  const optionalProps: string[] = [];
+                  
+                  for (const prop of depSpec.properties) {
+                    if (prop && prop.name && typeof prop.name === 'string') {
+                      if (prop.required === true) {
+                        requiredProps.push(prop.name);
+                      } else {
+                        optionalProps.push(prop.name);
+                      }
+                    }
+                  }
+                  
+                  // Check for missing required props
+                  const missingRequired = requiredProps.filter(prop => !passedProps.has(prop));
+                  if (missingRequired.length > 0) {
+                    violations.push({
+                      rule: 'validate-dependency-props',
+                      severity: 'critical',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `Dependency component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component's specification.`,
+                      code: `<${componentName} ... />`
+                    });
+                  }
+                  
+                  // Validate prop types for passed props
+                  for (const [propName, attrNode] of passedPropNodes) {
+                    const propSpec = depSpec.properties.find(p => p.name === propName);
+                    if (propSpec && propSpec.type) {
+                      const value = attrNode.value;
+                      
+                      // Type validation based on prop spec type
+                      if (propSpec.type === 'string') {
+                        // Check if value could be a string
+                        if (value && t.isJSXExpressionContainer(value)) {
+                          const expr = value.expression;
+                          // Check for obvious non-string types
+                          if (t.isNumericLiteral(expr) || t.isBooleanLiteral(expr) || 
+                              t.isArrayExpression(expr) || (t.isObjectExpression(expr) && !t.isTemplateLiteral(expr))) {
+                            violations.push({
+                              rule: 'validate-dependency-props',
+                              severity: 'high',
+                              line: attrNode.loc?.start.line || 0,
+                              column: attrNode.loc?.start.column || 0,
+                              message: `Prop "${propName}" on component "${componentName}" expects type "string" but received a different type.`,
+                              code: `${propName}={...}`
+                            });
+                          }
+                        }
+                      } else if (propSpec.type === 'number') {
+                        // Check if value could be a number
+                        if (value && t.isJSXExpressionContainer(value)) {
+                          const expr = value.expression;
+                          if (t.isStringLiteral(expr) || t.isBooleanLiteral(expr) || 
+                              t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                            violations.push({
+                              rule: 'validate-dependency-props',
+                              severity: 'high',
+                              line: attrNode.loc?.start.line || 0,
+                              column: attrNode.loc?.start.column || 0,
+                              message: `Prop "${propName}" on component "${componentName}" expects type "number" but received a different type.`,
+                              code: `${propName}={...}`
+                            });
+                          }
+                        }
+                      } else if (propSpec.type === 'boolean') {
+                        // Check if value could be a boolean
+                        if (value && t.isJSXExpressionContainer(value)) {
+                          const expr = value.expression;
+                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
+                              t.isArrayExpression(expr) || t.isObjectExpression(expr)) {
+                            violations.push({
+                              rule: 'validate-dependency-props',
+                              severity: 'high',
+                              line: attrNode.loc?.start.line || 0,
+                              column: attrNode.loc?.start.column || 0,
+                              message: `Prop "${propName}" on component "${componentName}" expects type "boolean" but received a different type.`,
+                              code: `${propName}={...}`
+                            });
+                          }
+                        }
+                      } else if (propSpec.type === 'array') {
+                        // Check if value could be an array
+                        if (value && t.isJSXExpressionContainer(value)) {
+                          const expr = value.expression;
+                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
+                              t.isBooleanLiteral(expr) || (t.isObjectExpression(expr) && !t.isArrayExpression(expr))) {
+                            violations.push({
+                              rule: 'validate-dependency-props',
+                              severity: 'high',
+                              line: attrNode.loc?.start.line || 0,
+                              column: attrNode.loc?.start.column || 0,
+                              message: `Prop "${propName}" on component "${componentName}" expects type "array" but received a different type.`,
+                              code: `${propName}={...}`
+                            });
+                          }
+                        }
+                      } else if (propSpec.type === 'object') {
+                        // Check if value could be an object
+                        if (value && t.isJSXExpressionContainer(value)) {
+                          const expr = value.expression;
+                          if (t.isStringLiteral(expr) || t.isNumericLiteral(expr) || 
+                              t.isBooleanLiteral(expr) || t.isArrayExpression(expr)) {
+                            violations.push({
+                              rule: 'validate-dependency-props',
+                              severity: 'high',
+                              line: attrNode.loc?.start.line || 0,
+                              column: attrNode.loc?.start.column || 0,
+                              message: `Prop "${propName}" on component "${componentName}" expects type "object" but received a different type.`,
+                              code: `${propName}={...}`
+                            });
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Check for unknown props (props not in the spec)
+                  const specPropNames = new Set<string>(depSpec.properties.map(p => p.name).filter(Boolean));
+                  const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
+                  
+                  for (const passedProp of passedProps) {
+                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp)) {
+                      violations.push({
+                        rule: 'validate-dependency-props',
+                        severity: 'medium',
+                        line: passedPropNodes.get(passedProp)?.loc?.start.line || 0,
+                        column: passedPropNodes.get(passedProp)?.loc?.start.column || 0,
+                        message: `Prop "${passedProp}" is not defined in the specification for component "${componentName}". In addition to the standard MJ props, valid custom props: ${Array.from(specPropNames).join(', ') || 'none'}.`,
+                        code: `${passedProp}={...}`
+                      });
+                    }
                   }
                 }
               }

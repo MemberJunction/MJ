@@ -1,5 +1,5 @@
 // FunnelChart Sub-component
-const FunnelChart = ({ data, onStageClick, selectedStage, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function FunnelChart ({ data, onStageClick, selectedStage, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const containerRef = useRef(null);
 
   useEffect(() => {

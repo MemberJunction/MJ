@@ -1,5 +1,4 @@
-// CustomerHeader Sub-component
-const CustomerHeader = ({ customer, metrics, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function CustomerHeader ({ customer, metrics, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const handleOpenCustomer = () => {
     if (callbacks?.OpenEntityRecord && customer?.id) {
       callbacks.OpenEntityRecord('Accounts', customer.id);

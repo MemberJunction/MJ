@@ -74,4 +74,14 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
     public get ComponentDependencies(): ComponentDependencyEntity[] {
         return this._componentDependencies;
     }
+
+    /**
+     * Finds a component on a case-insensitive match of name and optionally, namespace and registry if provided
+     */
+    public FindComponent(name: string, namespace?: string, registry?: string): ComponentEntityExtended | undefined {
+        const match =  this._components.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase() && 
+                                             c.Namespace?.trim().toLowerCase() === namespace?.trim().toLowerCase() && 
+                                            (!registry || c.SourceRegistry?.trim().toLowerCase() === registry?.trim().toLowerCase()));
+        return match;
+    }
 }

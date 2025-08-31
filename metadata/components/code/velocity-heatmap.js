@@ -1,5 +1,5 @@
 // VelocityHeatmap Sub-component  
-const VelocityHeatmap = ({ data, onCellClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function VelocityHeatmap ({ data, onCellClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
 
   useEffect(() => {

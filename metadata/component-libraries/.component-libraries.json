@@ -136,7 +136,7 @@
       "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"
     },
     "sync": {
-      "lastModified": "2025-08-30T02:52:07.057Z",
+      "lastModified": "2025-08-30T19:31:32.669Z",
       "checksum": "801658cb3c81b3266e67e3f5e2807dfe4dd688f3f4a83543466e0656806ac56f"
     }
   },
@@ -456,14 +456,35 @@
       "Category": "UI",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/dist/ag-grid-community.min.js",
       "CDNCssUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/styles/ag-grid.css",
-      "Description": "Feature-rich enterprise data grid with sorting, filtering, and editing"
+      "Description": "Base AG-Grid grid with sorting, filtering, and editing. Use the ag-grid-react library for React coding"
     },
     "primaryKey": {
       "ID": "F7881AA4-83AF-4841-8475-55BBFD5187CC"
     },
     "sync": {
-      "lastModified": "2025-08-19T18:18:15.874Z",
-      "checksum": "67d1f7cd3be01f0f325c1364101c31de6f6aa9225158248ebbfe428d1bdd47b2"
+      "lastModified": "2025-08-30T19:45:19.405Z",
+      "checksum": "62dd363ead28995b5338dcc59c3c3ec5f72045e784aa0fd1ee530655da8cdb9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ag-grid-react",
+      "DisplayName": "AG-Grid React",
+      "Version": "31.0.1",
+      "GlobalVariable": "AgGridReact",
+      "Category": "UI",
+      "CDNUrl": "https://unpkg.com/ag-grid-react@31.0.1/bundles/ag-grid-react.min.js",
+      "Dependencies": {
+        "ag-grid": "^31.0.1"
+      },
+      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid"
+    },
+    "primaryKey": {
+      "ID": "BFD00569-1E06-450E-BFD0-FBD19EFF9BB6"
+    },
+    "sync": {
+      "lastModified": "2025-08-30T19:45:19.388Z",
+      "checksum": "d437add298cd82f897a8120d4ec4ec6320d227ef7d339b3a72da720283317e46"
     }
   },
   {

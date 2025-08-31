@@ -194,15 +194,41 @@ export class ComponentCompiler {
 
     // Generate component declarations if dependencies are provided
     // Filter out the component being compiled to avoid naming conflicts
-    const componentDeclarations = dependencies && dependencies.length > 0
-      ? dependencies
-          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
+    // Also detect and warn about duplicates
+    const seenDependencies = new Set<string>();
+    const uniqueDependencies: Array<{ name: string; code?: string }> = [];
+    const duplicates: string[] = [];
+    
+    if (dependencies && dependencies.length > 0) {
+      for (const dep of dependencies) {
+        if (dep.name === componentName) {
+          // Skip the component being compiled itself
+          continue;
+        }
+        if (seenDependencies.has(dep.name)) {
+          duplicates.push(dep.name);
+        } else {
+          seenDependencies.add(dep.name);
+          uniqueDependencies.push(dep);
+        }
+      }
+    }
+    
+    // Generate warning for duplicates
+    const duplicateWarnings = duplicates.length > 0
+      ? duplicates
+          .map(name => `console.warn('[React-Runtime-JS] WARNING: Component "${name}" is registered multiple times as a dependency. Using first occurrence only.');`)
+          .join('\n        ')
+      : '';
+    
+    const componentDeclarations = uniqueDependencies.length > 0
+      ? uniqueDependencies
           .map(dep => `const ${dep.name} = componentsOuter['${dep.name}'];`)
           .join('\n        ')
       : '';
-    const componentLogChecks = dependencies && dependencies.length > 0
-      ? dependencies
-          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
+    
+    const componentLogChecks = uniqueDependencies.length > 0
+      ? uniqueDependencies
           .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`)
           .join('\n        ')
       : '';
@@ -266,6 +292,7 @@ export class ComponentCompiler {
           console.log('styles for ${componentName}:', styles);
           console.log('utilities for ${componentName}:', utilitiesOuter);
           console.log('libraries for ${componentName}:', libraries);` : ''}
+          ${duplicateWarnings ? '// Duplicate dependency warnings\n        ' + duplicateWarnings + '\n        ' : ''}
           ${libraryDeclarations ? '// Destructure Libraries\n' + libraryDeclarations + '\n        ' : ''}
           ${componentDeclarations ? '// Destructure Dependencies\n' + componentDeclarations + '\n        ' : ''}
           ${libraryLogChecks}

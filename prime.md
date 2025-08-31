@@ -46,6 +46,11 @@ This document describes the React runtime architecture and the iterative testing
 ### 2. React Test Harness (`packages/React/test-harness`)
 **Purpose**: Browser-based testing and validation of React components using Playwright
 
+**Important Runtime Context**:
+- React hooks (useState, useEffect, useRef, useMemo, useCallback, etc.) are destructured and available globally
+- Components can use hooks without the `React.` prefix (e.g., `useState` instead of `React.useState`)
+- This is handled by the runtime environment which provides these functions in the component's execution context
+
 **Key Features**:
 - **ComponentRunner**: 
   - Executes components in real Chrome browser via Playwright

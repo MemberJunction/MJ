@@ -1,5 +1,5 @@
 // TeamLeaderboard Sub-component
-const TeamLeaderboard = ({ teamData, onRepClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function TeamLeaderboard ({ teamData, onRepClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [sortBy, setSortBy] = useState('revenue');
 
   const sortedTeamData = useMemo(() => {

@@ -1,5 +1,5 @@
 // ActionPanel Sub-component
-const ActionPanel = ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function ActionPanel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [activeTab, setActiveTab] = useState('details');
 
   return (

@@ -30,7 +30,7 @@ export class Info {
 }
 
 @Resolver(Info)
-export class InfoResolver {
+export class InfoResolver { 
   @Public()
   @Query(() => Info)
   Info(@Ctx() context: AppContext): Info {

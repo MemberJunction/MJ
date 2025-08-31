@@ -1,5 +1,5 @@
 // StatusOverview Sub-component
-const StatusOverview = ({ statusData, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function StatusOverview ({ statusData, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const getStatusColor = (status) => {
     const colors = {
       'Paid': '#28a745',
