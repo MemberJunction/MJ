@@ -12,7 +12,6 @@ import {
   SimpleEmbedTextResult,
   ComponentObject
 } from '@memberjunction/interactive-component-types';
-import { LibraryLoader } from '@memberjunction/react-runtime';
 import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -722,12 +721,11 @@ export class ComponentRunner {
    * Component-specific libraries are loaded by the runtime's ComponentCompiler
    */
   private async loadRuntimeLibraries(page: any, debug: boolean = false) {
-    // Use LibraryLoader to get the correct URLs for React libraries
-    const libraries = await LibraryLoader.loadAllLibraries(
-      undefined, // Use default configuration
-      undefined, // No additional libraries
-      { debug }  // Pass debug flag to get development builds
-    );
+    // Import getCoreRuntimeLibraries to get the correct URLs for React libraries
+    // We can't use LibraryLoader.loadAllLibraries() here because it expects to run in a browser
+    // environment with window/document, but we're in Node.js with Playwright
+    const { getCoreRuntimeLibraries } = await import('@memberjunction/react-runtime');
+    const coreLibraries = getCoreRuntimeLibraries(debug);
     
     // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
@@ -743,32 +741,15 @@ export class ComponentRunner {
       }
     };
     
-    // Load the core libraries using their CDN URLs from LibraryLoader
-    // LibraryLoader has already loaded them, but we need to inject them into the page
-    const reactLib = libraries.libraries.React;
-    const reactDOMLib = libraries.libraries.ReactDOM;
-    const babelLib = libraries.libraries.Babel;
-    
-    // Get the URLs that were loaded
-    const loadedResources = LibraryLoader.getLoadedResources();
-    let reactUrl: string | undefined;
-    let reactDOMUrl: string | undefined;
-    let babelUrl: string | undefined;
-    
-    for (const [url, resource] of loadedResources) {
-      if (url.includes('react') && !url.includes('react-dom')) {
-        reactUrl = url;
-      } else if (url.includes('react-dom')) {
-        reactDOMUrl = url;
-      } else if (url.includes('babel')) {
-        babelUrl = url;
+    // Load the core libraries (React, ReactDOM, Babel) into the Playwright page context
+    for (const lib of coreLibraries) {
+      if (lib.cdnUrl) {
+        await loadScriptWithTimeout(lib.cdnUrl);
+        if (debug) {
+          console.log(`  ✓ Loaded ${lib.displayName} (${lib.globalVariable})`);
+        }
       }
     }
-    
-    // Load the scripts into the page
-    if (reactUrl) await loadScriptWithTimeout(reactUrl);
-    if (reactDOMUrl) await loadScriptWithTimeout(reactDOMUrl);
-    if (babelUrl) await loadScriptWithTimeout(babelUrl);
     
     // Load the real MemberJunction React Runtime UMD bundle
     const fs = await import('fs');
