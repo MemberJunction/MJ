@@ -1118,7 +1118,8 @@ export class AIPromptRunner {
         prompt,
         explicitModelId,
         configurationId,
-        vendorId
+        vendorId,
+        params.verbose
       );
 
       // Track all models considered for selection info
@@ -1259,7 +1260,8 @@ export class AIPromptRunner {
     prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
-    preferredVendorId?: string
+    preferredVendorId?: string,
+    verbose?: boolean
   ): ModelVendorCandidate[] {
     const preferredVendorName = preferredVendorId ? 
       AIEngine.Instance.Vendors.find(v => v.ID === preferredVendorId)?.Name : undefined;
@@ -1457,11 +1459,15 @@ export class AIPromptRunner {
       if (candidates.length > 0) {
         // Sort all candidates by priority (highest first)
         candidates.sort((a, b) => b.priority - a.priority);
-        LogStatus(`Using SelectionStrategy='Specific' with ${promptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
+        if (verbose) {
+          LogStatus(`Using SelectionStrategy='Specific' with ${promptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
+        }
         return candidates;
       }
-      // If no candidates generated from AIPromptModel entries, fall through to Phase 3
-      LogStatus(`SelectionStrategy='Specific' specified but no usable candidates from AIPromptModel entries, falling back to general selection`);
+      if (verbose) {
+        // If no candidates generated from AIPromptModel entries, fall through to Phase 3
+        LogStatus(`SelectionStrategy='Specific' specified but no usable candidates from AIPromptModel entries, falling back to general selection`);
+      }
     }
 
     // PHASE 3: Use general selection strategy (fallback)
@@ -1602,7 +1608,7 @@ export class AIPromptRunner {
       });
       
       if (hasKey) {
-        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`, true);
         if (candidate.isPreferredVendor) {
           this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
         }
@@ -1627,75 +1633,7 @@ export class AIPromptRunner {
     
     return { selected: null, consideredModels };
   }
-
-  /**
-   * Finds the first model-vendor candidate that has an available API key
-   * 
-   * @param candidates - Ordered list of model-vendor candidates
-   * @param params - Optional prompt parameters for verbose flag
-   * @returns The first candidate with an available API key, or null if none found
-   */
-  private async selectModelWithAPIKey(
-    candidates: ModelVendorCandidate[],
-    params?: AIPromptParams
-  ): Promise<ModelVendorCandidate | null> {
-    const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
-    let attemptCount = 0;
-    
-    //this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
-    
-    for (const candidate of candidates) {
-      attemptCount++;
-      
-      // Check cache first
-      if (checkedDrivers.has(candidate.driverClass)) {
-        const hasKey = checkedDrivers.get(candidate.driverClass)!;
-        if (hasKey) {
-          this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
-          return candidate;
-        }
-        // Skip logging for cached negative results to reduce noise
-        continue;
-      }
-
-      // Check for API key with robust validation
-      const apiKey = GetAIAPIKey(candidate.driverClass);
-      const hasKey = this.isValidAPIKey(apiKey);
-      checkedDrivers.set(candidate.driverClass, hasKey);
-      
-      if (hasKey) {
-        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
-        if (candidate.isPreferredVendor) {
-          this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
-        }
-        this.logStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`, true, params);
-        return candidate;
-      } else {
-        // Log first few failed attempts for debugging
-        if (attemptCount <= 3) {
-          this.logStatus(`   ❌ No API key for ${candidate.model.Name}/${candidate.vendorName || 'default'} (${candidate.driverClass})`, true, params);
-        }
-      }
-    }
-
-    // Log what we tried
-    const triedSummary = candidates.slice(0, 5).map(c => 
-      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
-    ).join(', ');
-    
-    this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
-      category: 'APIKeyValidation',
-      severity: 'critical',
-      metadata: {
-        candidatesChecked: candidates.length,
-        modelNames: candidates.map(c => c.model.Name),
-        vendorNames: candidates.map(c => c.vendorName || 'default')
-      }
-    });
-    
-    return null;
-  }
-
+ 
   /**
    * Creates an AIPromptRun entity for execution tracking
    */
