@@ -5930,10 +5930,10 @@ Correct pattern:
           if (!isUsed) {
             violations.push({
               rule: 'unused-component-dependencies',
-              severity: 'high',
+              severity: 'low',
               line: 1,
               column: 0,
-              message: `Component dependency "${depName}" is declared but never used. This likely means missing functionality.`,
+              message: `Component dependency "${depName}" is declared but never used. Consider removing it if not needed.`,
               code: `Expected usage: <${depName} /> or <components.${depName} />`
             });
           }
