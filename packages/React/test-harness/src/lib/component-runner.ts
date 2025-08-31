@@ -12,6 +12,7 @@ import {
   SimpleEmbedTextResult,
   ComponentObject
 } from '@memberjunction/interactive-component-types';
+import { LibraryLoader } from '@memberjunction/react-runtime';
 import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -461,8 +462,21 @@ export class ComponentRunner {
             static getDerivedStateFromError(error: any) {
               // Capture the actual error message IMMEDIATELY
               (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+              
+              // Check if this is a minified React error
+              const errorMessage = error.message || error.toString();
+              let enhancedMessage = errorMessage;
+              
+              if (errorMessage.includes('Minified React error')) {
+                // Extract error number if present
+                const match = errorMessage.match(/#(\d+)/);
+                if (match) {
+                  enhancedMessage = `React Error #${match[1]} - Visit https://react.dev/errors/${match[1]} for details. ${errorMessage}`;
+                }
+              }
+              
               (window as any).__testHarnessRuntimeErrors.push({
-                message: error.message || error.toString(),
+                message: enhancedMessage,
                 stack: error.stack,
                 type: 'react-render-error',
                 phase: 'component-render'
@@ -472,8 +486,8 @@ export class ComponentRunner {
             }
             
             componentDidCatch(error: any, errorInfo: any) {
-              console.error('React Error Boundary caught:', error, errorInfo);
-              // Update the last error with component stack info
+              // Don't log here - it creates duplicate messages
+              // Just update the last error with component stack info
               const errors = (window as any).__testHarnessRuntimeErrors || [];
               if (errors.length > 0) {
                 const lastError = errors[errors.length - 1];
@@ -486,11 +500,8 @@ export class ComponentRunner {
             render() {
               if (this.state.hasError) {
                 // DON'T re-throw - this causes "Script error"
-                // Instead, render an error message
-                return (window as any).React.createElement('div', 
-                  { style: { color: 'red', padding: '20px' } },
-                  'Component failed to render: ' + (this.state.error?.message || 'Unknown error')
-                );
+                // Instead, render a simple error indicator
+                return null; // Don't render anything - the error is already captured
               }
               return this.props.children;
             }
@@ -711,7 +722,14 @@ export class ComponentRunner {
    * Component-specific libraries are loaded by the runtime's ComponentCompiler
    */
   private async loadRuntimeLibraries(page: any, debug: boolean = false) {
-    // Helper function to load scripts with timeout (Recommendation #3)
+    // Use LibraryLoader to get the correct URLs for React libraries
+    const libraries = await LibraryLoader.loadAllLibraries(
+      undefined, // Use default configuration
+      undefined, // No additional libraries
+      { debug }  // Pass debug flag to get development builds
+    );
+    
+    // Helper function to load scripts with timeout
     const loadScriptWithTimeout = async (url: string, timeout: number = 10000) => {
       try {
         await Promise.race([
@@ -725,12 +743,32 @@ export class ComponentRunner {
       }
     };
     
-    // Load React and ReactDOM with timeout protection
-    await loadScriptWithTimeout('https://unpkg.com/react@18/umd/react.development.js');
-    await loadScriptWithTimeout('https://unpkg.com/react-dom@18/umd/react-dom.development.js');
+    // Load the core libraries using their CDN URLs from LibraryLoader
+    // LibraryLoader has already loaded them, but we need to inject them into the page
+    const reactLib = libraries.libraries.React;
+    const reactDOMLib = libraries.libraries.ReactDOM;
+    const babelLib = libraries.libraries.Babel;
     
-    // Load Babel for JSX transformation with timeout
-    await loadScriptWithTimeout('https://unpkg.com/@babel/standalone/babel.min.js');
+    // Get the URLs that were loaded
+    const loadedResources = LibraryLoader.getLoadedResources();
+    let reactUrl: string | undefined;
+    let reactDOMUrl: string | undefined;
+    let babelUrl: string | undefined;
+    
+    for (const [url, resource] of loadedResources) {
+      if (url.includes('react') && !url.includes('react-dom')) {
+        reactUrl = url;
+      } else if (url.includes('react-dom')) {
+        reactDOMUrl = url;
+      } else if (url.includes('babel')) {
+        babelUrl = url;
+      }
+    }
+    
+    // Load the scripts into the page
+    if (reactUrl) await loadScriptWithTimeout(reactUrl);
+    if (reactDOMUrl) await loadScriptWithTimeout(reactDOMUrl);
+    if (babelUrl) await loadScriptWithTimeout(babelUrl);
     
     // Load the real MemberJunction React Runtime UMD bundle
     const fs = await import('fs');

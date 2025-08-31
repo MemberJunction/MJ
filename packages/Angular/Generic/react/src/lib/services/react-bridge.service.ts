@@ -44,9 +44,10 @@ export class ReactBridgeService implements OnDestroy {
    */
   private async bootstrapReact(): Promise<void> {
     try {
-      await this.adapter.initialize();
+      // Pass debug flag to get development builds when debug is enabled
+      await this.adapter.initialize(undefined, undefined, { debug: this.debug });
       if (this.debug) {
-        console.log('React ecosystem pre-loaded successfully');
+        console.log('React ecosystem pre-loaded successfully with debug mode:', this.debug);
       }
     } catch (error) {
       console.error('Failed to pre-load React ecosystem:', error);
