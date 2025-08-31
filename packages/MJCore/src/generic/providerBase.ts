@@ -337,7 +337,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
             if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = Metadata.Provider.AllMetadata
+                this._localMetadata = structuredClone(Metadata.Provider.AllMetadata);
                 return true;
             }
             return false;
