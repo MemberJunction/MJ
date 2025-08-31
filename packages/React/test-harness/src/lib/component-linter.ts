@@ -3195,8 +3195,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         const violations: Violation[] = [];
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
         
-        // Build set of allowed props: standard props + componentSpec properties
-        const allowedProps = new Set(standardProps);
+        // React special props that are automatically provided by React
+        const reactSpecialProps = new Set(['children']);
+        
+        // Build set of allowed props: standard props + React special props + componentSpec properties
+        const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
         
         // Add props from componentSpec.properties if they exist
         if (componentSpec?.properties) {
@@ -3236,7 +3239,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                   });
                 }
               }
@@ -3273,7 +3276,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                     });
                   }
                 }
@@ -3364,14 +3367,43 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                   
                   // Check for missing required props
-                  const missingRequired = requiredProps.filter(prop => !passedProps.has(prop));
-                  if (missingRequired.length > 0) {
+                  const missingRequired = requiredProps.filter(prop => {
+                    // Special handling for 'children' prop
+                    if (prop === 'children') {
+                      // Check if JSX element has children nodes
+                      const hasChildren = path.node.children && path.node.children.length > 0 && 
+                        path.node.children.some(child => 
+                          !t.isJSXText(child) || (t.isJSXText(child) && child.value.trim() !== '')
+                        );
+                      return !passedProps.has(prop) && !hasChildren;
+                    }
+                    return !passedProps.has(prop);
+                  });
+                  
+                  // Separate children warnings from other critical props
+                  const missingChildren = missingRequired.filter(prop => prop === 'children');
+                  const missingOtherProps = missingRequired.filter(prop => prop !== 'children');
+                  
+                  // Critical violation for non-children required props
+                  if (missingOtherProps.length > 0) {
                     violations.push({
                       rule: 'validate-dependency-props',
                       severity: 'critical',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `Dependency component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component's specification.`,
+                      message: `Dependency component "${componentName}" is missing required props: ${missingOtherProps.join(', ')}. These props are marked as required in the component's specification.`,
+                      code: `<${componentName} ... />`
+                    });
+                  }
+                  
+                  // Medium severity warning for missing children when required
+                  if (missingChildren.length > 0) {
+                    violations.push({
+                      rule: 'validate-dependency-props',
+                      severity: 'medium',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `Component "${componentName}" expects children but none were provided. The 'children' prop is marked as required in the component's specification.`,
                       code: `<${componentName} ... />`
                     });
                   }
@@ -3471,9 +3503,10 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   // Check for unknown props (props not in the spec)
                   const specPropNames = new Set<string>(depSpec.properties.map(p => p.name).filter(Boolean));
                   const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
+                  const reactSpecialProps = new Set(['children']);
                   
                   for (const passedProp of passedProps) {
-                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp)) {
+                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp) && !reactSpecialProps.has(passedProp)) {
                       violations.push({
                         rule: 'validate-dependency-props',
                         severity: 'medium',
