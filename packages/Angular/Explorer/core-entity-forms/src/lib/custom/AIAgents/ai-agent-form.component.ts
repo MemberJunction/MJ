@@ -51,7 +51,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit, OnDestroy {
+export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntityExtended;
     
@@ -2392,7 +2392,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-    
     /**
      * Component cleanup - critical for preventing memory leaks
      */

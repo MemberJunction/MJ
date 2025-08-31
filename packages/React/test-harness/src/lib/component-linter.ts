@@ -2314,12 +2314,32 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                         // Property name is valid, now check its type
                         const value = prop.value;
                         
+                        // Helper to check if a node is null or undefined
+                        const isNullOrUndefined = (node: t.Node): boolean => {
+                          return t.isNullLiteral(node) || 
+                                 (t.isIdentifier(node) && node.name === 'undefined');
+                        };
+                        
                         // Helper to check if a node could evaluate to a string
-                        const isStringLike = (node: t.Node): boolean => {
+                        const isStringLike = (node: t.Node, depth: number = 0): boolean => {
+                          // Prevent infinite recursion
+                          if (depth > 3) return false;
+                          
+                          // Special handling for ternary operators - check both branches
+                          if (t.isConditionalExpression(node)) {
+                            const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
+                            const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
+                            return consequentOk && alternateOk;
+                          }
+                          
+                          // Explicitly reject object and array expressions
+                          if (t.isObjectExpression(node) || t.isArrayExpression(node)) {
+                            return false;
+                          }
+                          
                           return t.isStringLiteral(node) || 
                                  t.isTemplateLiteral(node) || 
                                  t.isBinaryExpression(node) || // String concatenation
-                                 t.isConditionalExpression(node) || // Ternary
                                  t.isIdentifier(node) || // Variable
                                  t.isCallExpression(node) || // Function call
                                  t.isMemberExpression(node); // Property access
@@ -2358,8 +2378,9 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                         
                         // Validate types based on property name
                         if (propName === 'ExtraFilter' || propName === 'OrderBy' || propName === 'EntityName') {
-                          // These must be strings
-                          if (!isStringLike(value)) {
+                          // These must be strings (ExtraFilter and OrderBy can also be null/undefined)
+                          const allowNullUndefined = propName === 'ExtraFilter' || propName === 'OrderBy';
+                          if (!isStringLike(value) && !(allowNullUndefined && isNullOrUndefined(value))) {
                             let exampleValue = '';
                             if (propName === 'ExtraFilter') {
                               exampleValue = `"Status = 'Active' AND Type = 'Customer'"`;
@@ -2514,12 +2535,32 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       // Property name is valid, now check its type
                       const value = prop.value;
                       
+                      // Helper to check if a node is null or undefined
+                      const isNullOrUndefined = (node: t.Node): boolean => {
+                        return t.isNullLiteral(node) || 
+                               (t.isIdentifier(node) && node.name === 'undefined');
+                      };
+                      
                       // Helper to check if a node could evaluate to a string
-                      const isStringLike = (node: t.Node): boolean => {
+                      const isStringLike = (node: t.Node, depth: number = 0): boolean => {
+                        // Prevent infinite recursion
+                        if (depth > 3) return false;
+                        
+                        // Special handling for ternary operators - check both branches
+                        if (t.isConditionalExpression(node)) {
+                          const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
+                          const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
+                          return consequentOk && alternateOk;
+                        }
+                        
+                        // Explicitly reject object and array expressions
+                        if (t.isObjectExpression(node) || t.isArrayExpression(node)) {
+                          return false;
+                        }
+                        
                         return t.isStringLiteral(node) || 
                                t.isTemplateLiteral(node) || 
                                t.isBinaryExpression(node) || // String concatenation
-                               t.isConditionalExpression(node) || // Ternary
                                t.isIdentifier(node) || // Variable
                                t.isCallExpression(node) || // Function call
                                t.isMemberExpression(node); // Property access
@@ -3195,8 +3236,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         const violations: Violation[] = [];
         const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
         
-        // Build set of allowed props: standard props + componentSpec properties
-        const allowedProps = new Set(standardProps);
+        // React special props that are automatically provided by React
+        const reactSpecialProps = new Set(['children']);
+        
+        // Build set of allowed props: standard props + React special props + componentSpec properties
+        const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
         
         // Add props from componentSpec.properties if they exist
         if (componentSpec?.properties) {
@@ -3236,7 +3280,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                   });
                 }
               }
@@ -3273,7 +3317,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
                     });
                   }
                 }
@@ -3364,14 +3408,43 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                   
                   // Check for missing required props
-                  const missingRequired = requiredProps.filter(prop => !passedProps.has(prop));
-                  if (missingRequired.length > 0) {
+                  const missingRequired = requiredProps.filter(prop => {
+                    // Special handling for 'children' prop
+                    if (prop === 'children') {
+                      // Check if JSX element has children nodes
+                      const hasChildren = path.node.children && path.node.children.length > 0 && 
+                        path.node.children.some(child => 
+                          !t.isJSXText(child) || (t.isJSXText(child) && child.value.trim() !== '')
+                        );
+                      return !passedProps.has(prop) && !hasChildren;
+                    }
+                    return !passedProps.has(prop);
+                  });
+                  
+                  // Separate children warnings from other critical props
+                  const missingChildren = missingRequired.filter(prop => prop === 'children');
+                  const missingOtherProps = missingRequired.filter(prop => prop !== 'children');
+                  
+                  // Critical violation for non-children required props
+                  if (missingOtherProps.length > 0) {
                     violations.push({
                       rule: 'validate-dependency-props',
                       severity: 'critical',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `Dependency component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component's specification.`,
+                      message: `Dependency component "${componentName}" is missing required props: ${missingOtherProps.join(', ')}. These props are marked as required in the component's specification.`,
+                      code: `<${componentName} ... />`
+                    });
+                  }
+                  
+                  // Medium severity warning for missing children when required
+                  if (missingChildren.length > 0) {
+                    violations.push({
+                      rule: 'validate-dependency-props',
+                      severity: 'medium',
+                      line: openingElement.loc?.start.line || 0,
+                      column: openingElement.loc?.start.column || 0,
+                      message: `Component "${componentName}" expects children but none were provided. The 'children' prop is marked as required in the component's specification.`,
                       code: `<${componentName} ... />`
                     });
                   }
@@ -3471,9 +3544,10 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   // Check for unknown props (props not in the spec)
                   const specPropNames = new Set<string>(depSpec.properties.map(p => p.name).filter(Boolean));
                   const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
+                  const reactSpecialProps = new Set(['children']);
                   
                   for (const passedProp of passedProps) {
-                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp)) {
+                    if (!specPropNames.has(passedProp) && !standardProps.has(passedProp) && !reactSpecialProps.has(passedProp)) {
                       violations.push({
                         rule: 'validate-dependency-props',
                         severity: 'medium',
@@ -5897,10 +5971,10 @@ Correct pattern:
           if (!isUsed) {
             violations.push({
               rule: 'unused-component-dependencies',
-              severity: 'high',
+              severity: 'low',
               line: 1,
               column: 0,
-              message: `Component dependency "${depName}" is declared but never used. This likely means missing functionality.`,
+              message: `Component dependency "${depName}" is declared but never used. Consider removing it if not needed.`,
               code: `Expected usage: <${depName} /> or <components.${depName} />`
             });
           }

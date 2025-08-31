@@ -20,10 +20,10 @@ Each iteration:
 
 Stop only when: goal complete OR unrecoverable failure.
 
-{%- if parentAgentName == '' and subAgentCount > 0 -%}
+{% if parentAgentName == '' and subAgentCount > 0 %}
 # Role: Top-Level Agent
 You have {{subAgentCount}} sub-agents. Delegate appropriately.
-{%- elseif parentAgentName != '' -%}
+{% elseif parentAgentName != '' %}
 # Role: Sub-Agent
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {%- endif -%}

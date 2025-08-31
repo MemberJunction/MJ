@@ -325,15 +325,15 @@
       "ID": "24648BE5-0355-446F-86BC-AFF654FE77B7"
     },
     "sync": {
-      "lastModified": "2025-08-31T00:10:15.988Z",
-      "checksum": "195a4c25097a7d33e5d6ed52805bfa648be44e5837264f1e657ef38daccf7928"
+      "lastModified": "2025-08-31T15:12:37.627Z",
+      "checksum": "3e9822060137eae19e7a791959228c3d8f48d4c13ca06737c3cf60cb70bf2fce"
     }
   },
   {
     "fields": {
       "Name": "AccountsByIndustryChart",
       "Namespace": "CRM/Analytics",
-      "Description": "Interactive pie chart component that visualizes account distribution by industry with click-to-filter functionality",
+      "Description": "Interactive pie chart that visualizes account distribution by industry with click-to-filter functionality",
       "Title": "Accounts by Industry Chart",
       "Type": "Other",
       "Version": "1.0.0",
@@ -347,15 +347,15 @@
       "ID": "013C0415-FAEB-4D15-88B7-669B353A5E0B"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:54.003Z",
-      "checksum": "3e055d7fd049a680b467c5d30a1e68a7034c7328c86aff8215dc21eda5e2ab31"
+      "lastModified": "2025-08-31T15:12:37.644Z",
+      "checksum": "f26bb9b90f078a25dea478aacd36cadf532cf0687a251bc030c528e542869feb"
     }
   },
   {
     "fields": {
       "Name": "AccountsByIndustryList",
       "Namespace": "CRM/Analytics",
-      "Description": "Sortable, paginated table component displaying filtered account records with row selection capability",
+      "Description": "Sortable and paginated table component displaying filtered account records with row selection capability",
       "Title": "Accounts by Industry List",
       "Type": "Other",
       "Version": "1.0.0",
@@ -369,8 +369,8 @@
       "ID": "A9D9A794-7824-4865-BA6C-1C7A4FAA8427"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:54.054Z",
-      "checksum": "42538a9d103651e0c5efc490c4fbc9b467ee8703ad7d8375017f4bb296c5f412"
+      "lastModified": "2025-08-31T15:12:37.664Z",
+      "checksum": "ad6474290a89d82b36bf71302969dc3522bd212625974df6ff6ab5110898f7a0"
     }
   },
   {
@@ -391,8 +391,8 @@
       "ID": "212F30E2-C117-49FA-9278-46B587FFC745"
     },
     "sync": {
-      "lastModified": "2025-08-30T02:52:07.736Z",
-      "checksum": "63dc02622bf721700ab2deee241b60918685bc192a1318b87e2f5066e0c1f7fa"
+      "lastModified": "2025-08-31T15:12:37.680Z",
+      "checksum": "f15945970ec15c53dc9071123a90f3bac98ed62651ec418ff569a35b5b03b052"
     }
   },
   {
@@ -897,8 +897,8 @@
       "ID": "85657926-0D16-4456-BAE1-65D0074883AE"
     },
     "sync": {
-      "lastModified": "2025-08-31T00:10:33.222Z",
-      "checksum": "80e32462c90db201f77fd7e2fec50cefc1c565220c73bfeff347e013edff78f6"
+      "lastModified": "2025-08-31T15:12:37.943Z",
+      "checksum": "6bc2b211a530a49987794ea9ec9566581de76f3de97a237d1864d485b5420c13"
     }
   },
   {

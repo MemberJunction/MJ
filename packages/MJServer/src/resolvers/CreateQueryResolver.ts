@@ -429,6 +429,19 @@ export class QueryResolverExtended extends QueryResolver {
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
             }
 
+            // now make sure there is NO existing query by the same name in the specified category
+            const existingQueryResult = await provider.RunView({
+                EntityName: 'Queries',
+                ExtraFilter: `Name='${input.Name}' AND CategoryID='${finalCategoryID}'` 
+            }, context.userPayload.userRecord);
+            if (existingQueryResult.Success && existingQueryResult.Results?.length > 0) {
+                // we have a match! Let's return an error
+                return {
+                    Success: false,
+                    ErrorMessage: `Query with name '${input.Name}' already exists in the specified ${input.CategoryID ? 'category' : 'categoryPath'}`
+                };
+            }
+
             // Update fields that were provided
             const updateFields: Record<string, any> = {};
             if (input.Name !== undefined) updateFields.Name = input.Name;

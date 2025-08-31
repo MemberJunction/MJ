@@ -626,10 +626,10 @@
     "fields": {
       "Name": "react-hook-form",
       "DisplayName": "React Hook Form",
-      "Version": "7.48.2",
+      "Version": "7.62.0",
       "GlobalVariable": "ReactHookForm",
       "Category": "UI",
-      "CDNUrl": "https://cdn.jsdelivr.net/npm/react-hook-form@7.48.2/dist/index.umd.production.min.js",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/react-hook-form@7.62.0/dist/index.umd.min.js",
       "CDNCssUrl": null,
       "Description": "Performant forms with easy validation"
     },
@@ -637,8 +637,8 @@
       "ID": "1EEA6E0B-FB75-43FA-996D-B6F920577FF8"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.659Z",
-      "checksum": "e4685971d24a87fb40af4b2d96b002713a825567ac020272031773a73f43999f"
+      "lastModified": "2025-08-31T15:12:37.342Z",
+      "checksum": "08a195c5391cc01955dda07c1b591578c71ce1f49568a96ef3c266d63be07ea5"
     }
   },
   {
