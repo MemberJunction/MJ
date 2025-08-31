@@ -18,7 +18,6 @@
         "filterFields": ["IsActive", "Industry"],
         "sortFields": ["AccountName", "Revenue", "Industry"],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
         "usageContext": "Groups accounts by industry for pie chart visualization and filtered list display"
       }
     ],
