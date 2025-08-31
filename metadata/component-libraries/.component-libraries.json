@@ -240,11 +240,11 @@
     "fields": {
       "Name": "date-fns",
       "DisplayName": "date-fns",
-      "Version": "3.0.6",
+      "Version": "3.6.0",
       "Status": "Deprecated",
       "GlobalVariable": "dateFns",
       "Category": "Utility",
-      "CDNUrl": "https://cdn.jsdelivr.net/npm/date-fns@3.0.6/cdn.min.js",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js",
       "CDNCssUrl": null,
       "Description": "Modern JavaScript date utility library"
     },
@@ -252,8 +252,8 @@
       "ID": "94552655-B996-4791-9008-A2D6AAC526AC"
     },
     "sync": {
-      "lastModified": "2025-08-21T18:23:28.662Z",
-      "checksum": "b60735a8e9ca825504faac0e8d788bcaf7f3b9cb7955e4b92b34210135c2a555"
+      "lastModified": "2025-08-31T00:44:58.375Z",
+      "checksum": "8b700134bf8ecb68a71c5368e357c221ec41a83ca155b54fbb1e9311dfe46873"
     }
   },
   {
@@ -1060,11 +1060,11 @@
   {
     "fields": {
       "Name": "jspdf",
-      "DisplayName": "jsPDF",
-      "Version": "2.5.1",
+      "DisplayName": "jspdf",
+      "Version": "3.0.2",
       "GlobalVariable": "jspdf",
       "Category": "Other",
-      "CDNUrl": "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/jspdf@3.0.2/dist/jspdf.umd.min.js",
       "CDNCssUrl": null,
       "Description": "Client-side JavaScript PDF generation library for creating PDF documents",
       "Status": "Active"
@@ -1073,8 +1073,8 @@
       "ID": "4AAF4A70-9C30-496B-9324-51BD8F24D090"
     },
     "sync": {
-      "lastModified": "2025-08-27T21:48:53.306Z",
-      "checksum": "74e25640a2801cdc45c8e86f818b0ce061ec061c63b8549c0cde65921752fba6"
+      "lastModified": "2025-08-31T00:44:58.471Z",
+      "checksum": "0ffb764e657ffa5ac1d31cbdb672b2e9ec269eaaa31842d07c2ef29a46027818"
     }
   },
   {
