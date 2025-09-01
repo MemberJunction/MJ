@@ -94,7 +94,7 @@
                             @if (loadingStates.executionHistory) {
                                 <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
                             } @else if (executionHistoryCount > 0) {
-                                <span> ({{ executionHistoryCount }})</span>
+                                <span> ({{ executionHistoryCount }})@if(executionHistoryCount < totalExecutionHistoryCount){ of {{ totalExecutionHistoryCount }} }</span>
                             }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
@@ -596,6 +596,9 @@
                     <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.learningCycles">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-brain"></i> Learning Cycles{{ learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '' }}
+                            @if (loadingStates.learningCycles) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
@@ -654,6 +657,9 @@
                     <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.notes">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sticky-note"></i> Notes{{ noteCount > 0 ? ' (' + noteCount + ')' : '' }}
+                            @if (loadingStates.notes) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
