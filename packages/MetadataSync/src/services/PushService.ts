@@ -212,9 +212,9 @@ export class PushService {
           }
           
           // Show per-directory summary
-          const dirTotal = result.created + result.updated + result.unchanged + result.deleted;
+          const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
           if (dirTotal > 0 || result.errors > 0) {
-            callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
+            callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
             if (result.created > 0) {
               callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
             }
@@ -226,6 +226,9 @@ export class PushService {
             }
             if (result.unchanged > 0) {
               callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
+            }
+            if (result.skipped > 0) {
+              callbacks?.onLog?.(`   - Skipped: ${result.skipped}`);
             }
             if (result.errors > 0) {
               callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
@@ -444,6 +447,7 @@ export class PushService {
                   else if (result.status === 'updated') updated++;
                   else if (result.status === 'unchanged') unchanged++;
                   else if (result.status === 'deleted') deleted++;
+                  else if (result.status === 'skipped') skipped++;
                   else if (result.status === 'error') errors++;
                 }
               }
@@ -469,6 +473,7 @@ export class PushService {
                 else if (result.status === 'updated') updated++;
                 else if (result.status === 'unchanged') unchanged++;
                 else if (result.status === 'deleted') deleted++;
+                else if (result.status === 'skipped') skipped++;
                 else if (result.status === 'error') errors++;
               }
             } catch (recordError) {
@@ -504,7 +509,7 @@ export class PushService {
     options: PushOptions,
     batchContext: Map<string, BaseEntity>,
     callbacks?: PushCallbacks
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted'; isDuplicate?: boolean }> {
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
     
@@ -891,7 +896,7 @@ export class PushService {
     _entityDir: string,
     options: PushOptions,
     callbacks?: PushCallbacks
-  ): Promise<{ status: 'deleted'; isDuplicate?: boolean }> {
+  ): Promise<{ status: 'deleted' | 'skipped' | 'unchanged'; isDuplicate?: boolean }> {
     const { record, entityName } = flattenedRecord;
     
     // Validate that we have a primary key for deletion
@@ -904,7 +909,8 @@ export class PushService {
       if (options.verbose) {
         callbacks?.onLog?.(`   ℹ️  Record already deleted on ${record.deleteRecord.deletedAt}`);
       }
-      return { status: 'deleted', isDuplicate: true };
+      // Return unchanged since the record is already in the desired state (deleted)
+      return { status: 'unchanged', isDuplicate: false };
     }
     
     // Load the entity to verify it exists
@@ -923,10 +929,10 @@ export class PushService {
       if (!record.deleteRecord) {
         record.deleteRecord = { delete: true };
       }
-      record.deleteRecord.deletedAt = new Date().toISOString();
+      record.deleteRecord.deletedAt = undefined; // Indicate it was not found
       record.deleteRecord.notFound = true;
       
-      return { status: 'deleted', isDuplicate: false };
+      return { status: 'skipped', isDuplicate: false };
     }
     
     // Log the deletion
@@ -980,6 +986,11 @@ export class PushService {
         record.deleteRecord = { delete: true };
       }
       record.deleteRecord.deletedAt = new Date().toISOString();
+      
+      // Remove notFound flag if it exists since we successfully found and deleted the record
+      if (record.deleteRecord.notFound) {
+        delete record.deleteRecord.notFound;
+      }
       
       if (options.verbose) {
         callbacks?.onLog?.(`   ✓ Successfully deleted ${entityName} record`);

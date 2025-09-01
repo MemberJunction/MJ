@@ -64,7 +64,7 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 - **External files**: Store large text fields (prompts, templates, etc.) in appropriate formats (.md, .html, .sql)
 - **File references**: Use `@file:filename.ext` to link external files from JSON
 
-### Embedded Collections (NEW)
+### Embedded Collections
 - **Related Entities**: Store related records as arrays within parent JSON files
 - **Hierarchical References**: Use `@parent:` and `@root:` to reference parent/root entity fields
 - **Automatic Metadata**: Related entities maintain their own primaryKey and sync metadata
@@ -526,7 +526,7 @@ Each JSON file contains one record:
 }
 ```
 
-#### Multiple Records per File (NEW)
+#### Multiple Records per File
 JSON files can contain arrays of records:
 ```json
 [
@@ -604,7 +604,7 @@ metadata/
 }
 ```
 
-### Record with Embedded Collections (NEW)
+### Record with Embedded Collections
 ```json
 {
   "fields": {
@@ -706,7 +706,7 @@ The tool automatically detects primary key fields from entity metadata:
 - **Auto-detection**: Tool reads entity metadata to determine primary key structure
 - **No hardcoding**: Works with any primary key field name(s)
 
-### deleteRecord Directive (NEW)
+### deleteRecord Directive
 The tool now supports deleting records from the database using a special `deleteRecord` directive in JSON files. This allows you to remove obsolete records as part of your metadata sync workflow:
 
 #### How to Delete a Record
@@ -800,7 +800,7 @@ Examples:
 - `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
 - `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
 
-#### Multi-Field Lookups (NEW)
+#### Multi-Field Lookups
 When you need to match records based on multiple criteria, use the multi-field syntax:
 ```json
 {
@@ -811,13 +811,13 @@ When you need to match records based on multiple criteria, use the multi-field s
 
 This ensures you get the exact record you want when multiple records might have the same value in a single field.
 
-### @parent: References (NEW)
+### @parent: References 
 Reference fields from the immediate parent entity in embedded collections:
 - `@parent:ID` - Get the parent's ID field
 - `@parent:Name` - Get the parent's Name field
 - Works with any field from the parent entity
 
-### @root: References (NEW)
+### @root: References
 Reference fields from the root entity in nested structures:
 - `@root:ID` - Get the root entity's ID
 - `@root:CategoryID` - Get the root's CategoryID
@@ -1179,7 +1179,7 @@ This ensures that included content can contain other special references that wil
 - Those @file references are resolved to their actual content
 - If the @file points to a JSON file with @include directives, those are also processed
 
-### @template: References (NEW)
+### @template: References
 Enable JSON template composition for reusable configurations:
 
 #### String Template Reference
@@ -1268,7 +1268,7 @@ mj sync pull --entity="AI Prompts"
 # Pull specific records by filter
 mj sync pull --entity="AI Prompts" --filter="CategoryID='customer-service-id'"
 
-# Pull multiple records into a single file (NEW)
+# Pull multiple records into a single file
 mj sync pull --entity="AI Prompts" --multi-file="all-prompts"
 mj sync pull --entity="AI Prompts" --filter="Status='Active'" --multi-file="active-prompts.json"
 
@@ -1278,14 +1278,14 @@ mj sync push
 # Push only specific entity directory
 mj sync push --dir="ai-prompts"
 
-# Push with verbose output (NEW)
+# Push with verbose output
 mj sync push -v
 mj sync push --verbose
 
 # Dry run to see what would change
 mj sync push --dry-run
 
-# Push with parallel processing (NEW)
+# Push with parallel processing
 mj sync push --parallel-batch-size=20  # Process 20 records in parallel (default: 10, max: 50)
 
 # Show status of local vs database
@@ -1314,7 +1314,7 @@ Configuration follows a hierarchical structure:
 - **Entity configs**: Each entity directory has its own config defining the entity type
 - **Inheritance**: All files within an entity directory are treated as records of that entity type
 
-### Parallel Processing (NEW)
+### Parallel Processing
 
 MetadataSync now supports parallel processing of records during push operations, significantly improving performance for large datasets.
 
@@ -1364,7 +1364,7 @@ mj sync push --parallel-batch-size=1
 - Working with complex dependencies
 - Limited database connection pools
 
-### Directory Processing Order (NEW)
+### Directory Processing Order
 
 The MetadataSync tool now supports custom directory processing order to handle dependencies between entity types. This feature ensures that dependent entities are processed in the correct order.
 
@@ -1442,7 +1442,7 @@ In this example:
 - Production subdirectory further adds "drafts"
 - All patterns are cumulative, so production inherits all parent ignores
 
-### SQL Logging (NEW)
+### SQL Logging 
 
 The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:
 - Creating migration files from MetadataSync operations
@@ -1565,7 +1565,7 @@ The `filterPatterns` option allows you to include or exclude specific SQL statem
 - `*pattern` - Ends with pattern
 - `pattern` - Exact match
 
-### User Role Validation (NEW)
+### User Role Validation 
 
 MetadataSync now supports validating UserID fields against specific roles in the MemberJunction system. This ensures that only users with appropriate roles can be referenced in metadata files.
 
@@ -1719,7 +1719,7 @@ The validation will:
 }
 ```
 
-## Embedded Collections (NEW)
+## Embedded Collections 
 
 The tool now supports managing related entities as embedded collections within parent JSON files. This is ideal for entities that have a strong parent-child relationship.
 
@@ -1729,7 +1729,7 @@ The tool now supports managing related entities as embedded collections within p
 - **Cleaner Organization**: Fewer files to manage
 - **Relationship Clarity**: Visual representation of data relationships
 
-## Recursive Patterns (NEW)
+## Recursive Patterns 
 
 The tool now supports automatic recursive patterns for self-referencing entities, eliminating the need to manually define each nesting level for hierarchical data structures.
 
