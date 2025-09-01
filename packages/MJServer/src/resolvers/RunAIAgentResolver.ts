@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
-import { UserPayload } from '../types.js';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { DatabaseProviderBase, LogError, LogStatus } from '@memberjunction/core';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
@@ -8,6 +8,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -304,6 +305,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * @private
      */
     private async executeAIAgent(
+        p: DatabaseProviderBase,
         agentId: string,
         userPayload: UserPayload,
         messagesJson: string,
@@ -339,6 +341,8 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
+            // @jordanfanapour IMPORTANT TO-DO for various engine classes (via base engine class) and here for AI Agent Runner and for AI Prompt Runner, need to be able to pass in a IMetadataProvider for it to use
+            // for multi-user server environments like this one
             // Create AI agent runner
             const agentRunner = new AgentRunner();
             
@@ -453,7 +457,7 @@ export class RunAIAgentResolver extends ResolverBase {
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('messages') messagesJson: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
@@ -463,7 +467,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
         @Arg('configurationId', { nullable: true }) configurationId?: string
     ): Promise<AIAgentRunResult> {
+        const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
+            p,
             agentId,
             userPayload,
             messagesJson,
@@ -485,7 +491,7 @@ export class RunAIAgentResolver extends ResolverBase {
     @Query(() => AIAgentRunResult)
     async RunAIAgentSystemUser(
         @Arg('agentId') agentId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('messages') messagesJson: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
@@ -495,7 +501,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
         @Arg('configurationId', { nullable: true }) configurationId?: string
     ): Promise<AIAgentRunResult> {
+        const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
+            p,
             agentId,
             userPayload,
             messagesJson,

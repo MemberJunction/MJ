@@ -14,6 +14,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
+import { GetReadOnlyProvider } from '../util.js';
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
@@ -75,10 +76,10 @@ export class PotentialDuplicateResponseType extends PotentialDuplicateResponse {
 export class DuplicateRecordResolver {
   @Query(() => PotentialDuplicateResponseType)
   async GetRecordDuplicates(
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @Arg('params') params: PotentialDuplicateRequestType
   ): Promise<PotentialDuplicateResponseType> {
-    const md = new Metadata();
+    const md = GetReadOnlyProvider(providers);
 
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) {

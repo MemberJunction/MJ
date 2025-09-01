@@ -768,6 +768,11 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
             
             // Automatically show artifact if the new AI message has one
             this.autoShowArtifactIfPresent(aiDetail);
+            
+            // Check if the conversation name was updated on the server (especially when artifacts are created)
+            if (aiDetail.ArtifactID) {
+              await this.syncConversationNameFromServer(conversation.ID);
+            }
           }
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
@@ -1334,9 +1339,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this.DataContext = convoAny._DataContext;
       } else {
         this.DataContext = new DataContext();
-        const start = new Date().getTime();
         await this.DataContext.LoadMetadata(this.DataContextID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
-        LogStatus('Skip Chat: Time to load data context: ' + (new Date().getTime() - start) + 'ms');
         // cache it for later
         convoAny._DataContext = this.DataContext;
       }
@@ -1605,6 +1608,11 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
           
           // Automatically show artifact if the new AI message has one
           this.autoShowArtifactIfPresent(aiDetail);
+          
+          // Check if the conversation name was updated on the server (especially when artifacts are created)
+          if (aiDetail.ArtifactID) {
+            await this.syncConversationNameFromServer(this.SelectedConversation.ID);
+          }
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
@@ -2508,6 +2516,30 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
     } catch (error) {
       LogError(`Error stopping processing: ${error}`);
       this.notificationService.CreateSimpleNotification('Failed to stop processing', 'error', 3000);
+    }
+  }
+
+  /**
+   * Checks if the conversation name was updated on the server and syncs it to the UI
+   * This typically happens when artifacts are created and Skip renames the conversation
+   * @param conversationId The ID of the conversation to check
+   */
+  private async syncConversationNameFromServer(conversationId: string): Promise<void> {
+    const p = this.ProviderToUse;
+    const updatedConvo = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
+    await updatedConvo.Load(conversationId);
+    
+    if (this.SelectedConversation && updatedConvo.Name !== this.SelectedConversation.Name) {
+      // Update the conversation name in memory
+      this.SelectedConversation.Name = updatedConvo.Name;
+      
+      // Update the conversation in the list
+      const idx = this.Conversations.findIndex((c) => c.ID === conversationId);
+      if (idx >= 0) {
+        this.Conversations[idx].Name = updatedConvo.Name;
+        // Trigger change detection for the list
+        this.Conversations = [...this.Conversations];
+      }
     }
   }
 

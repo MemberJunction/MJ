@@ -1845,10 +1845,43 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 
      * **server-side** sub-classes only by calling AIEngine or other methods to generate embeddings for a given
-     * piece of text provided.
+     * piece of text provided. Subclasses that override this method to implement embedding support should also
+     * override @see SupportsEmbedTextLocal and return true
      * @param textToEmbed 
      */
     protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult>{
         throw new Error("EmbedTextLocal not implemented in BaseEntity, sub-classes must implement this functionality to use it");
+    }
+
+    /**
+     * Specifies if the current object supports the @see EmbedTextLocal method or not - useful to know before calling it for conditional
+     * code that has fallbacks as needed. BaseEntity does not implement this method but server-side sub-classes often do, but it is not mandatory for 
+     * any sub-class.
+     * @returns 
+     */
+    public SupportsEmbedTextLocal(): boolean {
+        return false;
+    }
+
+    /**
+     * private storage for vectors that might be used for this entity, typically in association with individual fields
+     * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
+     * that embed multiple fields if desired.
+     */
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+
+    /**
+     * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can
+     * use this to track vectors associated with 
+     */
+    public get Vectors(): Map<string, number[]> {
+        return this._vectors;
+    }
+
+    /**
+     * Resets the vector embeddings for this entity to an empty state.
+     */
+    public ResetVectors(): void {
+        this._vectors.clear();
     }
 }

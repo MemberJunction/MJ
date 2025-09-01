@@ -1,5 +1,4 @@
-// OpportunityPanel Sub-component
-const OpportunityPanel = ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function OpportunityPanel ({ data, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const [activeTab, setActiveTab] = useState('details');
 
   return (

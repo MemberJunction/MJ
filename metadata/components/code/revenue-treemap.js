@@ -1,5 +1,5 @@
 // RevenueTreemap Sub-component
-const RevenueTreemap = ({ data, onProductClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function RevenueTreemap ({ data, onProductClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
 
   useEffect(() => {

@@ -5,8 +5,9 @@ import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } 
 import { ActionParam, ActionResult } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
-import { AppContext } from "../types.js";
+import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays } from "@memberjunction/global";
+import { GetReadOnlyProvider } from "../util.js";
 
 /**
  * Input type for action parameters
@@ -341,7 +342,7 @@ export class ActionResolver {
 
       // Add entity object if we have entity information and primary key
       if ((input.EntityID || input.EntityName) && input.PrimaryKey && input.PrimaryKey.KeyValuePairs.length > 0) {
-        await this.addEntityObject(params, input, user);
+        await this.addEntityObject(ctx.providers, params, input, user);
       }
 
       // Add other parameters
@@ -400,8 +401,8 @@ export class ActionResolver {
    * @param user The authenticated user
    * @private
    */
-  private async addEntityObject(params: any, input: EntityActionInput, user: UserInfo): Promise<void> {
-    const md = new Metadata();
+  private async addEntityObject(providers: Array<ProviderInfo>, params: any, input: EntityActionInput, user: UserInfo): Promise<void> {
+    const md = GetReadOnlyProvider(providers);
     
     // Find the entity by ID or name
     let entity;

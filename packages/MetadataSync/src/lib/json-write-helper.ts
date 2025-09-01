@@ -37,7 +37,7 @@ export class JsonWriteHelper {
         // This is a RecordData object - rebuild with correct order
         const ordered: any = {};
         
-        // Add properties in desired order: fields, relatedEntities, primaryKey, sync
+        // Add properties in desired order: fields, relatedEntities, primaryKey, sync, deleteRecord
         if (data.fields !== undefined) {
           ordered.fields = this.normalizeRecordDataOrder(data.fields);
         }
@@ -49,6 +49,9 @@ export class JsonWriteHelper {
         }
         if (data.sync !== undefined) {
           ordered.sync = this.normalizeRecordDataOrder(data.sync);
+        }
+        if (data.deleteRecord !== undefined) {
+          ordered.deleteRecord = this.normalizeRecordDataOrder(data.deleteRecord);
         }
         
         return ordered;

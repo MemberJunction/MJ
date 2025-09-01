@@ -1,5 +1,5 @@
 // RelationshipMap Sub-component
-const RelationshipMap = ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function RelationshipMap ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

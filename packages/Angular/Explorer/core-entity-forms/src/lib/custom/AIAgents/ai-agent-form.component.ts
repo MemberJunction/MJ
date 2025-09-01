@@ -13,6 +13,10 @@ import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { firstValueFrom, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { PromptSelectorResult } from './prompt-selector-dialog.component';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ActionEngineBase } from '@memberjunction/actions-base';
+import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
+            
 
 
 /**
@@ -51,7 +55,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements AfterViewInit, OnDestroy {
+export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
     public record!: AIAgentEntityExtended;
     
@@ -118,24 +122,35 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     // === Related Entity Counts ===
     /** Number of sub-agents under this agent */
-    public subAgentCount = 0;
-    
+    public get subAgentCount(): number {
+        return this.subAgents.length;
+    }
+
     /** Number of prompts associated with this agent */
-    public promptCount = 0;
-    
+    public get promptCount(): number {
+        return this.agentPrompts.length;
+    }
+
     /** Number of actions configured for this agent */
-    public actionCount = 0;
-    
-    
+    public get actionCount(): number {
+        return this.agentActions.length;
+    }
+
     /** Number of learning cycles for this agent */
-    public learningCycleCount = 0;
-    
+    public get learningCycleCount(): number {
+        return this.learningCycles.length;
+    }
+
     /** Number of notes associated with this agent */
-    public noteCount = 0;
+    public get noteCount(): number {
+        return this.agentNotes.length;
+    }
     
     /** Number of execution history records */
-    public executionHistoryCount = 0;
-    
+    public get executionHistoryCount(): number {
+        return this.recentExecutions.length;
+    }
+
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display */
     public subAgents: AIAgentEntityExtended[] = [];
@@ -155,22 +170,22 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     /** Array of recent execution records for history display */
     public recentExecutions: AIAgentRunEntityExtended[] = [];
-    
+    public totalExecutionHistoryCount: number = 0;
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
     
     // === Loading States ===
     /** Main loading state for initial data load */
-    public isLoadingData = false;
+    public isLoadingData = true;
     
-    /** Individual loading states for each section */
+    /** Individual loading states for each section, start off true until loading complete */
     public loadingStates = {
-        executionHistory: false,
-        subAgents: false,
-        prompts: false,
-        actions: false,
-        learningCycles: false,
-        notes: false
+        executionHistory: true,
+        subAgents: true,
+        prompts: true,
+        actions: true,
+        learningCycles: true,
+        notes: true
     };
 
     // === Dropdown Data ===
@@ -198,25 +213,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * @private
      */
     private async loadAgentTypes(): Promise<void> {
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: 'MJ: AI Agent Types',
-                ExtraFilter: '',
-                OrderBy: 'Name ASC',
-                ResultType: 'entity_object'
-            });
-            
-            if (result.Success) {
-                this.agentTypes = result.Results || [];
-            } else {
-                console.error('Failed to load agent types:', result.ErrorMessage);
-                this.agentTypes = [];
-            }
-        } catch (error) {
-            console.error('Error loading agent types:', error);
-            this.agentTypes = [];
-        }
+        this.agentTypes = AIEngineBase.Instance.AgentTypes
     }
 
     /**
@@ -229,24 +226,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             return;
         }
 
-        try {
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: 'AI Prompts',
-                ExtraFilter: `ID = '${this.record.ContextCompressionPromptID}'`,
-                ResultType: 'entity_object',
-                MaxRows: 1
-            });
-
-            if (result.Success && result.Results && result.Results.length > 0) {
-                this.selectedContextCompressionPrompt = result.Results[0];
-            } else {
-                console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
-                this.selectedContextCompressionPrompt = null;
-            }
-        } catch (error) {
-            console.error('Error loading context compression prompt:', error);
-            this.selectedContextCompressionPrompt = null;
+        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => p.ID === this.record.ContextCompressionPromptID);
+        if (!this.selectedContextCompressionPrompt) {
+            console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
         }
     }
 
@@ -255,8 +237,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public async openContextCompressionPromptSelector(): Promise<void> {
         try {
-            const { PromptSelectorDialogComponent } = await import('./prompt-selector-dialog.component');
-            
             const dialogRef = this.dialogService.open({
                 title: 'Select Context Compression Prompt',
                 content: PromptSelectorDialogComponent,
@@ -499,6 +479,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         await super.ngOnInit();
         
         // Load agent types for dropdown (needed for both new and existing records)
+        await AIEngineBase.Instance.Config(false); // in UI context user and provider default to global
+        await ActionEngineBase.Instance.Config(false);
+
         await this.loadAgentTypes();
         
         // Load context compression prompt if one is set
@@ -507,8 +490,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
         
         if (this.record?.ID) {
-            await this.loadRelatedCounts();
-            await this.loadAgentType();
+            await this.loadRelatedCounts(false); // no need to force refresh on initial load
+            await this.loadCurrentAgentType();
             
             // Schedule change detection - safer than manual detectChanges()
             this.cdr.markForCheck();
@@ -532,7 +515,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * This data populates the various expander panels in the enhanced form interface.
      * @private
      */
-    private async loadRelatedCounts(): Promise<void> {
+    private async loadRelatedCounts(forceRefresh: boolean): Promise<void> {
         if (!this.record?.ID) return;
         
         // Set loading state
@@ -545,77 +528,68 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             learningCycles: true,
             notes: true
         };
-        this.cdr.detectChanges();
+        this.cdr.detectChanges(); // update UI
+
+        if (forceRefresh) {
+            await AIEngineBase.Instance.Config(true); // force refresh
+        }
         
         try {
+            // pull stuff that doesn't change from AI Engine as it is pretty static and engine is smart
+            // enough to refresh cache if something changes (via this process, exernal process changes require an update for now)
+            this.subAgents = AIEngineBase.Instance.Agents.filter(a => a.ParentID === this.record.ID) 
+            
+            this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
+                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
+                return filteredAgentPrompts.some(ap => ap.PromptID === p.ID);
+            });
+
+            this.agentActions = ActionEngineBase.Instance.Actions.filter(a => {
+                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => aa.AgentID === this.record.ID);
+                return filteredAgentActions.some(aa => aa.ActionID === a.ID);
+            });
+            
+
             const rv = new RunView();
             
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
-                // Sub-agents
-                {
-                    EntityName: 'AI Agents',
-                    ExtraFilter: `ParentID='${this.record.ID}'`,
-                    OrderBy: 'Name ASC'
-                },
-                // Prompts
-                {
-                    EntityName: 'AI Prompts',
-                    ExtraFilter: `ID IN (SELECT PromptID FROM __mj.vwAIAgentPrompts WHERE AgentID='${this.record.ID}')`
-                },
-                // Actions
-                {
-                    EntityName: 'Actions',
-                    ExtraFilter: `ID IN (SELECT ActionID FROM __mj.vwAIAgentActions WHERE AgentID='${this.record.ID}')`,
-                    OrderBy: 'Name ASC'
-                },
                 // Learning cycles
                 {
                     EntityName: 'AI Agent Learning Cycles',
+                    // limit fields
+                    Fields: ["ID","Name","StartedAt", "EndedAt","Status","AgentID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: 'StartedAt DESC'
                 },
                 // Notes
                 {
                     EntityName: 'AI Agent Notes',
+                    // limit fields
+                    Fields: ["ID","Name", "AgentID", "AgentNoteType","AgentNoteTypeID","UserID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`
                 },
                 // Execution history
                 {
                     EntityName: 'MJ: AI Agent Runs',
+                    Fields: [ // limit what we take from runs as this is where we can have a LOT come down if we include JSON fields
+                        "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
+                        "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp"
+                    ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
-                    OrderBy: '__mj_CreatedAt DESC'
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 100
                 }
             ]);
 
-            // Load agent types for dropdown
-            await this.loadAgentTypes();
-            
             // Process results in the same order as queries
-            if (results.length >= 6) {
-                // Sub-agents (index 0)
-                this.subAgents = results[0].Results as AIAgentEntityExtended[] || [];
-                this.subAgentCount = results[0].TotalRowCount || 0;
+            if (results && results.length > 0) {
+                this.learningCycles = results[0].Results as AIAgentLearningCycleEntity[] || [];
                 
-                // Prompts (index 1)
-                this.agentPrompts = results[1].Results as AIPromptEntityExtended[] || [];
-                this.promptCount = results[1].TotalRowCount || 0;
+                this.agentNotes = results[1].Results as AIAgentNoteEntity[] || [];
                 
-                // Actions (index 2)
-                this.agentActions = results[2].Results as ActionEntity[] || [];
-                this.actionCount = results[2].TotalRowCount || 0;
-                
-                // Learning cycles (index 3)
-                this.learningCycles = results[3].Results as AIAgentLearningCycleEntity[] || [];
-                this.learningCycleCount = results[3].TotalRowCount || 0;
-                
-                // Notes (index 4)
-                this.agentNotes = results[4].Results as AIAgentNoteEntity[] || [];
-                this.noteCount = results[4].TotalRowCount || 0;
-                
-                // Execution history (index 5)
-                this.recentExecutions = results[5].Results as AIAgentRunEntityExtended[] || [];
-                this.executionHistoryCount = results[5].TotalRowCount || 0;
+                this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
+                this.totalExecutionHistoryCount = results[2].TotalRowCount;
             }
 
             // Create snapshot for cancel/revert functionality
@@ -623,12 +597,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         } catch (error) {
             console.error('Error loading related data:', error);
             // Set all counts to 0 on error to ensure UI shows proper empty states
-            this.subAgentCount = 0;
-            this.promptCount = 0;
-            this.actionCount = 0;
-            this.learningCycleCount = 0;
-            this.noteCount = 0;
-            this.executionHistoryCount = 0;
         } finally {
             // Clear loading states
             this.isLoadingData = false;
@@ -666,7 +634,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Loads the agent type entity for this agent
      * @private
      */
-    private async loadAgentType(): Promise<void> {
+    private async loadCurrentAgentType(): Promise<void> {
         if (!this.record?.TypeID) {
             return;
         }
@@ -753,18 +721,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.agentActions = [...this.originalSnapshots.agentActions];
             this.subAgents = [...this.originalSnapshots.subAgents];
             
-            // Restore counts
-            this.promptCount = this.originalSnapshots.promptCount;
-            this.actionCount = this.originalSnapshots.actionCount;
-            this.subAgentCount = this.originalSnapshots.subAgentCount;
-            this.learningCycleCount = this.originalSnapshots.learningCycleCount;
-            this.noteCount = this.originalSnapshots.noteCount;
-            this.executionHistoryCount = this.originalSnapshots.executionHistoryCount;
-            
             // Reset other UI state
             this.hasUnsavedChanges = false;
-            
-            
+                        
             // Mark for check instead of forcing immediate detection
             this.cdr.markForCheck();
         }
@@ -998,7 +957,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
                             // Update UI to show the new sub-agent
                             this.subAgents.push(result.subAgent);
-                            this.subAgentCount = this.subAgents.length;
                             this.hasUnsavedChanges = true;
 
                             // Mark for check instead of forcing immediate detection
@@ -1094,7 +1052,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         
                         // Update UI to show the new prompts (cast to extended type for display)
                         this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
-                        this.promptCount = this.agentPrompts.length;
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -1197,7 +1154,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     
                     // Update UI to show the new actions
                     this.agentActions.push(...newActions);
-                    this.actionCount = this.agentActions.length;
                     
                     // Mark for check instead of forcing immediate detection
                     this.cdr.markForCheck();
@@ -1493,7 +1449,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public async refreshRelatedData() {
         if (this.record?.ID) {
-            await this.loadRelatedCounts();
+            await this.loadRelatedCounts(true); // force refresh
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Related data refreshed',
                 'success',
@@ -1600,8 +1556,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                             this.hasUnsavedChanges = true;
 
                             // Update UI to show the new prompt
-                            this.agentPrompts.push(result.prompt as AIPromptEntityExtended);
-                            this.promptCount = this.agentPrompts.length;
+                            this.agentPrompts.push(result.prompt);
 
                             // Trigger change detection to update UI
                             this.cdr.detectChanges();
@@ -1697,7 +1652,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     const promptIndex = this.agentPrompts.findIndex(p => p.ID === prompt.ID);
                     if (promptIndex >= 0) {
                         this.agentPrompts.splice(promptIndex, 1);
-                        this.promptCount = this.agentPrompts.length;
                     }
 
                     this.hasUnsavedChanges = true;
@@ -1791,7 +1745,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         
                         // Update UI to show the new sub-agents
                         this.subAgents.push(...newAgents);
-                        this.subAgentCount = this.subAgents.length;
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -1875,7 +1828,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     const subAgentIndex = this.subAgents.findIndex(sa => sa.ID === subAgent.ID);
                     if (subAgentIndex >= 0) {
                         this.subAgents.splice(subAgentIndex, 1);
-                        this.subAgentCount = this.subAgents.length;
                     }
 
                     this.hasUnsavedChanges = true;
@@ -1959,7 +1911,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 const actionIndex = this.agentActions.findIndex(a => a.ID === action.ID);
                 if (actionIndex >= 0) {
                     this.agentActions.splice(actionIndex, 1);
-                    this.actionCount = this.agentActions.length;
                 }
 
                 this.hasUnsavedChanges = true;
@@ -1994,14 +1945,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         
         try {
             // Find the corresponding AIAgentPromptEntity for this prompt
-            const rv = new RunView();
-            const agentPromptResult = await rv.RunView<AIAgentPromptEntity>({
-                EntityName: 'MJ: AI Agent Prompts',
-                ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
-                ResultType: 'entity_object'
-            });
+            // Get all agent prompts for validation
 
-            if (!agentPromptResult.Success || !agentPromptResult.Results?.length) {
+            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
+            const agentPrompt = allAgentPrompts.find(ap => ap.PromptID === prompt.ID);
+            if (!agentPrompt) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Unable to find prompt configuration for advanced settings',
                     'error',
@@ -2009,17 +1957,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 );
                 return;
             }
-
-            const agentPrompt = agentPromptResult.Results[0];
-
-            // Get all agent prompts for validation
-            const allAgentPromptsResult = await rv.RunView<AIAgentPromptEntity>({
-                EntityName: 'MJ: AI Agent Prompts',
-                ExtraFilter: `AgentID='${this.record.ID}'`,
-                ResultType: 'entity_object'
-            });
-
-            const allAgentPrompts = allAgentPromptsResult.Success ? (allAgentPromptsResult.Results || []) : [];
 
             this.agentManagementService.openAgentPromptAdvancedSettingsDialog({
                 agentPrompt: agentPrompt,
@@ -2047,7 +1984,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                                 );
 
                                 // Refresh the related data to reflect changes
-                                await this.loadRelatedCounts();
+                                await this.loadRelatedCounts(true);
                             } else {
                                 MJNotificationService.Instance.CreateSimpleNotification(
                                     'Failed to save prompt settings. Please try again.',
@@ -2088,24 +2025,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Opens the advanced settings dialog for a sub-agent
      */
-    public async openSubAgentAdvancedSettings(subAgent: AIAgentEntityExtended, event: Event) {
+    public async openSubAgentAdvancedSettings(subAgentEntity: AIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
-            // Load the full sub-agent entity for editing
-            const md = new Metadata();
-            const subAgentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
-            await subAgentEntity.Load(subAgent.ID);
-
             // Get all sub-agents under the same parent for validation
-            const rv = new RunView();
-            const allSubAgentsResult = await rv.RunView<AIAgentEntityExtended>({
-                EntityName: 'AI Agents',
-                ExtraFilter: `ParentID='${this.record.ID}'`,
-                ResultType: 'entity_object'
-            });
-
-            const allSubAgents = allSubAgentsResult.Success ? (allSubAgentsResult.Results || []) : [];
+            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => sa.ParentID === subAgentEntity.ParentID);
 
             this.agentManagementService.openSubAgentAdvancedSettingsDialog({
                 subAgent: subAgentEntity,
@@ -2132,7 +2057,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                                 );
 
                                 // Update the local sub-agent data to reflect changes
-                                const localSubAgent = this.subAgents.find(sa => sa.ID === subAgent.ID);
+                                const localSubAgent = this.subAgents.find(sa => sa.ID === subAgentEntity.ID);
                                 if (localSubAgent) {
                                     localSubAgent.ExecutionOrder = formData.executionOrder;
                                     localSubAgent.ExecutionMode = formData.executionMode;
@@ -2365,7 +2290,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 this.PendingRecords.length = 0;
                 
                 // Reload related data to reflect database state
-                await this.loadRelatedCounts();
+                await this.loadRelatedCounts(true);
 
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'AI Agent and all related changes saved successfully',
@@ -2392,7 +2317,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
     }
 
-    
     /**
      * Component cleanup - critical for preventing memory leaks
      */

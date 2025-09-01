@@ -1,5 +1,5 @@
 // DealCard Sub-component
-const DealCard = ({ deal, onOpen, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function DealCard ({ deal, onOpen, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const getStageColor = (stage) => {
     const colors = {
       'Prospecting': '#17a2b8',

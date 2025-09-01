@@ -1,5 +1,5 @@
 // TrendChart Sub-component
-const TrendChart = ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function TrendChart ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

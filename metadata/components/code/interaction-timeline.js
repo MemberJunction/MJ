@@ -1,5 +1,4 @@
-// InteractionTimeline Sub-component
-const InteractionTimeline = ({ interactions, dateRange, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function InteractionTimeline ({ interactions, dateRange, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const filteredInteractions = useMemo(() => {
     if (!interactions) return [];
     if (!dateRange) return interactions;

@@ -91,6 +91,11 @@ export {
 } from './utilities/library-loader';
 
 export {
+  getCoreRuntimeLibraries,
+  isCoreRuntimeLibrary
+} from './utilities/core-libraries';
+
+export {
   LibraryRegistry,
   LibraryDefinition
 } from './utilities/library-registry';

@@ -1,5 +1,5 @@
 // RevenueTrendChart Sub-component
-const RevenueTrendChart = ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function RevenueTrendChart ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 

@@ -1,5 +1,29 @@
 # @memberjunction/metadata-sync
 
+## Unreleased
+
+### Minor Changes
+
+- **deleteRecord Feature**: Added support for deleting records from the database through the metadata sync tool
+  - New `deleteRecord` directive allows marking records for deletion in JSON files
+  - Records are deleted when `deleteRecord.delete` is set to `true`
+  - After successful deletion, the tool updates the JSON with a `deletedAt` timestamp
+  - Delete operations are included in SQL logs when SQL logging is enabled
+  - Supports dry-run mode to preview deletions without executing them
+  - Handles foreign key constraint errors gracefully with helpful error messages
+  - Primary key is required to identify which record to delete
+  - Once deleted (indicated by `deletedAt`), subsequent push operations skip the deletion
+  - Takes precedence over normal create/update operations when present
+
+### Implementation Details
+
+- Modified `PushService.ts` to detect and process deleteRecord directives
+- Added new `processDeleteRecord` method to handle deletion logic
+- Updated `RecordData` interface to include optional `deleteRecord` field
+- Modified `JsonWriteHelper` to properly serialize the deleteRecord field
+- Delete operations generate appropriate SQL DELETE statements in migration logs
+- Error handling provides detailed context for troubleshooting failed deletions
+
 ## 2.95.0
 
 ### Patch Changes

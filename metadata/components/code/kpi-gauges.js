@@ -1,5 +1,4 @@
-// KPIGauges Sub-component
-const KPIGauges = ({ kpis, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) => {
+function KPIGauges ({ kpis, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const gaugeRefs = useRef([]);
   const chartInstances = useRef([]);
 

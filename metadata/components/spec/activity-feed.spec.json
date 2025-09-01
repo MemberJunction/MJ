@@ -16,7 +16,6 @@
         "filterFields": [],
         "sortFields": ["ActivityDate"],
         "fieldMetadata": [],
-        "permissionLevelNeeded": ["read"],
         "usageContext": "Recent activities displayed in chronological feed"
       }
     ],

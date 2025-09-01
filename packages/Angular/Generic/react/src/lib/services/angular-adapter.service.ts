@@ -13,10 +13,10 @@ import {
   CompileOptions,
   RuntimeContext,
   ExternalLibraryConfig,
-  LibraryConfiguration
+  LibraryConfiguration,
+  SetupStyles
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
-import { DEFAULT_STYLES } from '../default-styles';
 import { ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
@@ -39,18 +39,20 @@ export class AngularAdapterService {
    * Initialize the React runtime with Angular-specific configuration
    * @param config Optional library configuration
    * @param additionalLibraries Optional additional libraries to merge
+   * @param options Optional options including debug flag
    * @returns Promise resolving when runtime is ready
    */
   async initialize(
     config?: LibraryConfiguration,
-    additionalLibraries?: ExternalLibraryConfig[]
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
   ): Promise<void> {
     if (this.runtime) {
       return; // Already initialized
     }
 
     // Load React ecosystem with optional additional libraries
-    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries);
+    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries, options);
     
     // Create runtime context
     this.runtimeContext = {
@@ -160,7 +162,7 @@ export class AngularAdapterService {
     // Apply default styles if not provided
     const optionsWithDefaults = {
       ...options,
-      styles: options.styles || DEFAULT_STYLES
+      styles: options.styles || SetupStyles()
     };
 
     return this.runtime!.compiler.compile(optionsWithDefaults);

@@ -3,6 +3,7 @@ import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEn
 import { AppContext } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { z } from 'zod';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -21,11 +22,11 @@ export class EntityDependencyResolver {
   @Query(() => [EntityDependencyResult])
   async GetEntityDependencies(
     @Arg('entityName', () => String) entityName: string,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     try {
-      const md = new Metadata();
+      const md = GetReadOnlyProvider(providers);
       return md.GetEntityDependencies(entityName);
     } catch (err) {
       LogError(err);
@@ -57,11 +58,11 @@ export class RecordDependencyResolver {
   async GetRecordDependencies(
     @Arg('entityName', () => String) entityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) ckInput: CompositeKeyInputType,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     try {
-      const md = new Metadata();
+      const md = GetReadOnlyProvider(providers);
       const ck = new CompositeKey(ckInput.KeyValuePairs);
       const result = await md.GetRecordDependencies(entityName, ck);
       
@@ -165,11 +166,11 @@ export class RecordMergeResolver {
   @Mutation(() => RecordMergeResult)
   async MergeRecords(
     @Arg('request', () => RecordMergeRequest) request: RecordMergeRequest,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     try {
-      const md = new Metadata();
+      const md = GetReadWriteProvider(providers);
       const options = {};
       const result = await md.MergeRecords(request, userPayload.userRecord, options);
       return result;

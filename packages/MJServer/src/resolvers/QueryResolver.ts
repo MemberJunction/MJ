@@ -1,9 +1,10 @@
 import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int } from 'type-graphql';
-import { RunQuery, QueryInfo } from '@memberjunction/core';
+import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
+import { GetReadOnlyProvider } from '../util.js';
 
 @ObjectType()
 export class RunQueryResultType {
@@ -43,9 +44,7 @@ export class RunQueryResultType {
 
 @Resolver()
 export class RunQueryResolver {
-  private async findQuery(QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
-    const md = new Metadata();
-    
+  private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
     // Filter queries based on provided criteria
     const queries = md.Queries.filter(q => {
       if (QueryID) {
@@ -67,7 +66,7 @@ export class RunQueryResolver {
       if (refreshMetadataIfNotFound) {
         // If we didn't find the query, refresh metadata and try again
         await md.Refresh();
-        return this.findQuery(QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
+        return this.findQuery(md, QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
       } 
       else {
         return null; // No query found and not refreshing metadata
@@ -87,9 +86,11 @@ export class RunQueryResolver {
                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                      @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
-    const runQuery = new RunQuery();
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const md = provider as unknown as IMetadataProvider;
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription });
-    const result = await runQuery.RunQuery(
+    const result = await rq.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
@@ -111,7 +112,7 @@ export class RunQueryResolver {
     let queryName = result.QueryName;
     if (!queryName) {
       try {
-        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryPath, true);
+        const queryInfo = await this.findQuery(md, QueryID, undefined, CategoryID, CategoryPath, true);
         if (queryInfo) {
           queryName = queryInfo.Name;
         }
@@ -145,8 +146,9 @@ export class RunQueryResolver {
                            @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                            @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                            @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
-    const runQuery = new RunQuery();
-    const result = await runQuery.RunQuery(
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+    const result = await rq.RunQuery(
       { 
         QueryName: QueryName, 
         CategoryID: CategoryID,
@@ -185,8 +187,11 @@ export class RunQueryResolver {
                                @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                                @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
-    const runQuery = new RunQuery();
-    const result = await runQuery.RunQuery(
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const md = provider as unknown as IMetadataProvider;
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+
+    const result = await rq.RunQuery(
       { 
         QueryID: QueryID,
         CategoryID: CategoryID,
@@ -203,7 +208,7 @@ export class RunQueryResolver {
     let queryName = result.QueryName;
     if (!queryName) {
       try {
-        const queryInfo = await this.findQuery(QueryID, undefined, CategoryID, CategoryPath, true);
+        const queryInfo = await this.findQuery(md, QueryID, undefined, CategoryID, CategoryPath, true);
         if (queryInfo) {
           queryName = queryInfo.Name;
         }
@@ -238,8 +243,10 @@ export class RunQueryResolver {
                                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                                      @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
-    const runQuery = new RunQuery();
-    const result = await runQuery.RunQuery(
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+
+    const result = await rq.RunQuery(
       { 
         QueryName: QueryName,
         CategoryID: CategoryID,

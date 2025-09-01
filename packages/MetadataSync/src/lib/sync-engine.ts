@@ -33,6 +33,15 @@ export interface RecordData {
     /** SHA256 checksum of the fields object */
     checksum: string;
   };
+  /** Delete record directive for removing records from the database */
+  deleteRecord?: {
+    /** Flag to indicate this record should be deleted */
+    delete: boolean;
+    /** ISO timestamp of when the deletion was performed */
+    deletedAt?: string;
+    /** Flag to indicate the record was not found when attempting deletion */
+    notFound?: boolean;
+  };
 }
 
 /**

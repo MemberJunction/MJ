@@ -176,6 +176,7 @@ export class ComponentCompiler {
   private readonly CORE_LIBRARIES = new Set(['React', 'ReactDOM']);
 
   private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[], dependencies?: Array<{ name: string }>): string {
+    const debug = this.config.debug;
     // Generate library declarations if libraries are provided
     // Skip core libraries as they're passed as parameters to createComponent
     const libraryDeclarations = libraries && libraries.length > 0
@@ -187,22 +188,48 @@ export class ComponentCompiler {
     const libraryLogChecks = libraries && libraries.length > 0  
       ? libraries
           .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
-          .map(lib => `\nif (!${lib.globalVariable}) { console.error('[React-Runtime-JS] Library "${lib.globalVariable}" is not defined'); } else { console.log('[React-Runtime-JS] Library "${lib.globalVariable}" is defined'); }`)
+          .map(lib => `\nif (!${lib.globalVariable}) { console.error('[React-Runtime-JS] Library "${lib.globalVariable}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Library "${lib.globalVariable}" is defined');` : ''} }`)
           .join('\n        ')
       : '';
 
     // Generate component declarations if dependencies are provided
     // Filter out the component being compiled to avoid naming conflicts
-    const componentDeclarations = dependencies && dependencies.length > 0
-      ? dependencies
-          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
+    // Also detect and warn about duplicates
+    const seenDependencies = new Set<string>();
+    const uniqueDependencies: Array<{ name: string; code?: string }> = [];
+    const duplicates: string[] = [];
+    
+    if (dependencies && dependencies.length > 0) {
+      for (const dep of dependencies) {
+        if (dep.name === componentName) {
+          // Skip the component being compiled itself
+          continue;
+        }
+        if (seenDependencies.has(dep.name)) {
+          duplicates.push(dep.name);
+        } else {
+          seenDependencies.add(dep.name);
+          uniqueDependencies.push(dep);
+        }
+      }
+    }
+    
+    // Generate warning for duplicates
+    const duplicateWarnings = duplicates.length > 0
+      ? duplicates
+          .map(name => `console.warn('[React-Runtime-JS] WARNING: Component "${name}" is registered multiple times as a dependency. Using first occurrence only.');`)
+          .join('\n        ')
+      : '';
+    
+    const componentDeclarations = uniqueDependencies.length > 0
+      ? uniqueDependencies
           .map(dep => `const ${dep.name} = componentsOuter['${dep.name}'];`)
           .join('\n        ')
       : '';
-    const componentLogChecks = dependencies && dependencies.length > 0
-      ? dependencies
-          .filter(dep => dep.name !== componentName) // Don't destructure the component being compiled itself
-          .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined'); }`)
+    
+    const componentLogChecks = uniqueDependencies.length > 0
+      ? uniqueDependencies
+          .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`)
           .join('\n        ')
       : '';
 
@@ -220,7 +247,7 @@ export class ComponentCompiler {
           throw new Error('Component "${componentName}" is not defined in the provided code');
         }
         else {
-          console.log('[React-Runtime-JS] Component "${componentName}" is defined');
+          ${debug ? `console.log('[React-Runtime-JS] Component "${componentName}" is defined');` : ''}
         }
         
         // Store the component in a variable so we don't lose it
@@ -233,6 +260,7 @@ export class ComponentCompiler {
           : UserComponent;
         
         // Debug logging to understand what we're getting
+        ${debug ? `
         console.log('[React-Runtime-JS]Component ${componentName} type:', typeof UserComponent);
         if (typeof UserComponent === 'object' && UserComponent !== null) {
           console.log('[React-Runtime-JS]Component ${componentName} keys:', Object.keys(UserComponent));
@@ -240,7 +268,7 @@ export class ComponentCompiler {
           if ('component' in UserComponent) {
             console.log('[React-Runtime-JS]Component ${componentName}.component type:', typeof UserComponent.component);
           }
-        }
+        }` : ''}
         
         // Validate that we have a function (React component)
         if (typeof ActualComponent !== 'function') {
@@ -258,11 +286,13 @@ export class ComponentCompiler {
           if (!utilitiesOuter) {
             utilitiesOuter = props?.utilities;
           }
+          ${debug ? `
           console.log('Props for ${componentName}:', props);
           console.log('components for ${componentName}:', componentsOuter);
           console.log('styles for ${componentName}:', styles);
           console.log('utilities for ${componentName}:', utilitiesOuter);
-          console.log('libraries for ${componentName}:', libraries);
+          console.log('libraries for ${componentName}:', libraries);` : ''}
+          ${duplicateWarnings ? '// Duplicate dependency warnings\n        ' + duplicateWarnings + '\n        ' : ''}
           ${libraryDeclarations ? '// Destructure Libraries\n' + libraryDeclarations + '\n        ' : ''}
           ${componentDeclarations ? '// Destructure Dependencies\n' + componentDeclarations + '\n        ' : ''}
           ${libraryLogChecks}
@@ -423,11 +453,37 @@ export class ComponentCompiler {
       console.warn('⚠️ No componentLibraries provided for LibraryRegistry initialization');
     }
 
-    // Extract library names from the requested libraries
-    const libraryNames = libraries.map(lib => lib.name);
+    // Filter out React, ReactDOM, and invalid library entries
+    const filteredLibraries = libraries.filter(lib => {
+      // Check if library object is valid
+      if (!lib || typeof lib !== 'object' || !lib.name) {
+        console.warn(`⚠️ Invalid library entry detected (missing name):`, lib);
+        return false;
+      }
+      
+      const libNameLower = lib.name.toLowerCase();
+      if (libNameLower === 'react' || libNameLower === 'reactdom') {
+        console.warn(`⚠️ Library '${lib.name}' is automatically loaded by the React runtime and should not be requested separately`);
+        return false;
+      }
+      return true;
+    });
+    
+    // Extract library names from the filtered libraries (with extra safety)
+    const libraryNames = filteredLibraries
+      .map(lib => lib.name)
+      .filter(name => name && typeof name === 'string');
     
     if (this.config.debug) {
       console.log('📦 Using dependency-aware loading for libraries:', libraryNames);
+    }
+    
+    // If all libraries were filtered out, return empty map
+    if (filteredLibraries.length === 0) {
+      if (this.config.debug) {
+        console.log('📚 All requested libraries were filtered out (React/ReactDOM), returning empty map');
+      }
+      return loadedLibraries;
     }
 
     try {
@@ -441,7 +497,7 @@ export class ComponentCompiler {
 
       // Map the results to match the expected format
       // We need to map from library name to global variable
-      for (const lib of libraries) {
+      for (const lib of filteredLibraries) {
         // Check if library is approved first
         const isApproved = LibraryRegistry.isApproved(lib.name);
         if (!isApproved) {
