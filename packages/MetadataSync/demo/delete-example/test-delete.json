@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Test Prompt for Deletion",
+    "Description": "This is a test prompt that will be deleted",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "Status": "Active",
+    "Prompt": "This is a test prompt that we will delete to demonstrate the deleteRecord feature."
+  },
+  "primaryKey": {
+    "ID": "TEST-DELETE-550e8400-e29b-41d4-a716-446655440000"
+  },
+  "deleteRecord": {
+    "delete": true
+  },
+  "sync": {
+    "lastModified": "2024-01-15T10:30:00Z",
+    "checksum": "sha256:test1234"
+  }
+}

@@ -175,8 +175,8 @@ export default class Push extends Command {
         created: result.created,
         updated: result.updated,
         unchanged: result.unchanged,
-        deleted: 0,
-        skipped: 0,
+        deleted: result.deleted || 0,
+        skipped: result.skipped || 0,
         errors: result.errors,
         duration: endTime - startTime,
       });

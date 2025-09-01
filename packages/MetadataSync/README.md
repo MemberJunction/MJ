@@ -706,6 +706,63 @@ The tool automatically detects primary key fields from entity metadata:
 - **Auto-detection**: Tool reads entity metadata to determine primary key structure
 - **No hardcoding**: Works with any primary key field name(s)
 
+### deleteRecord Directive (NEW)
+The tool now supports deleting records from the database using a special `deleteRecord` directive in JSON files. This allows you to remove obsolete records as part of your metadata sync workflow:
+
+#### How to Delete a Record
+1. Add a `deleteRecord` section to any record JSON file
+2. Set `delete: true` to mark the record for deletion
+3. Run `mj sync push` to execute the deletion
+4. The tool will update the JSON with a deletion timestamp
+
+#### Syntax
+```json
+{
+  "fields": {
+    "Name": "Obsolete Prompt",
+    "Description": "This prompt is no longer needed"
+  },
+  "primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "deleteRecord": {
+    "delete": true
+  }
+}
+```
+
+#### After Deletion
+After successfully deleting the record, the tool updates the JSON file:
+```json
+{
+  "fields": {
+    "Name": "Obsolete Prompt",
+    "Description": "This prompt is no longer needed"
+  },
+  "primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "deleteRecord": {
+    "delete": true,
+    "deletedAt": "2024-01-15T14:30:00.000Z"
+  }
+}
+```
+
+#### Important Notes
+- **Primary key required**: You must specify the `primaryKey` to identify which record to delete
+- **One-time operation**: Once `deletedAt` is set, the deletion won't be attempted again
+- **SQL logging**: Delete operations are included in SQL logs when enabled
+- **Foreign key constraints**: Deletions may fail if other records reference this record
+- **Dry-run support**: Use `--dry-run` to preview what would be deleted
+- **Takes precedence**: If `deleteRecord` is present, normal create/update operations are skipped
+
+#### Use Cases
+- Removing deprecated prompts, templates, or configurations
+- Cleaning up test data
+- Synchronizing deletions across environments
+- Maintaining clean metadata through version control
+
 ### @file: References
 When a field value starts with `@file:`, the tool will:
 1. Read content from the specified file for push operations
