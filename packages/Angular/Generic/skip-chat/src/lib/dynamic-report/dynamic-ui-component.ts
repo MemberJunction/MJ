@@ -40,24 +40,12 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     private _cachedComponentTypeName: string = 'Component';
     public isCreatingReport: boolean = false;
     
-    // Toggle states for showing/hiding component details
-    public showFunctionalRequirements: boolean = false;
-    public showDataRequirements: boolean = false;
-    public showTechnicalDesign: boolean = false;
-    public showCode: boolean = false;
-    public showSpec: boolean = false;
     
     // Toolbar configuration for code editors
     public codeToolbarConfig: ToolbarConfig = {
         enabled: true,
         buttons: [TOOLBAR_BUTTONS.COPY]
     };
-    
-    // Details panel height for resizing
-    public detailsPanelHeight: string = '300px';
-    private isResizing: boolean = false;
-    private startY: number = 0;
-    private startHeight: number = 0;
     
     // Cache for user states only - component specs come from data
     public userStates = new Map<number, any>();
@@ -165,14 +153,23 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         }
     }
   
+    /**
+     * Print the current report
+     * Uses smart printing with CSS media queries to format the output properly
+     */
     public async PrintReport() {
-        const currentComponent = this.getCurrentReactComponent();
-        if (currentComponent) {
-            // React component handles printing internally
-            window.print();
-        } else {
-            window.print();
-        }
+        // For now, we use browser print with CSS media queries to hide UI elements
+        // and format the report properly for printing.
+        // The @media print CSS rules handle the formatting.
+        
+        // Future enhancement: When React components expose a print method,
+        // we can check for it and use component-specific printing logic.
+        
+        // Give a small delay to ensure content is fully rendered
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Trigger browser print - CSS handles the formatting
+        window.print();
     }
 
     /**
@@ -271,48 +268,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
     
     /**
-     * Toggle methods for showing/hiding component details
-     */
-    public toggleShowFunctionalRequirements(): void {
-        this.showFunctionalRequirements = !this.showFunctionalRequirements;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowDataRequirements(): void {
-        this.showDataRequirements = !this.showDataRequirements;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowTechnicalDesign(): void {
-        this.showTechnicalDesign = !this.showTechnicalDesign;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowCode(): void {
-        this.showCode = !this.showCode;
-        this.adjustDetailsPanelHeight();
-    }
-
-    public toggleShowSpec(): void {
-        this.showSpec = !this.showSpec;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    /**
-     * Adjust the details panel height when toggling views
-     */
-    private adjustDetailsPanelHeight(): void {
-        const anyVisible = this.showFunctionalRequirements || this.showDataRequirements || 
-                          this.showTechnicalDesign || this.showCode || this.showSpec;
-        
-        if (anyVisible && this.detailsPanelHeight === '0px') {
-            this.detailsPanelHeight = '300px';
-        } else if (!anyVisible) {
-            this.detailsPanelHeight = '0px';
-        }
-    }
-    
-    /**
      * Format functional requirements as HTML
      */
     public getFormattedFunctionalRequirements(option: ComponentOption): any {
@@ -407,62 +362,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             return `// Error building complete component spec:\n// ${e}`;
         }
     }
-    
-    /**
-     * Start resizing the details panel
-     */
-    public startResize(event: MouseEvent | TouchEvent): void {
-        event.preventDefault();
-        this.isResizing = true;
-        this.startY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-        this.startHeight = parseInt(this.detailsPanelHeight, 10);
-        
-        // Use NgZone to run outside Angular to prevent change detection during drag
-        this.ngZone.runOutsideAngular(() => {
-            document.addEventListener('mousemove', this.onResize);
-            document.addEventListener('mouseup', this.stopResize);
-            document.addEventListener('touchmove', this.onResize);
-            document.addEventListener('touchend', this.stopResize);
-        });
-    }
-    
-    /**
-     * Handle resize movement
-     */
-    private onResize = (event: MouseEvent | TouchEvent): void => {
-        if (!this.isResizing) return;
-        
-        const currentY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-        const deltaY = currentY - this.startY;
-        const newHeight = Math.max(100, Math.min(600, this.startHeight + deltaY));
-        
-        // Run inside Angular to update the binding
-        this.ngZone.run(() => {
-            this.detailsPanelHeight = `${newHeight}px`;
-            this.cdr.detectChanges();
-        });
-    }
-    
-    /**
-     * Stop resizing
-     */
-    private stopResize = (): void => {
-        this.isResizing = false;
-        document.removeEventListener('mousemove', this.onResize);
-        document.removeEventListener('mouseup', this.stopResize);
-        document.removeEventListener('touchmove', this.onResize);
-        document.removeEventListener('touchend', this.stopResize);
-    }
-    
-    @HostListener('window:resize')
-    onWindowResize(): void {
-        // Ensure the details panel height remains valid on window resize
-        const currentHeight = parseInt(this.detailsPanelHeight, 10);
-        const maxHeight = window.innerHeight * 0.6;
-        if (currentHeight > maxHeight) {
-            this.detailsPanelHeight = `${maxHeight}px`;
-        }
-    }
 
     async ngAfterViewInit() {
         // Initialize libraries once per application if not already done
@@ -500,11 +399,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     ngOnDestroy(): void {
         // Clean up user states
         this.userStates.clear();
-        
-        // Ensure resize listeners are removed if still active
-        if (this.isResizing) {
-            this.stopResize();
-        }
         
         // The MJReactComponent handles its own cleanup
     }
