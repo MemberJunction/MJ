@@ -37,6 +37,7 @@
     "@memberjunction/ng-timeline": "2.95.0",
     "@memberjunction/ng-join-grid": "2.95.0",
     "@memberjunction/ai-engine-base": "2.95.0",
+    "@memberjunction/actions-base": "2.95.0",
     "@memberjunction/ng-ai-test-harness": "2.95.0",
     "@memberjunction/ng-action-gallery": "2.95.0",
     "@progress/kendo-angular-grid": "16.2.0",
