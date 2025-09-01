@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/cli
 
+## 2.96.0
+
+### Patch Changes
+
+- d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
+
+  - Added deleteRecord directive to mark records for deletion in JSON files
+  - Records with deleteRecord.delete=true are deleted during push operations
+  - After successful deletion, adds deletedAt timestamp to track when deleted
+
+- Updated dependencies [d7b5647]
+- Updated dependencies [8e1c946]
+  - @memberjunction/metadata-sync@2.96.0
+  - @memberjunction/ai-cli@2.96.0
+  - @memberjunction/codegen-lib@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes

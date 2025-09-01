@@ -1,5 +1,0 @@
----
-"@memberjunction/server": minor
----
-
-migration

@@ -1,5 +1,27 @@
 # @memberjunction/metadata-sync
 
+## 2.96.0
+
+### Minor Changes
+
+- 8e1c946: migration
+
+### Patch Changes
+
+- d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
+
+  - Added deleteRecord directive to mark records for deletion in JSON files
+  - Records with deleteRecord.delete=true are deleted during push operations
+  - After successful deletion, adds deletedAt timestamp to track when deleted
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/graphql-dataprovider@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/core-entities-server@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+  - @memberjunction/global@2.96.0
+
 ## Unreleased
 
 ### Minor Changes

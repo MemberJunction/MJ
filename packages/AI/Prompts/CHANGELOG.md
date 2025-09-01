@@ -1,5 +1,23 @@
 # @memberjunction/ai-prompts
 
+## 2.96.0
+
+### Minor Changes
+
+- 8f34e55: migration
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ai-core-plus@2.96.0
+  - @memberjunction/aiengine@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/templates-base-types@2.96.0
+  - @memberjunction/templates@2.96.0
+  - @memberjunction/ai@2.96.0
+  - @memberjunction/global@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes
