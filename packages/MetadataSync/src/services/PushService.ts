@@ -38,6 +38,8 @@ export interface PushResult {
   created: number;
   updated: number;
   unchanged: number;
+  deleted: number;
+  skipped: number;
   errors: number;
   warnings: string[];
   sqlLogPath?: string;
@@ -47,6 +49,8 @@ export interface EntityPushResult {
   created: number;
   updated: number;
   unchanged: number;
+  deleted: number;
+  skipped: number;
   errors: number;
 }
 
@@ -159,6 +163,8 @@ export class PushService {
       let totalCreated = 0;
       let totalUpdated = 0;
       let totalUnchanged = 0;
+      let totalDeleted = 0;
+      let totalSkipped = 0;
       let totalErrors = 0;
       
       // Begin transaction if not in dry-run mode
@@ -173,6 +179,7 @@ export class PushService {
             const warning = `Skipping ${entityDir} - no valid entity configuration`;
             this.warnings.push(warning);
             callbacks?.onWarn?.(warning);
+            totalSkipped++; // Count skipped directories
             continue;
           }
           
@@ -205,17 +212,23 @@ export class PushService {
           }
           
           // Show per-directory summary
-          const dirTotal = result.created + result.updated + result.unchanged;
+          const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
           if (dirTotal > 0 || result.errors > 0) {
-            callbacks?.onLog?.(`   Total processed: ${dirTotal} unique records`);
+            callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
             if (result.created > 0) {
               callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
             }
             if (result.updated > 0) {
               callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
             }
+            if (result.deleted > 0) {
+              callbacks?.onLog?.(`   ✓ Deleted: ${result.deleted}`);
+            }
             if (result.unchanged > 0) {
               callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
+            }
+            if (result.skipped > 0) {
+              callbacks?.onLog?.(`   - Skipped: ${result.skipped}`);
             }
             if (result.errors > 0) {
               callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
@@ -225,6 +238,8 @@ export class PushService {
           totalCreated += result.created;
           totalUpdated += result.updated;
           totalUnchanged += result.unchanged;
+          totalDeleted += result.deleted;
+          totalSkipped += result.skipped;
           totalErrors += result.errors;
         }
         
@@ -264,6 +279,8 @@ export class PushService {
         created: totalCreated,
         updated: totalUpdated,
         unchanged: totalUnchanged,
+        deleted: totalDeleted,
+        skipped: totalSkipped,
         errors: totalErrors,
         warnings: this.warnings,
         sqlLogPath
@@ -303,6 +320,8 @@ export class PushService {
     let created = 0;
     let updated = 0;
     let unchanged = 0;
+    let deleted = 0;
+    let skipped = 0;
     let errors = 0;
     
     // Find all JSON files in the directory
@@ -421,10 +440,15 @@ export class PushService {
                 
                 // Update stats for successful results
                 const result = batchResult.result!;
-                if (!result.isDuplicate) {
+                if (result.isDuplicate) {
+                  skipped++; // Count duplicates as skipped
+                } else {
                   if (result.status === 'created') created++;
                   else if (result.status === 'updated') updated++;
                   else if (result.status === 'unchanged') unchanged++;
+                  else if (result.status === 'deleted') deleted++;
+                  else if (result.status === 'skipped') skipped++;
+                  else if (result.status === 'error') errors++;
                 }
               }
             }
@@ -442,10 +466,15 @@ export class PushService {
               );
               
               // Update stats
-              if (!result.isDuplicate) {
+              if (result.isDuplicate) {
+                skipped++; // Count duplicates as skipped
+              } else {
                 if (result.status === 'created') created++;
                 else if (result.status === 'updated') updated++;
                 else if (result.status === 'unchanged') unchanged++;
+                else if (result.status === 'deleted') deleted++;
+                else if (result.status === 'skipped') skipped++;
+                else if (result.status === 'error') errors++;
               }
             } catch (recordError) {
               const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
@@ -471,7 +500,7 @@ export class PushService {
       }
     }
     
-    return { created, updated, unchanged, errors };
+    return { created, updated, unchanged, deleted, skipped, errors };
   }
   
   private async processFlattenedRecord(
@@ -480,9 +509,14 @@ export class PushService {
     options: PushOptions,
     batchContext: Map<string, BaseEntity>,
     callbacks?: PushCallbacks
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error'; isDuplicate?: boolean }> {
+  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
+    
+    // Check if this record has a deleteRecord directive
+    if (record.deleteRecord && record.deleteRecord.delete === true) {
+      return await this.processDeleteRecord(flattenedRecord, entityDir, options, callbacks);
+    }
     
     // Use the unique record ID from the flattened record for batch context
     // This ensures we can properly find parent entities even when they're new
@@ -526,7 +560,7 @@ export class PushService {
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           this.warnings.push(warning);
           callbacks?.onWarn?.(warning);
-          return { status: 'error' };
+          return { status: 'error', isDuplicate: false }; // This will be counted as error, not skipped
         } else {
           // Log that we're creating the missing record
           if (options.verbose) {
@@ -857,7 +891,131 @@ export class PushService {
     return String(value);
   }
   
-  private buildBatchContextKey(entityName: string, record: RecordData): string {
+  private async processDeleteRecord(
+    flattenedRecord: FlattenedRecord,
+    _entityDir: string,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<{ status: 'deleted' | 'skipped' | 'unchanged'; isDuplicate?: boolean }> {
+    const { record, entityName } = flattenedRecord;
+    
+    // Validate that we have a primary key for deletion
+    if (!record.primaryKey || Object.keys(record.primaryKey).length === 0) {
+      throw new Error(`Cannot delete ${entityName} record without primaryKey. Please specify primaryKey fields.`);
+    }
+    
+    // Check if the deletion has already been processed
+    if (record.deleteRecord?.deletedAt) {
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ℹ️  Record already deleted on ${record.deleteRecord.deletedAt}`);
+      }
+      // Return unchanged since the record is already in the desired state (deleted)
+      return { status: 'unchanged', isDuplicate: false };
+    }
+    
+    // Load the entity to verify it exists
+    const existingEntity = await this.syncEngine.loadEntity(entityName, record.primaryKey);
+    
+    if (!existingEntity) {
+      const pkDisplay = Object.entries(record.primaryKey)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(', ');
+      
+      const warning = `Record not found for deletion: ${entityName} with primaryKey {${pkDisplay}}`;
+      this.warnings.push(warning);
+      callbacks?.onWarn?.(warning);
+      
+      // Mark as deleted anyway since it doesn't exist
+      if (!record.deleteRecord) {
+        record.deleteRecord = { delete: true };
+      }
+      record.deleteRecord.deletedAt = undefined; // Indicate it was not found
+      record.deleteRecord.notFound = true;
+      
+      return { status: 'skipped', isDuplicate: false };
+    }
+    
+    // Log the deletion
+    const entityInfo = this.syncEngine.getEntityInfo(entityName);
+    const primaryKeyDisplay: string[] = [];
+    if (entityInfo) {
+      for (const pk of entityInfo.PrimaryKeys) {
+        primaryKeyDisplay.push(`${pk.Name}: ${existingEntity.Get(pk.Name)}`);
+      }
+    }
+    
+    callbacks?.onLog?.(`🗑️  Deleting ${entityName} record:`);
+    if (primaryKeyDisplay.length > 0) {
+      callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+    }
+    
+    // Additional info if available
+    const recordName = existingEntity.Get('Name');
+    if (recordName) {
+      callbacks?.onLog?.(`   Name: ${recordName}`);
+    }
+    
+    if (options.dryRun) {
+      callbacks?.onLog?.(`[DRY RUN] Would delete ${entityName} record`);
+      return { status: 'deleted', isDuplicate: false };
+    }
+    
+    // Delete the record
+    try {
+      const deleteResult = await existingEntity.Delete();
+      
+      if (!deleteResult) {
+        // Check the LatestResult for error details
+        const errorMessage = existingEntity.LatestResult?.Message || 'Unknown error';
+        const errorDetails = existingEntity.LatestResult?.Errors?.map(err => 
+          typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+        )?.join(', ') || '';
+        
+        callbacks?.onError?.(`\n❌ Failed to delete ${entityName} record`);
+        callbacks?.onError?.(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
+        callbacks?.onError?.(`   Error: ${errorMessage}`);
+        if (errorDetails) {
+          callbacks?.onError?.(`   Details: ${errorDetails}`);
+        }
+        
+        throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
+      }
+      
+      // Update the deleteRecord section with deletedAt timestamp
+      if (!record.deleteRecord) {
+        record.deleteRecord = { delete: true };
+      }
+      record.deleteRecord.deletedAt = new Date().toISOString();
+      
+      // Remove notFound flag if it exists since we successfully found and deleted the record
+      if (record.deleteRecord.notFound) {
+        delete record.deleteRecord.notFound;
+      }
+      
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ✓ Successfully deleted ${entityName} record`);
+      }
+      
+      return { status: 'deleted', isDuplicate: false };
+      
+    } catch (deleteError: any) {
+      console.error(`\n❌ DELETE EXCEPTION for ${entityName}`);
+      console.error(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
+      console.error(`   Error: ${deleteError.message || deleteError}`);
+      
+      // Check for specific error patterns
+      if (deleteError.message?.includes('FOREIGN KEY constraint')) {
+        console.error(`   Tip: This record is referenced by other records and cannot be deleted.`);
+        console.error(`   Consider deleting dependent records first.`);
+      } else if (deleteError.message?.includes('permission')) {
+        console.error(`   Tip: You may not have permission to delete this record.`);
+      }
+      
+      throw deleteError;
+    }
+  }
+  
+  private _buildBatchContextKey(entityName: string, record: RecordData): string {
     // Build a unique key for the batch context based on entity name and identifying fields
     const keyParts = [entityName];
     
