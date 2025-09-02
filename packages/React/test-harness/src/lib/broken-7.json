@@ -1,0 +1,630 @@
+{
+  "functionalRequirements": "- **Model List View**: Display a table of all AI models with key columns such as Name, AIModelType, IsActive (Status), and __mj_CreatedAt (Created Date). Include alternating row colors for improved visual contrast.\n- **Sorting**: Allow sorting by Name (ascending/descending) and __mj_CreatedAt (date).\n- **Search/Filter**: Filter models using Name, Vendor, AIModelType, and IsActive status. When the IsActive filter is cleared (no selection), the list must display both active and inactive models. Selecting 'Active only' shows only active models; selecting 'Inactive only' shows only inactive models.\n- **Selection & Detail Panel**: Show detailed view with fields (Name, Vendor, AIModelType, PowerRank, SpeedRank, CostRank) and status (IsActive) in an adjacent panel.",
+  "title": "Model Explorer",
+  "name": "ModelExplorer",
+  "type": "dashboard",
+  "userExplanation": "A simple interface that lists your AI models, lets you sort them and view detailed information for a selected model.",
+  "technicalDesign": "## ModelExplorer Component Architecture (updated)\n\n- **Purpose**: Provides a browsable list of AI models with sorting, filtering, and a detail panel.\n- **State Management**: Local `selectedModelId`, `sortState`, `filterState` using React `useState`. All state is local; external changes are communicated via callbacks.\n- **Props**: Same as before (`models`, `initialSelectedModelId`, `onModelSelect`, `onFiltersChange`, `onSortChange`).\n- **Child Components**:\n  1. **ModelListTable** – renders the table, handles row selection, sorting, and displays filter UI.\n     - **Filter Logic Update**: The `IsActive` filter is now *optional*. When the \"Active Only\" checkbox is checked, the list is filtered to active models. When it is unchecked, the filter is omitted entirely, showing both active and inactive models. This aligns with the requirement that clearing the filter shows all models.\n     - **Alternating Row Colors**: Table rows now use a subtle alternating background (e.g., light gray on every other row) to improve visual contrast.\n  2. **ModelFilterPanel** – UI for filter criteria.\n     - Updated to emit `IsActive` only when true; when unchecked, the `IsActive` field is omitted from the filter object, allowing the parent to treat it as no filter.\n  3. **ModelDetailPanel** – displays detailed information for the selected AI model.\n- **Event Flow**:\n  1. User adjusts filters → `ModelFilterPanel` emits `onFiltersChange` → `ModelExplorer` updates `filterState`. The `IsActive` flag now behaves as described above.\n  2. User sorts a column → `ModelListTable` emits `onSortChange` → `ModelExplorer` updates `sortState`.\n  3. User selects a row → `ModelListTable` emits `onSelectModel` → `ModelExplorer` updates `selectedModelId`.\n- **Libraries**: `@mui/material` for UI components, `ag-grid-react` for the data table.\n- **Design Decisions**:\n  - Preserve all data fields defined in `dataRequirements` (including primary key `ID`).\n  - Keep child components presentational; they receive data via props and emit high‑level events.\n  - Enhanced visual contrast via alternating row colors while keeping the table implementation simple.\n- **Functional Alignment**: Meets the updated functional requirement that clearing the \"Active Only\" filter displays all models, and adds better row contrast for readability.",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Provides a list of AI models with key columns and details for selection in the Model Explorer component.",
+    "entities": [
+      {
+        "name": "AI Models",
+        "description": "Catalog of AI models configured in the system.",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Vendor",
+          "AIModelType",
+          "IsActive",
+          "PowerRank",
+          "SpeedRank",
+          "CostRank",
+          "__mj_CreatedAt"
+        ],
+        "filterFields": [
+          "Name",
+          "Vendor",
+          "AIModelType",
+          "IsActive"
+        ],
+        "sortFields": [
+          "Name",
+          "__mj_CreatedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "Vendor",
+            "sequence": 13,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "AIModelType",
+            "sequence": 12,
+            "defaultInView": false,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "IsActive",
+            "sequence": 6,
+            "defaultInView": false,
+            "type": "bit",
+            "allowsNull": false,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "PowerRank",
+            "sequence": 5,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "SpeedRank",
+            "sequence": 9,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "CostRank",
+            "sequence": 10,
+            "defaultInView": false,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false
+          },
+          {
+            "name": "__mj_CreatedAt",
+            "sequence": 7,
+            "defaultInView": false,
+            "type": "datetimeoffset",
+            "allowsNull": false,
+            "isPrimaryKey": false
+          }
+        ],
+        "usageContext": "Model Explorer component displays a browsable list of AI models with sorting, filtering and detail panel.",
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }
+    ]
+  },
+  "location": "embedded",
+  "description": "A simple interface that lists your AI models, lets you sort them and view detailed information for a selected model.",
+  "properties": [
+    {
+      "name": "models",
+      "type": "Array<{ID:string, Name:string, Vendor:string, AIModelType:string, IsActive:boolean, PowerRank?:number, SpeedRank?:number, CostRank?:number, __mj_CreatedAt:string}>",
+      "required": false,
+      "description": "Array of AI model records returned from the backend view."
+    },
+    {
+      "name": "initialSelectedModelId",
+      "type": "string",
+      "required": false,
+      "description": "Optional ID of the model to be pre‑selected when the component mounts."
+    },
+    {
+      "name": "onModelSelect",
+      "type": "(modelId: string) => void",
+      "required": false,
+      "description": "Callback invoked when a model row is selected in the list."
+    },
+    {
+      "name": "onFiltersChange",
+      "type": "(filters: Record<string, any>) => void",
+      "required": false,
+      "description": "Callback invoked when filter criteria change."
+    },
+    {
+      "name": "onSortChange",
+      "type": "(field: string, direction: 'asc'|'desc') => void",
+      "required": false,
+      "description": "Callback invoked when the sort field or direction changes."
+    }
+  ],
+  "events": [
+    {
+      "name": "onModelSelect",
+      "description": "Emitted when a model row is selected in the table.",
+      "parameters": [
+        {
+          "name": "modelId",
+          "type": "string",
+          "description": "ID of the selected AI model"
+        }
+      ]
+    },
+    {
+      "name": "onFiltersChange",
+      "description": "Emitted when filter values are changed.",
+      "parameters": [
+        {
+          "name": "filters",
+          "type": "object",
+          "description": "Current filter key/value map"
+        }
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Emitted when the sort field or direction changes.",
+      "parameters": [
+        {
+          "name": "field",
+          "type": "string",
+          "description": "Field being sorted"
+        },
+        {
+          "name": "direction",
+          "type": "string",
+          "description": "'asc' or 'desc'"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<ModelExplorer models={models} initialSelectedModelId={selectedId} onModelSelect={handleSelect} onFiltersChange={handleFilters} onSortChange={handleSort} />",
+  "libraries": [
+    {},
+    {}
+  ],
+  "dependencies": [
+    {
+      "name": "ModelListTable",
+      "location": "embedded",
+      "description": "Table component that lists AI models, supports sorting, selection, and displays a filter bar.",
+      "functionalRequirements": "- Render a table with columns: Name, AIModelType, IsActive, __mj_CreatedAt.\n- Enable clicking a row to select a model.\n- Allow column sorting for Name and __mj_CreatedAt.\n- Display a filter input area for Name, Vendor, AIModelType, IsActive.",
+      "dataRequirements": {
+        "mode": "views",
+        "entities": [
+          {
+            "name": "AI Models",
+            "displayFields": [
+              "ID",
+              "Name",
+              "Vendor",
+              "AIModelType",
+              "IsActive",
+              "__mj_CreatedAt"
+            ],
+            "filterFields": [
+              "Name",
+              "Vendor",
+              "AIModelType",
+              "IsActive"
+            ],
+            "sortFields": [
+              "Name",
+              "__mj_CreatedAt"
+            ],
+            "fieldMetadata": [
+              {
+                "name": "ID",
+                "sequence": 1,
+                "defaultInView": false,
+                "type": "uniqueidentifier",
+                "allowsNull": false,
+                "isPrimaryKey": true
+              },
+              {
+                "name": "Name",
+                "sequence": 2,
+                "defaultInView": false,
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false
+              },
+              {
+                "name": "Vendor",
+                "sequence": 13,
+                "defaultInView": false,
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false
+              },
+              {
+                "name": "AIModelType",
+                "sequence": 12,
+                "defaultInView": false,
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false
+              },
+              {
+                "name": "IsActive",
+                "sequence": 6,
+                "defaultInView": false,
+                "type": "bit",
+                "allowsNull": false,
+                "isPrimaryKey": false
+              },
+              {
+                "name": "__mj_CreatedAt",
+                "sequence": 7,
+                "defaultInView": false,
+                "type": "datetimeoffset",
+                "allowsNull": false,
+                "isPrimaryKey": false
+              }
+            ]
+          }
+        ],
+        "description": "List of AI models for the table view."
+      },
+      "properties": [
+        {
+          "name": "models",
+          "type": "Array<{ID:string, Name:string, Vendor:string, AIModelType:string, IsActive:boolean, __mj_CreatedAt:string}>",
+          "required": true,
+          "description": "Array of AI model records to display."
+        },
+        {
+          "name": "selectedModelId",
+          "type": "string",
+          "required": false,
+          "description": "ID of the currently selected model."
+        },
+        {
+          "name": "filters",
+          "type": "Record<string, any>",
+          "required": false,
+          "description": "Current filter values for Name, Vendor, AIModelType, IsActive."
+        },
+        {
+          "name": "sortField",
+          "type": "string",
+          "required": false,
+          "description": "Field currently used for sorting (Name or __mj_CreatedAt)."
+        },
+        {
+          "name": "sortDirection",
+          "type": "'asc'|'desc'",
+          "required": false,
+          "description": "Sort direction."
+        }
+      ],
+      "events": [
+        {
+          "name": "onSelectModel",
+          "description": "Emitted when a user clicks a row.",
+          "parameters": [
+            {
+              "name": "modelId",
+              "type": "string",
+              "description": "ID of the selected model."
+            }
+          ]
+        },
+        {
+          "name": "onSortChange",
+          "description": "Emitted when user changes column sorting.",
+          "parameters": [
+            {
+              "name": "field",
+              "type": "string",
+              "description": "Field being sorted."
+            },
+            {
+              "name": "direction",
+              "type": "string",
+              "description": "'asc' or 'desc'."
+            }
+          ]
+        },
+        {
+          "name": "onFiltersChange",
+          "description": "Emitted when filter inputs are modified.",
+          "parameters": [
+            {
+              "name": "filters",
+              "type": "object",
+              "description": "Current filter map."
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<ModelListTable models={models} selectedModelId={selectedModelId} filters={filters} sortField={sortField} sortDirection={sortDirection} onSelectModel={handleSelect} onSortChange={handleSort} onFiltersChange={handleFilters} />",
+      "libraries": [
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "^5.15.2"
+        },
+        {}
+      ],
+      "relevantExamples": [
+        {
+          "name": "AIPromptsCluster",
+          "namespace": "AI/Analytics",
+          "version": "1.0.0",
+          "description": "Interactive clustering visualization of AI prompts using semantic embeddings to discover patterns and relationships",
+          "relevance": 0
+        },
+        {
+          "name": "AIModelDetails",
+          "namespace": "AI",
+          "version": "1.0.0",
+          "description": "Sliding details panel showing comprehensive model information, vendors, and usage statistics",
+          "relevance": 0
+        },
+        {
+          "name": "FunnelChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Sub-component of SalesFunnelVisualization that renders the funnel visualization",
+          "relevance": 0
+        }
+      ],
+      "code": "function ModelListTable({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  models,\n  selectedModelId,\n  filters,\n  sortField,\n  sortDirection,\n}) {\n  const { Box, Table, TableHead, TableRow, TableCell, TableBody, TableSortLabel, TextField, Checkbox, FormControlLabel, Paper } = MaterialUI;\n\n  const [selectedId, setSelectedId] = useState(\n    savedUserSettings?.selectedModelId ?? selectedModelId ?? null\n  );\n  const [localFilters, setLocalFilters] = useState(\n    savedUserSettings?.filters ?? filters ?? {}\n  );\n  const [localSortField, setLocalSortField] = useState(\n    savedUserSettings?.sortField ?? sortField ?? 'Name'\n  );\n  const [localSortDirection, setLocalSortDirection] = useState(\n    savedUserSettings?.sortDirection ?? sortDirection ?? 'asc'\n  );\n\n  // Sync incoming prop changes (optional but safe)\n  useEffect(() => {\n    if (selectedModelId && selectedModelId !== selectedId) {\n      setSelectedId(selectedModelId);\n    }\n  }, [selectedModelId]);\n\n  useEffect(() => {\n    if (filters && JSON.stringify(filters) !== JSON.stringify(localFilters)) {\n      setLocalFilters(filters);\n    }\n  }, [filters]);\n\n  useEffect(() => {\n    if (sortField && sortField !== localSortField) {\n      setLocalSortField(sortField);\n    }\n    if (sortDirection && sortDirection !== localSortDirection) {\n      setLocalSortDirection(sortDirection);\n    }\n  }, [sortField, sortDirection]);\n\n  // Handlers\n  const handleSelect = (id) => {\n    setSelectedId(id);\n    callbacks?.onSelectModel?.(id);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      selectedModelId: id,\n    });\n  };\n\n  const handleFilterChange = (field, value) => {\n    setLocalFilters((prev) => {\n      const newFilters = { ...prev, [field]: value };\n      callbacks?.onFiltersChange?.(newFilters);\n      onSaveUserSettings?.({\n        ...savedUserSettings,\n        filters: newFilters,\n      });\n      return newFilters;\n    });\n  };\n\n  const handleSort = (field) => {\n    const isSame = field === localSortField;\n    const newDirection = isSame && localSortDirection === 'asc' ? 'desc' : 'asc';\n    setLocalSortField(field);\n    setLocalSortDirection(newDirection);\n    callbacks?.onSortChange?.(field, newDirection);\n    onSaveUserSettings?.({\n      ...savedUserSettings,\n      sortField: field,\n      sortDirection: newDirection,\n    });\n  };\n\n  // Compute filtered and sorted data\n  const displayedModels = useMemo(() => {\n    let data = models || [];\n    // Apply filters\n    if (localFilters.Name) {\n      const val = localFilters.Name.toLowerCase();\n      data = data.filter((m) => m.Name && m.Name.toLowerCase().includes(val));\n    }\n    if (localFilters.Vendor) {\n      const val = localFilters.Vendor.toLowerCase();\n      data = data.filter((m) => m.Vendor && m.Vendor.toLowerCase().includes(val));\n    }\n    if (localFilters.AIModelType) {\n      const val = localFilters.AIModelType.toLowerCase();\n      data = data.filter((m) => m.AIModelType && m.AIModelType.toLowerCase().includes(val));\n    }\n    if (localFilters.IsActive !== undefined && localFilters.IsActive !== '') {\n      const boolVal =\n        localFilters.IsActive === true ||\n        localFilters.IsActive === 'true' ||\n        localFilters.IsActive === 1 ||\n        localFilters.IsActive === '1';\n      data = data.filter((m) => m.IsActive === boolVal);\n    }\n    // Sorting\n    const sorted = [...data].sort((a, b) => {\n      let aVal = a[localSortField];\n      let bVal = b[localSortField];\n      if (localSortField === '__mj_CreatedAt') {\n        aVal = new Date(aVal);\n        bVal = new Date(bVal);\n      }\n      if (aVal < bVal) return localSortDirection === 'asc' ? -1 : 1;\n      if (aVal > bVal) return localSortDirection === 'asc' ? 1 : -1;\n      return 0;\n    });\n    return sorted;\n  }, [models, localFilters, localSortField, localSortDirection]);\n\n  return (\n    <Paper style={styles?.container || { padding: 16 }}>\n      {/* Filter Bar */}\n      <Box display=\"flex\" flexWrap=\"wrap\" gap={2} mb={2}>\n        <TextField\n          label=\"Name\"\n          value={localFilters.Name || ''}\n          onChange={(e) => handleFilterChange('Name', e.target.value)}\n          variant=\"outlined\"\n          size=\"small\"\n        />\n        <TextField\n          label=\"Vendor\"\n          value={localFilters.Vendor || ''}\n          onChange={(e) => handleFilterChange('Vendor', e.target.value)}\n          variant=\"outlined\"\n          size=\"small\"\n        />\n        <TextField\n          label=\"Model Type\"\n          value={localFilters.AIModelType || ''}\n          onChange={(e) => handleFilterChange('AIModelType', e.target.value)}\n          variant=\"outlined\"\n          size=\"small\"\n        />\n        <FormControlLabel\n          control={\n            <Checkbox\n              checked={localFilters.IsActive === true || localFilters.IsActive === 'true'}\n              onChange={(e) => handleFilterChange('IsActive', e.target.checked)}\n            />\n          }\n          label=\"Active Only\"\n        />\n      </Box>\n\n      {/* Table */}\n      <Table size=\"small\">\n        <TableHead>\n          <TableRow>\n            <TableCell>\n              <TableSortLabel\n                active={localSortField === 'Name'}\n                direction={localSortDirection}\n                onClick={() => handleSort('Name')}\n              >\n                Name\n              </TableSortLabel>\n            </TableCell>\n            <TableCell>Vendor</TableCell>\n            <TableCell>Model Type</TableCell>\n            <TableCell>Active</TableCell>\n            <TableCell>\n              <TableSortLabel\n                active={localSortField === '__mj_CreatedAt'}\n                direction={localSortDirection}\n                onClick={() => handleSort('__mj_CreatedAt')}\n              >\n                Created At\n              </TableSortLabel>\n            </TableCell>\n          </TableRow>\n        </TableHead>\n        <TableBody>\n          {displayedModels.map((model) => (\n            <TableRow\n              key={model.ID}\n              hover\n              selected={model.ID === selectedId}\n              onClick={() => handleSelect(model.ID)}\n              style={{ cursor: 'pointer' }}\n            >\n              <TableCell>{model.Name}</TableCell>\n              <TableCell>{model.Vendor}</TableCell>\n              <TableCell>{model.AIModelType}</TableCell>\n              <TableCell>{model.IsActive ? 'Yes' : 'No'}</TableCell>\n              <TableCell>{new Date(model.__mj_CreatedAt).toLocaleDateString()}</TableCell>\n            </TableRow>\n          ))}\n        </TableBody>\n      </Table>\n    </Paper>\n  );\n}\n"
+    },
+    {
+      "name": "ModelFilterPanel",
+      "location": "embedded",
+      "description": "Provides UI controls for filtering the model list by Name, Vendor, AIModelType, and IsActive.",
+      "functionalRequirements": "- Text input for Name.\n- Dropdown for Vendor.\n- Dropdown for AIModelType.\n- Toggle or dropdown for IsActive status.\n- Emit filter object on change.",
+      "dataRequirements": {
+        "mode": "views",
+        "entities": [
+          {
+            "name": "AI Models",
+            "filterFields": [
+              "Name",
+              "Vendor",
+              "AIModelType",
+              "IsActive"
+            ],
+            "fieldMetadata": [
+              {
+                "name": "Name",
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 2
+              },
+              {
+                "name": "Vendor",
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 13
+              },
+              {
+                "name": "AIModelType",
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 12
+              },
+              {
+                "name": "IsActive",
+                "type": "bit",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 6
+              }
+            ]
+          }
+        ],
+        "description": "Filter fields used by the ModelFilterPanel."
+      },
+      "properties": [
+        {
+          "name": "filters",
+          "type": "Record<string, any>",
+          "required": false,
+          "description": "Current filter values."
+        }
+      ],
+      "events": [
+        {
+          "name": "onFiltersChange",
+          "description": "Emitted when any filter input changes.",
+          "parameters": [
+            {
+              "name": "filters",
+              "type": "object",
+              "description": "Updated filter map."
+            }
+          ]
+        }
+      ],
+      "exampleUsage": "<ModelFilterPanel filters={filters} onFiltersChange={handleFilters} />",
+      "libraries": [
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "^5.15.2"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "CustomerHeader",
+          "namespace": "CRM/Customer",
+          "version": "1.0.0",
+          "description": "Header section with customer summary information",
+          "relevance": 0
+        },
+        {
+          "name": "AIDetailTable",
+          "namespace": "AI/Analytics/Performance",
+          "version": "1.0.0",
+          "description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering",
+          "relevance": 0
+        },
+        {
+          "name": "DealVelocityMetrics",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Analyze and visualize the speed of deals through the sales pipeline with detailed stage-by-stage metrics",
+          "relevance": 0
+        }
+      ],
+      "code": "function ModelFilterPanel({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  filters = {}\n}) {\n  const { Box, TextField, Select, MenuItem, FormControl, InputLabel, Checkbox, FormControlLabel, Button, CircularProgress, Alert } = MaterialUI;\n\n  const [filterValues, setFilterValues] = React.useState(() => ({\n    Name: filters.Name ?? savedUserSettings?.filters?.Name ?? '',\n    Vendor: filters.Vendor ?? savedUserSettings?.filters?.Vendor ?? '',\n    AIModelType: filters.AIModelType ?? savedUserSettings?.filters?.AIModelType ?? '',\n    IsActive: filters.IsActive ?? savedUserSettings?.filters?.IsActive ?? false\n  }));\n\n  const [vendorOptions, setVendorOptions] = React.useState([]);\n  const [typeOptions, setTypeOptions] = React.useState([]);\n  const [loading, setLoading] = React.useState(false);\n  const [error, setError] = React.useState(null);\n\n  // Load distinct Vendor and AIModelType values once on mount\n  React.useEffect(() => {\n    const loadOptions = async () => {\n      setLoading(true);\n      try {\n        const result = await utilities.rv.RunView({\n          EntityName: 'AI Models',\n          Fields: ['Vendor', 'AIModelType'],\n          MaxRows: 1000\n        });\n        if (result.Success) {\n          const rows = result.Results;\n          const vendorSet = new Set();\n          const typeSet = new Set();\n          rows.forEach(r => {\n            if (r.Vendor) vendorSet.add(r.Vendor);\n            if (r.AIModelType) typeSet.add(r.AIModelType);\n          });\n          setVendorOptions(Array.from(vendorSet));\n          setTypeOptions(Array.from(typeSet));\n        } else {\n          setError('Failed to load filter options');\n        }\n      } catch (e) {\n        setError(e.message || 'Error loading filter options');\n      } finally {\n        setLoading(false);\n      }\n    };\n    loadOptions();\n  }, []);\n\n  const handleChange = field => event => {\n    const value = field === 'IsActive' ? event.target.checked : event.target.value;\n    const updated = { ...filterValues, [field]: value };\n    setFilterValues(updated);\n    if (callbacks?.onFiltersChange) callbacks.onFiltersChange(updated);\n    if (onSaveUserSettings) {\n      onSaveUserSettings({\n        ...savedUserSettings,\n        filters: updated\n      });\n    }\n  };\n\n  const clearFilters = () => {\n    const cleared = { Name: '', Vendor: '', AIModelType: '', IsActive: false };\n    setFilterValues(cleared);\n    if (callbacks?.onFiltersChange) callbacks.onFiltersChange(cleared);\n    if (onSaveUserSettings) {\n      onSaveUserSettings({\n        ...savedUserSettings,\n        filters: cleared\n      });\n    }\n  };\n\n  return (\n    <Box sx={{ p: 2, ...styles?.container }}>\n      {loading && <CircularProgress size={24} />}\n      {error && <Alert severity='error'>{error}</Alert>}\n      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: loading || error ? 2 : 0 }}>\n        <TextField\n          label='Name'\n          value={filterValues.Name}\n          onChange={handleChange('Name')}\n          variant='outlined'\n          size='small'\n        />\n        <FormControl variant='outlined' size='small'>\n          <InputLabel id='vendor-label'>Vendor</InputLabel>\n          <Select\n            labelId='vendor-label'\n            label='Vendor'\n            value={filterValues.Vendor}\n            onChange={handleChange('Vendor')}\n          >\n            <MenuItem value=''><em>All</em></MenuItem>\n            {vendorOptions.map(v => (\n              <MenuItem key={v} value={v}>{v}</MenuItem>\n            ))}\n          </Select>\n        </FormControl>\n        <FormControl variant='outlined' size='small'>\n          <InputLabel id='type-label'>AI Model Type</InputLabel>\n          <Select\n            labelId='type-label'\n            label='AI Model Type'\n            value={filterValues.AIModelType}\n            onChange={handleChange('AIModelType')}\n          >\n            <MenuItem value=''><em>All</em></MenuItem>\n            {typeOptions.map(t => (\n              <MenuItem key={t} value={t}>{t}</MenuItem>\n            ))}\n          </Select>\n        </FormControl>\n        <FormControlLabel\n          control={\n            <Checkbox\n              checked={filterValues.IsActive}\n              onChange={handleChange('IsActive')}\n            />\n          }\n          label='Active Only'\n        />\n        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>\n          <Button variant='contained' color='primary' onClick={() => { /* parent can react to filter change via callbacks */ }}>\n            Apply\n          </Button>\n          <Button variant='outlined' onClick={clearFilters}>\n            Clear\n          </Button>\n        </Box>\n      </Box>\n    </Box>\n  );\n}\n"
+    },
+    {
+      "name": "ModelDetailPanel",
+      "location": "embedded",
+      "description": "Displays detailed information for the selected AI model.",
+      "functionalRequirements": "- Show fields: Name, Vendor, AIModelType, PowerRank, SpeedRank, CostRank, IsActive.\n- Provide a close button to clear selection.\n- No editing; read‑only view.",
+      "dataRequirements": {
+        "mode": "views",
+        "entities": [
+          {
+            "name": "AI Models",
+            "displayFields": [
+              "Name",
+              "Vendor",
+              "AIModelType",
+              "PowerRank",
+              "SpeedRank",
+              "CostRank",
+              "IsActive"
+            ],
+            "fieldMetadata": [
+              {
+                "name": "Name",
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 2
+              },
+              {
+                "name": "Vendor",
+                "type": "nvarchar",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 13
+              },
+              {
+                "name": "AIModelType",
+                "type": "nvarchar",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 12
+              },
+              {
+                "name": "PowerRank",
+                "type": "int",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 5
+              },
+              {
+                "name": "SpeedRank",
+                "type": "int",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 9
+              },
+              {
+                "name": "CostRank",
+                "type": "int",
+                "allowsNull": true,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 10
+              },
+              {
+                "name": "IsActive",
+                "type": "bit",
+                "allowsNull": false,
+                "isPrimaryKey": false,
+                "defaultInView": false,
+                "sequence": 6
+              }
+            ]
+          }
+        ],
+        "description": "Detail fields displayed by ModelDetailPanel."
+      },
+      "properties": [
+        {
+          "name": "model",
+          "type": "{  ID: string,  Name: string,  Vendor?: string,  AIModelType: string,  PowerRank?: number,  SpeedRank?: number,  CostRank?: number,  IsActive: boolean}",
+          "required": true,
+          "description": "The selected model object to display."
+        },
+        {
+          "name": "onClose",
+          "type": "() => void",
+          "required": false,
+          "description": "Callback invoked when the user closes the detail panel."
+        }
+      ],
+      "events": [
+        {
+          "name": "onClose",
+          "description": "Emitted when the close button is clicked."
+        }
+      ],
+      "exampleUsage": "<ModelDetailPanel model={selectedModel} onClose={handleCloseDetail} />",
+      "libraries": [
+        {
+          "name": "@mui/material",
+          "globalVariable": "MaterialUI",
+          "version": "^5.15.2"
+        }
+      ],
+      "relevantExamples": [
+        {
+          "name": "AIPromptsCluster",
+          "namespace": "AI/Analytics",
+          "version": "1.0.0",
+          "description": "Interactive clustering visualization of AI prompts using semantic embeddings to discover patterns and relationships",
+          "relevance": 0
+        },
+        {
+          "name": "CustomerBalances",
+          "namespace": "CRM/Finance",
+          "version": "1.0.0",
+          "description": "Table showing customer outstanding balances",
+          "relevance": 0
+        },
+        {
+          "name": "TrendChart",
+          "namespace": "CRM/Analytics",
+          "version": "1.0.0",
+          "description": "Time series chart showing velocity trends",
+          "relevance": 0
+        }
+      ],
+      "code": "function ModelDetailPanel({\n  utilities,\n  styles,\n  components,\n  callbacks,\n  savedUserSettings,\n  onSaveUserSettings,\n  model,\n  onClose\n}) {\n  const { Box, Typography, Button, CircularProgress } = MaterialUI;\n\n  // State for showing AI-generated summary, persisted in user settings\n  const [showSummary, setShowSummary] = React.useState(\n    savedUserSettings?.showSummary ?? false\n  );\n  const [summary, setSummary] = React.useState(null);\n  const [loadingSummary, setLoadingSummary] = React.useState(false);\n  const [summaryError, setSummaryError] = React.useState(null);\n\n  // Persist the showSummary preference\n  const persistShowSummary = (value) => {\n    if (onSaveUserSettings) {\n      onSaveUserSettings({\n        ...savedUserSettings,\n        showSummary: value\n      });\n    }\n  };\n\n  const loadSummary = async () => {\n    setLoadingSummary(true);\n    setSummaryError(null);\n    try {\n      const result = await utilities.ai.ExecutePrompt({\n        systemPrompt: `Provide a concise 2‑3 sentence summary of the following AI model:\\n${JSON.stringify(\n          model,\n          null,\n          2\n        )}`,\n        modelPower: \"lowest\"\n      });\n      if (result?.success) {\n        setSummary(result.result);\n      } else {\n        setSummaryError(\"Failed to generate summary.\");\n      }\n    } catch (e) {\n      console.error(e);\n      setSummaryError(\"Error generating summary.\");\n    } finally {\n      setLoadingSummary(false);\n    }\n  };\n\n  const handleToggleSummary = () => {\n    const newVal = !showSummary;\n    setShowSummary(newVal);\n    persistShowSummary(newVal);\n    if (newVal && !summary) {\n      loadSummary();\n    }\n  };\n\n  // Load summary on mount if preference is true\n  React.useEffect(() => {\n    if (showSummary && !summary) {\n      loadSummary();\n    }\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, []);\n\n  const handleClose = () => {\n    if (onClose) onClose();\n  };\n\n  // Guard against missing model data\n  if (!model) {\n    return (\n      <Box\n        sx={styles?.container || { padding: 2, border: \"1px solid #ccc\", borderRadius: 2 }}\n      >\n        <Box display=\"flex\" justifyContent=\"space-between\" alignItems=\"center\" mb={2}>\n          <Typography variant=\"h6\">Model Details</Typography>\n          {onClose && (\n            <Button variant=\"text\" size=\"small\" onClick={handleClose}>\n              Close\n            </Button>\n          )}\n        </Box>\n        <Typography>No model selected.</Typography>\n      </Box>\n    );\n  }\n\n  return (\n    <Box\n      sx={styles?.container || { padding: 2, border: \"1px solid #ccc\", borderRadius: 2 }}\n    >\n      <Box display=\"flex\" justifyContent=\"space-between\" alignItems=\"center\" mb={2}>\n        <Typography variant=\"h6\">Model Details</Typography>\n        {onClose && (\n          <Button variant=\"text\" size=\"small\" onClick={handleClose}>\n            Close\n          </Button>\n        )}\n      </Box>\n\n      <Box mb={2}>\n        <Typography><strong>Name:</strong> {model.Name}</Typography>\n        {model.Vendor && (\n          <Typography><strong>Vendor:</strong> {model.Vendor}</Typography>\n        )}\n        <Typography><strong>Type:</strong> {model.AIModelType}</Typography>\n        {model.PowerRank != null && (\n          <Typography><strong>Power Rank:</strong> {model.PowerRank}</Typography>\n        )}\n        {model.SpeedRank != null && (\n          <Typography><strong>Speed Rank:</strong> {model.SpeedRank}</Typography>\n        )}\n        {model.CostRank != null && (\n          <Typography><strong>Cost Rank:</strong> {model.CostRank}</Typography>\n        )}\n        <Typography><strong>Active:</strong> {model.IsActive ? \"Yes\" : \"No\"}</Typography>\n      </Box>\n\n      <Button variant=\"contained\" onClick={handleToggleSummary} sx={{ mb: 2 }}>\n        {showSummary ? \"Hide Summary\" : \"Show Summary\"}\n      </Button>\n\n      {showSummary && (\n        <Box>\n          {loadingSummary && <CircularProgress size={24} />}\n          {summaryError && (\n            <Typography color=\"error\">{summaryError}</Typography>\n          )}\n          {summary && (\n            <Typography>{summary}</Typography>\n          )}\n        </Box>\n      )}\n    </Box>\n  );\n}\n"
+    }
+  ],
+  "code": "function ModelExplorer({\n  utilities = {},\n  styles = {},\n  components = {},\n  callbacks = {},\n  savedUserSettings = {},\n  onSaveUserSettings,\n  models,\n  initialSelectedModelId,\n  onModelSelect,\n  onFiltersChange,\n  onSortChange\n}) {\n  const { ModelListTable, ModelFilterPanel, ModelDetailPanel } = components;\n\n  // Local state for data when not provided via props\n  const [localModels, setLocalModels] = React.useState([]);\n\n  // UI state\n  const [selectedModelId, setSelectedModelId] = React.useState(\n    savedUserSettings?.selectedModelId ?? initialSelectedModelId ?? null\n  );\n  const [filters, setFilters] = React.useState(savedUserSettings?.filters || {});\n  const [sortField, setSortField] = React.useState(savedUserSettings?.sortField || 'Name');\n  const [sortDirection, setSortDirection] = React.useState(\n    savedUserSettings?.sortDirection || 'asc'\n  );\n\n  // Load models if not supplied via prop and utilities are available\n  React.useEffect(() => {\n    if (models) return; // parent supplied data\n    if (!utilities?.rv?.RunView) return; // utilities not provided, skip loading\n    const loadModels = async () => {\n      const result = await utilities.rv.RunView({\n        EntityName: 'AI Models',\n        Fields: [\n          'ID',\n          'Name',\n          'Vendor',\n          'AIModelType',\n          'IsActive',\n          'PowerRank',\n          'SpeedRank',\n          'CostRank',\n          '__mj_CreatedAt'\n        ],\n        OrderBy: `${sortField} ${sortDirection.toUpperCase()}`,\n        MaxRows: 0 // 0 = no limit per platform conventions\n      });\n      if (result?.Success) {\n        setLocalModels(result.Results);\n      }\n    };\n    loadModels();\n    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount\n  }, []);\n\n  // Determine source models array\n  const allModels = React.useMemo(() => {\n    return models ?? localModels;\n  }, [models, localModels]);\n\n  // Apply filters\n  const filteredModels = React.useMemo(() => {\n    return allModels.filter((m) => {\n      // Name filter (contains, case‑insensitive)\n      if (filters.Name && !m.Name?.toLowerCase().includes(String(filters.Name).toLowerCase())) {\n        return false;\n      }\n      // Vendor filter\n      if (filters.Vendor && !m.Vendor?.toLowerCase().includes(String(filters.Vendor).toLowerCase())) {\n        return false;\n      }\n      // AIModelType filter\n      if (filters.AIModelType && m.AIModelType !== filters.AIModelType) {\n        return false;\n      }\n      // IsActive filter – only filter when explicitly true (Active Only)\n      if (filters.IsActive === true && m.IsActive !== true) {\n        return false;\n      }\n      return true;\n    });\n  }, [allModels, filters]);\n\n  // Apply sorting\n  const sortedModels = React.useMemo(() => {\n    const sorted = [...filteredModels];\n    sorted.sort((a, b) => {\n      const aVal = a[sortField];\n      const bVal = b[sortField];\n      if (aVal == null) return 1;\n      if (bVal == null) return -1;\n      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;\n      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;\n      return 0;\n    });\n    return sorted;\n  }, [filteredModels, sortField, sortDirection]);\n\n  // Handlers\n  const handleSelectModel = (modelId) => {\n    setSelectedModelId(modelId);\n    onModelSelect?.(modelId);\n    onSaveUserSettings?.({\n      ...(savedUserSettings || {}),\n      selectedModelId: modelId\n    });\n  };\n\n  const handleFiltersChange = (newFilters) => {\n    setFilters(newFilters);\n    onFiltersChange?.(newFilters);\n    onSaveUserSettings?.({\n      ...(savedUserSettings || {}),\n      filters: newFilters\n    });\n  };\n\n  const handleSortChange = (field, direction) => {\n    setSortField(field);\n    setSortDirection(direction);\n    onSortChange?.(field, direction);\n    onSaveUserSettings?.({\n      ...(savedUserSettings || {}),\n      sortField: field,\n      sortDirection: direction\n    });\n  };\n\n  const handleCloseDetail = () => {\n    setSelectedModelId(null);\n    onSaveUserSettings?.({\n      ...(savedUserSettings || {}),\n      selectedModelId: null\n    });\n  };\n\n  // Merge callbacks for child components that emit events\n  const childCallbacks = React.useMemo(\n    () => ({\n      ...callbacks,\n      onSelectModel: handleSelectModel,\n      onSortChange: handleSortChange,\n      onFiltersChange: handleFiltersChange\n    }),\n    [callbacks, handleSelectModel, handleSortChange, handleFiltersChange]\n  );\n\n  const selectedModel = React.useMemo(() => {\n    return allModels.find((m) => m.ID === selectedModelId) || null;\n  }, [allModels, selectedModelId]);\n\n  return (\n    <div style={styles?.container}>\n      {ModelFilterPanel && (\n        <ModelFilterPanel\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={childCallbacks}\n          savedUserSettings={savedUserSettings}\n          onSaveUserSettings={onSaveUserSettings}\n          filters={filters}\n        />\n      )}\n      {ModelListTable && (\n        <ModelListTable\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={childCallbacks}\n          savedUserSettings={savedUserSettings}\n          onSaveUserSettings={onSaveUserSettings}\n          models={sortedModels}\n          selectedModelId={selectedModelId}\n          filters={filters}\n          sortField={sortField}\n          sortDirection={sortDirection}\n          className=\"model-list-table\"\n        />\n      )}\n      {selectedModel && ModelDetailPanel && (\n        <ModelDetailPanel\n          utilities={utilities}\n          styles={styles}\n          components={components}\n          callbacks={callbacks}\n          savedUserSettings={savedUserSettings}\n          onSaveUserSettings={onSaveUserSettings}\n          model={selectedModel}\n          onClose={handleCloseDetail}\n        />\n      )}\n      {/* Inline style for alternating row colors */}\n      <style>{`.model-list-table tbody tr:nth-child(even) {background-color: #f5f5f5;}`}</style>\n    </div>\n  );\n}\n\nmodule.exports = ModelExplorer;",
+  "testsPassed": false
+}

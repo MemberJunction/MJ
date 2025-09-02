@@ -304,9 +304,17 @@ export class ComponentRunner {
           // The spec might not have globalVariable, but we need it for the runtime to work
           if (spec.libraries && componentLibraries) {
             for (const specLib of spec.libraries) {
+              // Skip if library entry is invalid
+              if (!specLib || !specLib.name) {
+                if (debug) {
+                  console.warn('  ⚠️ Skipping invalid library entry (missing name):', specLib);
+                }
+                continue;
+              }
+              
               if (!specLib.globalVariable) {
                 const libDef = componentLibraries.find(l => 
-                  l.Name.toLowerCase() === specLib.name.toLowerCase()
+                  l && l.Name && l.Name.toLowerCase() === specLib.name.toLowerCase()
                 );
                 if (libDef && libDef.GlobalVariable) {
                   specLib.globalVariable = libDef.GlobalVariable;
@@ -355,7 +363,12 @@ export class ComponentRunner {
             });
             (window as any).__testHarnessTestFailed = true;
             // Don't re-throw - let execution continue to collect this error properly
-            return; // Exit early but let the error collection happen
+            // Return a failure result so the Promise resolves properly
+            return {
+              success: false,
+              error: `Component registration failed: ${registrationError.message || registrationError}`,
+              componentCount: 0
+            };
           }
           
           if (debug && !registrationResult.success) {
@@ -587,6 +600,21 @@ export class ComponentRunner {
         };
       }
 
+      // Ensure executionResult has proper shape
+      if (!executionResult) {
+        executionResult = {
+          success: false,
+          error: 'Component execution returned no result'
+        };
+        errors.push('Component execution failed to return a result');
+      } else if (!executionResult.success && executionResult.error) {
+        // Add the execution error if it hasn't been captured elsewhere
+        const errorMsg = `Component execution failed: ${executionResult.error}`;
+        if (!errors.some(e => e.includes(executionResult.error!))) {
+          errors.push(errorMsg);
+        }
+      }
+      
       if (debug) {
         console.log('Execution result:', executionResult);
       }
@@ -1081,9 +1109,22 @@ export class ComponentRunner {
     });
 
     const errors: Array<{message: string; source?: string}> = [];
+    
+    // Check if we have any specific React render errors
+    const hasSpecificReactError = errorData.runtimeErrors.some((error: any) => 
+      error.type === 'react-render-error' && 
+      !error.message.includes('Script error')
+    );
 
     // Process runtime errors with their source information
     errorData.runtimeErrors.forEach((error: any) => {
+      // Skip generic "Script error" messages if we have more specific React errors
+      if (hasSpecificReactError && 
+          error.type === 'runtime' && 
+          error.message === 'Script error.') {
+        return; // Skip this generic error
+      }
+      
       const phase = error.phase ? ` (during ${error.phase})` : '';
       const errorMsg = `${error.type} error: ${error.message}${phase}`;
       errors.push({
