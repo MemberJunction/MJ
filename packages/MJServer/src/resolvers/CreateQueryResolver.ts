@@ -354,7 +354,12 @@ export class QueryResolverExtended extends QueryResolver {
                     QueryData: JSON.stringify(record.GetAll()),
                     Fields: record.QueryFields,
                     Parameters: record.QueryParameters,
-                    Entities: record.QueryEntities,
+                    Entities: record.QueryEntities.map(e => {
+                        return {
+                            ...e,
+                            EntityName: e.Entity // alias this to fix variable name mismatch
+                        }
+                    }),
                     Permissions: record.QueryPermissions
                 };
             } 
