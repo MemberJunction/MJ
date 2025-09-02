@@ -30,6 +30,7 @@ export interface Violation {
   column: number;
   message: string;
   code?: string;
+  source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
 }
 
 export interface FixSuggestion {

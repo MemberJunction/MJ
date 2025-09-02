@@ -348,7 +348,8 @@ export class ComponentRunner {
               message: `Component registration failed: ${registrationError.message || registrationError}`,
               stack: registrationError.stack,
               type: 'registration-error',
-              phase: 'component-compilation'
+              phase: 'component-compilation',
+              source: 'runtime-wrapper'
             });
             (window as any).__testHarnessTestFailed = true;
             throw registrationError; // Re-throw for outer handler
@@ -422,7 +423,8 @@ export class ComponentRunner {
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
                   message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
-                  type: 'render-loop'
+                  type: 'render-loop',
+                  source: 'test-harness'
                 });
                 // Try to unmount to stop the madness
                 try {
@@ -478,7 +480,8 @@ export class ComponentRunner {
                 message: enhancedMessage,
                 stack: error.stack,
                 type: 'react-render-error',
-                phase: 'component-render'
+                phase: 'component-render',
+                source: 'user-component'  // This is the actual error from user's component
               });
               (window as any).__testHarnessTestFailed = true;
               return { hasError: true, error };
@@ -544,7 +547,8 @@ export class ComponentRunner {
           (window as any).__testHarnessRuntimeErrors.push({
             message: error.message || String(error),
             stack: error.stack,
-            type: 'execution-error'
+            type: 'execution-error',
+            source: 'runtime-wrapper'
           });
           (window as any).__testHarnessTestFailed = true;
           
@@ -589,9 +593,9 @@ export class ComponentRunner {
       // Get render count
       renderCount = await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
 
-      // Collect all errors
-      const runtimeErrors = await this.collectRuntimeErrors(page);
-      errors.push(...runtimeErrors);
+      // Collect all errors with source information
+      const runtimeErrorsWithSource = await this.collectRuntimeErrors(page);
+      errors.push(...runtimeErrorsWithSource.map(e => e.message)); // Extract messages for backward compat
 
       // Collect warnings (separate from errors)
       const collectedWarnings = await this.collectWarnings(page);
@@ -604,8 +608,9 @@ export class ComponentRunner {
       const asyncErrors = await this.collectRuntimeErrors(page);
       // Only add new errors
       asyncErrors.forEach(err => {
-        if (!errors.includes(err)) {
-          errors.push(err);
+        if (!errors.includes(err.message)) {
+          errors.push(err.message);
+          runtimeErrorsWithSource.push(err); // Keep the structured version too
         }
       });
       
@@ -636,16 +641,32 @@ export class ComponentRunner {
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
       
-      const result: ComponentExecutionResult = {
-        success: success && dataErrors.length === 0, // Fail if we have data errors
-        html,
-        errors: allErrors.map(e => ({
+      // Map runtime errors with source info, data errors don't have source
+      const errorViolations = runtimeErrorsWithSource.map(e => ({
+        message: e.message,
+        severity: 'critical' as const,
+        rule: 'runtime-error',
+        line: 0,
+        column: 0,
+        source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
+      }));
+      
+      // Add data errors without source
+      dataErrors.forEach(e => {
+        errorViolations.push({
           message: e,
           severity: 'critical' as const,
           rule: 'runtime-error',
           line: 0,
-          column: 0
-        })),
+          column: 0,
+          source: 'user-component' as const // Data errors are from user's data access code
+        });
+      });
+      
+      const result: ComponentExecutionResult = {
+        success: success && dataErrors.length === 0, // Fail if we have data errors
+        html,
+        errors: errorViolations,
         warnings: warnings.map(w => ({
           message: w,
           severity: 'low' as const,
@@ -667,21 +688,38 @@ export class ComponentRunner {
       return result;
 
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      // For catch block errors, we need to handle them specially
+      const catchError = {
+        message: error instanceof Error ? error.message : String(error),
+        source: 'test-harness' as const // Errors caught here are usually test harness issues
+      };
       
-      // Combine runtime errors with data errors
-      const allErrors = [...errors, ...dataErrors];
+      // Create error violations including the catch error
+      const errorViolations: Violation[] = [{
+        message: catchError.message,
+        severity: 'critical' as const,
+        rule: 'runtime-error',
+        line: 0,
+        column: 0,
+        source: catchError.source
+      }];
       
-      const result: ComponentExecutionResult = {
-        success: false,
-        html: '',
-        errors: allErrors.map(e => ({
+      // Add any data errors
+      dataErrors.forEach(e => {
+        errorViolations.push({
           message: e,
           severity: 'critical' as const,
           rule: 'runtime-error',
           line: 0,
-          column: 0
-        })),
+          column: 0,
+          source: 'user-component' as const
+        });
+      });
+      
+      const result: ComponentExecutionResult = {
+        success: false,
+        html: '',
+        errors: errorViolations,
         warnings: warnings.map(w => ({
           message: w,
           severity: 'low' as const,
@@ -969,10 +1007,17 @@ export class ComponentRunner {
 
       // Global error handler
       window.addEventListener('error', (event) => {
+        // Determine source based on error content
+        let source = 'user-component';  // Default to user component
+        if (event.message && event.message.includes('Script error')) {
+          source = 'runtime-wrapper';
+        }
+        
         (window as any).__testHarnessRuntimeErrors.push({
           message: event.error?.message || event.message,
           stack: event.error?.stack,
-          type: 'runtime'
+          type: 'runtime',
+          source: source
         });
         (window as any).__testHarnessTestFailed = true;
       });
@@ -982,7 +1027,8 @@ export class ComponentRunner {
         (window as any).__testHarnessRuntimeErrors.push({
           message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason),
           stack: event.reason?.stack,
-          type: 'promise-rejection'
+          type: 'promise-rejection',
+          source: 'user-component'  // Async errors are likely from user code
         });
         (window as any).__testHarnessTestFailed = true;
         event.preventDefault();
@@ -993,7 +1039,7 @@ export class ComponentRunner {
   /**
    * Collect runtime errors from the page
    */
-  private async collectRuntimeErrors(page: any): Promise<string[]> {
+  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string}>> {
     const errorData = await page.evaluate(() => {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
@@ -1002,27 +1048,25 @@ export class ComponentRunner {
       };
     });
 
-    const errors: string[] = [];
+    const errors: Array<{message: string; source?: string}> = [];
 
-    // Only add "test failed" message if there are actual errors
-    if (errorData.testFailed && (errorData.runtimeErrors.length > 0 || errorData.consoleErrors.length > 0)) {
-      errors.push('Test marked as failed by error handlers');
-    }
-
+    // Process runtime errors with their source information
     errorData.runtimeErrors.forEach((error: any) => {
-      // Include phase information if available to help identify where the error occurred
       const phase = error.phase ? ` (during ${error.phase})` : '';
       const errorMsg = `${error.type} error: ${error.message}${phase}`;
-      if (!errors.includes(errorMsg)) {
-        errors.push(errorMsg);
-      }
+      errors.push({
+        message: errorMsg,
+        source: error.source
+      });
     });
 
+    // Console errors don't have source info
     errorData.consoleErrors.forEach((error: string) => {
       const errorMsg = `Console error: ${error}`;
-      if (!errors.includes(errorMsg)) {
-        errors.push(errorMsg);
-      }
+      errors.push({
+        message: errorMsg,
+        source: 'react-framework' // Console errors from React are framework level
+      });
     });
 
     return errors;
