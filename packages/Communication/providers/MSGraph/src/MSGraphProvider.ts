@@ -15,7 +15,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
     private ServiceAccount: User | null = null;
     private HTMLConverter: compiledFunction;
-    
+
     constructor() {
         super();
 
@@ -29,12 +29,12 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             // Smart selection: use message.From if provided and different from default
             // This maintains backward compatibility while enabling custom From addresses
             let senderEmail: string | undefined;
-            if (message.From && 
-                message.From.trim() !== '' && 
+            if (message.From &&
+                message.From.trim() !== '' &&
                 message.From !== Config.AZURE_ACCOUNT_EMAIL) {
                 senderEmail = message.From;
             }
-            
+
             const user: User | null = await this.GetServiceAccount(senderEmail);
             if(!user){
                 return {
@@ -51,7 +51,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                     Error: 'Message is null'
                 };
             }
-    
+
             const sendMail: Record<string, any> = {
                 message: {
                     subject: message.Subject,
@@ -83,7 +83,15 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 },
                 saveToSentItems: message.ContextData?.saveToSentItems ?? false
             };
-    
+
+            if(message.Headers){
+                // Convert Headers (Record<string, string>) to internetMessageHeaders (Array[{key:value}])
+                sendMail.message.internetMessageHeaders = Object.entries(message.Headers).map(([key, value]) => ({
+                    name: `X-${key}`,
+                    value: value
+                }));
+            }
+
             const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/sendMail`;
             await Auth.GraphClient.api(sendMessagePath).post(sendMail);
 
@@ -142,7 +150,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
             const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${params.MessageID}/reply`;
             const result: any = await Auth.GraphClient.api(sendMessagePath).post(reply);
-        
+
             return {
                 Success: true,
                 Result: result
@@ -198,7 +206,18 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             Messages: []
         };
 
-        const messages = sourceMessages.map((message: Message) => {
+
+        let headers = null;
+        // GetHeaders is an async function for one specific message.  I need
+        // to resolve all of them into a structure, indexed by sourceMessage.id
+        // and then apply that in the mapped message below.
+        if ( params.IncludeHeaders ) {
+            const headersPromises = sourceMessages.map((message) => this.GetHeaders(params, user, message.id));
+            headers = await Promise.all(headersPromises);
+        }
+
+        const messages = sourceMessages.map((message: Message, index: number) => {
+
             const replyTo: string[] = message.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [];
             const primaryToRecipient: string = replyTo.length > 0 ? replyTo[0]: '';
 
@@ -209,7 +228,8 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 Subject: message.subject || '',
                 Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
-                ThreadID: message.conversationId || ''
+                ThreadID: message.conversationId || '',
+                Headers: headers ? headers[index] : null
             };
         });
 
@@ -283,6 +303,17 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         }
     }
 
+    protected async GetHeaders(params: GetMessagesParams, user: User, messageID: string | undefined): Promise<Record<string, string>> {
+        if ( params.IncludeHeaders && messageID ){
+            const messageHeaderPath = `${Auth.ApiConfig.uri}/${user.id}/messages/${messageID}?$select=internetMessageHeaders`;
+            const messageHeaderResponse = await Auth.GraphClient.api(messageHeaderPath).get();
+            return messageHeaderResponse.internetMessageHeaders?.map((header: {name: string, value: string}) => ({
+                [header.name]: header.value
+            })) || {};
+        }
+        return {};
+    }
+
     protected async GetServiceAccount(email?: string): Promise<User | null> {
         if(this.ServiceAccount){
             return this.ServiceAccount;
@@ -308,14 +339,14 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         return user;
     }
 
-    protected async MarkMessageAsRead(userID: string, messageID: string): Promise<boolean> {        
+    protected async MarkMessageAsRead(userID: string, messageID: string): Promise<boolean> {
         try{
             const Client: Client = Auth.GraphClient;
             const updatePath: string = `${Auth.ApiConfig.uri}/${userID}/messages/${messageID}`;
             const updatedMessage = {
                 isRead: true
             };
-            
+
             await Client.api(updatePath).update(updatedMessage);
             LogStatus(`Message ${messageID} marked as read`);
             return true;
