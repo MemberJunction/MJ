@@ -193,23 +193,27 @@ export class ComponentRunner {
         console.log('  - spec.name:', options.componentSpec.name);
         console.log('  - spec.code length:', options.componentSpec.code?.length || 0);
         console.log('  - props:', JSON.stringify(options.props || {}, null, 2));
-        console.log('  - componentLibraries count:', allLibraries?.length || 0);
-        if (allLibraries && allLibraries.length > 0) {
-          console.log('  - First few libraries:', allLibraries.slice(0, 3).map(lib => ({
-            Name: lib.Name,
-            GlobalVariable: lib.GlobalVariable
+        
+        // Show spec-specific libraries, not all available libraries
+        if (options.componentSpec.libraries && options.componentSpec.libraries.length > 0) {
+          console.log('  - spec requires libraries:', options.componentSpec.libraries.map(lib => ({
+            name: lib.name,
+            globalVariable: lib.globalVariable,
+            version: lib.version
           })));
+        } else {
+          console.log('  - spec requires libraries: none');
         }
+        
+        // Total available libraries in metadata (for context only)
+        console.log('  - total available libraries in metadata:', allLibraries?.length || 0);
       }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
       const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
-          console.log('📚 BROWSER: Received componentLibraries:', componentLibraries?.length || 0);
-          if (componentLibraries?.length > 0) {
-            console.log('  First library:', componentLibraries[0]);
-          }
+          console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
         }
         
         // Declare renderCheckInterval at the top scope for cleanup
