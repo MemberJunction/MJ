@@ -26,8 +26,10 @@ export class ReactDebugConfig {
   /**
    * Static property that controls React debug mode globally.
    * Can be overridden at application startup before React loads.
+   * Defaults to true for better development experience.
+   * Should be explicitly set to false in production.
    */
-  static DEBUG_MODE: boolean = false;
+  static DEBUG_MODE: boolean = true;
 
   /**
    * Get the current debug mode setting.
@@ -41,8 +43,8 @@ export class ReactDebugConfig {
     }
     
     // Check if we're in development mode (common Angular pattern)
-    if (typeof window !== 'undefined' && (window as any).ngDevMode !== undefined) {
-      // Angular's development mode indicator
+    // ngDevMode is truthy in dev mode, false in prod mode
+    if (typeof window !== 'undefined' && (window as any).ngDevMode) {
       return true;
     }
     
