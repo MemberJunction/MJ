@@ -4,7 +4,7 @@
   "description": "Lint rules for AG-Grid React component library",
   "componentAccess": {
     "pattern": "namespace",
-    "description": "AG-Grid React exports components as properties on the global AgGridReact object",
+    "description": "AG-Grid React exports components as properties on the global AgGridReact object.",
     "components": {
       "AgGridReact": {
         "correctAccess": "AgGridReact.AgGridReact",
