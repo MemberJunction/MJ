@@ -570,7 +570,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' is already available from dependencies (auto-destructured), but this code is creating a new definition which overrides it.`,
+                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' should be accessed via destructuring from components prop or as components.${varName}, but this code is creating a new definition which overrides it.`,
                     code: `const ${varName} = ...`
                   });
                 }
@@ -590,7 +590,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' is already available from dependencies (auto-destructured), but this code is creating a new function which overrides it.`,
+                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' should be accessed via destructuring from components prop or as components.${funcName}, but this code is creating a new function which overrides it.`,
                   code: `function ${funcName}(...)`
                 });
               }
@@ -598,8 +598,8 @@ export class ComponentLinter {
           }
         });
         
-        // Components are now auto-destructured in the wrapper, so we don't need to check for manual destructuring
-        // We just need to check if they're being used directly
+        // Components must be destructured from the components prop or accessed via components.ComponentName
+        // Check if they're being used correctly
         let hasComponentsUsage = false;
         const usedDependencies = new Set<string>();
         
@@ -644,7 +644,7 @@ export class ComponentLinter {
           }
         });
         
-        // Components are now auto-destructured, so just check for unused dependencies
+        // Check for unused dependencies - components must be destructured or accessed via components prop
         if (dependencyNames.size > 0 && usedDependencies.size === 0) {
           const depList = Array.from(dependencyNames).join(', ');
           violations.push({
@@ -652,7 +652,7 @@ export class ComponentLinter {
             severity: 'low',
             line: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.line || 0,
             column: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.column || 0,
-            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components are available for use.`,
+            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components must be destructured from the components prop or accessed as components.ComponentName to use them.`,
             code: `// Available: ${depList}`
           });
         }
@@ -3596,93 +3596,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     },
 
     {
-      name: 'invalid-components-destructuring',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        // Build sets of valid component names and library names
-        const validComponentNames = new Set<string>();
-        const libraryNames = new Set<string>();
-        const libraryGlobalVars = new Set<string>();
-        
-        // Add dependency components
-        if (componentSpec?.dependencies) {
-          for (const dep of componentSpec.dependencies) {
-            if (dep.name) {
-              validComponentNames.add(dep.name);
-            }
-          }
-        }
-        
-        // Add libraries
-        if (componentSpec?.libraries) {
-          for (const lib of componentSpec.libraries) {
-            if (lib.name) {
-              libraryNames.add(lib.name);
-            }
-            if (lib.globalVariable) {
-              libraryGlobalVars.add(lib.globalVariable);
-            }
-          }
-        }
-        
-        // Check for manual destructuring from components (now optional since auto-destructuring is in place)
-        traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            // Look for: const { Something } = components;
-            if (t.isObjectPattern(path.node.id) && 
-                t.isIdentifier(path.node.init) && 
-                path.node.init.name === 'components') {
-              
-              for (const prop of path.node.id.properties) {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  const destructuredName = prop.key.name;
-                  
-                  // Check if this is NOT a valid component from dependencies
-                  if (!validComponentNames.has(destructuredName)) {
-                    // Check if it might be a library being incorrectly destructured
-                    if (libraryNames.has(destructuredName) || libraryGlobalVars.has(destructuredName)) {
-                      violations.push({
-                        rule: 'invalid-components-destructuring',
-                        severity: 'critical',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: `Attempting to destructure library "${destructuredName}" from components prop. Libraries should be accessed directly via their globalVariable, not from components.`,
-                        code: `const { ${destructuredName} } = components;`
-                      });
-                    } else {
-                      violations.push({
-                        rule: 'invalid-components-destructuring',
-                        severity: 'high',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: `Destructuring "${destructuredName}" from components prop, but it's not in the component's dependencies array. Either add it to dependencies or it might be a missing library.`,
-                        code: `const { ${destructuredName} } = components;`
-                      });
-                    }
-                  } else {
-                    // Valid component, but manual destructuring is now redundant
-                    violations.push({
-                      rule: 'invalid-components-destructuring',
-                      severity: 'low',
-                      line: prop.loc?.start.line || 0,
-                      column: prop.loc?.start.column || 0,
-                      message: `Manual destructuring of "${destructuredName}" from components prop is redundant. Components are now auto-destructured and available directly.`,
-                      code: `const { ${destructuredName} } = components; // Can be removed`
-                    });
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
-
-    {
       name: 'unsafe-array-operations',
       appliesTo: 'all',
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -4101,14 +4014,14 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     });
                   }
                   } else if (componentsFromProp.has(tagName)) {
-                    // This shouldn't happen since dependency components are auto-destructured
-                    // But keep as a fallback check
+                    // Component is in dependencies but not destructured/accessible
+                    // This indicates the component wasn't properly destructured from components prop
                     violations.push({
                       rule: 'undefined-jsx-component',
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. There may be an issue with component registration.`,
+                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. Make sure to destructure it from the components prop: const { ${tagName} } = components;`,
                       code: `<${tagName} ... />`
                     });
                   } else {
