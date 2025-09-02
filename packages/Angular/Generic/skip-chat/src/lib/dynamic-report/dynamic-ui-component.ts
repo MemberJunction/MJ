@@ -155,21 +155,155 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
   
     /**
      * Print the current report
-     * Uses smart printing with CSS media queries to format the output properly
+     * Uses a hidden iframe to print only the component content without opening new windows
      */
     public async PrintReport() {
-        // For now, we use browser print with CSS media queries to hide UI elements
-        // and format the report properly for printing.
-        // The @media print CSS rules handle the formatting.
-        
-        // Future enhancement: When React components expose a print method,
-        // we can check for it and use component-specific printing logic.
-        
-        // Give a small delay to ensure content is fully rendered
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Trigger browser print - CSS handles the formatting
-        window.print();
+        try {
+            // Find the currently visible React component
+            let componentElement: Element | null = null;
+            
+            const allComponents = document.querySelectorAll('mj-react-component');
+            for (const comp of Array.from(allComponents)) {
+                const rect = comp.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    const parent = comp.closest('.k-content.k-state-active');
+                    if (parent || allComponents.length === 1) {
+                        componentElement = comp;
+                        break;
+                    }
+                }
+            }
+            
+            if (!componentElement) {
+                console.warn('No visible React component found to print');
+                window.print();
+                return;
+            }
+
+            // Create a hidden iframe for printing
+            const printFrame = document.createElement('iframe');
+            printFrame.style.position = 'absolute';
+            printFrame.style.width = '0';
+            printFrame.style.height = '0';
+            printFrame.style.border = 'none';
+            printFrame.style.left = '-9999px';
+            document.body.appendChild(printFrame);
+
+            const printDocument = printFrame.contentDocument || printFrame.contentWindow?.document;
+            if (!printDocument) {
+                console.error('Could not access iframe document');
+                document.body.removeChild(printFrame);
+                window.print();
+                return;
+            }
+
+            // Clone the component element to preserve current state
+            const clonedContent = componentElement.cloneNode(true) as HTMLElement;
+            
+            // Get all stylesheets
+            const styleSheets = Array.from(document.styleSheets)
+                .map(sheet => {
+                    try {
+                        return Array.from(sheet.cssRules || [])
+                            .map(rule => rule.cssText)
+                            .join('\n');
+                    } catch (e) {
+                        return '';
+                    }
+                })
+                .filter(css => css.length > 0)
+                .join('\n');
+
+            // Get external stylesheet links
+            const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .map(link => (link as HTMLLinkElement).href)
+                .map(href => `<link rel="stylesheet" href="${href}">`)
+                .join('\n');
+
+            // Build the print document
+            printDocument.open();
+            printDocument.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Print Report</title>
+                    ${styleLinks}
+                    <style>
+                        ${styleSheets}
+                        
+                        /* Reset styles for print */
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            background: white;
+                        }
+                        
+                        /* Ensure proper print colors */
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                            color-adjust: exact !important;
+                        }
+                        
+                        /* Make sure charts and tables are visible */
+                        canvas, svg {
+                            max-width: 100% !important;
+                            page-break-inside: avoid;
+                        }
+                        
+                        table {
+                            width: 100% !important;
+                            page-break-inside: auto;
+                        }
+                        
+                        tr {
+                            page-break-inside: avoid;
+                            page-break-after: auto;
+                        }
+                        
+                        /* Hide any remaining UI elements */
+                        .k-tabstrip-items,
+                        .tab-action-bar,
+                        button {
+                            display: none !important;
+                        }
+                        
+                        @media print {
+                            body {
+                                margin: 0;
+                                padding: 10px;
+                            }
+                        }
+                    </style>
+                </head>
+                <body></body>
+                </html>
+            `);
+            printDocument.close();
+
+            // Append the cloned content
+            printDocument.body.appendChild(clonedContent);
+
+            // Wait for content to render (especially important for charts)
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Trigger print for the iframe
+            if (printFrame.contentWindow) {
+                printFrame.contentWindow.focus();
+                printFrame.contentWindow.print();
+            }
+
+            // Clean up the iframe after a delay to ensure print dialog has opened
+            setTimeout(() => {
+                document.body.removeChild(printFrame);
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Error printing report:', error);
+            window.print();
+        }
     }
 
     /**
