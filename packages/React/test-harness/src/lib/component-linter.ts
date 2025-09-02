@@ -3243,10 +3243,13 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
         
         // Add props from componentSpec.properties if they exist
+        // These are the architect-defined props that this component is allowed to accept
+        const specDefinedProps: string[] = [];
         if (componentSpec?.properties) {
           for (const prop of componentSpec.properties) {
             if (prop.name) {
               allowedProps.add(prop.name);
+              specDefinedProps.push(prop.name);
             }
           }
         }
@@ -3271,16 +3274,28 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 
                 // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
-                  const customPropsMessage = componentSpec?.properties?.length 
-                    ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
-                    : '';
+                  let message: string;
+                  if (specDefinedProps.length > 0) {
+                    message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                              `This component can only accept: ` +
+                              `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                              `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
+                              `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `Any additional props must be defined in the component spec's properties array.`;
+                  } else {
+                    message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                              `This component can only accept: ` +
+                              `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                              `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `To accept additional props, they must be defined in the component spec's properties array.`;
+                  }
                   
                   violations.push({
                     rule: 'component-props-validation',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                    message
                   });
                 }
               }
@@ -3308,16 +3323,28 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                   
                   if (invalidProps.length > 0) {
-                    const customPropsMessage = componentSpec?.properties?.length 
-                      ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
-                      : '';
+                    let message: string;
+                    if (specDefinedProps.length > 0) {
+                      message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                                `This component can only accept: ` +
+                                `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                                `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
+                                `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `Any additional props must be defined in the component spec's properties array.`;
+                    } else {
+                      message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                                `This component can only accept: ` +
+                                `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                                `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `To accept additional props, they must be defined in the component spec's properties array.`;
+                    }
                     
                     violations.push({
                       rule: 'component-props-validation',
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                      message
                     });
                   }
                 }
@@ -8370,18 +8397,30 @@ await utilities.rq.RunQuery({
           
         case 'component-props-validation':
           violation.suggestion = {
-            text: 'Components can only accept standard props or props defined in spec. Load data internally.',
-            example: `// ❌ WRONG - Root component with additional props:
-function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // Additional props will break hosting environment
+            text: 'Components can only accept standard props and props explicitly defined in the component spec. Additional props must be declared in the spec\'s properties array.',
+            example: `// ❌ WRONG - Component with undeclared props:
+function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
+  // customers, orders, selectedId are NOT allowed unless defined in spec
 }
 
-// ✅ CORRECT - Root component with only standard props:
-function RootComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load ALL data internally using utilities
+// ✅ CORRECT Option 1 - Use only standard props and load data internally:
+function MyComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load data internally using utilities
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
+}
+
+// ✅ CORRECT Option 2 - Define props in component spec:
+// In spec.properties array:
+// [
+//   { name: "customers", type: "array", required: false, description: "Customer list" },
+//   { name: "orders", type: "array", required: false, description: "Order list" },
+//   { name: "selectedId", type: "string", required: false, description: "Selected item ID" }
+// ]
+// Then the component can accept them:
+function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
+  // These props are now allowed because they're defined in the spec
   
   useEffect(() => {
     const loadData = async () => {

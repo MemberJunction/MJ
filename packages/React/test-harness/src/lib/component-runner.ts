@@ -574,10 +574,12 @@ export class ComponentRunner {
       
       // Race between execution and timeout
       let executionResult: { success: boolean; error?: string; componentCount?: number };
+      let hasTimeout = false;
       try {
         executionResult = await Promise.race([executionPromise, timeoutPromise]);
       } catch (timeoutError) {
         // Handle timeout gracefully
+        hasTimeout = true;
         errors.push(`Component execution timed out after ${globalTimeout}ms`);
         executionResult = { 
           success: false, 
@@ -631,15 +633,18 @@ export class ComponentRunner {
       // Take screenshot
       const screenshot = await page.screenshot();
 
+      // Check for excessive render count first
+      const hasRenderLoop = renderCount > ComponentRunner.MAX_RENDER_COUNT;
+      if (hasRenderLoop) {
+        errors.push(`Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`);
+      }
+
       // Determine success
       const success = errors.length === 0 && 
                      criticalWarnings.length === 0 && 
-                     renderCount <= ComponentRunner.MAX_RENDER_COUNT &&
+                     !hasRenderLoop &&
+                     !hasTimeout &&
                      executionResult.success;
-
-      if (renderCount > ComponentRunner.MAX_RENDER_COUNT) {
-        errors.push(`Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`);
-      }
 
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
@@ -653,6 +658,30 @@ export class ComponentRunner {
         column: 0,
         source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
       }));
+      
+      // Add timeout error if detected
+      if (hasTimeout) {
+        errorViolations.push({
+          message: `Component execution timed out after ${globalTimeout}ms`,
+          severity: 'critical' as const,
+          rule: 'timeout',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const // This is a test harness timeout
+        });
+      }
+      
+      // Add render loop error if detected
+      if (hasRenderLoop) {
+        errorViolations.push({
+          message: `Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`,
+          severity: 'critical' as const,
+          rule: 'render-loop',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const // This is a test harness detection
+        });
+      }
       
       // Add data errors without source
       dataErrors.forEach(e => {
