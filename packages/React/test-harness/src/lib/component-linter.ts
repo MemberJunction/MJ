@@ -12,11 +12,11 @@ import { StylesTypeAnalyzer } from './styles-type-analyzer';
 export interface LintResult {
   success: boolean;
   violations: Violation[];
-  suggestions: FixSuggestion[];
   criticalCount?: number;
   highCount?: number;
   mediumCount?: number;
   lowCount?: number;
+  hasErrors: boolean;
 }
 
 export interface LintOptions {
@@ -31,13 +31,12 @@ export interface Violation {
   message: string;
   code?: string;
   source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
+  suggestion?: {
+    text: string;
+    example?: string;
+  };
 }
 
-export interface FixSuggestion {
-  violation: string;
-  suggestion: string;
-  example?: string;
-}
 
 interface Rule {
   name: string;
@@ -6838,14 +6837,17 @@ Correct pattern:
       
       // If we have critical syntax errors, return immediately with those
       if (syntaxViolations.length > 0) {
+        // Add suggestions directly to syntax violations
+        this.generateSyntaxErrorSuggestions(syntaxViolations);
+        
         return {
           success: false,
           violations: syntaxViolations,
-          suggestions: this.generateSyntaxErrorSuggestions(syntaxViolations),
           criticalCount: syntaxViolations.length,
           highCount: 0,
           mediumCount: 0,
-          lowCount: 0
+          lowCount: 0,
+          hasErrors: true
         };
       }
       
@@ -6922,17 +6924,17 @@ Correct pattern:
         console.log('');
       }
       
-      // Generate fix suggestions
-      const suggestions = this.generateFixSuggestions(uniqueViolations);
+      // Add suggestions directly to violations
+      this.addSuggestionsToViolations(uniqueViolations);
       
       return {
         success: criticalCount === 0 && highCount === 0,  // Only fail on critical/high
         violations: uniqueViolations,
-        suggestions,
         criticalCount,
         highCount,
         mediumCount,
-        lowCount
+        lowCount,
+        hasErrors: criticalCount > 0 || highCount > 0
       };
     } catch (error) {
       // If parsing fails, return a parse error
@@ -6945,7 +6947,7 @@ Correct pattern:
           column: 0,
           message: `Failed to parse component: ${error instanceof Error ? error.message : 'Unknown error'}`
         }],
-        suggestions: []
+        hasErrors: true
       };
     }
   }
@@ -7374,15 +7376,17 @@ Correct pattern:
     return unique;
   }
   
-  private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
-    const suggestions: FixSuggestion[] = [];
-    
+  /**
+   * Adds suggestions directly to violations based on their rule type
+   * @param violations Array of violations to enhance with suggestions
+   * @returns The same violations array with suggestions embedded
+   */
+  private static addSuggestionsToViolations(violations: Violation[]): Violation[] {
     for (const violation of violations) {
       switch (violation.rule) {
         case 'no-import-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all import statements. Interactive components receive everything through props.',
+          violation.suggestion = {
+            text: 'Remove all import statements. Interactive components receive everything through props.',
             example: `// ❌ WRONG - Using import statements:
 import React from 'react';
 import { useState } from 'react';
@@ -7410,13 +7414,12 @@ function MyComponent({ utilities, styles, components }) {
 // 2. Passed through the 'components' prop (child components)
 // 3. Passed through the 'styles' prop (styling)
 // 4. Available globally (React hooks)`
-          });
+          };
           break;
           
         case 'no-export-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all export statements. The component function should be the only code, not exported.',
+          violation.suggestion = {
+            text: 'Remove all export statements. The component function should be the only code, not exported.',
             example: `// ❌ WRONG - Using export:
 export function MyComponent({ utilities }) {
   return <div>Hello</div>;
@@ -7438,13 +7441,12 @@ function MyComponent({ utilities, styles, components }) {
 // The component is self-contained.
 // No exports needed - the host environment
 // will execute the function directly.`
-          });
+          };
           break;
           
         case 'no-require-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all require() and dynamic import() statements. Use props instead.',
+          violation.suggestion = {
+            text: 'Remove all require() and dynamic import() statements. Use props instead.',
             example: `// ❌ WRONG - Using require or dynamic import:
 function MyComponent({ utilities }) {
   const lodash = require('lodash');
@@ -7475,13 +7477,12 @@ function MyComponent({ utilities, styles, components }) {
 // - Passed via props (utilities, components, styles)
 // - Available globally (React hooks)
 // No module loading allowed!`
-          });
+          };
           break;
           
         case 'use-function-declaration':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
+          violation.suggestion = {
+            text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
             example: `// ❌ WRONG - Top-level arrow function component:
 const MyComponent = ({ utilities, styles, components }) => {
   const [state, setState] = useState('');
@@ -7514,13 +7515,12 @@ function ChildComponent() {
 // 3. Hoisting allows flexible code organization
 // 4. Consistent with React documentation patterns
 // 5. Easier to distinguish from regular variables`
-          });
+          };
           break;
           
         case 'no-return-component':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove the return statement at the end of the file. The component function should stand alone.',
+          violation.suggestion = {
+            text: 'Remove the return statement at the end of the file. The component function should stand alone.',
             example: `// ❌ WRONG - Returning the component:
 function MyComponent({ utilities, styles, components }) {
   const [state, setState] = useState('');
@@ -7547,13 +7547,12 @@ function MyComponent({ utilities, styles, components }) {
 
 // The runtime will find and execute your component
 // by its function name. No need to return or reference it!`
-          });
+          };
           break;
           
         case 'no-iife-wrapper':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+          violation.suggestion = {
+            text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
             example: `// ❌ WRONG - IIFE wrapper patterns:
 (function() {
   function MyComponent({ utilities, styles, components }) {
@@ -7587,13 +7586,12 @@ function MyComponent({ utilities, styles, components }) {
 // 3. IIFEs prevent proper component discovery
 // 4. Makes debugging harder
 // 5. Unnecessary complexity`
-          });
+          };
           break;
           
         case 'full-state-ownership':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
+          violation.suggestion = {
+            text: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
             example: `// ❌ WRONG - Controlled state props:
 function PaginationControls({ currentPage, filters, sortBy, onPageChange }) {
   // These props suggest parent controls the state - WRONG!
@@ -7653,13 +7651,12 @@ function DataTable({
 // - Direct state names (currentPage, selectedId, activeTab)
 // - State without 'initial'/'default' prefix (sortBy, filters, searchTerm)
 // - Controlled patterns (value + onChange, checked + onChange)`
-          });
+          };
           break;
           
         case 'no-use-reducer':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use useState for state management, not useReducer',
+          violation.suggestion = {
+            text: 'Use useState for state management, not useReducer',
             example: `// Instead of:
 const [state, dispatch] = useReducer(reducer, initialState);
 
@@ -7682,13 +7679,12 @@ function Component({ savedUserSettings, onSaveUserSettings }) {
     }
   };
 }`
-          });
+          };
           break;
           
         case 'no-data-prop':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Replace generic data prop with specific named props',
+          violation.suggestion = {
+            text: 'Replace generic data prop with specific named props',
             example: `// Instead of:
 function Component({ data, savedUserSettings, onSaveUserSettings }) {
   return <div>{data.items.map(...)}</div>;
@@ -7706,14 +7702,13 @@ function Component({ items, customers, savedUserSettings, onSaveUserSettings }) 
 
 // Load data using utilities:
 const result = await utilities.rv.RunView({ entityName: 'Items' });`
-          });
+          };
           break;
           
           
         case 'saved-user-settings-pattern':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only save important user preferences, not ephemeral UI state',
+          violation.suggestion = {
+            text: 'Only save important user preferences, not ephemeral UI state',
             example: `// ✅ SAVE these (important preferences):
 - Selected items/tabs: selectedCustomerId, activeTab
 - Sort preferences: sortBy, sortDirection  
@@ -7738,13 +7733,12 @@ const handleSelect = (id) => {
     selectedId: id
   });
 };`
-          });
+          };
           break;
           
         case 'pass-standard-props':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always pass standard props to all components',
+          violation.suggestion = {
+            text: 'Always pass standard props to all components',
             example: `// Always include these props when calling components:
 <ChildComponent
   items={items}  // Data props
@@ -7759,21 +7753,19 @@ const handleSelect = (id) => {
   components={components}
   callbacks={callbacks}
 />`
-          });
+          };
           break;
           
         case 'no-child-implementation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove child component implementations. Only the root component function should be in this file',
+          violation.suggestion = {
+            text: 'Remove child component implementations. Only the root component function should be in this file',
             example: 'Move child component functions to separate generation requests'
-          });
+          };
           break;
           
         case 'undefined-component-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
+          violation.suggestion = {
+            text: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
             example: `// Component spec should include all referenced components:
 {
   "name": "MyComponent",
@@ -7798,13 +7790,12 @@ const handleSelect = (id) => {
 // Then in your component:
 const { ModelTreeView, PromptTable, FilterPanel } = components;
 // All these will be available`
-          });
+          };
           break;
           
         case 'component-usage-without-destructuring':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must be properly accessed - either destructure from components prop or use dot notation',
+          violation.suggestion = {
+            text: 'Components must be properly accessed - either destructure from components prop or use dot notation',
             example: `// ❌ WRONG - Using component without destructuring:
 function MyComponent({ components }) {
   return <AccountList />; // Error: AccountList not destructured
@@ -7825,13 +7816,12 @@ function MyComponent({ components }) {
 function MyComponent({ components: { AccountList } }) {
   return <AccountList />;
 }`
-          });
+          };
           break;
           
         case 'unsafe-array-access':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always check array bounds before accessing elements',
+          violation.suggestion = {
+            text: 'Always check array bounds before accessing elements',
             example: `// ❌ UNSAFE:
 const firstItem = items[0].name;
 const total = data[0].reduce((sum, item) => sum + item.value, 0);
@@ -7845,13 +7835,12 @@ const total = data.length > 0
 // ✅ BETTER - Use optional chaining:
 const firstItem = items[0]?.name || 'No items';
 const total = data[0]?.reduce((sum, item) => sum + item.value, 0) || 0;`
-          });
+          };
           break;
 
         case 'array-reduce-safety':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always provide an initial value for reduce() or check array length',
+          violation.suggestion = {
+            text: 'Always provide an initial value for reduce() or check array length',
             example: `// ❌ UNSAFE:
 const sum = numbers.reduce((a, b) => a + b); // Fails on empty array
 const total = data[0].reduce((sum, item) => sum + item.value); // Multiple issues
@@ -7866,13 +7855,12 @@ const total = data.length > 0 && data[0]
 const sum = numbers.length > 0 
   ? numbers.reduce((a, b) => a + b)
   : 0;`
-          });
+          };
           break;
           
         case 'entity-name-mismatch':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use the exact entity name from dataRequirements in RunView calls',
+          violation.suggestion = {
+            text: 'Use the exact entity name from dataRequirements in RunView calls',
             example: `// The component spec defines the entities to use:
 // dataRequirements: {
 //   entities: [
@@ -7900,13 +7888,12 @@ await utilities.rv.RunViews([
 
 // The linter validates that all entity names in RunView/RunViews calls
 // match those declared in the component spec's dataRequirements`
-          });
+          };
           break;
           
         case 'missing-query-parameter':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Provide all required parameters defined in dataRequirements for the query',
+          violation.suggestion = {
+            text: 'Provide all required parameters defined in dataRequirements for the query',
             example: `// The component spec defines required parameters:
 // dataRequirements: {
 //   queries: [
@@ -7937,13 +7924,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate  // All parameters included
   }
 });`
-          });
+          };
           break;
           
         case 'unknown-query-parameter':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only use parameters that are defined in dataRequirements for the query',
+          violation.suggestion = {
+            text: 'Only use parameters that are defined in dataRequirements for the query',
             example: `// ❌ WRONG - Using undefined parameter:
 await utilities.rq.RunQuery({
   QueryName: "User Activity Summary",
@@ -7962,13 +7948,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate  // Only parameters from dataRequirements
   }
 });`
-          });
+          };
           break;
           
         case 'missing-parameters-object':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Queries with parameters must include a Parameters object in RunQuery',
+          violation.suggestion = {
+            text: 'Queries with parameters must include a Parameters object in RunQuery',
             example: `// ❌ WRONG - Query requires parameters but none provided:
 await utilities.rq.RunQuery({
   QueryName: "User Activity Summary"
@@ -7983,13 +7968,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate
   }
 });`
-          });
+          };
           break;
           
         case 'query-name-mismatch':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use the exact query name from dataRequirements in RunQuery calls',
+          violation.suggestion = {
+            text: 'Use the exact query name from dataRequirements in RunQuery calls',
             example: `// The component spec defines the queries to use:
 // dataRequirements: {
 //   queries: [
@@ -8011,13 +7995,12 @@ await utilities.rv.RunQuery({
 
 // The linter validates that all query names in RunQuery calls
 // match those declared in the component spec's dataRequirements.queries`
-          });
+          };
           break;
           
         case 'runview-sql-function':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'RunView does not support SQL aggregations. Use RunQuery or aggregate in JavaScript.',
+          violation.suggestion = {
+            text: 'RunView does not support SQL aggregations. Use RunQuery or aggregate in JavaScript.',
             example: `// ❌ WRONG - SQL functions in RunView:
 await utilities.rv.RunView({
   EntityName: 'Accounts',
@@ -8039,13 +8022,12 @@ if (result?.Success) {
   const total = result.Results.length;
   const totalRevenue = result.Results.reduce((sum, acc) => sum + (acc.Revenue || 0), 0);
 }`
-          });
+          };
           break;
           
         case 'field-not-in-requirements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only use fields that are defined in dataRequirements for the entity',
+          violation.suggestion = {
+            text: 'Only use fields that are defined in dataRequirements for the entity',
             example: `// Check your dataRequirements to see allowed fields:
 // dataRequirements: {
 //   entities: [{
@@ -8067,13 +8049,12 @@ await utilities.rv.RunView({
   EntityName: 'Accounts',
   Fields: ['ID', 'AccountName', 'Industry'] // All from displayFields
 });`
-          });
+          };
           break;
           
         case 'orderby-field-not-sortable':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'OrderBy fields must be in the sortFields array for the entity',
+          violation.suggestion = {
+            text: 'OrderBy fields must be in the sortFields array for the entity',
             example: `// ❌ WRONG - Sorting by non-sortable field:
 await utilities.rv.RunView({
   EntityName: 'Accounts',
@@ -8085,13 +8066,12 @@ await utilities.rv.RunView({
   EntityName: 'Accounts',
   OrderBy: 'AccountName ASC' // AccountName is in sortFields
 });`
-          });
+          };
           break;
           
         case 'parent-event-callback-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must invoke parent event callbacks when state changes',
+          violation.suggestion = {
+            text: 'Components must invoke parent event callbacks when state changes',
             example: `// ❌ WRONG - Only updating internal state:
 function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings }) {
   const [selectedAccountId, setSelectedAccountId] = useState(savedUserSettings?.selectedAccountId);
@@ -8120,13 +8100,12 @@ function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings
     onSaveUserSettings?.({ ...savedUserSettings, selectedAccountId: accountId });
   };
 }`
-          });
+          };
           break;
           
         case 'property-name-consistency':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Maintain consistent property names when transforming data',
+          violation.suggestion = {
+            text: 'Maintain consistent property names when transforming data',
             example: `// ❌ WRONG - Transform to camelCase but access as PascalCase:
 setAccountData(results.map(item => ({
   accountName: item.AccountName,      // camelCase
@@ -8153,13 +8132,12 @@ setAccountData(results.map(item => ({
 // Later in render...
 <td>{account.accountName}</td>        // Use camelCase consistently
 <td>{formatCurrency(account.annualRevenue)}</td> // Works!`
-          });
+          };
           break;
           
         case 'noisy-settings-updates':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Save settings sparingly - only on meaningful user actions',
+          violation.suggestion = {
+            text: 'Save settings sparingly - only on meaningful user actions',
             example: `// ❌ WRONG - Saving on every keystroke:
 const handleSearchChange = (e) => {
   setSearchTerm(e.target.value);
@@ -8180,13 +8158,12 @@ const saveSearchTerm = useMemo(() =>
   }, 500),
   [savedUserSettings]
 );`
-          });
+          };
           break;
           
         case 'prop-state-sync':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Initialize state once, don\'t sync from props',
+          violation.suggestion = {
+            text: 'Initialize state once, don\'t sync from props',
             example: `// ❌ WRONG - Syncing prop to state:
 const [value, setValue] = useState(propValue);
 useEffect(() => {
@@ -8200,13 +8177,12 @@ const [value, setValue] = useState(
 
 // ✅ CORRECT - If you need prop changes, use derived state:
 const displayValue = propOverride || value;`
-          });
+          };
           break;
           
         case 'performance-memoization':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use useMemo for expensive operations and static data',
+          violation.suggestion = {
+            text: 'Use useMemo for expensive operations and static data',
             example: `// ❌ WRONG - Expensive operation on every render:
 const filteredItems = items.filter(item => 
   item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -8231,13 +8207,12 @@ const columns = useMemo(() => [
   { field: 'name', header: 'Name' },
   { field: 'value', header: 'Value' }
 ], []); // Empty deps = never changes`
-          });
+          };
           break;
           
         case 'child-state-management':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Never manage state for child components',
+          violation.suggestion = {
+            text: 'Never manage state for child components',
             example: `// ❌ WRONG - Managing child state:
 const [childTableSort, setChildTableSort] = useState('name');
 const [modalOpen, setModalOpen] = useState(false);
@@ -8254,13 +8229,12 @@ const [modalOpen, setModalOpen] = useState(false);
   onSaveUserSettings={handleChildSettings}
   // Child manages its own sort state!
 />`
-          });
+          };
           break;
           
         case 'server-reload-on-client-operation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use client-side operations for sorting and filtering',
+          violation.suggestion = {
+            text: 'Use client-side operations for sorting and filtering',
             example: `// ❌ WRONG - Reload from server:
 const handleSort = (field) => {
   setSortBy(field);
@@ -8284,13 +8258,12 @@ const sortedData = useMemo(() => {
   });
   return sorted;
 }, [data, sortBy, sortDirection]);`
-          });
+          };
           break;
           
         case 'runview-runquery-valid-properties':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use only valid properties for RunView/RunViews and RunQuery',
+          violation.suggestion = {
+            text: 'Use only valid properties for RunView/RunViews and RunQuery',
             example: `// ❌ WRONG - Invalid properties on RunView:
 await utilities.rv.RunView({
   EntityName: 'MJ: AI Prompt Runs',
@@ -8319,13 +8292,12 @@ await utilities.rq.RunQuery({
 // Valid RunQuery properties:
 // - QueryName (required)
 // - CategoryName, CategoryID, Parameters (optional)`
-          });
+          };
           break;
           
         case 'component-props-validation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components can only accept standard props or props defined in spec. Load data internally.',
+          violation.suggestion = {
+            text: 'Components can only accept standard props or props defined in spec. Load data internally.',
             example: `// ❌ WRONG - Root component with additional props:
 function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
   // Additional props will break hosting environment
@@ -8357,13 +8329,12 @@ function RootComponent({ utilities, styles, components, callbacks, savedUserSett
   
   return <div>{/* Use state, not props */}</div>;
 }`
-          });
+          };
           break;
           
         case 'runview-runquery-result-direct-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'RunView and RunQuery return result objects, not arrays. Access the data with .Results property.',
+          violation.suggestion = {
+            text: 'RunView and RunQuery return result objects, not arrays. Access the data with .Results property.',
             example: `// ❌ WRONG - Using result directly as array:
 const result = await utilities.rv.RunView({
   EntityName: 'Users',
@@ -8409,13 +8380,12 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
 //   TotalRowCount?: number,
 //   ExecutionTime?: number
 // }`
-          });
+          };
           break;
           
         case 'styles-invalid-path':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
+          violation.suggestion = {
+            text: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
             example: `// ❌ WRONG - Invalid property paths:
 styles.fontSize.small           // fontSize is not at root level
 styles.colors.background        // colors.background exists
@@ -8430,13 +8400,12 @@ styles.spacing.sm               // correct size name
 styles?.typography?.fontSize?.sm || '14px'
 styles?.colors?.background || '#FFFFFF'
 styles?.spacing?.sm || '8px'`
-          });
+          };
           break;
           
         case 'styles-unsafe-access':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use optional chaining for nested styles access to prevent runtime errors.',
+          violation.suggestion = {
+            text: 'Use optional chaining for nested styles access to prevent runtime errors.',
             example: `// ❌ UNSAFE - Direct nested access:
 const fontSize = styles.typography.fontSize.md;
 const borderRadius = styles.borders.radius.sm;
@@ -8451,46 +8420,39 @@ const {
     fontSize: { md: fontSize = '14px' } = {}
   } = {}
 } = styles || {};`
-          });
+          };
           break;
       }
     }
     
-    return suggestions;
+    return violations;
   }
 
-  private static generateSyntaxErrorSuggestions(violations: Violation[]): FixSuggestion[] {
-    const suggestions: FixSuggestion[] = [];
+  private static generateSyntaxErrorSuggestions(violations: Violation[]): void {
     
     for (const violation of violations) {
       if (violation.message.includes('Unterminated string')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Check that all string literals are properly closed with matching quotes',
+        violation.suggestion = {
+          text: 'Check that all string literals are properly closed with matching quotes',
           example: 'Template literals with interpolation must use backticks: `text ${variable} text`'
-        });
+        };
       } else if (violation.message.includes('Unexpected token') || violation.message.includes('export')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Ensure all code is within the component function body',
+        violation.suggestion = {
+          text: 'Ensure all code is within the component function body',
           example: 'Remove any export statements or code outside the function definition'
-        });
+        };
       } else if (violation.message.includes('import') && violation.message.includes('top level')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Import statements are not allowed in components - use props instead',
+        violation.suggestion = {
+          text: 'Import statements are not allowed in components - use props instead',
           example: 'Access libraries through props: const { React, MaterialUI } = props.components'
-        });
+        };
       } else {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Fix the syntax error before the component can be compiled',
+        violation.suggestion = {
+          text: 'Fix the syntax error before the component can be compiled',
           example: 'Review the code at the specified line and column for syntax issues'
-        });
+        };
       }
     }
-    
-    return suggestions;
   }
 
   /**

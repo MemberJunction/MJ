@@ -1,7 +1,7 @@
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
+import { ComponentLinter, Violation } from './component-linter';
 import { 
   ComponentSpec, 
   ComponentUtilities, 
@@ -43,7 +43,6 @@ export interface ComponentExecutionResult {
   executionTime: number;
   renderCount?: number;
   lintViolations?: Violation[];
-  fixSuggestions?: FixSuggestion[];
 }
 
 /**
@@ -79,7 +78,7 @@ export class ComponentRunner {
     isRootComponent?: boolean,
     contextUser?: UserInfo,
     options?: any
-  ): Promise<{ violations: Violation[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
+  ): Promise<{ violations: Violation[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentName,
@@ -94,7 +93,6 @@ export class ComponentRunner {
 
     return {
       violations: lintResult.violations,
-      suggestions: lintResult.suggestions,
       hasErrors
     };
   }
