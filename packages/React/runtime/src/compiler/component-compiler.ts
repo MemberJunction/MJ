@@ -223,7 +223,8 @@ export class ComponentCompiler {
     
     const componentDeclarations = uniqueDependencies.length > 0
       ? uniqueDependencies
-          .map(dep => `const ${dep.name} = componentsOuter['${dep.name}'];`)
+          .map(dep => `const ${dep.name}Raw = componentsOuter['${dep.name}'];
+        const ${dep.name} = ${dep.name}Raw?.component || ${dep.name}Raw;`)
           .join('\n        ')
       : '';
     
