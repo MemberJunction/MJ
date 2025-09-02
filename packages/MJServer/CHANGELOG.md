@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/server
 
+## 2.96.0
+
+### Minor Changes
+
+- 11bf948: migration
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+- Updated dependencies [8f34e55]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ai-prompts@2.96.0
+  - @memberjunction/ai-agent-manager-actions@2.96.0
+  - @memberjunction/ai-agents@2.96.0
+  - @memberjunction/ai-core-plus@2.96.0
+  - @memberjunction/aiengine@2.96.0
+  - @memberjunction/ai-vectors-pinecone@2.96.0
+  - @memberjunction/actions-apollo@2.96.0
+  - @memberjunction/actions-bizapps-accounting@2.96.0
+  - @memberjunction/actions-bizapps-crm@2.96.0
+  - @memberjunction/actions-bizapps-lms@2.96.0
+  - @memberjunction/actions-bizapps-social@2.96.0
+  - @memberjunction/core-actions@2.96.0
+  - @memberjunction/actions@2.96.0
+  - @memberjunction/entity-communications-server@2.96.0
+  - @memberjunction/doc-utils@2.96.0
+  - @memberjunction/external-change-detection@2.96.0
+  - @memberjunction/graphql-dataprovider@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/core-entities-server@2.96.0
+  - @memberjunction/data-context@2.96.0
+  - @memberjunction/queue@2.96.0
+  - @memberjunction/storage@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+  - @memberjunction/skip-types@2.96.0
+  - @memberjunction/templates@2.96.0
+  - @memberjunction/data-context-server@2.96.0
+  - @memberjunction/ai@2.96.0
+  - @memberjunction/ai-anthropic@2.96.0
+  - @memberjunction/ai-cerebras@2.96.0
+  - @memberjunction/ai-groq@2.96.0
+  - @memberjunction/ai-lmstudio@2.96.0
+  - @memberjunction/ai-local-embeddings@2.96.0
+  - @memberjunction/ai-mistral@2.96.0
+  - @memberjunction/ai-ollama@2.96.0
+  - @memberjunction/ai-openai@2.96.0
+  - @memberjunction/ai-openrouter@2.96.0
+  - @memberjunction/global@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes

@@ -1,5 +1,25 @@
 # @memberjunction/react-test-harness
 
+## 2.96.0
+
+### Minor Changes
+
+- 8f34e55: migration
+- 22e365f: migration
+- ad06a79: migration
+- 8e1c946: migration
+
+### Patch Changes
+
+- a3d32ec: tweaks
+- Updated dependencies [8f34e55]
+- Updated dependencies [22e365f]
+- Updated dependencies [a3d32ec]
+- Updated dependencies [ad06a79]
+- Updated dependencies [8e1c946]
+  - @memberjunction/react-runtime@2.96.0
+  - @memberjunction/interactive-component-types@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes

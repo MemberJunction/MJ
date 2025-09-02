@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.96.0
+
+### Minor Changes
+
+- 01dcfde: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes

@@ -1,0 +1,11 @@
+{
+  "entity": "AI Prompts",
+  "pull": {
+    "externalizeFields": ["Prompt"],
+    "ignoreNullFields": true
+  },
+  "push": {
+    "autoCreateMissingRecords": false
+  },
+  "description": "Example demonstrating the deleteRecord feature for removing obsolete prompts"
+}

@@ -1,5 +1,23 @@
 # @memberjunction/react-runtime
 
+## 2.96.0
+
+### Minor Changes
+
+- 8f34e55: migration
+- 22e365f: migration
+- ad06a79: migration
+- 8e1c946: migration
+
+### Patch Changes
+
+- a3d32ec: tweaks
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/interactive-component-types@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/global@2.96.0
+
 ## 2.95.0
 
 ### Patch Changes
