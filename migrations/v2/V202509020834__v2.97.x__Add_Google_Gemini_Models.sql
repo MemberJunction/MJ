@@ -118,7 +118,7 @@ VALUES
         'Any, JSON',
         0, -- SupportsEffortLevel
         1, -- SupportsStreaming
-        'GoogleLLM',
+        'GeminiLLM',
         200000, -- MaxInputTokens (200k tokens)
         10000  -- MaxOutputTokens (10k tokens)
     ),
@@ -133,7 +133,7 @@ VALUES
         'Any, JSON',
         0, -- SupportsEffortLevel
         1, -- SupportsStreaming
-        'GoogleLLM',
+        'GeminiLLM',
         30000, -- MaxInputTokens (30k tokens)
         2500  -- MaxOutputTokens (2.5k tokens)
     ),
@@ -148,7 +148,7 @@ VALUES
         'Any, JSON',
         0, -- SupportsEffortLevel
         1, -- SupportsStreaming
-        'GoogleLLM',
+        'GeminiLLM',
         10000, -- MaxInputTokens (10k tokens)
         400  -- MaxOutputTokens (400 tokens)
     );
