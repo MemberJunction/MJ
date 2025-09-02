@@ -6146,94 +6146,124 @@ Correct pattern:
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
-        // Count all function declarations and expressions at the top level
-        const functionDeclarations: Array<{name: string, line: number, column: number}> = [];
-        const functionExpressions: Array<{name: string, line: number, column: number}> = [];
+        // Check that the AST body contains exactly one statement and it's a function declaration
+        const programBody = ast.program.body;
         
-        traverse(ast, {
-          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-            // Only check top-level functions (not nested inside other functions)
-            const parent = path.getFunctionParent();
-            if (!parent) {
-              const funcName = path.node.id?.name || 'anonymous';
-              functionDeclarations.push({
-                name: funcName,
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0
-              });
-            }
-          },
-          VariableDeclaration(path: NodePath<t.VariableDeclaration>) {
-            // Check for const/let/var func = function() or arrow functions at top level
-            const parent = path.getFunctionParent();
-            if (!parent) {
-              for (const declarator of path.node.declarations) {
-                if (t.isVariableDeclarator(declarator) && 
-                    (t.isFunctionExpression(declarator.init) || 
-                     t.isArrowFunctionExpression(declarator.init))) {
-                  const funcName = t.isIdentifier(declarator.id) ? declarator.id.name : 'anonymous';
-                  functionExpressions.push({
-                    name: funcName,
-                    line: declarator.loc?.start.line || 0,
-                    column: declarator.loc?.start.column || 0
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        const allFunctions = [...functionDeclarations, ...functionExpressions];
-        
-        // Check if we have more than one function
-        if (allFunctions.length > 1) {
-          // Find which one is the main component
-          const mainComponentIndex = allFunctions.findIndex(f => f.name === componentName);
-          const otherFunctions = allFunctions.filter((_, index) => index !== mainComponentIndex);
-          
-          violations.push({
-            rule: 'single-function-only',
-            severity: 'critical',
-            line: otherFunctions[0].line,
-            column: otherFunctions[0].column,
-            message: `Component code must contain ONLY the main component function "${componentName}". Found ${allFunctions.length} functions: ${allFunctions.map(f => f.name).join(', ')}. Move other functions to separate component dependencies.`,
-            code: `Remove functions: ${otherFunctions.map(f => f.name).join(', ')}`
-          });
-          
-          // Add a violation for each extra function
-          for (const func of otherFunctions) {
-            violations.push({
-              rule: 'single-function-only',
-              severity: 'critical',
-              line: func.line,
-              column: func.column,
-              message: `Extra function "${func.name}" not allowed. Each component must be a single function. Move this to a separate component dependency.`,
-              code: `function ${func.name} should be a separate component`
-            });
-          }
-        }
-        
-        // Also check that the single function matches the component name
-        if (allFunctions.length === 1 && allFunctions[0].name !== componentName) {
-          violations.push({
-            rule: 'single-function-only',
-            severity: 'critical',
-            line: allFunctions[0].line,
-            column: allFunctions[0].column,
-            message: `Component function name "${allFunctions[0].name}" does not match component name "${componentName}". The function must be named exactly as specified.`,
-            code: `Rename function to: function ${componentName}(...)`
-          });
-        }
-        
-        // Check for no function at all
-        if (allFunctions.length === 0) {
+        // First, check if there's anything other than a single function declaration
+        if (programBody.length === 0) {
           violations.push({
             rule: 'single-function-only',
             severity: 'critical',
             line: 1,
             column: 0,
-            message: `Component code must contain exactly one function named "${componentName}". No functions found.`,
+            message: `Component code must contain exactly one function declaration named "${componentName}". No code found.`,
             code: `Add: function ${componentName}({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) { ... }`
+          });
+          return violations;
+        }
+        
+        if (programBody.length > 1) {
+          // Multiple top-level statements - not allowed
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: programBody[1].loc?.start.line || 0,
+            column: programBody[1].loc?.start.column || 0,
+            message: `Component code must contain ONLY a single function declaration. Found ${programBody.length} top-level statements. No code should exist before or after the function.`,
+            code: `Remove all code except: function ${componentName}(...) { ... }`
+          });
+          
+          // Report each extra statement
+          for (let i = 1; i < programBody.length; i++) {
+            const stmt = programBody[i];
+            let stmtType = 'statement';
+            if (t.isVariableDeclaration(stmt)) {
+              stmtType = 'variable declaration';
+            } else if (t.isFunctionDeclaration(stmt)) {
+              stmtType = 'function declaration';
+            } else if (t.isExpressionStatement(stmt)) {
+              stmtType = 'expression';
+            }
+            
+            violations.push({
+              rule: 'single-function-only',
+              severity: 'critical',
+              line: stmt.loc?.start.line || 0,
+              column: stmt.loc?.start.column || 0,
+              message: `Extra ${stmtType} not allowed. Only the component function should exist.`,
+              code: ''
+            });
+          }
+        }
+        
+        // Check that the single statement is a function declaration (not arrow function or other)
+        const firstStatement = programBody[0];
+        
+        if (!t.isFunctionDeclaration(firstStatement)) {
+          let actualType = 'unknown statement';
+          let suggestion = '';
+          
+          if (t.isVariableDeclaration(firstStatement)) {
+            // Check if it's an arrow function or other variable
+            const declarator = firstStatement.declarations[0];
+            if (t.isVariableDeclarator(declarator)) {
+              if (t.isArrowFunctionExpression(declarator.init) || t.isFunctionExpression(declarator.init)) {
+                actualType = 'arrow function or function expression';
+                suggestion = `Use function declaration syntax: function ${componentName}(...) { ... }`;
+              } else {
+                actualType = 'variable declaration';
+                suggestion = 'Remove this variable and ensure only the component function exists';
+              }
+            }
+          } else if (t.isExpressionStatement(firstStatement)) {
+            actualType = 'expression statement';
+            suggestion = 'Remove this expression and add the component function';
+          }
+          
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: firstStatement.loc?.start.line || 0,
+            column: firstStatement.loc?.start.column || 0,
+            message: `Component must be a function declaration, not ${actualType}. ${suggestion}`,
+            code: ''
+          });
+          
+          // Don't check name if it's not a function declaration
+          return violations;
+        }
+        
+        // Check that the function name matches the component name
+        const functionName = firstStatement.id?.name;
+        if (functionName !== componentName) {
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: firstStatement.loc?.start.line || 0,
+            column: firstStatement.loc?.start.column || 0,
+            message: `Component function name "${functionName}" does not match component name "${componentName}". The function must be named exactly as specified.`,
+            code: `Rename to: function ${componentName}(...)`
+          });
+        }
+        
+        // Additional check: look for any code before the function that might have been missed
+        // (e.g., leading variable declarations that destructure from React)
+        if (programBody.length === 1 && t.isFunctionDeclaration(firstStatement)) {
+          // Use traverse to find any problematic patterns inside
+          traverse(ast, {
+            Program(path: NodePath<t.Program>) {
+              // Check if there are any directives or other non-obvious code
+              if (path.node.directives && path.node.directives.length > 0) {
+                violations.push({
+                  rule: 'single-function-only',
+                  severity: 'high',
+                  line: 1,
+                  column: 0,
+                  message: 'Component should not have directives like "use strict". These are added automatically.',
+                  code: ''
+                });
+              }
+            }
           });
         }
         
@@ -6752,6 +6782,49 @@ Correct pattern:
                   code: `...${varName}`
                 });
               }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'no-react-destructuring',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for destructuring from React
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) &&
+                path.node.init.name === 'React') {
+              
+              // Get the destructured properties
+              const destructuredProps = path.node.id.properties
+                .filter(prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key))
+                .map(prop => (prop as t.ObjectProperty).key as t.Identifier)
+                .map(key => key.name);
+              
+              violations.push({
+                rule: 'no-react-destructuring',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Cannot destructure from React. The hooks (${destructuredProps.join(', ')}) are already available as global functions in the React runtime.`,
+                code: path.toString().substring(0, 100),
+                suggestion: {
+                  text: `Remove the destructuring statement. React hooks like ${destructuredProps.join(', ')} are already available globally and don't need to be imported or destructured.`,
+                  example: `// Remove this line entirely:
+// const { ${destructuredProps.join(', ')} } = React;
+
+// Just use the hooks directly:
+const [state, setState] = useState(initialValue);`
+                }
+              });
             }
           }
         });

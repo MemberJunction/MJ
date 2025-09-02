@@ -350,7 +350,8 @@ export class ComponentRunner {
               source: 'runtime-wrapper'
             });
             (window as any).__testHarnessTestFailed = true;
-            throw registrationError; // Re-throw for outer handler
+            // Don't re-throw - let execution continue to collect this error properly
+            return; // Exit early but let the error collection happen
           }
           
           if (debug && !registrationResult.success) {
