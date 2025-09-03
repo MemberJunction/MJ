@@ -44,8 +44,8 @@
             </div>
             
             <!-- Inner tab strip for Component, Functional, Technical, Data, Code tabs -->
-            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-              <kendo-tabstrip style="height: 100%; display: flex; flex-direction: column;">
+            <div class="inner-tabstrip-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+              <kendo-tabstrip class="inner-tabs" style="height: 100%; display: flex; flex-direction: column;">
                 <!-- Component Tab (always first) -->
                 <kendo-tabstrip-tab [selected]="true">
                   <ng-template kendoTabTitle>
@@ -187,6 +187,27 @@
                     </div>
                   </ng-template>
                 </kendo-tabstrip-tab>
+                
+                <!-- Spec Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-file-code"></i> Spec
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                      <mj-code-editor
+                        [value]="getComponentSpec(option)"
+                        [language]="'json'"
+                        [autoFocus]="false"
+                        [indentWithTab]="true"
+                        [readonly]="true"
+                        [toolbar]="codeToolbarConfig"
+                        (toolbarAction)="handleCodeToolbarAction($event)"
+                        style="height: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
               </kendo-tabstrip>
             </div>
           </div>
@@ -227,8 +248,8 @@
     </div>
     
     <!-- Tab strip for Component, Functional, Technical, Data, Code tabs -->
-    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-      <kendo-tabstrip style="height: 100%; display: flex; flex-direction: column;">
+    <div class="inner-tabstrip-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+      <kendo-tabstrip class="inner-tabs" style="height: 100%; display: flex; flex-direction: column;">
         <!-- Component Tab (always first) -->
         <kendo-tabstrip-tab [selected]="true">
           <ng-template kendoTabTitle>
@@ -367,6 +388,29 @@
                 <mj-code-editor
                   [value]="getComponentCode(componentOptions[0])"
                   [language]="'javascript'"
+                  [autoFocus]="false"
+                  [indentWithTab]="true"
+                  [readonly]="true"
+                  [toolbar]="codeToolbarConfig"
+                  (toolbarAction)="handleCodeToolbarAction($event)"
+                  style="height: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+        
+        <!-- Spec Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-file-code"></i> Spec
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                <mj-code-editor
+                  [value]="getComponentSpec(componentOptions[0])"
+                  [language]="'json'"
                   [autoFocus]="false"
                   [indentWithTab]="true"
                   [readonly]="true"
