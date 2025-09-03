@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/ai@2.97.0
+- @memberjunction/ai-vectordb@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

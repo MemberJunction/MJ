@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/actions-apollo
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/actions@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

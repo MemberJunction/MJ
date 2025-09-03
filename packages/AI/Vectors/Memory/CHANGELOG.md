@@ -1,5 +1,12 @@
 # @memberjunction/ai-vectors-memory
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

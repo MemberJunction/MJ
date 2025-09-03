@@ -1,5 +1,16 @@
 # @memberjunction/interactive-component-types
 
+## 2.97.0
+
+### Minor Changes
+
+- dc497d5: migration
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.97.0
+- @memberjunction/core@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

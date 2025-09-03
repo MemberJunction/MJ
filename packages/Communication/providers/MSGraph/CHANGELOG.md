@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.97.0
+
+### Patch Changes
+
+- 93ac030: Added support for including headers in emails.
+- Updated dependencies [93ac030]
+  - @memberjunction/communication-types@2.97.0
+  - @memberjunction/core-entities@2.97.0
+  - @memberjunction/aiengine@2.97.0
+  - @memberjunction/sqlserver-dataprovider@2.97.0
+  - @memberjunction/ai@2.97.0
+  - @memberjunction/ai-openai@2.97.0
+  - @memberjunction/core@2.97.0
+  - @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes
