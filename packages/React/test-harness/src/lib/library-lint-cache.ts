@@ -45,6 +45,12 @@ export class LibraryLintCache {
     if (this.isLoaded) {
       return Promise.resolve();
     }
+    
+    // If we have manually added rules, consider it loaded
+    if (this.compiledRules.size > 0) {
+      this.isLoaded = true;
+      return Promise.resolve();
+    }
 
     // If loading is in progress, return the existing promise
     if (this.loadingPromise) {
@@ -95,10 +101,15 @@ export class LibraryLintCache {
                 const validatorDef = validator as any;
                 if (validatorDef.validate) {
                   try {
-                    // Create the validation function from the string
-                    // The validate property should contain the full function code after @file resolution
+                    // The validate property already contains the resolved JavaScript code from the DB
+                    // The validator returns a violation object, so we need to push it to context.violations
                     const validateFn = new Function('ast', 'path', 't', 'context', 
-                      `return (${validatorDef.validate})(ast, path, t, context);`
+                      `const result = (${validatorDef.validate})(ast, path, t, context);
+                       if (result) {
+                         // If the validator returned a violation, push it to context
+                         context.violations.push(result);
+                       }
+                       return result;`
                     ) as any;
                     
                     compiledRules.validators[name] = {
@@ -145,5 +156,59 @@ export class LibraryLintCache {
     this.compiledRules.clear();
     this.isLoaded = false;
     this.loadingPromise = null;
+  }
+
+  /**
+   * Manually add library rules for testing without database access
+   */
+  public addTestLibraryRules(libraryName: string, lintRules: any): void {
+    try {
+      // Compile validators if they exist
+      const compiledRules: CompiledLibraryRules = {
+        library: { Name: libraryName } as ComponentLibraryEntity,
+        initialization: lintRules.initialization,
+        lifecycle: lintRules.lifecycle,
+        options: lintRules.options
+      };
+      
+      // Compile validator functions
+      if (lintRules.validators) {
+        compiledRules.validators = {};
+        
+        for (const [name, validator] of Object.entries(lintRules.validators)) {
+          if (validator && typeof validator === 'object') {
+            const validatorDef = validator as any;
+            if (validatorDef.validate) {
+              try {
+                // The validate property already contains the resolved JavaScript code
+                // The validator returns a violation object, so we need to push it to context.violations
+                const validateFn = new Function('ast', 'path', 't', 'context', 
+                  `const result = (${validatorDef.validate})(ast, path, t, context);
+                   if (result) {
+                     // If the validator returned a violation, push it to context
+                     context.violations.push(result);
+                   }
+                   return result;`
+                ) as any;
+                
+                compiledRules.validators[name] = {
+                  description: validatorDef.description,
+                  severity: validatorDef.severity,
+                  validateFn
+                };
+              } catch (error) {
+                console.warn(`Failed to compile validator ${name} for library ${libraryName}:`, error);
+              }
+            }
+          }
+        }
+      }
+      
+      // Cache the compiled rules
+      this.compiledRules.set(libraryName, compiledRules);
+      
+    } catch (error) {
+      console.warn(`Failed to add test rules for library ${libraryName}:`, error);
+    }
   }
 }
