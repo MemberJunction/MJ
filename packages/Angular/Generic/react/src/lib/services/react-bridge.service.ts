@@ -123,7 +123,7 @@ export class ReactBridgeService implements OnDestroy {
    * @returns React context with React, ReactDOM, Babel, and libraries
    */
   async getReactContext(): Promise<RuntimeContext> {
-    await this.adapter.initialize();
+    await this.adapter.initialize(undefined, undefined, {debug: this.debug});
     return this.adapter.getRuntimeContext();
   }
 

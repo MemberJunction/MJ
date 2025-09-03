@@ -406,7 +406,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         namespace: this.component.namespace || 'Global',
         version: version,
         allowOverride: false,  // Each version is unique
-        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
+        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
+        debug: true
       }
     );
     

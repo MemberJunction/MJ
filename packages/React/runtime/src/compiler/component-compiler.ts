@@ -242,6 +242,7 @@ export class ComponentCompiler {
           .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`)
           .join('\n        ')
       : '';
+ 
 
     const wrappedCode = `
       function createComponent(
@@ -249,6 +250,11 @@ export class ComponentCompiler {
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console, components
       ) {
+        if (!React)
+            console.log('[React-Runtime-JS] React is not defined');
+        if (!ReactDOM)
+            console.log('[React-Runtime-JS] ReactDOM is not defined');
+
         // Code for ${componentName}
         ${componentCode}
         
