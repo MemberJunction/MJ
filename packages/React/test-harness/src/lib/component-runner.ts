@@ -37,7 +37,6 @@ export interface ComponentExecutionResult {
   html: string;
   errors: Violation[];
   warnings: Violation[];
-  criticalWarnings: string[];
   console: { type: string; text: string }[];
   screenshot?: Buffer;
   executionTime: number;
@@ -101,7 +100,6 @@ export class ComponentRunner {
     const startTime = Date.now();
     const errors: string[] = [];
     const warnings: string[] = [];
-    const criticalWarnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     const dataErrors: string[] = []; // Track data access errors from RunView/RunQuery
     let renderCount = 0;
@@ -184,7 +182,7 @@ export class ComponentRunner {
       await this.setupErrorTracking(page);
       
       // Set up console logging
-      this.setupConsoleLogging(page, consoleLogs, warnings, criticalWarnings);
+      this.setupConsoleLogging(page, consoleLogs, warnings);
       
       // Expose MJ utilities to the page
       await this.exposeMJUtilities(page, options, dataErrors, debug)
@@ -669,7 +667,6 @@ export class ComponentRunner {
 
       // Determine success
       const success = errors.length === 0 && 
-                     criticalWarnings.length === 0 && 
                      !hasRenderLoop &&
                      !hasTimeout &&
                      executionResult.success;
@@ -677,11 +674,11 @@ export class ComponentRunner {
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
       
-      // Map runtime errors with source info, data errors don't have source
+      // Map runtime errors with source info and specific rules
       const errorViolations = runtimeErrorsWithSource.map(e => ({
         message: e.message,
         severity: 'critical' as const,
-        rule: 'runtime-error',
+        rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
         line: 0,
         column: 0,
         source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
@@ -723,18 +720,41 @@ export class ComponentRunner {
         });
       });
       
+      // Check warnings for critical patterns and move them to errors
+      const criticalWarningViolations: Violation[] = [];
+      const regularWarnings: string[] = [];
+      
+      warnings.forEach(w => {
+        if (ComponentRunner.CRITICAL_WARNING_PATTERNS.some(pattern => pattern.test(w))) {
+          // This is a critical warning - add to errors
+          criticalWarningViolations.push({
+            message: w,
+            severity: 'critical' as const,
+            rule: 'critical-react-warning',
+            line: 0,
+            column: 0,
+            source: 'react-framework' as const
+          });
+        } else {
+          // Regular warning
+          regularWarnings.push(w);
+        }
+      });
+      
+      // Combine all error violations
+      const allErrorViolations = [...errorViolations, ...criticalWarningViolations];
+      
       const result: ComponentExecutionResult = {
-        success: success && dataErrors.length === 0, // Fail if we have data errors
+        success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
-        errors: errorViolations,
-        warnings: warnings.map(w => ({
+        errors: allErrorViolations,
+        warnings: regularWarnings.map(w => ({
           message: w,
           severity: 'low' as const,
           rule: 'warning',
           line: 0,
           column: 0
         })),
-        criticalWarnings,
         console: consoleLogs,
         screenshot,
         executionTime: Date.now() - startTime,
@@ -787,7 +807,6 @@ export class ComponentRunner {
           line: 0,
           column: 0
         })),
-        criticalWarnings,
         console: consoleLogs,
         executionTime: Date.now() - startTime,
         renderCount
@@ -1179,7 +1198,7 @@ export class ComponentRunner {
   /**
    * Collect runtime errors from the page
    */
-  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string}>> {
+  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string; type?: string; rule?: string}>> {
     const errorData = await page.evaluate(() => {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
@@ -1188,7 +1207,7 @@ export class ComponentRunner {
       };
     });
 
-    const errors: Array<{message: string; source?: string}> = [];
+    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
     
     // Check if we have any specific React render errors
     const hasSpecificReactError = errorData.runtimeErrors.some((error: any) => 
@@ -1205,20 +1224,51 @@ export class ComponentRunner {
         return; // Skip this generic error
       }
       
-      const phase = error.phase ? ` (during ${error.phase})` : '';
-      const errorMsg = `${error.type} error: ${error.message}${phase}`;
+      // Map error types to specific rule names
+      let rule = 'runtime-error';
+      switch(error.type) {
+        case 'invalid-element-type':
+          rule = 'invalid-jsx-element';
+          break;
+        case 'undefined-component':
+          rule = 'undefined-jsx-component';
+          break;
+        case 'react-render-error':
+          rule = 'react-render-error';
+          break;
+        case 'render-loop':
+          rule = 'infinite-render-loop';
+          break;
+        case 'registration-error':
+          rule = 'component-registration-error';
+          break;
+        case 'execution-error':
+          rule = 'execution-error';
+          break;
+        case 'runtime':
+          rule = 'runtime-error';
+          break;
+        case 'promise-rejection':
+          rule = 'unhandled-promise-rejection';
+          break;
+      }
+      
+      // Don't prepend type to message, just use the clean message
       errors.push({
-        message: errorMsg,
-        source: error.source
+        message: error.message,
+        source: error.source,
+        type: error.type,
+        rule: rule
       });
     });
 
-    // Console errors don't have source info
+    // Console errors don't have type info
     errorData.consoleErrors.forEach((error: string) => {
-      const errorMsg = `Console error: ${error}`;
       errors.push({
-        message: errorMsg,
-        source: 'react-framework' // Console errors from React are framework level
+        message: error,
+        source: 'react-framework',
+        type: 'console-error',
+        rule: 'console-error'
       });
     });
 
@@ -1252,8 +1302,7 @@ export class ComponentRunner {
   private setupConsoleLogging(
     page: any,
     consoleLogs: { type: string; text: string }[],
-    warnings: string[],
-    criticalWarnings: string[]
+    warnings: string[]
   ): void {
     page.on('console', (msg: any) => {
       const type = msg.type();
@@ -1266,11 +1315,6 @@ export class ComponentRunner {
       if (type === 'warning') {
         if (!warnings.includes(text)) {
           warnings.push(text);
-        }
-        
-        // Check if it's a critical warning that should fail the test
-        if (ComponentRunner.CRITICAL_WARNING_PATTERNS.some(pattern => pattern.test(text))) {
-          criticalWarnings.push(text);
         }
       }
     });
@@ -1792,12 +1836,6 @@ export class ComponentRunner {
       });
     }
     
-    if (result.criticalWarnings && result.criticalWarnings.length > 0) {
-      console.log('\n🔴 Critical Warnings:', result.criticalWarnings.length);
-      result.criticalWarnings.forEach((warn, i) => {
-        console.log(`  ${i + 1}. ${warn}`);
-      });
-    }
     
     console.log('\n========================================\n');
   }
