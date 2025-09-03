@@ -12,11 +12,11 @@ import { StylesTypeAnalyzer } from './styles-type-analyzer';
 export interface LintResult {
   success: boolean;
   violations: Violation[];
-  suggestions: FixSuggestion[];
   criticalCount?: number;
   highCount?: number;
   mediumCount?: number;
   lowCount?: number;
+  hasErrors: boolean;
 }
 
 export interface LintOptions {
@@ -30,13 +30,13 @@ export interface Violation {
   column: number;
   message: string;
   code?: string;
+  source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
+  suggestion?: {
+    text: string;
+    example?: string;
+  };
 }
 
-export interface FixSuggestion {
-  violation: string;
-  suggestion: string;
-  example?: string;
-}
 
 interface Rule {
   name: string;
@@ -570,7 +570,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' is already available from dependencies (auto-destructured), but this code is creating a new definition which overrides it.`,
+                    message: `Component '${varName}' shadows a dependency component. The component '${varName}' should be accessed via destructuring from components prop or as components.${varName}, but this code is creating a new definition which overrides it.`,
                     code: `const ${varName} = ...`
                   });
                 }
@@ -590,7 +590,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' is already available from dependencies (auto-destructured), but this code is creating a new function which overrides it.`,
+                  message: `Component '${funcName}' shadows a dependency component. The component '${funcName}' should be accessed via destructuring from components prop or as components.${funcName}, but this code is creating a new function which overrides it.`,
                   code: `function ${funcName}(...)`
                 });
               }
@@ -598,8 +598,8 @@ export class ComponentLinter {
           }
         });
         
-        // Components are now auto-destructured in the wrapper, so we don't need to check for manual destructuring
-        // We just need to check if they're being used directly
+        // Components must be destructured from the components prop or accessed via components.ComponentName
+        // Check if they're being used correctly
         let hasComponentsUsage = false;
         const usedDependencies = new Set<string>();
         
@@ -644,7 +644,7 @@ export class ComponentLinter {
           }
         });
         
-        // Components are now auto-destructured, so just check for unused dependencies
+        // Check for unused dependencies - components must be destructured or accessed via components prop
         if (dependencyNames.size > 0 && usedDependencies.size === 0) {
           const depList = Array.from(dependencyNames).join(', ');
           violations.push({
@@ -652,7 +652,7 @@ export class ComponentLinter {
             severity: 'low',
             line: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.line || 0,
             column: (mainComponentPath as NodePath<t.FunctionDeclaration>).node.loc?.start.column || 0,
-            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components are available for use.`,
+            message: `Component has dependencies [${depList}] defined in spec but they're not being used. These components must be destructured from the components prop or accessed as components.ComponentName to use them.`,
             code: `// Available: ${depList}`
           });
         }
@@ -3243,10 +3243,13 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
         
         // Add props from componentSpec.properties if they exist
+        // These are the architect-defined props that this component is allowed to accept
+        const specDefinedProps: string[] = [];
         if (componentSpec?.properties) {
           for (const prop of componentSpec.properties) {
             if (prop.name) {
               allowedProps.add(prop.name);
+              specDefinedProps.push(prop.name);
             }
           }
         }
@@ -3271,16 +3274,28 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 
                 // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
-                  const customPropsMessage = componentSpec?.properties?.length 
-                    ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
-                    : '';
+                  let message: string;
+                  if (specDefinedProps.length > 0) {
+                    message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                              `This component can only accept: ` +
+                              `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                              `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
+                              `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `Any additional props must be defined in the component spec's properties array.`;
+                  } else {
+                    message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                              `This component can only accept: ` +
+                              `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                              `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `To accept additional props, they must be defined in the component spec's properties array.`;
+                  }
                   
                   violations.push({
                     rule: 'component-props-validation',
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                    message
                   });
                 }
               }
@@ -3308,16 +3323,28 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                   
                   if (invalidProps.length > 0) {
-                    const customPropsMessage = componentSpec?.properties?.length 
-                      ? ` and custom props defined in spec: ${componentSpec.properties.map(p => p.name).join(', ')}`
-                      : '';
+                    let message: string;
+                    if (specDefinedProps.length > 0) {
+                      message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                                `This component can only accept: ` +
+                                `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                                `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
+                                `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `Any additional props must be defined in the component spec's properties array.`;
+                    } else {
+                      message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
+                                `This component can only accept: ` +
+                                `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
+                                `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `To accept additional props, they must be defined in the component spec's properties array.`;
+                    }
                     
                     violations.push({
                       rule: 'component-props-validation',
                       severity: 'critical',
                       line: path.node.loc?.start.line || 0,
                       column: path.node.loc?.start.column || 0,
-                      message: `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. Components can only accept standard props: ${Array.from(standardProps).join(', ')}, React special props: ${Array.from(reactSpecialProps).join(', ')}${customPropsMessage}. All custom props must be defined in the component spec properties array.`
+                      message
                     });
                   }
                 }
@@ -3557,93 +3584,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         code: `${passedProp}={...}`
                       });
                     }
-                  }
-                }
-              }
-            }
-          }
-        });
-        
-        return violations;
-      }
-    },
-
-    {
-      name: 'invalid-components-destructuring',
-      appliesTo: 'all',
-      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
-        const violations: Violation[] = [];
-        
-        // Build sets of valid component names and library names
-        const validComponentNames = new Set<string>();
-        const libraryNames = new Set<string>();
-        const libraryGlobalVars = new Set<string>();
-        
-        // Add dependency components
-        if (componentSpec?.dependencies) {
-          for (const dep of componentSpec.dependencies) {
-            if (dep.name) {
-              validComponentNames.add(dep.name);
-            }
-          }
-        }
-        
-        // Add libraries
-        if (componentSpec?.libraries) {
-          for (const lib of componentSpec.libraries) {
-            if (lib.name) {
-              libraryNames.add(lib.name);
-            }
-            if (lib.globalVariable) {
-              libraryGlobalVars.add(lib.globalVariable);
-            }
-          }
-        }
-        
-        // Check for manual destructuring from components (now optional since auto-destructuring is in place)
-        traverse(ast, {
-          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-            // Look for: const { Something } = components;
-            if (t.isObjectPattern(path.node.id) && 
-                t.isIdentifier(path.node.init) && 
-                path.node.init.name === 'components') {
-              
-              for (const prop of path.node.id.properties) {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                  const destructuredName = prop.key.name;
-                  
-                  // Check if this is NOT a valid component from dependencies
-                  if (!validComponentNames.has(destructuredName)) {
-                    // Check if it might be a library being incorrectly destructured
-                    if (libraryNames.has(destructuredName) || libraryGlobalVars.has(destructuredName)) {
-                      violations.push({
-                        rule: 'invalid-components-destructuring',
-                        severity: 'critical',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: `Attempting to destructure library "${destructuredName}" from components prop. Libraries should be accessed directly via their globalVariable, not from components.`,
-                        code: `const { ${destructuredName} } = components;`
-                      });
-                    } else {
-                      violations.push({
-                        rule: 'invalid-components-destructuring',
-                        severity: 'high',
-                        line: prop.loc?.start.line || 0,
-                        column: prop.loc?.start.column || 0,
-                        message: `Destructuring "${destructuredName}" from components prop, but it's not in the component's dependencies array. Either add it to dependencies or it might be a missing library.`,
-                        code: `const { ${destructuredName} } = components;`
-                      });
-                    }
-                  } else {
-                    // Valid component, but manual destructuring is now redundant
-                    violations.push({
-                      rule: 'invalid-components-destructuring',
-                      severity: 'low',
-                      line: prop.loc?.start.line || 0,
-                      column: prop.loc?.start.column || 0,
-                      message: `Manual destructuring of "${destructuredName}" from components prop is redundant. Components are now auto-destructured and available directly.`,
-                      code: `const { ${destructuredName} } = components; // Can be removed`
-                    });
                   }
                 }
               }
@@ -4074,14 +4014,14 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     });
                   }
                   } else if (componentsFromProp.has(tagName)) {
-                    // This shouldn't happen since dependency components are auto-destructured
-                    // But keep as a fallback check
+                    // Component is in dependencies but not destructured/accessible
+                    // This indicates the component wasn't properly destructured from components prop
                     violations.push({
                       rule: 'undefined-jsx-component',
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. There may be an issue with component registration.`,
+                      message: `JSX component "${tagName}" is in dependencies but appears to be undefined. Make sure to destructure it from the components prop: const { ${tagName} } = components;`,
                       code: `<${tagName} ... />`
                     });
                   } else {
@@ -6146,94 +6086,124 @@ Correct pattern:
       test: (ast: t.File, componentName: string) => {
         const violations: Violation[] = [];
         
-        // Count all function declarations and expressions at the top level
-        const functionDeclarations: Array<{name: string, line: number, column: number}> = [];
-        const functionExpressions: Array<{name: string, line: number, column: number}> = [];
+        // Check that the AST body contains exactly one statement and it's a function declaration
+        const programBody = ast.program.body;
         
-        traverse(ast, {
-          FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
-            // Only check top-level functions (not nested inside other functions)
-            const parent = path.getFunctionParent();
-            if (!parent) {
-              const funcName = path.node.id?.name || 'anonymous';
-              functionDeclarations.push({
-                name: funcName,
-                line: path.node.loc?.start.line || 0,
-                column: path.node.loc?.start.column || 0
-              });
-            }
-          },
-          VariableDeclaration(path: NodePath<t.VariableDeclaration>) {
-            // Check for const/let/var func = function() or arrow functions at top level
-            const parent = path.getFunctionParent();
-            if (!parent) {
-              for (const declarator of path.node.declarations) {
-                if (t.isVariableDeclarator(declarator) && 
-                    (t.isFunctionExpression(declarator.init) || 
-                     t.isArrowFunctionExpression(declarator.init))) {
-                  const funcName = t.isIdentifier(declarator.id) ? declarator.id.name : 'anonymous';
-                  functionExpressions.push({
-                    name: funcName,
-                    line: declarator.loc?.start.line || 0,
-                    column: declarator.loc?.start.column || 0
-                  });
-                }
-              }
-            }
-          }
-        });
-        
-        const allFunctions = [...functionDeclarations, ...functionExpressions];
-        
-        // Check if we have more than one function
-        if (allFunctions.length > 1) {
-          // Find which one is the main component
-          const mainComponentIndex = allFunctions.findIndex(f => f.name === componentName);
-          const otherFunctions = allFunctions.filter((_, index) => index !== mainComponentIndex);
-          
-          violations.push({
-            rule: 'single-function-only',
-            severity: 'critical',
-            line: otherFunctions[0].line,
-            column: otherFunctions[0].column,
-            message: `Component code must contain ONLY the main component function "${componentName}". Found ${allFunctions.length} functions: ${allFunctions.map(f => f.name).join(', ')}. Move other functions to separate component dependencies.`,
-            code: `Remove functions: ${otherFunctions.map(f => f.name).join(', ')}`
-          });
-          
-          // Add a violation for each extra function
-          for (const func of otherFunctions) {
-            violations.push({
-              rule: 'single-function-only',
-              severity: 'critical',
-              line: func.line,
-              column: func.column,
-              message: `Extra function "${func.name}" not allowed. Each component must be a single function. Move this to a separate component dependency.`,
-              code: `function ${func.name} should be a separate component`
-            });
-          }
-        }
-        
-        // Also check that the single function matches the component name
-        if (allFunctions.length === 1 && allFunctions[0].name !== componentName) {
-          violations.push({
-            rule: 'single-function-only',
-            severity: 'critical',
-            line: allFunctions[0].line,
-            column: allFunctions[0].column,
-            message: `Component function name "${allFunctions[0].name}" does not match component name "${componentName}". The function must be named exactly as specified.`,
-            code: `Rename function to: function ${componentName}(...)`
-          });
-        }
-        
-        // Check for no function at all
-        if (allFunctions.length === 0) {
+        // First, check if there's anything other than a single function declaration
+        if (programBody.length === 0) {
           violations.push({
             rule: 'single-function-only',
             severity: 'critical',
             line: 1,
             column: 0,
-            message: `Component code must contain exactly one function named "${componentName}". No functions found.`,
+            message: `Component code must contain exactly one function declaration named "${componentName}". No code found.`,
             code: `Add: function ${componentName}({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) { ... }`
+          });
+          return violations;
+        }
+        
+        if (programBody.length > 1) {
+          // Multiple top-level statements - not allowed
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: programBody[1].loc?.start.line || 0,
+            column: programBody[1].loc?.start.column || 0,
+            message: `Component code must contain ONLY a single function declaration. Found ${programBody.length} top-level statements. No code should exist before or after the function.`,
+            code: `Remove all code except: function ${componentName}(...) { ... }`
+          });
+          
+          // Report each extra statement
+          for (let i = 1; i < programBody.length; i++) {
+            const stmt = programBody[i];
+            let stmtType = 'statement';
+            if (t.isVariableDeclaration(stmt)) {
+              stmtType = 'variable declaration';
+            } else if (t.isFunctionDeclaration(stmt)) {
+              stmtType = 'function declaration';
+            } else if (t.isExpressionStatement(stmt)) {
+              stmtType = 'expression';
+            }
+            
+            violations.push({
+              rule: 'single-function-only',
+              severity: 'critical',
+              line: stmt.loc?.start.line || 0,
+              column: stmt.loc?.start.column || 0,
+              message: `Extra ${stmtType} not allowed. Only the component function should exist.`,
+              code: ''
+            });
+          }
+        }
+        
+        // Check that the single statement is a function declaration (not arrow function or other)
+        const firstStatement = programBody[0];
+        
+        if (!t.isFunctionDeclaration(firstStatement)) {
+          let actualType = 'unknown statement';
+          let suggestion = '';
+          
+          if (t.isVariableDeclaration(firstStatement)) {
+            // Check if it's an arrow function or other variable
+            const declarator = firstStatement.declarations[0];
+            if (t.isVariableDeclarator(declarator)) {
+              if (t.isArrowFunctionExpression(declarator.init) || t.isFunctionExpression(declarator.init)) {
+                actualType = 'arrow function or function expression';
+                suggestion = `Use function declaration syntax: function ${componentName}(...) { ... }`;
+              } else {
+                actualType = 'variable declaration';
+                suggestion = 'Remove this variable and ensure only the component function exists';
+              }
+            }
+          } else if (t.isExpressionStatement(firstStatement)) {
+            actualType = 'expression statement';
+            suggestion = 'Remove this expression and add the component function';
+          }
+          
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: firstStatement.loc?.start.line || 0,
+            column: firstStatement.loc?.start.column || 0,
+            message: `Component must be a function declaration, not ${actualType}. ${suggestion}`,
+            code: ''
+          });
+          
+          // Don't check name if it's not a function declaration
+          return violations;
+        }
+        
+        // Check that the function name matches the component name
+        const functionName = firstStatement.id?.name;
+        if (functionName !== componentName) {
+          violations.push({
+            rule: 'single-function-only',
+            severity: 'critical',
+            line: firstStatement.loc?.start.line || 0,
+            column: firstStatement.loc?.start.column || 0,
+            message: `Component function name "${functionName}" does not match component name "${componentName}". The function must be named exactly as specified.`,
+            code: `Rename to: function ${componentName}(...)`
+          });
+        }
+        
+        // Additional check: look for any code before the function that might have been missed
+        // (e.g., leading variable declarations that destructure from React)
+        if (programBody.length === 1 && t.isFunctionDeclaration(firstStatement)) {
+          // Use traverse to find any problematic patterns inside
+          traverse(ast, {
+            Program(path: NodePath<t.Program>) {
+              // Check if there are any directives or other non-obvious code
+              if (path.node.directives && path.node.directives.length > 0) {
+                violations.push({
+                  rule: 'single-function-only',
+                  severity: 'high',
+                  line: 1,
+                  column: 0,
+                  message: 'Component should not have directives like "use strict". These are added automatically.',
+                  code: ''
+                });
+              }
+            }
           });
         }
         
@@ -6758,6 +6728,49 @@ Correct pattern:
         
         return violations;
       }
+    },
+
+    {
+      name: 'no-react-destructuring',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for destructuring from React
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) &&
+                path.node.init.name === 'React') {
+              
+              // Get the destructured properties
+              const destructuredProps = path.node.id.properties
+                .filter(prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key))
+                .map(prop => (prop as t.ObjectProperty).key as t.Identifier)
+                .map(key => key.name);
+              
+              violations.push({
+                rule: 'no-react-destructuring',
+                severity: 'critical',
+                line: path.node.loc?.start.line || 0,
+                column: path.node.loc?.start.column || 0,
+                message: `Cannot destructure from React. The hooks (${destructuredProps.join(', ')}) are already available as global functions in the React runtime.`,
+                code: path.toString().substring(0, 100),
+                suggestion: {
+                  text: `Remove the destructuring statement. React hooks like ${destructuredProps.join(', ')} are already available globally and don't need to be imported or destructured.`,
+                  example: `// Remove this line entirely:
+// const { ${destructuredProps.join(', ')} } = React;
+
+// Just use the hooks directly:
+const [state, setState] = useState(initialValue);`
+                }
+              });
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -6837,14 +6850,17 @@ Correct pattern:
       
       // If we have critical syntax errors, return immediately with those
       if (syntaxViolations.length > 0) {
+        // Add suggestions directly to syntax violations
+        this.generateSyntaxErrorSuggestions(syntaxViolations);
+        
         return {
           success: false,
           violations: syntaxViolations,
-          suggestions: this.generateSyntaxErrorSuggestions(syntaxViolations),
           criticalCount: syntaxViolations.length,
           highCount: 0,
           mediumCount: 0,
-          lowCount: 0
+          lowCount: 0,
+          hasErrors: true
         };
       }
       
@@ -6921,17 +6937,17 @@ Correct pattern:
         console.log('');
       }
       
-      // Generate fix suggestions
-      const suggestions = this.generateFixSuggestions(uniqueViolations);
+      // Add suggestions directly to violations
+      this.addSuggestionsToViolations(uniqueViolations);
       
       return {
         success: criticalCount === 0 && highCount === 0,  // Only fail on critical/high
         violations: uniqueViolations,
-        suggestions,
         criticalCount,
         highCount,
         mediumCount,
-        lowCount
+        lowCount,
+        hasErrors: criticalCount > 0 || highCount > 0
       };
     } catch (error) {
       // If parsing fails, return a parse error
@@ -6944,7 +6960,7 @@ Correct pattern:
           column: 0,
           message: `Failed to parse component: ${error instanceof Error ? error.message : 'Unknown error'}`
         }],
-        suggestions: []
+        hasErrors: true
       };
     }
   }
@@ -7373,15 +7389,17 @@ Correct pattern:
     return unique;
   }
   
-  private static generateFixSuggestions(violations: Violation[]): FixSuggestion[] {
-    const suggestions: FixSuggestion[] = [];
-    
+  /**
+   * Adds suggestions directly to violations based on their rule type
+   * @param violations Array of violations to enhance with suggestions
+   * @returns The same violations array with suggestions embedded
+   */
+  private static addSuggestionsToViolations(violations: Violation[]): Violation[] {
     for (const violation of violations) {
       switch (violation.rule) {
         case 'no-import-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all import statements. Interactive components receive everything through props.',
+          violation.suggestion = {
+            text: 'Remove all import statements. Interactive components receive everything through props.',
             example: `// ❌ WRONG - Using import statements:
 import React from 'react';
 import { useState } from 'react';
@@ -7409,13 +7427,12 @@ function MyComponent({ utilities, styles, components }) {
 // 2. Passed through the 'components' prop (child components)
 // 3. Passed through the 'styles' prop (styling)
 // 4. Available globally (React hooks)`
-          });
+          };
           break;
           
         case 'no-export-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all export statements. The component function should be the only code, not exported.',
+          violation.suggestion = {
+            text: 'Remove all export statements. The component function should be the only code, not exported.',
             example: `// ❌ WRONG - Using export:
 export function MyComponent({ utilities }) {
   return <div>Hello</div>;
@@ -7437,13 +7454,12 @@ function MyComponent({ utilities, styles, components }) {
 // The component is self-contained.
 // No exports needed - the host environment
 // will execute the function directly.`
-          });
+          };
           break;
           
         case 'no-require-statements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove all require() and dynamic import() statements. Use props instead.',
+          violation.suggestion = {
+            text: 'Remove all require() and dynamic import() statements. Use props instead.',
             example: `// ❌ WRONG - Using require or dynamic import:
 function MyComponent({ utilities }) {
   const lodash = require('lodash');
@@ -7474,13 +7490,12 @@ function MyComponent({ utilities, styles, components }) {
 // - Passed via props (utilities, components, styles)
 // - Available globally (React hooks)
 // No module loading allowed!`
-          });
+          };
           break;
           
         case 'use-function-declaration':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
+          violation.suggestion = {
+            text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
             example: `// ❌ WRONG - Top-level arrow function component:
 const MyComponent = ({ utilities, styles, components }) => {
   const [state, setState] = useState('');
@@ -7513,13 +7528,12 @@ function ChildComponent() {
 // 3. Hoisting allows flexible code organization
 // 4. Consistent with React documentation patterns
 // 5. Easier to distinguish from regular variables`
-          });
+          };
           break;
           
         case 'no-return-component':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove the return statement at the end of the file. The component function should stand alone.',
+          violation.suggestion = {
+            text: 'Remove the return statement at the end of the file. The component function should stand alone.',
             example: `// ❌ WRONG - Returning the component:
 function MyComponent({ utilities, styles, components }) {
   const [state, setState] = useState('');
@@ -7546,13 +7560,12 @@ function MyComponent({ utilities, styles, components }) {
 
 // The runtime will find and execute your component
 // by its function name. No need to return or reference it!`
-          });
+          };
           break;
           
         case 'no-iife-wrapper':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+          violation.suggestion = {
+            text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
             example: `// ❌ WRONG - IIFE wrapper patterns:
 (function() {
   function MyComponent({ utilities, styles, components }) {
@@ -7586,13 +7599,12 @@ function MyComponent({ utilities, styles, components }) {
 // 3. IIFEs prevent proper component discovery
 // 4. Makes debugging harder
 // 5. Unnecessary complexity`
-          });
+          };
           break;
           
         case 'full-state-ownership':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
+          violation.suggestion = {
+            text: 'Components must manage ALL their own state internally. Use proper naming conventions for initialization.',
             example: `// ❌ WRONG - Controlled state props:
 function PaginationControls({ currentPage, filters, sortBy, onPageChange }) {
   // These props suggest parent controls the state - WRONG!
@@ -7652,13 +7664,12 @@ function DataTable({
 // - Direct state names (currentPage, selectedId, activeTab)
 // - State without 'initial'/'default' prefix (sortBy, filters, searchTerm)
 // - Controlled patterns (value + onChange, checked + onChange)`
-          });
+          };
           break;
           
         case 'no-use-reducer':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use useState for state management, not useReducer',
+          violation.suggestion = {
+            text: 'Use useState for state management, not useReducer',
             example: `// Instead of:
 const [state, dispatch] = useReducer(reducer, initialState);
 
@@ -7681,13 +7692,12 @@ function Component({ savedUserSettings, onSaveUserSettings }) {
     }
   };
 }`
-          });
+          };
           break;
           
         case 'no-data-prop':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Replace generic data prop with specific named props',
+          violation.suggestion = {
+            text: 'Replace generic data prop with specific named props',
             example: `// Instead of:
 function Component({ data, savedUserSettings, onSaveUserSettings }) {
   return <div>{data.items.map(...)}</div>;
@@ -7705,14 +7715,13 @@ function Component({ items, customers, savedUserSettings, onSaveUserSettings }) 
 
 // Load data using utilities:
 const result = await utilities.rv.RunView({ entityName: 'Items' });`
-          });
+          };
           break;
           
           
         case 'saved-user-settings-pattern':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only save important user preferences, not ephemeral UI state',
+          violation.suggestion = {
+            text: 'Only save important user preferences, not ephemeral UI state',
             example: `// ✅ SAVE these (important preferences):
 - Selected items/tabs: selectedCustomerId, activeTab
 - Sort preferences: sortBy, sortDirection  
@@ -7737,13 +7746,12 @@ const handleSelect = (id) => {
     selectedId: id
   });
 };`
-          });
+          };
           break;
           
         case 'pass-standard-props':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always pass standard props to all components',
+          violation.suggestion = {
+            text: 'Always pass standard props to all components',
             example: `// Always include these props when calling components:
 <ChildComponent
   items={items}  // Data props
@@ -7758,21 +7766,19 @@ const handleSelect = (id) => {
   components={components}
   callbacks={callbacks}
 />`
-          });
+          };
           break;
           
         case 'no-child-implementation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Remove child component implementations. Only the root component function should be in this file',
+          violation.suggestion = {
+            text: 'Remove child component implementations. Only the root component function should be in this file',
             example: 'Move child component functions to separate generation requests'
-          });
+          };
           break;
           
         case 'undefined-component-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
+          violation.suggestion = {
+            text: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
             example: `// Component spec should include all referenced components:
 {
   "name": "MyComponent",
@@ -7797,13 +7803,12 @@ const handleSelect = (id) => {
 // Then in your component:
 const { ModelTreeView, PromptTable, FilterPanel } = components;
 // All these will be available`
-          });
+          };
           break;
           
         case 'component-usage-without-destructuring':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must be properly accessed - either destructure from components prop or use dot notation',
+          violation.suggestion = {
+            text: 'Components must be properly accessed - either destructure from components prop or use dot notation',
             example: `// ❌ WRONG - Using component without destructuring:
 function MyComponent({ components }) {
   return <AccountList />; // Error: AccountList not destructured
@@ -7824,13 +7829,12 @@ function MyComponent({ components }) {
 function MyComponent({ components: { AccountList } }) {
   return <AccountList />;
 }`
-          });
+          };
           break;
           
         case 'unsafe-array-access':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always check array bounds before accessing elements',
+          violation.suggestion = {
+            text: 'Always check array bounds before accessing elements',
             example: `// ❌ UNSAFE:
 const firstItem = items[0].name;
 const total = data[0].reduce((sum, item) => sum + item.value, 0);
@@ -7844,13 +7848,12 @@ const total = data.length > 0
 // ✅ BETTER - Use optional chaining:
 const firstItem = items[0]?.name || 'No items';
 const total = data[0]?.reduce((sum, item) => sum + item.value, 0) || 0;`
-          });
+          };
           break;
 
         case 'array-reduce-safety':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Always provide an initial value for reduce() or check array length',
+          violation.suggestion = {
+            text: 'Always provide an initial value for reduce() or check array length',
             example: `// ❌ UNSAFE:
 const sum = numbers.reduce((a, b) => a + b); // Fails on empty array
 const total = data[0].reduce((sum, item) => sum + item.value); // Multiple issues
@@ -7865,13 +7868,12 @@ const total = data.length > 0 && data[0]
 const sum = numbers.length > 0 
   ? numbers.reduce((a, b) => a + b)
   : 0;`
-          });
+          };
           break;
           
         case 'entity-name-mismatch':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use the exact entity name from dataRequirements in RunView calls',
+          violation.suggestion = {
+            text: 'Use the exact entity name from dataRequirements in RunView calls',
             example: `// The component spec defines the entities to use:
 // dataRequirements: {
 //   entities: [
@@ -7899,13 +7901,12 @@ await utilities.rv.RunViews([
 
 // The linter validates that all entity names in RunView/RunViews calls
 // match those declared in the component spec's dataRequirements`
-          });
+          };
           break;
           
         case 'missing-query-parameter':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Provide all required parameters defined in dataRequirements for the query',
+          violation.suggestion = {
+            text: 'Provide all required parameters defined in dataRequirements for the query',
             example: `// The component spec defines required parameters:
 // dataRequirements: {
 //   queries: [
@@ -7936,13 +7937,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate  // All parameters included
   }
 });`
-          });
+          };
           break;
           
         case 'unknown-query-parameter':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only use parameters that are defined in dataRequirements for the query',
+          violation.suggestion = {
+            text: 'Only use parameters that are defined in dataRequirements for the query',
             example: `// ❌ WRONG - Using undefined parameter:
 await utilities.rq.RunQuery({
   QueryName: "User Activity Summary",
@@ -7961,13 +7961,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate  // Only parameters from dataRequirements
   }
 });`
-          });
+          };
           break;
           
         case 'missing-parameters-object':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Queries with parameters must include a Parameters object in RunQuery',
+          violation.suggestion = {
+            text: 'Queries with parameters must include a Parameters object in RunQuery',
             example: `// ❌ WRONG - Query requires parameters but none provided:
 await utilities.rq.RunQuery({
   QueryName: "User Activity Summary"
@@ -7982,13 +7981,12 @@ await utilities.rq.RunQuery({
     StartDate: startDate
   }
 });`
-          });
+          };
           break;
           
         case 'query-name-mismatch':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use the exact query name from dataRequirements in RunQuery calls',
+          violation.suggestion = {
+            text: 'Use the exact query name from dataRequirements in RunQuery calls',
             example: `// The component spec defines the queries to use:
 // dataRequirements: {
 //   queries: [
@@ -8010,13 +8008,12 @@ await utilities.rv.RunQuery({
 
 // The linter validates that all query names in RunQuery calls
 // match those declared in the component spec's dataRequirements.queries`
-          });
+          };
           break;
           
         case 'runview-sql-function':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'RunView does not support SQL aggregations. Use RunQuery or aggregate in JavaScript.',
+          violation.suggestion = {
+            text: 'RunView does not support SQL aggregations. Use RunQuery or aggregate in JavaScript.',
             example: `// ❌ WRONG - SQL functions in RunView:
 await utilities.rv.RunView({
   EntityName: 'Accounts',
@@ -8038,13 +8035,12 @@ if (result?.Success) {
   const total = result.Results.length;
   const totalRevenue = result.Results.reduce((sum, acc) => sum + (acc.Revenue || 0), 0);
 }`
-          });
+          };
           break;
           
         case 'field-not-in-requirements':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Only use fields that are defined in dataRequirements for the entity',
+          violation.suggestion = {
+            text: 'Only use fields that are defined in dataRequirements for the entity',
             example: `// Check your dataRequirements to see allowed fields:
 // dataRequirements: {
 //   entities: [{
@@ -8066,13 +8062,12 @@ await utilities.rv.RunView({
   EntityName: 'Accounts',
   Fields: ['ID', 'AccountName', 'Industry'] // All from displayFields
 });`
-          });
+          };
           break;
           
         case 'orderby-field-not-sortable':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'OrderBy fields must be in the sortFields array for the entity',
+          violation.suggestion = {
+            text: 'OrderBy fields must be in the sortFields array for the entity',
             example: `// ❌ WRONG - Sorting by non-sortable field:
 await utilities.rv.RunView({
   EntityName: 'Accounts',
@@ -8084,13 +8079,12 @@ await utilities.rv.RunView({
   EntityName: 'Accounts',
   OrderBy: 'AccountName ASC' // AccountName is in sortFields
 });`
-          });
+          };
           break;
           
         case 'parent-event-callback-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components must invoke parent event callbacks when state changes',
+          violation.suggestion = {
+            text: 'Components must invoke parent event callbacks when state changes',
             example: `// ❌ WRONG - Only updating internal state:
 function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings }) {
   const [selectedAccountId, setSelectedAccountId] = useState(savedUserSettings?.selectedAccountId);
@@ -8119,13 +8113,12 @@ function ChildComponent({ onSelectAccount, savedUserSettings, onSaveUserSettings
     onSaveUserSettings?.({ ...savedUserSettings, selectedAccountId: accountId });
   };
 }`
-          });
+          };
           break;
           
         case 'property-name-consistency':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Maintain consistent property names when transforming data',
+          violation.suggestion = {
+            text: 'Maintain consistent property names when transforming data',
             example: `// ❌ WRONG - Transform to camelCase but access as PascalCase:
 setAccountData(results.map(item => ({
   accountName: item.AccountName,      // camelCase
@@ -8152,13 +8145,12 @@ setAccountData(results.map(item => ({
 // Later in render...
 <td>{account.accountName}</td>        // Use camelCase consistently
 <td>{formatCurrency(account.annualRevenue)}</td> // Works!`
-          });
+          };
           break;
           
         case 'noisy-settings-updates':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Save settings sparingly - only on meaningful user actions',
+          violation.suggestion = {
+            text: 'Save settings sparingly - only on meaningful user actions',
             example: `// ❌ WRONG - Saving on every keystroke:
 const handleSearchChange = (e) => {
   setSearchTerm(e.target.value);
@@ -8179,13 +8171,12 @@ const saveSearchTerm = useMemo(() =>
   }, 500),
   [savedUserSettings]
 );`
-          });
+          };
           break;
           
         case 'prop-state-sync':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Initialize state once, don\'t sync from props',
+          violation.suggestion = {
+            text: 'Initialize state once, don\'t sync from props',
             example: `// ❌ WRONG - Syncing prop to state:
 const [value, setValue] = useState(propValue);
 useEffect(() => {
@@ -8199,13 +8190,12 @@ const [value, setValue] = useState(
 
 // ✅ CORRECT - If you need prop changes, use derived state:
 const displayValue = propOverride || value;`
-          });
+          };
           break;
           
         case 'performance-memoization':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use useMemo for expensive operations and static data',
+          violation.suggestion = {
+            text: 'Use useMemo for expensive operations and static data',
             example: `// ❌ WRONG - Expensive operation on every render:
 const filteredItems = items.filter(item => 
   item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -8230,13 +8220,12 @@ const columns = useMemo(() => [
   { field: 'name', header: 'Name' },
   { field: 'value', header: 'Value' }
 ], []); // Empty deps = never changes`
-          });
+          };
           break;
           
         case 'child-state-management':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Never manage state for child components',
+          violation.suggestion = {
+            text: 'Never manage state for child components',
             example: `// ❌ WRONG - Managing child state:
 const [childTableSort, setChildTableSort] = useState('name');
 const [modalOpen, setModalOpen] = useState(false);
@@ -8253,13 +8242,12 @@ const [modalOpen, setModalOpen] = useState(false);
   onSaveUserSettings={handleChildSettings}
   // Child manages its own sort state!
 />`
-          });
+          };
           break;
           
         case 'server-reload-on-client-operation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use client-side operations for sorting and filtering',
+          violation.suggestion = {
+            text: 'Use client-side operations for sorting and filtering',
             example: `// ❌ WRONG - Reload from server:
 const handleSort = (field) => {
   setSortBy(field);
@@ -8283,13 +8271,12 @@ const sortedData = useMemo(() => {
   });
   return sorted;
 }, [data, sortBy, sortDirection]);`
-          });
+          };
           break;
           
         case 'runview-runquery-valid-properties':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use only valid properties for RunView/RunViews and RunQuery',
+          violation.suggestion = {
+            text: 'Use only valid properties for RunView/RunViews and RunQuery',
             example: `// ❌ WRONG - Invalid properties on RunView:
 await utilities.rv.RunView({
   EntityName: 'MJ: AI Prompt Runs',
@@ -8318,24 +8305,35 @@ await utilities.rq.RunQuery({
 // Valid RunQuery properties:
 // - QueryName (required)
 // - CategoryName, CategoryID, Parameters (optional)`
-          });
+          };
           break;
           
         case 'component-props-validation':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Components can only accept standard props or props defined in spec. Load data internally.',
-            example: `// ❌ WRONG - Root component with additional props:
-function RootComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // Additional props will break hosting environment
+          violation.suggestion = {
+            text: 'Components can only accept standard props and props explicitly defined in the component spec. Additional props must be declared in the spec\'s properties array.',
+            example: `// ❌ WRONG - Component with undeclared props:
+function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
+  // customers, orders, selectedId are NOT allowed unless defined in spec
 }
 
-// ✅ CORRECT - Root component with only standard props:
-function RootComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load ALL data internally using utilities
+// ✅ CORRECT Option 1 - Use only standard props and load data internally:
+function MyComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load data internally using utilities
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
+}
+
+// ✅ CORRECT Option 2 - Define props in component spec:
+// In spec.properties array:
+// [
+//   { name: "customers", type: "array", required: false, description: "Customer list" },
+//   { name: "orders", type: "array", required: false, description: "Order list" },
+//   { name: "selectedId", type: "string", required: false, description: "Selected item ID" }
+// ]
+// Then the component can accept them:
+function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
+  // These props are now allowed because they're defined in the spec
   
   useEffect(() => {
     const loadData = async () => {
@@ -8356,13 +8354,12 @@ function RootComponent({ utilities, styles, components, callbacks, savedUserSett
   
   return <div>{/* Use state, not props */}</div>;
 }`
-          });
+          };
           break;
           
         case 'runview-runquery-result-direct-usage':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'RunView and RunQuery return result objects, not arrays. Access the data with .Results property.',
+          violation.suggestion = {
+            text: 'RunView and RunQuery return result objects, not arrays. Access the data with .Results property.',
             example: `// ❌ WRONG - Using result directly as array:
 const result = await utilities.rv.RunView({
   EntityName: 'Users',
@@ -8408,13 +8405,12 @@ setData(queryResult.Results || []);  // NOT queryResult directly!
 //   TotalRowCount?: number,
 //   ExecutionTime?: number
 // }`
-          });
+          };
           break;
           
         case 'styles-invalid-path':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
+          violation.suggestion = {
+            text: 'Fix invalid styles property paths. Use the correct ComponentStyles interface structure.',
             example: `// ❌ WRONG - Invalid property paths:
 styles.fontSize.small           // fontSize is not at root level
 styles.colors.background        // colors.background exists
@@ -8429,13 +8425,12 @@ styles.spacing.sm               // correct size name
 styles?.typography?.fontSize?.sm || '14px'
 styles?.colors?.background || '#FFFFFF'
 styles?.spacing?.sm || '8px'`
-          });
+          };
           break;
           
         case 'styles-unsafe-access':
-          suggestions.push({
-            violation: violation.rule,
-            suggestion: 'Use optional chaining for nested styles access to prevent runtime errors.',
+          violation.suggestion = {
+            text: 'Use optional chaining for nested styles access to prevent runtime errors.',
             example: `// ❌ UNSAFE - Direct nested access:
 const fontSize = styles.typography.fontSize.md;
 const borderRadius = styles.borders.radius.sm;
@@ -8450,46 +8445,39 @@ const {
     fontSize: { md: fontSize = '14px' } = {}
   } = {}
 } = styles || {};`
-          });
+          };
           break;
       }
     }
     
-    return suggestions;
+    return violations;
   }
 
-  private static generateSyntaxErrorSuggestions(violations: Violation[]): FixSuggestion[] {
-    const suggestions: FixSuggestion[] = [];
+  private static generateSyntaxErrorSuggestions(violations: Violation[]): void {
     
     for (const violation of violations) {
       if (violation.message.includes('Unterminated string')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Check that all string literals are properly closed with matching quotes',
+        violation.suggestion = {
+          text: 'Check that all string literals are properly closed with matching quotes',
           example: 'Template literals with interpolation must use backticks: `text ${variable} text`'
-        });
+        };
       } else if (violation.message.includes('Unexpected token') || violation.message.includes('export')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Ensure all code is within the component function body',
+        violation.suggestion = {
+          text: 'Ensure all code is within the component function body',
           example: 'Remove any export statements or code outside the function definition'
-        });
+        };
       } else if (violation.message.includes('import') && violation.message.includes('top level')) {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Import statements are not allowed in components - use props instead',
+        violation.suggestion = {
+          text: 'Import statements are not allowed in components - use props instead',
           example: 'Access libraries through props: const { React, MaterialUI } = props.components'
-        });
+        };
       } else {
-        suggestions.push({
-          violation: violation.rule,
-          suggestion: 'Fix the syntax error before the component can be compiled',
+        violation.suggestion = {
+          text: 'Fix the syntax error before the component can be compiled',
           example: 'Review the code at the specified line and column for syntax issues'
-        });
+        };
       }
     }
-    
-    return suggestions;
   }
 
   /**

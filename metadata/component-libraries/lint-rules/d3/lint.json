@@ -11,7 +11,7 @@
   },
   "validators": {
     "checkSelectionCleanup": {
-      "description": "Ensure D3 selections are properly cleaned up",
+      "description": "Ensure D3 selections are properly cleaned up.",
       "severity": "high",
       "validate": "@file:check-selection-cleanup.js"
     },

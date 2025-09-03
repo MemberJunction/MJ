@@ -311,13 +311,12 @@ export class QueryResolverExtended extends QueryResolver {
         try {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
+            const provider = GetReadWriteProvider(context.providers); 
             if (input.CategoryPath) {
-                const p = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
-                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, p, context.userPayload.userRecord);
+                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
             }
             
             // Use QueryEntityExtended which handles AI processing
-            const provider = GetReadWriteProvider(context.providers); 
             const record = await provider.GetEntityObject<QueryEntityExtended>("Queries", context.userPayload.userRecord);
             
             // Set the fields from input, handling CategoryPath resolution
@@ -354,7 +353,12 @@ export class QueryResolverExtended extends QueryResolver {
                     QueryData: JSON.stringify(record.GetAll()),
                     Fields: record.QueryFields,
                     Parameters: record.QueryParameters,
-                    Entities: record.QueryEntities,
+                    Entities: record.QueryEntities.map(e => {
+                        return {
+                            ...e,
+                            EntityName: e.Entity // alias this to fix variable name mismatch
+                        }
+                    }),
                     Permissions: record.QueryPermissions
                 };
             } 

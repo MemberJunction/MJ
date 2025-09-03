@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>React UMD Test</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script>
+        console.log('React object:', React);
+        console.log('React keys:', Object.keys(React));
+        console.log('React.useState:', React.useState);
+        console.log('React.useEffect:', React.useEffect);
+        console.log('React.useCallback:', React.useCallback);
+        console.log('React.useMemo:', React.useMemo);
+        console.log('typeof React.useState:', typeof React.useState);
+        console.log('typeof React.useEffect:', typeof React.useEffect);
+        
+        // Check if they're on window
+        console.log('window.useState:', window.useState);
+        console.log('window.useEffect:', window.useEffect);
+    </script>
+</body>
+</html>

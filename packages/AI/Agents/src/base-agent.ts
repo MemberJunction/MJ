@@ -2590,6 +2590,13 @@ export class BaseAgent {
                 systemPrompt: null // Custom prompts may not use system prompts
             } : config;
             
+            // Increment prompt iterations counter as we prepare as we are ATTEMPTING a prompt
+            // so we want to track this
+            if (this._agentRun) {
+                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
+                // don't need to save here, the run will be saved later
+            }
+
             const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
@@ -2619,13 +2626,7 @@ export class BaseAgent {
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-            
-            // Increment prompt iterations counter
-            if (this._agentRun) {
-                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
-                // We don't save here as the run will be saved later with all accumulated data
-            }
-            
+                        
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -2745,13 +2746,19 @@ export class BaseAgent {
             // instead retrun a helpful message in our return value that the parent loop can review and 
             // adjust
             const errString = error?.message || error || 'Unknown error';
-            return {
+            const errorNextStep = {
                 errorMessage: `Prompt execution failed: ${errString}`,
-                step: 'Failed',
+                step: 'Failed' as const,
                 terminate: false,
                 previousPayload: payload,
                 newPayload: payload
             };
+
+            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
+            if(guardailCheck && guardailCheck.exceeded) {
+                errorNextStep.terminate = true;
+            };
+            return errorNextStep;
         }
     }
 
