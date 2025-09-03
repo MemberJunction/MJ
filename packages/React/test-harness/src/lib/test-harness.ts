@@ -82,7 +82,6 @@ export class ReactTestHarness {
           html: '',
           errors: lintResult.violations,
           warnings: [],
-          criticalWarnings: [],
           console: [],
           executionTime: 0,
           lintViolations: lintResult.violations
