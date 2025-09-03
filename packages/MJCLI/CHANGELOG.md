@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/cli
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.97.0
+- @memberjunction/codegen-lib@2.97.0
+- @memberjunction/metadata-sync@2.97.0
+- @memberjunction/sqlserver-dataprovider@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

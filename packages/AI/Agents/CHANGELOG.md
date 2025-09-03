@@ -1,5 +1,23 @@
 # @memberjunction/ai-agents
 
+## 2.97.0
+
+### Minor Changes
+
+- dc497d5: migration
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/ai-core-plus@2.97.0
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/ai-prompts@2.97.0
+- @memberjunction/actions-base@2.97.0
+- @memberjunction/actions@2.97.0
+- @memberjunction/ai@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

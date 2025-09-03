@@ -1,5 +1,15 @@
 # @memberjunction/react-runtime
 
+## 2.97.0
+
+### Patch Changes
+
+- Updated dependencies [dc497d5]
+  - @memberjunction/interactive-component-types@2.97.0
+  - @memberjunction/core-entities@2.97.0
+  - @memberjunction/core@2.97.0
+  - @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @memberjunction/actions-bizapps-crm
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/actions@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes

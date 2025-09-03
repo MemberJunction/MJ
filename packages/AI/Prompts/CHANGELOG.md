@@ -1,5 +1,18 @@
 # @memberjunction/ai-prompts
 
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/ai-core-plus@2.97.0
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/templates-base-types@2.97.0
+- @memberjunction/templates@2.97.0
+- @memberjunction/ai@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Minor Changes

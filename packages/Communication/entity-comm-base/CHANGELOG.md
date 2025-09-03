@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/entity-communications-base
 
+## 2.97.0
+
+### Patch Changes
+
+- Updated dependencies [93ac030]
+  - @memberjunction/communication-types@2.97.0
+  - @memberjunction/core-entities@2.97.0
+  - @memberjunction/core@2.97.0
+  - @memberjunction/global@2.97.0
+
 ## 2.96.0
 
 ### Patch Changes
