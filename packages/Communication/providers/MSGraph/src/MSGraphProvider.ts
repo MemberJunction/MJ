@@ -87,7 +87,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             if(message.Headers){
                 // Convert Headers (Record<string, string>) to internetMessageHeaders (Array[{key:value}])
                 sendMail.message.internetMessageHeaders = Object.entries(message.Headers).map(([key, value]) => ({
-                    name: `X-${key}`,
+                    name: key.startsWith('X-') ? key : `X-${key}`,
                     value: value
                 }));
             }
