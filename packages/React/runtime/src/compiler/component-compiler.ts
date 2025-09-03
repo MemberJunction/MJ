@@ -223,7 +223,17 @@ export class ComponentCompiler {
     
     const componentDeclarations = uniqueDependencies.length > 0
       ? uniqueDependencies
-          .map(dep => `const ${dep.name} = componentsOuter['${dep.name}'];`)
+          .map(dep => `const ${dep.name}Raw = componentsOuter['${dep.name}'];
+        ${debug ? `console.log('[React-Runtime-JS] Extracting ${dep.name}:');
+        console.log('  - Raw value type:', typeof ${dep.name}Raw);
+        console.log('  - Raw value:', ${dep.name}Raw);
+        if (${dep.name}Raw && typeof ${dep.name}Raw === 'object') {
+          console.log('  - Has .component property:', 'component' in ${dep.name}Raw);
+          console.log('  - .component type:', typeof ${dep.name}Raw.component);
+        }` : ''}
+        const ${dep.name} = ${dep.name}Raw?.component || ${dep.name}Raw;
+        ${debug ? `console.log('  - Final ${dep.name} type:', typeof ${dep.name});
+        console.log('  - Final ${dep.name} is function:', typeof ${dep.name} === 'function');` : ''}`)
           .join('\n        ')
       : '';
     
@@ -232,6 +242,7 @@ export class ComponentCompiler {
           .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`)
           .join('\n        ')
       : '';
+ 
 
     const wrappedCode = `
       function createComponent(
@@ -239,6 +250,11 @@ export class ComponentCompiler {
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console, components
       ) {
+        if (!React)
+            console.log('[React-Runtime-JS] React is not defined');
+        if (!ReactDOM)
+            console.log('[React-Runtime-JS] ReactDOM is not defined');
+
         // Code for ${componentName}
         ${componentCode}
         
@@ -287,11 +303,24 @@ export class ComponentCompiler {
             utilitiesOuter = props?.utilities;
           }
           ${debug ? `
-          console.log('Props for ${componentName}:', props);
-          console.log('components for ${componentName}:', componentsOuter);
-          console.log('styles for ${componentName}:', styles);
-          console.log('utilities for ${componentName}:', utilitiesOuter);
-          console.log('libraries for ${componentName}:', libraries);` : ''}
+          console.log('[React-Runtime-JS] DestructureWrapperUserComponent for ${componentName}:');
+          console.log('  - Props:', props);
+          console.log('  - componentsOuter type:', typeof componentsOuter);
+          console.log('  - componentsOuter:', componentsOuter);
+          if (componentsOuter && typeof componentsOuter === 'object') {
+            console.log('  - componentsOuter keys:', Object.keys(componentsOuter));
+            for (const key of Object.keys(componentsOuter)) {
+              const comp = componentsOuter[key];
+              console.log(\`  - componentsOuter[\${key}] type:\`, typeof comp);
+              if (comp && typeof comp === 'object') {
+                console.log(\`    - Has .component: \${'component' in comp}\`);
+                console.log(\`    - .component type: \${typeof comp.component}\`);
+              }
+            }
+          }
+          console.log('  - styles:', styles);
+          console.log('  - utilities:', utilitiesOuter);
+          console.log('  - libraries:', libraries);` : ''}
           ${duplicateWarnings ? '// Duplicate dependency warnings\n        ' + duplicateWarnings + '\n        ' : ''}
           ${libraryDeclarations ? '// Destructure Libraries\n' + libraryDeclarations + '\n        ' : ''}
           ${componentDeclarations ? '// Destructure Dependencies\n' + componentDeclarations + '\n        ' : ''}

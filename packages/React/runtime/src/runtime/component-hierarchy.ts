@@ -54,6 +54,7 @@ export interface HierarchyRegistrationOptions {
    * Required, metadata for all possible libraries allowed by the system
    */
   allLibraries: ComponentLibraryEntity[];
+  debug?: boolean;
 }
 
 /**

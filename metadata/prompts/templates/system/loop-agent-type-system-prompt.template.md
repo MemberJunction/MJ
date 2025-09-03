@@ -41,7 +41,7 @@ Execute one at a time. Their completion ≠ your task completion.
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}
 {%- endif -%}
-{%- endif -%}
+{%- endif %}
 
 # Agent Definition
 Your name is {{ agentName }}

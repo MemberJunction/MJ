@@ -4,7 +4,7 @@
     "requiresNew": true,
     "elementType": "div",
     "requiredConfig": ["chart", "series"]
-  },
+  }, 
   "lifecycle": {
     "requiredMethods": [],
     "cleanupMethods": ["destroy"],

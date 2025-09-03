@@ -29,7 +29,7 @@ export class MessageRecipient {
  */
 export class Message {
     /**
-     * The type of message to send 
+     * The type of message to send
      */
     public MessageType: CommunicationProviderMessageTypeEntity;
 
@@ -45,7 +45,7 @@ export class Message {
     public FromName?: string;
 
     /**
-     * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social 
+     * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
      * media provider, it might be a user's social media handle
      */
     public To: string;
@@ -70,20 +70,20 @@ export class Message {
      */
     public Body?: string;
     /**
-     * Optional, when provided, Body is ignored and the template is used to render the message. In addition, 
-     * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will 
+     * Optional, when provided, Body is ignored and the template is used to render the message. In addition,
+     * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will
      * also be used to render the HTMLBody
      */
     public BodyTemplate?: TemplateEntityExtended;
 
     /**
-     * The HTML body of the message 
+     * The HTML body of the message
      */
     public HTMLBody?: string;
     /**
      * Optional, when provided, HTMLBody is ignored and the template is used to render the message. This OVERRIDES
      * the BodyTemplate's HTML content even if BodyTemplate is provided. This allows for flexibility in that you can
-     * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having 
+     * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having
      * an HTML option.
      */
     public HTMLBodyTemplate?: TemplateEntityExtended;
@@ -101,6 +101,11 @@ export class Message {
      * Optional, any context data that is needed to render the message template
      */
     public ContextData?: any;
+
+    /**
+     * Optional, any headers to add to the message
+     */
+    public Headers?: Record<string, string>;
 
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message
@@ -130,7 +135,7 @@ export abstract class ProcessedMessage extends Message {
     public ProcessedSubject: string;
 
 
-    public abstract Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}> 
+    public abstract Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}>
 }
 
 /**
@@ -161,6 +166,11 @@ export type GetMessagesParams<T = Record<string, any>> = {
      * Optional, any provider-specific parameters that are needed to get messages
      */
     ContextData?: T;
+
+    /**
+     * Optional, include the headers in the response (defaults to false)
+     */
+    IncludeHeaders?: boolean;
 };
 
 export type GetMessageMessage = {
@@ -249,12 +259,12 @@ export type ReplyToMessageResult<T = Record<string, any>> = BaseMessageResult & 
  */
 export abstract class BaseCommunicationProvider {
     /**
-     * 
+     *
      */
-    public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> 
+    public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>
 
     /**
-     * Fetches messages using the provider 
+     * Fetches messages using the provider
      */
     public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>
 

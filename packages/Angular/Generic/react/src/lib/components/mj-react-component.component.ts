@@ -126,7 +126,12 @@ export interface UserSettingsChangedEvent {
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
-  @Input() debug: boolean = true;
+  /**
+   * Controls verbose logging for component lifecycle and operations.
+   * Note: This does NOT control which React build (dev/prod) is loaded.
+   * To control React builds, use ReactDebugConfig.setDebugMode() at app startup.
+   */
+  @Input() enableLogging: boolean = false;
   
   // Auto-initialize utilities if not provided
   private _utilities: any;
@@ -138,8 +143,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.debug);
-      if (this.debug) {
+      this._utilities = runtimeUtils.buildUtilities(this.enableLogging);
+      if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
     }
@@ -156,7 +161,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Lazy initialization - only create default styles when needed
     if (!this._styles) {
       this._styles = SetupStyles();
-      if (this.debug) {
+      if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
       }
     }
@@ -206,9 +211,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   async ngAfterViewInit() {
-    // Set debug flag on the bridge service
-    this.reactBridge.debug = this.debug;
-    
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
     await this.initializeComponent();
@@ -346,7 +348,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const resolver = this.adapter.getResolver();
     
     // Debug: Log what dependencies we're trying to resolve
-    if (this.debug) {
+    if (this.enableLogging) {
       console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
     }
     
@@ -357,7 +359,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       Metadata.Provider.CurrentUser // Pass current user context for database operations
     );
     
-    if (this.debug) {
+    if (this.enableLogging) {
       console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
     }
     return resolved;
@@ -372,7 +374,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const version = this.component.version || this.generateComponentHash(this.component);
     this.componentVersion = version;  // Store for use in resolver
     
-    if (this.debug) {
+    if (this.enableLogging) {
       console.log(`Registering ${this.component.name}@${version}`);
     }
     
@@ -380,7 +382,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const registry = this.adapter.getRegistry();
     const existingComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
     if (existingComponent) {
-      if (this.debug) {
+      if (this.enableLogging) {
         console.log(`Component ${this.component.name}@${version} already registered`);
       }
       return;
@@ -404,7 +406,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         namespace: this.component.namespace || 'Global',
         version: version,
         allowOverride: false,  // Each version is unique
-        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries
+        allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
+        debug: true
       }
     );
     
@@ -413,7 +416,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       throw new Error(`Component registration failed: ${errors}`);
     }
     
-    if (this.debug) {
+    if (this.enableLogging) {
       console.log(`Registered ${result.registeredComponents.length} components`);
     }
   }
