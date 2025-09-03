@@ -40,24 +40,12 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     private _cachedComponentTypeName: string = 'Component';
     public isCreatingReport: boolean = false;
     
-    // Toggle states for showing/hiding component details
-    public showFunctionalRequirements: boolean = false;
-    public showDataRequirements: boolean = false;
-    public showTechnicalDesign: boolean = false;
-    public showCode: boolean = false;
-    public showSpec: boolean = false;
     
     // Toolbar configuration for code editors
     public codeToolbarConfig: ToolbarConfig = {
         enabled: true,
         buttons: [TOOLBAR_BUTTONS.COPY]
     };
-    
-    // Details panel height for resizing
-    public detailsPanelHeight: string = '300px';
-    private isResizing: boolean = false;
-    private startY: number = 0;
-    private startHeight: number = 0;
     
     // Cache for user states only - component specs come from data
     public userStates = new Map<number, any>();
@@ -165,12 +153,155 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
         }
     }
   
+    /**
+     * Print the current report
+     * Uses a hidden iframe to print only the component content without opening new windows
+     */
     public async PrintReport() {
-        const currentComponent = this.getCurrentReactComponent();
-        if (currentComponent) {
-            // React component handles printing internally
-            window.print();
-        } else {
+        try {
+            // Find the currently visible React component
+            let componentElement: Element | null = null;
+            
+            const allComponents = document.querySelectorAll('mj-react-component');
+            for (const comp of Array.from(allComponents)) {
+                const rect = comp.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    const parent = comp.closest('.k-content.k-state-active');
+                    if (parent || allComponents.length === 1) {
+                        componentElement = comp;
+                        break;
+                    }
+                }
+            }
+            
+            if (!componentElement) {
+                console.warn('No visible React component found to print');
+                window.print();
+                return;
+            }
+
+            // Create a hidden iframe for printing
+            const printFrame = document.createElement('iframe');
+            printFrame.style.position = 'absolute';
+            printFrame.style.width = '0';
+            printFrame.style.height = '0';
+            printFrame.style.border = 'none';
+            printFrame.style.left = '-9999px';
+            document.body.appendChild(printFrame);
+
+            const printDocument = printFrame.contentDocument || printFrame.contentWindow?.document;
+            if (!printDocument) {
+                console.error('Could not access iframe document');
+                document.body.removeChild(printFrame);
+                window.print();
+                return;
+            }
+
+            // Clone the component element to preserve current state
+            const clonedContent = componentElement.cloneNode(true) as HTMLElement;
+            
+            // Get all stylesheets
+            const styleSheets = Array.from(document.styleSheets)
+                .map(sheet => {
+                    try {
+                        return Array.from(sheet.cssRules || [])
+                            .map(rule => rule.cssText)
+                            .join('\n');
+                    } catch (e) {
+                        return '';
+                    }
+                })
+                .filter(css => css.length > 0)
+                .join('\n');
+
+            // Get external stylesheet links
+            const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .map(link => (link as HTMLLinkElement).href)
+                .map(href => `<link rel="stylesheet" href="${href}">`)
+                .join('\n');
+
+            // Build the print document
+            printDocument.open();
+            printDocument.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Print Report</title>
+                    ${styleLinks}
+                    <style>
+                        ${styleSheets}
+                        
+                        /* Reset styles for print */
+                        body {
+                            margin: 0;
+                            padding: 20px;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            background: white;
+                        }
+                        
+                        /* Ensure proper print colors */
+                        * {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                            color-adjust: exact !important;
+                        }
+                        
+                        /* Make sure charts and tables are visible */
+                        canvas, svg {
+                            max-width: 100% !important;
+                            page-break-inside: avoid;
+                        }
+                        
+                        table {
+                            width: 100% !important;
+                            page-break-inside: auto;
+                        }
+                        
+                        tr {
+                            page-break-inside: avoid;
+                            page-break-after: auto;
+                        }
+                        
+                        /* Hide any remaining UI elements */
+                        .k-tabstrip-items,
+                        .tab-action-bar,
+                        button {
+                            display: none !important;
+                        }
+                        
+                        @media print {
+                            body {
+                                margin: 0;
+                                padding: 10px;
+                            }
+                        }
+                    </style>
+                </head>
+                <body></body>
+                </html>
+            `);
+            printDocument.close();
+
+            // Append the cloned content
+            printDocument.body.appendChild(clonedContent);
+
+            // Wait for content to render (especially important for charts)
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Trigger print for the iframe
+            if (printFrame.contentWindow) {
+                printFrame.contentWindow.focus();
+                printFrame.contentWindow.print();
+            }
+
+            // Clean up the iframe after a delay to ensure print dialog has opened
+            setTimeout(() => {
+                document.body.removeChild(printFrame);
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Error printing report:', error);
             window.print();
         }
     }
@@ -271,48 +402,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
     
     /**
-     * Toggle methods for showing/hiding component details
-     */
-    public toggleShowFunctionalRequirements(): void {
-        this.showFunctionalRequirements = !this.showFunctionalRequirements;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowDataRequirements(): void {
-        this.showDataRequirements = !this.showDataRequirements;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowTechnicalDesign(): void {
-        this.showTechnicalDesign = !this.showTechnicalDesign;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    public toggleShowCode(): void {
-        this.showCode = !this.showCode;
-        this.adjustDetailsPanelHeight();
-    }
-
-    public toggleShowSpec(): void {
-        this.showSpec = !this.showSpec;
-        this.adjustDetailsPanelHeight();
-    }
-    
-    /**
-     * Adjust the details panel height when toggling views
-     */
-    private adjustDetailsPanelHeight(): void {
-        const anyVisible = this.showFunctionalRequirements || this.showDataRequirements || 
-                          this.showTechnicalDesign || this.showCode || this.showSpec;
-        
-        if (anyVisible && this.detailsPanelHeight === '0px') {
-            this.detailsPanelHeight = '300px';
-        } else if (!anyVisible) {
-            this.detailsPanelHeight = '0px';
-        }
-    }
-    
-    /**
      * Format functional requirements as HTML
      */
     public getFormattedFunctionalRequirements(option: ComponentOption): any {
@@ -407,62 +496,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
             return `// Error building complete component spec:\n// ${e}`;
         }
     }
-    
-    /**
-     * Start resizing the details panel
-     */
-    public startResize(event: MouseEvent | TouchEvent): void {
-        event.preventDefault();
-        this.isResizing = true;
-        this.startY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-        this.startHeight = parseInt(this.detailsPanelHeight, 10);
-        
-        // Use NgZone to run outside Angular to prevent change detection during drag
-        this.ngZone.runOutsideAngular(() => {
-            document.addEventListener('mousemove', this.onResize);
-            document.addEventListener('mouseup', this.stopResize);
-            document.addEventListener('touchmove', this.onResize);
-            document.addEventListener('touchend', this.stopResize);
-        });
-    }
-    
-    /**
-     * Handle resize movement
-     */
-    private onResize = (event: MouseEvent | TouchEvent): void => {
-        if (!this.isResizing) return;
-        
-        const currentY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-        const deltaY = currentY - this.startY;
-        const newHeight = Math.max(100, Math.min(600, this.startHeight + deltaY));
-        
-        // Run inside Angular to update the binding
-        this.ngZone.run(() => {
-            this.detailsPanelHeight = `${newHeight}px`;
-            this.cdr.detectChanges();
-        });
-    }
-    
-    /**
-     * Stop resizing
-     */
-    private stopResize = (): void => {
-        this.isResizing = false;
-        document.removeEventListener('mousemove', this.onResize);
-        document.removeEventListener('mouseup', this.stopResize);
-        document.removeEventListener('touchmove', this.onResize);
-        document.removeEventListener('touchend', this.stopResize);
-    }
-    
-    @HostListener('window:resize')
-    onWindowResize(): void {
-        // Ensure the details panel height remains valid on window resize
-        const currentHeight = parseInt(this.detailsPanelHeight, 10);
-        const maxHeight = window.innerHeight * 0.6;
-        if (currentHeight > maxHeight) {
-            this.detailsPanelHeight = `${maxHeight}px`;
-        }
-    }
 
     async ngAfterViewInit() {
         // Initialize libraries once per application if not already done
@@ -500,11 +533,6 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     ngOnDestroy(): void {
         // Clean up user states
         this.userStates.clear();
-        
-        // Ensure resize listeners are removed if still active
-        if (this.isResizing) {
-            this.stopResize();
-        }
         
         // The MJReactComponent handles its own cleanup
     }
