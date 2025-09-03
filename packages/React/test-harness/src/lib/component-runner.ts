@@ -179,7 +179,7 @@ export class ComponentRunner {
       }
 
       // Set up error tracking
-      await this.setupErrorTracking(page);
+      await this.setupErrorTracking(page, options.componentSpec, allLibraries);
       
       // Set up console logging
       this.setupConsoleLogging(page, consoleLogs, warnings);
@@ -1034,8 +1034,8 @@ export class ComponentRunner {
   /**
    * Set up error tracking in the page
    */
-  private async setupErrorTracking(page: any) {
-    await page.evaluate(() => {
+  private async setupErrorTracking(page: any, componentSpec: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
+    await page.evaluate(({ spec, availableLibraries }: { spec: any; availableLibraries: any[] }) => {
       // Initialize error tracking
       (window as any).__testHarnessRuntimeErrors = [];
       (window as any).__testHarnessConsoleErrors = [];
@@ -1160,9 +1160,105 @@ export class ComponentRunner {
         originalConsoleError.apply(console, args);
       };
 
+      // Helper function to analyze undefined identifiers
+      const analyzeUndefinedIdentifier = (identifier: string, spec: any, availableLibraries: any[]) => {
+        const result = {
+          isInSpecLibraries: false,
+          isInSpecDependencies: false,
+          isAvailableLibrary: false,
+          matchedLibrary: null as any,
+          specLibraries: spec?.libraries || [],
+          specDependencies: spec?.dependencies || []
+        };
+        
+        // Check if it's in spec libraries
+        result.isInSpecLibraries = result.specLibraries.some(
+          (lib: any) => lib.globalVariable === identifier
+        );
+        
+        // Check if it's in spec dependencies  
+        result.isInSpecDependencies = result.specDependencies.some(
+          (dep: any) => dep.name === identifier
+        );
+        
+        // Check against ALL available libraries (case-insensitive)
+        if (availableLibraries) {
+          const availableLib = availableLibraries.find(
+            (lib: any) => lib.GlobalVariable && 
+                         lib.GlobalVariable.toLowerCase() === identifier.toLowerCase()
+          );
+          
+          if (availableLib) {
+            result.isAvailableLibrary = true;
+            result.matchedLibrary = availableLib;
+          }
+        }
+        
+        return result;
+      };
+
+      // Helper function to generate guidance message
+      const generateGuidance = (identifier: string, analysis: any) => {
+        // Case 1: Trying to use a library not in their spec
+        if (analysis.isAvailableLibrary && !analysis.isInSpecLibraries) {
+          const libList = analysis.specLibraries.length > 0
+            ? analysis.specLibraries.map((l: any) => l.globalVariable || l.name).filter(Boolean).join(', ')
+            : 'no third-party libraries';
+            
+          return `${identifier} is not defined. It appears you're trying to use the ${analysis.matchedLibrary.Name} library. ` +
+                 `You do NOT have access to this library. ` +
+                 `Your architect gave you access to: ${libList}. ` +
+                 `You must work within these constraints and cannot load additional libraries.`;
+        }
+        
+        // Case 2: Should be a component but not properly accessed
+        if (analysis.isInSpecDependencies) {
+          return `${identifier} is not defined. This component exists in your dependencies. ` +
+                 `Ensure you've destructured it: const { ${identifier} } = components; ` +
+                 `or accessed it as: components.${identifier}`;
+        }
+        
+        // Case 3: Not a valid library or component
+        const libList = analysis.specLibraries.length > 0
+          ? `Available libraries: ${analysis.specLibraries.map((l: any) => l.globalVariable || l.name).filter(Boolean).join(', ')}`
+          : 'No third-party libraries are available';
+          
+        const depList = analysis.specDependencies.length > 0
+          ? `Available components: ${analysis.specDependencies.map((d: any) => d.name).join(', ')}`
+          : 'No component dependencies are available';
+          
+        return `${identifier} is not defined. This is not a valid library or component in your specification. ` +
+               `${libList}. ${depList}. ` +
+               `You must only use the libraries and components specified in your component specification.`;
+      };
+
       // Global error handler
       window.addEventListener('error', (event) => {
-        // Determine source based on error content
+        // Check for "X is not defined" errors
+        const notDefinedMatch = event.message?.match(/^(\w+) is not defined$/);
+        
+        if (notDefinedMatch) {
+          const identifier = notDefinedMatch[1];
+          
+          // Analyze what this identifier might be
+          const analysis = analyzeUndefinedIdentifier(identifier, spec, availableLibraries);
+          
+          // Generate specific guidance
+          const guidance = generateGuidance(identifier, analysis);
+          
+          // Store enhanced error with specific guidance
+          (window as any).__testHarnessRuntimeErrors.push({
+            message: guidance,
+            stack: event.error?.stack,
+            type: 'undefined-identifier',
+            source: 'user-component',
+            identifier: identifier
+          });
+          (window as any).__testHarnessTestFailed = true;
+          return;
+        }
+        
+        // Handle other errors as before
         let source = 'user-component';  // Default to user component
         if (event.message && event.message.includes('Script error')) {
           source = 'runtime-wrapper';
@@ -1188,7 +1284,7 @@ export class ComponentRunner {
         (window as any).__testHarnessTestFailed = true;
         event.preventDefault();
       });
-    });
+    }, { spec: componentSpec, availableLibraries: allLibraries || [] });
   }
 
   /**
@@ -1229,6 +1325,9 @@ export class ComponentRunner {
           break;
         case 'undefined-component':
           rule = 'undefined-jsx-component';
+          break;
+        case 'undefined-identifier':
+          rule = 'undefined-identifier';
           break;
         case 'react-render-error':
           rule = 'react-render-error';
