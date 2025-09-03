@@ -1024,12 +1024,92 @@ export class ComponentRunner {
       (window as any).__testHarnessTestFailed = false;
       (window as any).__testHarnessRenderCount = 0;
 
-      // Track renders
+      // Track renders and detect invalid element types
       const originalCreateElement = (window as any).React?.createElement;
       if (originalCreateElement) {
-        (window as any).React.createElement = function(...args: any[]) {
+        (window as any).React.createElement = function(type: any, props: any, ...children: any[]) {
           (window as any).__testHarnessRenderCount++;
-          return originalCreateElement.apply(this, args);
+          
+          // Enhanced error detection for invalid element types
+          if (type !== null && type !== undefined) {
+            const typeOf = typeof type;
+            
+            // Check for the common "object instead of component" error
+            if (typeOf === 'object' && !(window as any).React.isValidElement(type)) {
+              // Try to get a meaningful name for the object
+              let objectInfo = 'unknown object';
+              try {
+                if (type.constructor && type.constructor.name) {
+                  objectInfo = type.constructor.name;
+                } else if (type.name) {
+                  objectInfo = type.name;
+                } else {
+                  // Try to show what properties it has
+                  const keys = Object.keys(type).slice(0, 5);
+                  if (keys.length > 0) {
+                    objectInfo = `object with properties: ${keys.join(', ')}`;
+                  }
+                }
+              } catch (e) {
+                // Ignore errors in trying to get object info
+              }
+              
+              // Generate helpful error message
+              const errorMsg = [
+                `Invalid JSX element type: received an object (${objectInfo}) instead of a React component.`,
+                '',
+                'Common causes:',
+                '1. Using a library namespace directly: <ApexCharts /> instead of <ApexCharts.Chart />',
+                '2. Missing destructuring: Add "const { ComponentName } = LibraryName;" before use',
+                '3. Using a non-component export from a library (e.g., Chart.js constructor instead of React component)',
+                '4. Component failed to compile/resolve and is now an empty object',
+                '',
+                'Check your JSX usage and ensure you\'re referencing actual React components.'
+              ].join('\\n');
+              
+              // Log to both console and error tracking
+              console.error('🔴 Invalid JSX Element Type Detected:', errorMsg);
+              
+              // Store the error for later collection
+              (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+              (window as any).__testHarnessRuntimeErrors.push({
+                message: errorMsg,
+                type: 'invalid-element-type',
+                phase: 'createElement',
+                source: 'enhanced-detection',
+                elementInfo: objectInfo
+              });
+              
+              // Still try to call the original to get React's error too
+              // This will provide the component stack trace
+            }
+          } else if (type === undefined) {
+            // Undefined component - likely a failed destructure or missing import
+            const errorMsg = [
+              'Invalid JSX element type: component is undefined.',
+              '',
+              'Common causes:',
+              '1. Destructuring from undefined: const { Component } = undefined',  
+              '2. Misspelled component name in destructuring',
+              '3. Component not exported from library',
+              '4. Using wrong library global variable name',
+              '',
+              'Check that the component exists in your dependencies or libraries.'
+            ].join('\\n');
+            
+            console.error('🔴 Undefined JSX Component:', errorMsg);
+            
+            (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+            (window as any).__testHarnessRuntimeErrors.push({
+              message: errorMsg,
+              type: 'undefined-component',
+              phase: 'createElement',
+              source: 'enhanced-detection'
+            });
+          }
+          
+          // Call original createElement
+          return originalCreateElement.call(this, type, props, ...children);
         };
       }
 
