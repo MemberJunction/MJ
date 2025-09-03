@@ -63,8 +63,13 @@ export class ReactTestHarness {
   async testComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
-    // First, lint the component code
+    // Check if contextUser is required for library lint rules
     const spec = options.componentSpec;
+    if (spec.libraries && spec.libraries.length > 0 && !options.contextUser) {
+      throw new Error('contextUser is required in ComponentExecutionOptions when testing components with library dependencies. This is needed to load library-specific lint rules from the database.');
+    }
+    
+    // First, lint the component code
     if (spec.code) {
       const lintResult = await this.componentRunner.lintComponent(
         spec.code,
