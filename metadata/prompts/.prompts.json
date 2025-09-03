@@ -76,6 +76,21 @@
             "lastModified": "2025-08-12T19:54:42.628Z",
             "checksum": "44a315e584e660db5c1ae4ee262a263a8e1b53b85454ef7e1636cb83ed2305b1"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D4C04EFA-A65A-47D4-A4AF-7FE1326CFD7B"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:18.914Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
         }
       ]
     },
@@ -154,6 +169,21 @@
             "lastModified": "2025-08-12T19:54:42.663Z",
             "checksum": "a8295a33acb060ce0eb462d940a57a3ba9b06fb6f47bd6e809c89d59fe3f4a7d"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "33706212-42D5-49E8-B300-F30E646325B0"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:18.931Z",
+            "checksum": "13b7855903f6035517539a84aa482e4ee114165c18c0ff33c79b98ca6640f847"
+          }
         }
       ]
     },
@@ -161,8 +191,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2025-08-31T15:12:35.235Z",
-      "checksum": "5e78c170ccd6e7f37fb9e2ca50afc8c693b61f9553ede85fac445a9534e48800"
+      "lastModified": "2025-09-02T16:35:19.639Z",
+      "checksum": "1e9aefc29ab72622945f1404c88c9213704efffb1dd1ef9ce17a35d62c36bd8a"
     }
   },
   {
@@ -232,6 +262,21 @@
             "lastModified": "2025-08-12T19:54:42.693Z",
             "checksum": "a8295a33acb060ce0eb462d940a57a3ba9b06fb6f47bd6e809c89d59fe3f4a7d"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 16
+          },
+          "primaryKey": {
+            "ID": "58A038A6-D929-41B4-8626-633C5CBE3F2E"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.030Z",
+            "checksum": "df97c770cc4fe6aa0c519de421bf9ae5fe15cdc1ef83f5a5e7d6ef3385a5f3a6"
+          }
         }
       ]
     },
@@ -279,6 +324,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.701Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "3EA613A5-89C0-47A0-9FE4-812514209DE4"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.044Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
           }
         }
       ]
@@ -328,6 +388,21 @@
             "lastModified": "2025-08-12T19:54:42.711Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "516222AD-2E71-4F0B-A937-7E8F7838DF96"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.057Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
         }
       ]
     },
@@ -375,6 +450,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.719Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "75061080-0E9B-427F-8414-C7FF2A8D7AB4"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.067Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
           }
         }
       ]
@@ -424,6 +514,21 @@
             "lastModified": "2025-08-12T19:54:42.726Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "A4A14B21-6C6F-4A47-970F-0A7CD71BC19F"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.176Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
         }
       ]
     },
@@ -471,6 +576,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.734Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "988053ED-A97B-47AE-9CF6-FEBEC7657699"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.191Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
           }
         }
       ]
@@ -520,6 +640,21 @@
             "lastModified": "2025-08-12T19:54:42.748Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "1899F94E-6A37-4C79-8988-26C9E6D8942D"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.204Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
         }
       ]
     },
@@ -567,6 +702,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.755Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "AF1AE11C-269F-45DB-B497-F501D23FD2A4"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.216Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
           }
         }
       ]
@@ -616,6 +766,21 @@
             "lastModified": "2025-08-12T19:54:42.766Z",
             "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "1C4A581E-9564-43EE-922D-A459E7F4A147"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.228Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
         }
       ]
     },
@@ -664,6 +829,21 @@
             "lastModified": "2025-08-12T19:54:42.775Z",
             "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "8461DF0F-6503-4B40-B08E-17DA533E1873"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.333Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
+          }
         }
       ]
     },
@@ -711,6 +891,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.786Z",
             "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "042CAE39-2AEB-4957-A5B3-7182B4D1D9C4"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.346Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
           }
         }
       ]
@@ -775,6 +970,21 @@
             "lastModified": "2025-08-12T19:54:42.808Z",
             "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "7A6F8736-41A2-47A9-9942-D8184C311B95"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.358Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
+          }
         }
       ]
     },
@@ -837,6 +1047,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.825Z",
             "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "E0ADF6D7-4FE5-4AF2-8214-1EDEFAC14038"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.370Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
           }
         }
       ]
@@ -901,6 +1126,21 @@
             "lastModified": "2025-08-12T19:54:42.844Z",
             "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "63C36C67-FA1F-483D-9C68-4ACFF9A7090E"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.433Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
+          }
         }
       ]
     },
@@ -963,6 +1203,21 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:42.863Z",
             "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "95262251-25A9-4682-954B-E93A4F776CC6"
+          },
+          "sync": {
+            "lastModified": "2025-09-02T21:21:19.446Z",
+            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
           }
         }
       ]

@@ -9,6 +9,7 @@ import { BehaviorSubject, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { AngularAdapterService } from './angular-adapter.service';
 import { RuntimeContext } from '@memberjunction/react-runtime';
+import { ReactDebugConfig } from '../config/react-debug.config';
 
 /**
  * Service to manage React and ReactDOM instances with proper lifecycle.
@@ -27,8 +28,8 @@ export class ReactBridgeService implements OnDestroy {
   private maxWaitTime = 5000; // Maximum 5 seconds wait time
   private checkInterval = 200; // Check every 200ms
   
-  // Debug flag that can be set by components
-  public debug: boolean = false;
+  // Debug flag from project configuration
+  public debug: boolean = ReactDebugConfig.getDebugMode();
 
   constructor(private adapter: AngularAdapterService) {
     // Bootstrap React immediately on service initialization
@@ -44,10 +45,16 @@ export class ReactBridgeService implements OnDestroy {
    */
   private async bootstrapReact(): Promise<void> {
     try {
+      // Log the debug mode being used
+      console.log(`ReactBridgeService: Initializing React with debug mode = ${this.debug} (from ReactDebugConfig)`);
+      
       // Pass debug flag to get development builds when debug is enabled
       await this.adapter.initialize(undefined, undefined, { debug: this.debug });
+      
       if (this.debug) {
-        console.log('React ecosystem pre-loaded successfully with debug mode:', this.debug);
+        console.log('React ecosystem pre-loaded successfully with DEVELOPMENT builds (detailed error messages)');
+      } else {
+        console.log('React ecosystem pre-loaded successfully with PRODUCTION builds (minified)');
       }
     } catch (error) {
       console.error('Failed to pre-load React ecosystem:', error);
@@ -116,7 +123,7 @@ export class ReactBridgeService implements OnDestroy {
    * @returns React context with React, ReactDOM, Babel, and libraries
    */
   async getReactContext(): Promise<RuntimeContext> {
-    await this.adapter.initialize();
+    await this.adapter.initialize(undefined, undefined, {debug: this.debug});
     return this.adapter.getRuntimeContext();
   }
 

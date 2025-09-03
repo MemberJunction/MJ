@@ -99,7 +99,7 @@ export class LibraryLoader {
     // Always load core runtime libraries first
     const coreLibraries = getCoreRuntimeLibraries(debug);
     const corePromises = coreLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable)
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
     );
     
     const coreResults = await Promise.all(corePromises);
@@ -153,7 +153,7 @@ export class LibraryLoader {
     
     // Load plugin libraries
     const pluginPromises = pluginLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable)
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
     );
     
     const pluginResults = await Promise.all(pluginPromises);
@@ -216,10 +216,13 @@ export class LibraryLoader {
   /**
    * Load a script from URL
    */
-  private static async loadScript(url: string, globalName: string): Promise<any> {
+  private static async loadScript(url: string, globalName: string, debug: boolean = false): Promise<any> {
     // Check if already loaded
     const existing = this.loadedResources.get(url);
     if (existing) {
+      if (debug) {
+        console.log(`✅ Library '${globalName}' already loaded (cached)`);
+      }
       return existing.promise;
     }
 
@@ -227,6 +230,9 @@ export class LibraryLoader {
       // Check if global already exists
       const existingGlobal = (window as any)[globalName];
       if (existingGlobal) {
+        if (debug) {
+          console.log(`✅ Library '${globalName}' already available globally`);
+        }
         resolve(existingGlobal);
         return;
       }
@@ -253,6 +259,9 @@ export class LibraryLoader {
         cleanup();
         const global = (window as any)[globalName];
         if (global) {
+          if (debug) {
+            console.log(`✅ Library '${globalName}' loaded successfully from ${url}`);
+          }
           resolve(global);
         } else {
           // Some libraries may take a moment to initialize
@@ -261,6 +270,9 @@ export class LibraryLoader {
             () => {
               const delayedGlobal = (window as any)[globalName];
               if (delayedGlobal) {
+                if (debug) {
+                  console.log(`✅ Library '${globalName}' loaded successfully (delayed initialization)`);
+                }
                 resolve(delayedGlobal);
               } else {
                 reject(new Error(`${globalName} not found after script load`));
@@ -280,6 +292,9 @@ export class LibraryLoader {
       script.addEventListener('load', onLoad);
       script.addEventListener('error', onError);
 
+      if (debug) {
+        console.log(`📦 Loading library '${globalName}' from ${url}...`);
+      }
       document.head.appendChild(script);
       
       // Register the script element for cleanup
@@ -481,7 +496,7 @@ export class LibraryLoader {
       }
 
       // Load the script
-      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable);
+      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable, debug);
 
       // Track the loaded state
       const dependencies = Array.from(
@@ -609,7 +624,7 @@ export class LibraryLoader {
       }
 
       // Load the script
-      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable);
+      const loadedGlobal = await this.loadScript(library.CDNUrl, library.GlobalVariable, debug);
 
       // Track the loaded state
       const dependencies = Array.from(

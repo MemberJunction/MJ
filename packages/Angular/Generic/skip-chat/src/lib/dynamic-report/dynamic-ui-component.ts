@@ -468,7 +468,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // Initialize libraries once per application if not already done
         if (!SkipDynamicUIComponentComponent.librariesInitialized) {
             try {
-                await this.adapter.initialize(undefined, SKIP_CHAT_ADDITIONAL_LIBRARIES);
+                await this.adapter.initialize(undefined, SKIP_CHAT_ADDITIONAL_LIBRARIES, {debug: true});
                 SkipDynamicUIComponentComponent.librariesInitialized = true;
             } catch (error) {
                 LogError('Failed to initialize Skip Chat libraries', error as any);

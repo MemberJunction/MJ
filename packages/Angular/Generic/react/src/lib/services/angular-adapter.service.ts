@@ -32,6 +32,7 @@ export class AngularAdapterService {
     version: string;
   };
   private runtimeContext?: RuntimeContext;
+  private initializationPromise: Promise<void> | undefined;
 
   constructor(private scriptLoader: ScriptLoaderService) {}
 
@@ -50,7 +51,29 @@ export class AngularAdapterService {
     if (this.runtime) {
       return; // Already initialized
     }
+    if (this.initializationPromise) {
+      return this.initializationPromise; // in progress
+    }
 
+    // Start initialization and store the promise immediately
+    this.initializationPromise = this.doInitialize(config, additionalLibraries, options);
+
+    try {
+        await this.initializationPromise;
+    } catch (error) {
+        // Clear the promise on error so it can be retried
+        this.initializationPromise = undefined;
+        throw error;
+    }
+
+    return;
+  }
+
+  private async doInitialize(
+    config?: LibraryConfiguration,
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
+  ): Promise<void> {
     // Load React ecosystem with optional additional libraries
     const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries, options);
     
@@ -68,15 +91,17 @@ export class AngularAdapterService {
     this.runtime = createReactRuntime(ecosystem.Babel, {
       compiler: {
         cache: true,
-        maxCacheSize: 100
+        maxCacheSize: 100,
+        debug: options?.debug
       },
       registry: {
         maxComponents: 1000,
         cleanupInterval: 60000,
         useLRU: true,
-        enableNamespaces: true
+        enableNamespaces: true,
+        debug: options?.debug
       }
-    }, this.runtimeContext);
+    }, this.runtimeContext, options?.debug);
   }
 
   /**

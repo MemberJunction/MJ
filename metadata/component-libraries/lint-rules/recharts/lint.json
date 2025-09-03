@@ -11,7 +11,7 @@
   },
   "validators": {
     "checkResponsiveContainer": {
-      "description": "Check ResponsiveContainer has proper parent dimensions",
+      "description": "Check ResponsiveContainer has proper parent dimensions.",
       "severity": "critical",
       "validate": "@file:check-responsive-container.js"
     },

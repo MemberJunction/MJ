@@ -85,8 +85,7 @@ export class ReactTestHarness {
           criticalWarnings: [],
           console: [],
           executionTime: 0,
-          lintViolations: lintResult.violations,
-          fixSuggestions: lintResult.suggestions
+          lintViolations: lintResult.violations
         };
       }
     }

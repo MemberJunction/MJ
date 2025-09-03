@@ -1,7 +1,7 @@
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ComponentLinter, FixSuggestion, Violation } from './component-linter';
+import { ComponentLinter, Violation } from './component-linter';
 import { 
   ComponentSpec, 
   ComponentUtilities, 
@@ -43,7 +43,6 @@ export interface ComponentExecutionResult {
   executionTime: number;
   renderCount?: number;
   lintViolations?: Violation[];
-  fixSuggestions?: FixSuggestion[];
 }
 
 /**
@@ -79,7 +78,7 @@ export class ComponentRunner {
     isRootComponent?: boolean,
     contextUser?: UserInfo,
     options?: any
-  ): Promise<{ violations: Violation[]; suggestions: FixSuggestion[]; hasErrors: boolean }> {
+  ): Promise<{ violations: Violation[]; hasErrors: boolean }> {
     const lintResult = await ComponentLinter.lintComponent(
       componentCode,
       componentName,
@@ -94,7 +93,6 @@ export class ComponentRunner {
 
     return {
       violations: lintResult.violations,
-      suggestions: lintResult.suggestions,
       hasErrors
     };
   }
@@ -195,23 +193,27 @@ export class ComponentRunner {
         console.log('  - spec.name:', options.componentSpec.name);
         console.log('  - spec.code length:', options.componentSpec.code?.length || 0);
         console.log('  - props:', JSON.stringify(options.props || {}, null, 2));
-        console.log('  - componentLibraries count:', allLibraries?.length || 0);
-        if (allLibraries && allLibraries.length > 0) {
-          console.log('  - First few libraries:', allLibraries.slice(0, 3).map(lib => ({
-            Name: lib.Name,
-            GlobalVariable: lib.GlobalVariable
+        
+        // Show spec-specific libraries, not all available libraries
+        if (options.componentSpec.libraries && options.componentSpec.libraries.length > 0) {
+          console.log('  - spec requires libraries:', options.componentSpec.libraries.map(lib => ({
+            name: lib.name,
+            globalVariable: lib.globalVariable,
+            version: lib.version
           })));
+        } else {
+          console.log('  - spec requires libraries: none');
         }
+        
+        // Total available libraries in metadata (for context only)
+        console.log('  - total available libraries in metadata:', allLibraries?.length || 0);
       }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
       const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
-          console.log('📚 BROWSER: Received componentLibraries:', componentLibraries?.length || 0);
-          if (componentLibraries?.length > 0) {
-            console.log('  First library:', componentLibraries[0]);
-          }
+          console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
         }
         
         // Declare renderCheckInterval at the top scope for cleanup
@@ -302,9 +304,17 @@ export class ComponentRunner {
           // The spec might not have globalVariable, but we need it for the runtime to work
           if (spec.libraries && componentLibraries) {
             for (const specLib of spec.libraries) {
+              // Skip if library entry is invalid
+              if (!specLib || !specLib.name) {
+                if (debug) {
+                  console.warn('  ⚠️ Skipping invalid library entry (missing name):', specLib);
+                }
+                continue;
+              }
+              
               if (!specLib.globalVariable) {
                 const libDef = componentLibraries.find(l => 
-                  l.Name.toLowerCase() === specLib.name.toLowerCase()
+                  l && l.Name && l.Name.toLowerCase() === specLib.name.toLowerCase()
                 );
                 if (libDef && libDef.GlobalVariable) {
                   specLib.globalVariable = libDef.GlobalVariable;
@@ -348,10 +358,17 @@ export class ComponentRunner {
               message: `Component registration failed: ${registrationError.message || registrationError}`,
               stack: registrationError.stack,
               type: 'registration-error',
-              phase: 'component-compilation'
+              phase: 'component-compilation',
+              source: 'runtime-wrapper'
             });
             (window as any).__testHarnessTestFailed = true;
-            throw registrationError; // Re-throw for outer handler
+            // Don't re-throw - let execution continue to collect this error properly
+            // Return a failure result so the Promise resolves properly
+            return {
+              success: false,
+              error: `Component registration failed: ${registrationError.message || registrationError}`,
+              componentCount: 0
+            };
           }
           
           if (debug && !registrationResult.success) {
@@ -422,7 +439,8 @@ export class ComponentRunner {
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
                   message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
-                  type: 'render-loop'
+                  type: 'render-loop',
+                  source: 'test-harness'
                 });
                 // Try to unmount to stop the madness
                 try {
@@ -478,7 +496,8 @@ export class ComponentRunner {
                 message: enhancedMessage,
                 stack: error.stack,
                 type: 'react-render-error',
-                phase: 'component-render'
+                phase: 'component-render',
+                source: 'user-component'  // This is the actual error from user's component
               });
               (window as any).__testHarnessTestFailed = true;
               return { hasError: true, error };
@@ -544,7 +563,8 @@ export class ComponentRunner {
           (window as any).__testHarnessRuntimeErrors.push({
             message: error.message || String(error),
             stack: error.stack,
-            type: 'execution-error'
+            type: 'execution-error',
+            source: 'runtime-wrapper'
           });
           (window as any).__testHarnessTestFailed = true;
           
@@ -567,10 +587,12 @@ export class ComponentRunner {
       
       // Race between execution and timeout
       let executionResult: { success: boolean; error?: string; componentCount?: number };
+      let hasTimeout = false;
       try {
         executionResult = await Promise.race([executionPromise, timeoutPromise]);
       } catch (timeoutError) {
         // Handle timeout gracefully
+        hasTimeout = true;
         errors.push(`Component execution timed out after ${globalTimeout}ms`);
         executionResult = { 
           success: false, 
@@ -578,6 +600,21 @@ export class ComponentRunner {
         };
       }
 
+      // Ensure executionResult has proper shape
+      if (!executionResult) {
+        executionResult = {
+          success: false,
+          error: 'Component execution returned no result'
+        };
+        errors.push('Component execution failed to return a result');
+      } else if (!executionResult.success && executionResult.error) {
+        // Add the execution error if it hasn't been captured elsewhere
+        const errorMsg = `Component execution failed: ${executionResult.error}`;
+        if (!errors.some(e => e.includes(executionResult.error!))) {
+          errors.push(errorMsg);
+        }
+      }
+      
       if (debug) {
         console.log('Execution result:', executionResult);
       }
@@ -589,9 +626,9 @@ export class ComponentRunner {
       // Get render count
       renderCount = await page.evaluate(() => (window as any).__testHarnessRenderCount || 0);
 
-      // Collect all errors
-      const runtimeErrors = await this.collectRuntimeErrors(page);
-      errors.push(...runtimeErrors);
+      // Collect all errors with source information
+      const runtimeErrorsWithSource = await this.collectRuntimeErrors(page);
+      errors.push(...runtimeErrorsWithSource.map(e => e.message)); // Extract messages for backward compat
 
       // Collect warnings (separate from errors)
       const collectedWarnings = await this.collectWarnings(page);
@@ -604,8 +641,9 @@ export class ComponentRunner {
       const asyncErrors = await this.collectRuntimeErrors(page);
       // Only add new errors
       asyncErrors.forEach(err => {
-        if (!errors.includes(err)) {
-          errors.push(err);
+        if (!errors.includes(err.message)) {
+          errors.push(err.message);
+          runtimeErrorsWithSource.push(err); // Keep the structured version too
         }
       });
       
@@ -623,29 +661,72 @@ export class ComponentRunner {
       // Take screenshot
       const screenshot = await page.screenshot();
 
+      // Check for excessive render count first
+      const hasRenderLoop = renderCount > ComponentRunner.MAX_RENDER_COUNT;
+      if (hasRenderLoop) {
+        errors.push(`Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`);
+      }
+
       // Determine success
       const success = errors.length === 0 && 
                      criticalWarnings.length === 0 && 
-                     renderCount <= ComponentRunner.MAX_RENDER_COUNT &&
+                     !hasRenderLoop &&
+                     !hasTimeout &&
                      executionResult.success;
-
-      if (renderCount > ComponentRunner.MAX_RENDER_COUNT) {
-        errors.push(`Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`);
-      }
 
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
       
-      const result: ComponentExecutionResult = {
-        success: success && dataErrors.length === 0, // Fail if we have data errors
-        html,
-        errors: allErrors.map(e => ({
+      // Map runtime errors with source info, data errors don't have source
+      const errorViolations = runtimeErrorsWithSource.map(e => ({
+        message: e.message,
+        severity: 'critical' as const,
+        rule: 'runtime-error',
+        line: 0,
+        column: 0,
+        source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
+      }));
+      
+      // Add timeout error if detected
+      if (hasTimeout) {
+        errorViolations.push({
+          message: `Component execution timed out after ${globalTimeout}ms`,
+          severity: 'critical' as const,
+          rule: 'timeout',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const // This is a test harness timeout
+        });
+      }
+      
+      // Add render loop error if detected
+      if (hasRenderLoop) {
+        errorViolations.push({
+          message: `Possible render loop: ${renderCount} createElement calls detected (likely infinite loop)`,
+          severity: 'critical' as const,
+          rule: 'render-loop',
+          line: 0,
+          column: 0,
+          source: 'test-harness' as const // This is a test harness detection
+        });
+      }
+      
+      // Add data errors without source
+      dataErrors.forEach(e => {
+        errorViolations.push({
           message: e,
           severity: 'critical' as const,
           rule: 'runtime-error',
           line: 0,
-          column: 0
-        })),
+          column: 0,
+          source: 'user-component' as const // Data errors are from user's data access code
+        });
+      });
+      
+      const result: ComponentExecutionResult = {
+        success: success && dataErrors.length === 0, // Fail if we have data errors
+        html,
+        errors: errorViolations,
         warnings: warnings.map(w => ({
           message: w,
           severity: 'low' as const,
@@ -667,21 +748,38 @@ export class ComponentRunner {
       return result;
 
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      // For catch block errors, we need to handle them specially
+      const catchError = {
+        message: error instanceof Error ? error.message : String(error),
+        source: 'test-harness' as const // Errors caught here are usually test harness issues
+      };
       
-      // Combine runtime errors with data errors
-      const allErrors = [...errors, ...dataErrors];
+      // Create error violations including the catch error
+      const errorViolations: Violation[] = [{
+        message: catchError.message,
+        severity: 'critical' as const,
+        rule: 'runtime-error',
+        line: 0,
+        column: 0,
+        source: catchError.source
+      }];
       
-      const result: ComponentExecutionResult = {
-        success: false,
-        html: '',
-        errors: allErrors.map(e => ({
+      // Add any data errors
+      dataErrors.forEach(e => {
+        errorViolations.push({
           message: e,
           severity: 'critical' as const,
           rule: 'runtime-error',
           line: 0,
-          column: 0
-        })),
+          column: 0,
+          source: 'user-component' as const
+        });
+      });
+      
+      const result: ComponentExecutionResult = {
+        success: false,
+        html: '',
+        errors: errorViolations,
         warnings: warnings.map(w => ({
           message: w,
           severity: 'low' as const,
@@ -969,10 +1067,17 @@ export class ComponentRunner {
 
       // Global error handler
       window.addEventListener('error', (event) => {
+        // Determine source based on error content
+        let source = 'user-component';  // Default to user component
+        if (event.message && event.message.includes('Script error')) {
+          source = 'runtime-wrapper';
+        }
+        
         (window as any).__testHarnessRuntimeErrors.push({
           message: event.error?.message || event.message,
           stack: event.error?.stack,
-          type: 'runtime'
+          type: 'runtime',
+          source: source
         });
         (window as any).__testHarnessTestFailed = true;
       });
@@ -982,7 +1087,8 @@ export class ComponentRunner {
         (window as any).__testHarnessRuntimeErrors.push({
           message: 'Unhandled Promise Rejection: ' + (event.reason?.message || event.reason),
           stack: event.reason?.stack,
-          type: 'promise-rejection'
+          type: 'promise-rejection',
+          source: 'user-component'  // Async errors are likely from user code
         });
         (window as any).__testHarnessTestFailed = true;
         event.preventDefault();
@@ -993,7 +1099,7 @@ export class ComponentRunner {
   /**
    * Collect runtime errors from the page
    */
-  private async collectRuntimeErrors(page: any): Promise<string[]> {
+  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string}>> {
     const errorData = await page.evaluate(() => {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
@@ -1002,27 +1108,38 @@ export class ComponentRunner {
       };
     });
 
-    const errors: string[] = [];
+    const errors: Array<{message: string; source?: string}> = [];
+    
+    // Check if we have any specific React render errors
+    const hasSpecificReactError = errorData.runtimeErrors.some((error: any) => 
+      error.type === 'react-render-error' && 
+      !error.message.includes('Script error')
+    );
 
-    // Only add "test failed" message if there are actual errors
-    if (errorData.testFailed && (errorData.runtimeErrors.length > 0 || errorData.consoleErrors.length > 0)) {
-      errors.push('Test marked as failed by error handlers');
-    }
-
+    // Process runtime errors with their source information
     errorData.runtimeErrors.forEach((error: any) => {
-      // Include phase information if available to help identify where the error occurred
+      // Skip generic "Script error" messages if we have more specific React errors
+      if (hasSpecificReactError && 
+          error.type === 'runtime' && 
+          error.message === 'Script error.') {
+        return; // Skip this generic error
+      }
+      
       const phase = error.phase ? ` (during ${error.phase})` : '';
       const errorMsg = `${error.type} error: ${error.message}${phase}`;
-      if (!errors.includes(errorMsg)) {
-        errors.push(errorMsg);
-      }
+      errors.push({
+        message: errorMsg,
+        source: error.source
+      });
     });
 
+    // Console errors don't have source info
     errorData.consoleErrors.forEach((error: string) => {
       const errorMsg = `Console error: ${error}`;
-      if (!errors.includes(errorMsg)) {
-        errors.push(errorMsg);
-      }
+      errors.push({
+        message: errorMsg,
+        source: 'react-framework' // Console errors from React are framework level
+      });
     });
 
     return errors;

@@ -12,7 +12,7 @@
   },
   "validators": {
     "checkDestroyBeforeRecreate": {
-      "description": "Ensure Chart instances are destroyed before recreating on same canvas",
+      "description": "Ensure Chart instances are destroyed before recreating on same canvas.",
       "severity": "high",
       "validate": "@file:check-destroy-before-recreate.js"
     },
