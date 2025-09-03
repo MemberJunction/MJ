@@ -1075,15 +1075,13 @@ export class ComponentRunner {
               
               // Generate helpful error message
               const errorMsg = [
-                `Invalid JSX element type: received an object (${objectInfo}) instead of a React component.`,
+                `Invalid JSX element type: React received an object (${objectInfo}) instead of a React component function.`,
                 '',
-                'Common causes:',
-                '1. Using a library namespace directly: <ApexCharts /> instead of <ApexCharts.Chart />',
-                '2. Missing destructuring: Add "const { ComponentName } = LibraryName;" before use',
-                '3. Using a non-component export from a library (e.g., Chart.js constructor instead of React component)',
-                '4. Component failed to compile/resolve and is now an empty object',
+                'This often occurs when JSX elements or React.createElement receive an object instead of a valid component function.',
                 '',
-                'Check your JSX usage and ensure you\'re referencing actual React components.'
+                'Inspect all instances where you are using JSX elements that come from libraries or components to ensure they are properly referenced.',
+                '',
+                'The exact fix depends on the specific library or component structure.'
               ].join('\\n');
               
               // Log to both console and error tracking
@@ -1107,13 +1105,11 @@ export class ComponentRunner {
             const errorMsg = [
               'Invalid JSX element type: component is undefined.',
               '',
-              'Common causes:',
-              '1. Destructuring from undefined: const { Component } = undefined',  
-              '2. Misspelled component name in destructuring',
-              '3. Component not exported from library',
-              '4. Using wrong library global variable name',
+              'This occurs when a JSX element references a component that is undefined at runtime.',
               '',
-              'Check that the component exists in your dependencies or libraries.'
+              'Inspect how this component is being accessed - it may not exist in the expected location or may have a different name.',
+              '',
+              'Check that the component exists in your dependencies or libraries and is properly referenced.'
             ].join('\\n');
             
             console.error('🔴 Undefined JSX Component:', errorMsg);
@@ -1207,7 +1203,8 @@ export class ComponentRunner {
       };
     });
 
-    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
+    // Track unique errors and their counts
+    const errorMap = new Map<string, {error: any; count: number}>();
     
     // Check if we have any specific React render errors
     const hasSpecificReactError = errorData.runtimeErrors.some((error: any) => 
@@ -1253,22 +1250,56 @@ export class ComponentRunner {
           break;
       }
       
-      // Don't prepend type to message, just use the clean message
-      errors.push({
-        message: error.message,
-        source: error.source,
-        type: error.type,
-        rule: rule
-      });
+      // Create a key for deduplication based on message and type
+      const key = `${error.type}:${error.message}`;
+      
+      if (errorMap.has(key)) {
+        // Increment count for duplicate
+        errorMap.get(key)!.count++;
+      } else {
+        // Add new error
+        errorMap.set(key, {
+          error: {
+            message: error.message,
+            source: error.source,
+            type: error.type,
+            rule: rule
+          },
+          count: 1
+        });
+      }
     });
 
-    // Console errors don't have type info
+    // Process console errors
     errorData.consoleErrors.forEach((error: string) => {
+      const key = `console-error:${error}`;
+      
+      if (errorMap.has(key)) {
+        errorMap.get(key)!.count++;
+      } else {
+        errorMap.set(key, {
+          error: {
+            message: error,
+            source: 'react-framework',
+            type: 'console-error',
+            rule: 'console-error'
+          },
+          count: 1
+        });
+      }
+    });
+
+    // Convert map to array with occurrence counts
+    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
+    errorMap.forEach(({error, count}) => {
+      // Append count if > 1
+      const message = count > 1 
+        ? `${error.message} (occurred ${count} times)`
+        : error.message;
+      
       errors.push({
-        message: error,
-        source: 'react-framework',
-        type: 'console-error',
-        rule: 'console-error'
+        ...error,
+        message
       });
     });
 
