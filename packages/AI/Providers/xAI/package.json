@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-xai",
   "version": "2.96.0",
-  "description": "MemberJunction Wrapper for x.ai Grok Models",
+  "description": "MemberJunction Wrapper for x.ai models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
