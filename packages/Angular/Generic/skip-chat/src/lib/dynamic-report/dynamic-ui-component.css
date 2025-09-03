@@ -224,7 +224,7 @@
   border: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   line-height: 1.2;
   min-height: auto;
   height: auto;
@@ -284,20 +284,74 @@
   height: 100%;
 }
 
-/* Nested tab styling - for tabs within tabs */
+/* Inner tabs specific styling with horizontal scroll */
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  max-width: 100%;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+  padding: 4px 8px 0 8px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-item {
+  flex: 0 0 auto !important;
+  display: inline-block !important;
+  float: none !important;
+}
+
+::ng-deep .inner-tabs .k-link {
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Force single row for inner tabs */
+::ng-deep .inner-tabstrip-container .k-tabstrip-items {
+  min-width: max-content !important;
+}
+
+/* Custom scrollbar for inner tabs */
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Nested tab styling - for tabs within tabs (fallback) */
 ::ng-deep .k-tabstrip .k-tabstrip {
   margin: 0;
 }
 
 ::ng-deep .k-tabstrip .k-tabstrip .k-tabstrip-items {
-  padding: 2px 4px 0 4px;
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  width: max-content !important;
 }
 
-::ng-deep .k-tabstrip .k-tabstrip .k-link {
-  padding: 4px 10px;
-  font-size: 12px;
+::ng-deep .k-tabstrip .k-tabstrip .k-tabstrip-items-wrapper {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
 }
 
 /* Ensure proper content area in nested tabs */
