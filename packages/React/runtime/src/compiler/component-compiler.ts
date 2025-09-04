@@ -98,7 +98,8 @@ export class ComponentCompiler {
       const componentFactory = this.createComponentFactory(
         transpiledCode,
         options.componentName,
-        loadedLibraries
+        loadedLibraries,
+        options
       );
 
       // Build the compiled component
@@ -703,12 +704,14 @@ export class ComponentCompiler {
    * @param transpiledCode - Transpiled JavaScript code
    * @param componentName - Name of the component
    * @param loadedLibraries - Map of loaded libraries
+   * @param options - Compile options containing spec and other metadata
    * @returns Component factory function
    */
   private createComponentFactory(
     transpiledCode: string, 
     componentName: string,
-    loadedLibraries: Map<string, any>
+    loadedLibraries: Map<string, any>,
+    options: CompileOptions
   ): (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject {
     try {
       // Create the factory function with all React hooks
@@ -740,9 +743,23 @@ export class ComponentCompiler {
         }
         
         // Merge loaded libraries with context libraries
+        // IMPORTANT: Only include libraries that are NOT dependency-only
+        // We need to filter based on the libraries array from options
         const mergedLibraries = { ...libraries };
+        
+        // Only add libraries that are explicitly requested in the component
+        // This prevents dependency-only libraries from being accessible
+        const specLibraryNames = new Set(
+          (options.libraries || []).map((lib: any) => lib.globalVariable).filter(Boolean)
+        );
+        
         loadedLibraries.forEach((value, key) => {
-          mergedLibraries[key] = value;
+          // Only add if this library is in the spec (not just a dependency)
+          if (specLibraryNames.has(key)) {
+            mergedLibraries[key] = value;
+          } else if (this.config.debug) {
+            console.log(`⚠️ Filtering out dependency-only library: ${key}`);
+          }
         });
 
         // Execute the factory creator to get the createComponent function
