@@ -729,7 +729,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component "${componentName}" is trying to destructure from window.${propertyName}. If this is a library, it should be added to the component's libraries array in the spec and accessed via its globalVariable name.`,
+                  message: `Component "${componentName}" is trying to destructure from window.${propertyName}. This appears to be a library that is not included in the component spec. You cannot use libraries that are not already defined in the spec's libraries array.`,
                   code: path.toString().substring(0, 100)
                 });
               } else {
@@ -4031,7 +4031,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is not defined. Either define it in your component, add it to dependencies, or check if it should be destructured from a library.`,
+                      message: `JSX component "${tagName}" is not defined. You must either: (1) define it in your component, (2) use a component that's already in the spec's dependencies, or (3) destructure it from a library that's already in the spec's libraries.`,
                       code: `<${tagName} ... />`
                     });
                   }
