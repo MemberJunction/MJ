@@ -255,6 +255,24 @@ export class ComponentRunner {
           // Create runtime context
           // Note: Component libraries are loaded by the ComponentCompiler itself
           // via loadRequiredLibraries, so we don't need to pass them here
+          
+          // Diagnostic: Check if React is available before creating context
+          if (!(window as any).React) {
+            console.error('🔴 CRITICAL: React is NULL when creating runtimeContext!');
+            console.error('Window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('react')));
+            throw new Error('React is not available in window context');
+          }
+          
+          if (debug) {
+            console.log('✅ React is available:', typeof (window as any).React);
+            console.log('✅ React hooks check:', {
+              useState: typeof (window as any).React?.useState,
+              useEffect: typeof (window as any).React?.useEffect,
+              useRef: typeof (window as any).React?.useRef,
+              useMemo: typeof (window as any).React?.useMemo
+            });
+          }
+          
           const runtimeContext = {
             React: (window as any).React,
             ReactDOM: (window as any).ReactDOM,

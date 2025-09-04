@@ -8314,34 +8314,24 @@ await utilities.rq.RunQuery({
           
         case 'component-props-validation':
           violation.suggestion = {
-            text: 'Components can only accept standard props and props explicitly defined in the component spec. Additional props must be declared in the spec\'s properties array.',
+            text: 'Components can only accept standard props and props explicitly defined in the component spec. The spec is provided by the architect and cannot be modified - your code must match the spec exactly.',
             example: `// ❌ WRONG - Component with undeclared props:
 function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // customers, orders, selectedId are NOT allowed unless defined in spec
+  // ERROR: customers, orders, selectedId are NOT in the spec
+  // The spec defines what props are allowed - you cannot add new ones
 }
 
-// ✅ CORRECT Option 1 - Use only standard props and load data internally:
+// ✅ CORRECT - Use only standard props and props defined in the spec:
 function MyComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load data internally using utilities
+  // If you need data like customers/orders, load it internally using utilities
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
-}
-
-// ✅ CORRECT Option 2 - Define props in component spec:
-// In spec.properties array:
-// [
-//   { name: "customers", type: "array", required: false, description: "Customer list" },
-//   { name: "orders", type: "array", required: false, description: "Order list" },
-//   { name: "selectedId", type: "string", required: false, description: "Selected item ID" }
-// ]
-// Then the component can accept them:
-function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // These props are now allowed because they're defined in the spec
   
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Load customers data internally
         const result = await utilities.rv.RunView({
           EntityName: 'Customers',
           Fields: ['ID', 'Name', 'Status']
@@ -8356,8 +8346,12 @@ function MyComponent({ utilities, styles, components, customers, orders, selecte
     loadData();
   }, []);
   
-  return <div>{/* Use state, not props */}</div>;
-}`
+  return <div>{/* Use state variables, not props */}</div>;
+}
+
+// NOTE: If the spec DOES define additional props (e.g., customers, orders),
+// then you MUST accept and use them. Check the spec's properties array
+// to see what props are required/optional beyond the standard ones.`
           };
           break;
           

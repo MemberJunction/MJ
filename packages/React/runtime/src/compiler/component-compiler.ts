@@ -723,6 +723,22 @@ export class ComponentCompiler {
       return (context: RuntimeContext, styles: any = {}, components: Record<string, any> = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
         
+        // Diagnostic: Check if React is null when creating component
+        if (!React) {
+          console.error('🔴 CRITICAL: React is NULL in createComponentFactory!');
+          console.error('Context provided:', context);
+          console.error('Context keys:', Object.keys(context));
+          throw new Error('React is null in runtime context when creating component factory');
+        }
+        
+        // Additional diagnostic for React hooks
+        if (!React.useState || !React.useEffect) {
+          console.error('🔴 CRITICAL: React hooks are missing!');
+          console.error('React object keys:', React ? Object.keys(React) : 'React is null');
+          console.error('useState:', typeof React?.useState);
+          console.error('useEffect:', typeof React?.useEffect);
+        }
+        
         // Merge loaded libraries with context libraries
         const mergedLibraries = { ...libraries };
         loadedLibraries.forEach((value, key) => {
@@ -730,22 +746,35 @@ export class ComponentCompiler {
         });
 
         // Execute the factory creator to get the createComponent function
-        const createComponentFn = factoryCreator(
-          React,
-          ReactDOM,
-          React.useState,
-          React.useEffect,
-          React.useCallback,
-          React.useMemo,
-          React.useRef,
-          React.useContext,
-          React.useReducer,
-          React.useLayoutEffect,
-          mergedLibraries,
-          styles,
-          console,
-          components
-        );
+        let createComponentFn;
+        try {
+          createComponentFn = factoryCreator(
+            React,
+            ReactDOM,
+            React.useState,
+            React.useEffect,
+            React.useCallback,
+            React.useMemo,
+            React.useRef,
+            React.useContext,
+            React.useReducer,
+            React.useLayoutEffect,
+            mergedLibraries,
+            styles,
+            console,
+            components
+          );
+        } catch (error: any) {
+          console.error('🔴 CRITICAL: Error calling factoryCreator with React hooks!');
+          console.error('Error:', error?.message || error);
+          console.error('React is:', React);
+          console.error('React type:', typeof React);
+          if (React) {
+            console.error('React.useState:', typeof React.useState);
+            console.error('React.useEffect:', typeof React.useEffect);
+          }
+          throw new Error(`Failed to create component factory: ${error?.message || error}`);
+        }
 
         // Call createComponent to get the actual component
         const Component = createComponentFn(
