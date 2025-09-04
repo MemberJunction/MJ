@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/global
 
+## 2.98.0
+
 ## 2.97.0
 
 ## 2.96.0

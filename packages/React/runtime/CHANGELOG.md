@@ -1,5 +1,19 @@
 # @memberjunction/react-runtime
 
+## 2.98.0
+
+### Minor Changes
+
+- ce949f4: migration
+
+### Patch Changes
+
+- 56a4e9d: tweaks to linter
+  - @memberjunction/interactive-component-types@2.98.0
+  - @memberjunction/core@2.98.0
+  - @memberjunction/core-entities@2.98.0
+  - @memberjunction/global@2.98.0
+
 ## 2.97.0
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.98.0
+- @memberjunction/ai@2.98.0
+- @memberjunction/ai-core-plus@2.98.0
+- @memberjunction/actions-base@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/global@2.98.0
+
 ## 2.97.0
 
 ### Patch Changes

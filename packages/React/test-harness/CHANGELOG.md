@@ -1,5 +1,19 @@
 # @memberjunction/react-test-harness
 
+## 2.98.0
+
+### Minor Changes
+
+- ce949f4: migration
+
+### Patch Changes
+
+- 56a4e9d: tweaks to linter
+- Updated dependencies [56a4e9d]
+- Updated dependencies [ce949f4]
+  - @memberjunction/react-runtime@2.98.0
+  - @memberjunction/interactive-component-types@2.98.0
+
 ## 2.97.0
 
 ### Minor Changes
