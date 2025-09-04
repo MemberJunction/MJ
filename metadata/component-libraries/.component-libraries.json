@@ -136,7 +136,7 @@
       "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"
     },
     "sync": {
-      "lastModified": "2025-09-04T22:30:44.740Z",
+      "lastModified": "2025-09-04T23:20:48.473Z",
       "checksum": "801658cb3c81b3266e67e3f5e2807dfe4dd688f3f4a83543466e0656806ac56f"
     }
   },
@@ -399,14 +399,85 @@
       "Category": "UI",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/@mui/material@5.15.2/umd/material-ui.production.min.js",
       "CDNCssUrl": null,
-      "Description": "React components implementing Google's Material Design"
+      "Description": "React components implementing Google's Material Design",
+      "UsageType": "Direct",
+      "Dependencies": {
+        "@emotion/styled": "^11.11.0",
+        "@popperjs/core": "^2.11.8"
+      }
     },
     "primaryKey": {
       "ID": "CCCD65AF-004F-4D3A-8282-1BB7FB7DC9E5"
     },
     "sync": {
-      "lastModified": "2025-08-18T03:51:05.524Z",
-      "checksum": "647c4f15a90bc7a92eed52177a09a29b16003113757d4009bf135c73955038d9"
+      "lastModified": "2025-09-04T23:20:48.636Z",
+      "checksum": "e9ccc4e5408ac7f54c0ce833847d30bc892c902c043c7f472e589cd3cecd93b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@emotion/react",
+      "DisplayName": "Emotion React",
+      "Version": "11.11.4",
+      "GlobalVariable": "emotionReact",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@emotion/react@11.14.0/dist/emotion-react.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "CSS-in-JS library designed for high performance style composition",
+      "Status": "Active",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "D4D4C1C7-5991-499B-A68F-FB5362A9A540"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.576Z",
+      "checksum": "a16ca5da280408bdd6f3ca5fbde3f3554f47ed5703df7e682563da377e91607b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@emotion/styled",
+      "DisplayName": "Emotion Styled",
+      "Version": "11.11.0",
+      "GlobalVariable": "emotionStyled",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@emotion/styled@11.14.1/dist/emotion-styled.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Styled API for @emotion/react",
+      "Status": "Active",
+      "UsageType": "Dependency",
+      "Dependencies": {
+        "@emotion/react": "^11.11.4"
+      }
+    },
+    "primaryKey": {
+      "ID": "68822D3C-7A8F-40B9-8579-711B02860FE2"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.598Z",
+      "checksum": "d12ce9a99354579bbf92311d391256593fc25d3b5469db073afbfa2ef52b443e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@popperjs/core",
+      "DisplayName": "Popper.js",
+      "Version": "2.11.8",
+      "GlobalVariable": "Popper",
+      "Category": "Utility",
+      "UsageType": "Dependency",
+      "CDNUrl": "https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js",
+      "CDNCssUrl": null,
+      "Description": "Tooltip and popover positioning engine",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A16223DC-3660-4E64-811D-FA2914CE2A84"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.588Z",
+      "checksum": "5dc34fc8397a2370ec07c0c8c137a7fe2e2535127e4b397f94a91dfdfbc6ee97"
     }
   },
   {
@@ -453,6 +524,7 @@
       "DisplayName": "AG-Grid",
       "Version": "31.0.1",
       "GlobalVariable": "agGrid",
+      "UsageType": "Dependency",
       "Category": "UI",
       "CDNUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/dist/ag-grid-community.min.js",
       "CDNCssUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/styles/ag-grid.css",
@@ -462,8 +534,8 @@
       "ID": "F7881AA4-83AF-4841-8475-55BBFD5187CC"
     },
     "sync": {
-      "lastModified": "2025-08-30T19:45:19.405Z",
-      "checksum": "62dd363ead28995b5338dcc59c3c3ec5f72045e784aa0fd1ee530655da8cdb9f"
+      "lastModified": "2025-09-04T23:20:48.646Z",
+      "checksum": "d4cba23c43df35b89b7d9209bbf104cd758cda875a3f28ced96e4a6e250d6046"
     }
   },
   {
