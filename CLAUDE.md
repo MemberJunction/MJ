@@ -1,3 +1,6 @@
+# GENERAL RULE
+Don't say "You're absolutely right" each time I correct you. Mix it up, that's so boring!
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨

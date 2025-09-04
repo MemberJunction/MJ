@@ -6822,6 +6822,10 @@ const [state, setState] = useState(initialValue);`
     options?: ComponentExecutionOptions
   ): Promise<LintResult> {
     try {
+      // Require contextUser when libraries need to be checked
+      if (componentSpec?.libraries && componentSpec.libraries.length > 0 && !contextUser) {
+        throw new Error('contextUser is required when linting components with library dependencies. This is needed to load library-specific lint rules from the database.');
+      }
       // Parse with error recovery to get both AST and errors
       const parseResult = parser.parse(code, {
         sourceType: 'module',
@@ -6894,7 +6898,7 @@ const [state, setState] = useState(initialValue);`
       }
       
       // Apply library-specific lint rules if available
-      if (componentSpec?.libraries && contextUser) {
+      if (componentSpec?.libraries) {
         const libraryViolations = await this.applyLibraryLintRules(ast, componentSpec, contextUser, debugMode);
         violations.push(...libraryViolations);
       }
@@ -8505,12 +8509,34 @@ const {
           // Get the cached and compiled rules for this library
           const compiledRules = cache.getLibraryRules(lib.name);
           
+          if (debugMode) {
+            console.log(`\n  📚 Library: ${lib.name}`);
+            if (compiledRules) {
+              console.log(`  ┌─ Has lint rules: ✅`);
+              if (compiledRules.validators) {
+                console.log(`  ├─ Validators: ${Object.keys(compiledRules.validators).length}`);
+              }
+              if (compiledRules.initialization) {
+                console.log(`  ├─ Initialization rules: ✅`);
+              }
+              if (compiledRules.lifecycle) {
+                console.log(`  ├─ Lifecycle rules: ✅`);
+              }
+              console.log(`  └─ Starting checks...`);
+            } else {
+              console.log(`  └─ No lint rules defined`);
+            }
+          }
+          
           if (compiledRules) {
             const library = compiledRules.library;
             const libraryName = library.Name || lib.name;
             
             // Apply initialization rules
             if (compiledRules.initialization) {
+              if (debugMode) {
+                console.log(`  ├─ 🔍 Checking ${libraryName} initialization patterns...`);
+              }
               const initViolations = this.checkLibraryInitialization(
                 ast, 
                 libraryName,
@@ -8519,12 +8545,12 @@ const {
               
               // Debug logging for library violations
               if (debugMode && initViolations.length > 0) {
-                console.log(`\n🔍 ${libraryName} Initialization Violations Found:`);
+                console.log(`  │   ⚠️  Found ${initViolations.length} initialization issue${initViolations.length > 1 ? 's' : ''}`);
                 initViolations.forEach(v => {
                   const icon = v.severity === 'critical' ? '🔴' : 
                                v.severity === 'high' ? '🟠' :
                                v.severity === 'medium' ? '🟡' : '🟢';
-                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                  console.log(`  │   ${icon} Line ${v.line}: ${v.message}`);
                 });
               }
               
@@ -8533,6 +8559,9 @@ const {
             
             // Apply lifecycle rules
             if (compiledRules.lifecycle) {
+              if (debugMode) {
+                console.log(`  ├─ 🔄 Checking ${libraryName} lifecycle management...`);
+              }
               const lifecycleViolations = this.checkLibraryLifecycle(
                 ast,
                 libraryName,
@@ -8541,12 +8570,12 @@ const {
               
               // Debug logging for library violations
               if (debugMode && lifecycleViolations.length > 0) {
-                console.log(`\n🔍 ${libraryName} Lifecycle Violations Found:`);
+                console.log(`  │   ⚠️  Found ${lifecycleViolations.length} lifecycle issue${lifecycleViolations.length > 1 ? 's' : ''}`);
                 lifecycleViolations.forEach(v => {
                   const icon = v.severity === 'critical' ? '🔴' : 
                                v.severity === 'high' ? '🟠' :
                                v.severity === 'medium' ? '🟡' : '🟢';
-                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                  console.log(`  │   ${icon} Line ${v.line}: ${v.message}`);
                 });
               }
               
@@ -8555,6 +8584,9 @@ const {
             
             // Apply options validation
             if (compiledRules.options) {
+              if (debugMode) {
+                console.log(`  ├─ ⚙️  Checking ${libraryName} configuration options...`);
+              }
               const optionsViolations = this.checkLibraryOptions(
                 ast,
                 libraryName,
@@ -8563,12 +8595,12 @@ const {
               
               // Debug logging for library violations
               if (debugMode && optionsViolations.length > 0) {
-                console.log(`\n🔍 ${libraryName} Options Violations Found:`);
+                console.log(`  │   ⚠️  Found ${optionsViolations.length} configuration issue${optionsViolations.length > 1 ? 's' : ''}`);
                 optionsViolations.forEach(v => {
                   const icon = v.severity === 'critical' ? '🔴' : 
                                v.severity === 'high' ? '🟠' :
                                v.severity === 'medium' ? '🟡' : '🟢';
-                  console.log(`  ${icon} [${v.severity}] Line ${v.line}: ${v.message}`);
+                  console.log(`  │   ${icon} Line ${v.line}: ${v.message}`);
                 });
               }
               
@@ -8947,6 +8979,14 @@ const {
       if (validator && validator.validateFn) {
         const beforeCount = context.violations.length;
         
+        // Log that we're running this specific validator
+        if (debugMode) {
+          console.log(`  ├─ 🔬 Running ${libraryName} validator: ${validatorName}`);
+          if (validator.description) {
+            console.log(`  │   ℹ️  ${validator.description}`);
+          }
+        }
+        
         // Traverse AST and apply validator
         traverse(ast, {
           enter(path: NodePath) {
@@ -8956,6 +8996,9 @@ const {
             } catch (error) {
               // Validator execution error - log but don't crash
               console.warn(`Validator ${validatorName} failed:`, error);
+              if (debugMode) {
+                console.error('Full error:', error);
+              }
             }
           }
         });
@@ -8963,9 +9006,7 @@ const {
         // Debug logging for this specific validator
         const newViolations = context.violations.length - beforeCount;
         if (debugMode && newViolations > 0) {
-          console.log(`\n📋 ${libraryName} - ${validatorName}:`);
-          console.log(`  📊 ${validator.description || 'No description'}`);
-          console.log(`  ⚠️  Found ${newViolations} violation${newViolations > 1 ? 's' : ''}`);
+          console.log(`  │   ✓ Found ${newViolations} violation${newViolations > 1 ? 's' : ''}`);
           
           // Show the violations from this validator
           const validatorViolations = context.violations.slice(beforeCount);
@@ -8973,11 +9014,13 @@ const {
             const icon = v.type === 'error' || v.severity === 'critical' ? '🔴' : 
                          v.type === 'warning' || v.severity === 'high' ? '🟠' :
                          v.severity === 'medium' ? '🟡' : '🟢';
-            console.log(`    ${icon} Line ${v.line || 'unknown'}: ${v.message}`);
+            console.log(`  │   ${icon} Line ${v.line || 'unknown'}: ${v.message}`);
             if (v.suggestion) {
-              console.log(`       💡 ${v.suggestion}`);
+              console.log(`  │      💡 ${v.suggestion}`);
             }
           });
+        } else if (debugMode) {
+          console.log(`  │   ✓ No violations found`);
         }
       }
     }
