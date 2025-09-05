@@ -16,6 +16,7 @@ import {
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
+import { unwrapComponent, unwrapComponents, unwrapAllComponents } from '../utilities/component-unwrapper';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -714,11 +715,12 @@ export class ComponentCompiler {
     options: CompileOptions
   ): (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject {
     try {
-      // Create the factory function with all React hooks
+      // Create the factory function with all React hooks and utility functions
       const factoryCreator = new Function(
         'React', 'ReactDOM',
         'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
         'libraries', 'styles', 'console', 'components',
+        'unwrapComponent', 'unwrapComponents', 'unwrapAllComponents',
         `${transpiledCode}; return createComponent;`
       );
 
@@ -762,6 +764,11 @@ export class ComponentCompiler {
           }
         });
 
+        // Create bound versions of unwrap functions with debug flag
+        const boundUnwrapComponent = (lib: any, name: string) => unwrapComponent(lib, name, this.config.debug);
+        const boundUnwrapComponents = (lib: any, names: string[]) => unwrapComponents(lib, names, this.config.debug);
+        const boundUnwrapAllComponents = (lib: any) => unwrapAllComponents(lib, this.config.debug);
+
         // Execute the factory creator to get the createComponent function
         let createComponentFn;
         try {
@@ -779,7 +786,10 @@ export class ComponentCompiler {
             mergedLibraries,
             styles,
             console,
-            components
+            components,
+            boundUnwrapComponent,
+            boundUnwrapComponents,
+            boundUnwrapAllComponents
           );
         } catch (error: any) {
           console.error('🔴 CRITICAL: Error calling factoryCreator with React hooks!');
@@ -808,7 +818,10 @@ export class ComponentCompiler {
           mergedLibraries,
           styles,
           console,
-          components
+          components,
+          boundUnwrapComponent,
+          boundUnwrapComponents,
+          boundUnwrapAllComponents
         );
 
         // Return the component directly
