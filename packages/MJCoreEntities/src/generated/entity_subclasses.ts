@@ -8200,6 +8200,11 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Action Input Mapping
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
+    TerminateOnSubAgentChat: z.boolean().nullable().describe(`
+        * * Field Name: TerminateOnSubAgentChat
+        * * Display Name: Terminate On Sub Agent Chat
+        * * SQL Data Type: bit
+        * * Description: When true, if this Sub-Agent step returns a Chat next step, the flow will terminate and bubble the Chat message to the user. When false, the flow continues normally. Only applies to Sub-Agent step types.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -35390,6 +35395,19 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
     set ActionInputMapping(value: string | null) {
         this.Set('ActionInputMapping', value);
+    }
+
+    /**
+    * * Field Name: TerminateOnSubAgentChat
+    * * Display Name: Terminate On Sub Agent Chat
+    * * SQL Data Type: bit
+    * * Description: When true, if this Sub-Agent step returns a Chat next step, the flow will terminate and bubble the Chat message to the user. When false, the flow continues normally. Only applies to Sub-Agent step types.
+    */
+    get TerminateOnSubAgentChat(): boolean | null {
+        return this.Get('TerminateOnSubAgentChat');
+    }
+    set TerminateOnSubAgentChat(value: boolean | null) {
+        this.Set('TerminateOnSubAgentChat', value);
     }
 
     /**
