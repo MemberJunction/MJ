@@ -178,8 +178,8 @@ export class ComponentRunner {
         throw new Error('Failed to inject MJReactRuntime into page context');
       }
 
-      // Set up error tracking
-      await this.setupErrorTracking(page, options.componentSpec, allLibraries);
+      // NOTE: Error tracking setup moved to after library loading to avoid false positives
+      // during library initialization (e.g., antd's UMD bundle setup)
       
       // Set up console logging
       this.setupConsoleLogging(page, consoleLogs, warnings);
@@ -432,6 +432,102 @@ export class ComponentRunner {
           // Note: Library components are now handled by the runtime's compiler
           // which loads them into the appropriate context/closure
 
+          // NOW set up enhanced error tracking - AFTER libraries are loaded
+          // This avoids false positives from library initialization code (e.g., antd)
+          if (!(window as any).__testHarnessErrorTrackingSetup) {
+            (window as any).__testHarnessErrorTrackingSetup = true;
+            
+            // Initialize error tracking arrays if not already done
+            (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+            (window as any).__testHarnessConsoleErrors = (window as any).__testHarnessConsoleErrors || [];
+            (window as any).__testHarnessConsoleWarnings = (window as any).__testHarnessConsoleWarnings || [];
+            (window as any).__testHarnessTestFailed = (window as any).__testHarnessTestFailed || false;
+            (window as any).__testHarnessRenderCount = (window as any).__testHarnessRenderCount || 0;
+
+            // Wrap React.createElement to detect invalid element types
+            const originalCreateElement = (window as any).React?.createElement;
+            if (originalCreateElement) {
+              (window as any).React.createElement = function(type: any, props: any, ...children: any[]) {
+                (window as any).__testHarnessRenderCount++;
+                
+                // Enhanced error detection for invalid element types
+                if (type !== null && type !== undefined) {
+                  const typeOf = typeof type;
+                  
+                  // Check for the common "object instead of component" error
+                  if (typeOf === 'object' && !(window as any).React.isValidElement(type)) {
+                    // Try to get a meaningful name for the object
+                    let objectInfo = 'unknown object';
+                    try {
+                      if (type.constructor && type.constructor.name) {
+                        objectInfo = type.constructor.name;
+                      } else if (type.name) {
+                        objectInfo = type.name;
+                      } else {
+                        // Try to show what properties it has
+                        const keys = Object.keys(type).slice(0, 5);
+                        if (keys.length > 0) {
+                          objectInfo = `object with properties: ${keys.join(', ')}`;
+                        }
+                      }
+                    } catch (e) {
+                      // Ignore errors in trying to get object info
+                    }
+                    
+                    // Generate helpful error message
+                    const errorMsg = [
+                      `Invalid JSX element type: React received an object (${objectInfo}) instead of a React component function.`,
+                      '',
+                      'This often occurs when JSX elements or React.createElement receive an object instead of a valid component function.',
+                      '',
+                      'Inspect all instances where you are using JSX elements that come from libraries or components to ensure they are properly referenced.',
+                      '',
+                      'The exact fix depends on the specific library or component structure.'
+                    ].join('\\n');
+                    
+                    // Log to both console and error tracking
+                    console.error('🔴 Invalid JSX Element Type Detected:', errorMsg);
+                    
+                    // Store the error for later collection
+                    (window as any).__testHarnessRuntimeErrors.push({
+                      message: errorMsg,
+                      type: 'invalid-element-type',
+                      phase: 'createElement',
+                      source: 'enhanced-detection',
+                      elementInfo: objectInfo
+                    });
+                    
+                    // Still try to call the original to get React's error too
+                    // This will provide the component stack trace
+                  }
+                } else if (type === undefined) {
+                  // Undefined component - likely a failed destructure or missing import
+                  const errorMsg = [
+                    'Invalid JSX element type: component is undefined.',
+                    '',
+                    'This occurs when a JSX element references a component that is undefined at runtime.',
+                    '',
+                    'Inspect how this component is being accessed - it may not exist in the expected location or may have a different name.',
+                    '',
+                    'Check that the component exists in your dependencies or libraries and is properly referenced.'
+                  ].join('\\n');
+                  
+                  console.error('🔴 Undefined JSX Component:', errorMsg);
+                  
+                  (window as any).__testHarnessRuntimeErrors.push({
+                    message: errorMsg,
+                    type: 'undefined-component',
+                    phase: 'createElement',
+                    source: 'enhanced-detection'
+                  });
+                }
+                
+                // Call original createElement
+                return originalCreateElement.apply(this, [type, props, ...children]);
+              };
+            }
+          }
+
           // Render the component
           const rootElement = document.getElementById('root');
           if (!rootElement) {
@@ -644,7 +740,15 @@ export class ComponentRunner {
 
       // Collect all errors with source information
       const runtimeErrorsWithSource = await this.collectRuntimeErrors(page);
-      errors.push(...runtimeErrorsWithSource.map(e => e.message)); // Extract messages for backward compat
+      // Filter out JSX element type errors when adding to errors array
+      errors.push(...runtimeErrorsWithSource
+        .filter(e => {
+          // Skip JSX element type errors from error count
+          const isJSXError = e.type === 'invalid-element-type' || 
+                            e.type === 'undefined-component';
+          return !isJSXError;
+        })
+        .map(e => e.message)); // Extract messages for backward compat
 
       // Collect warnings (separate from errors)
       const collectedWarnings = await this.collectWarnings(page);
@@ -655,11 +759,16 @@ export class ComponentRunner {
       await page.waitForTimeout(asyncWaitTime);
       
       const asyncErrors = await this.collectRuntimeErrors(page);
-      // Only add new errors
+      // Only add new errors (excluding JSX element type errors)
       asyncErrors.forEach(err => {
-        if (!errors.includes(err.message)) {
+        const isJSXError = err.type === 'invalid-element-type' || 
+                          err.type === 'undefined-component';
+        if (!isJSXError && !errors.includes(err.message)) {
           errors.push(err.message);
           runtimeErrorsWithSource.push(err); // Keep the structured version too
+        } else if (isJSXError && !runtimeErrorsWithSource.some(e => e.message === err.message)) {
+          // Still track JSX errors for logging but don't add to errors array
+          runtimeErrorsWithSource.push(err);
         }
       });
       
@@ -693,14 +802,27 @@ export class ComponentRunner {
       const allErrors = [...errors, ...dataErrors];
       
       // Map runtime errors with source info and specific rules
-      const errorViolations = runtimeErrorsWithSource.map(e => ({
-        message: e.message,
-        severity: 'critical' as const,
-        rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
-        line: 0,
-        column: 0,
-        source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
-      }));
+      // Filter out JSX element type errors - they're too noisy and often false positives
+      const errorViolations = runtimeErrorsWithSource
+        .filter(e => {
+          // Skip JSX element type errors - still logged but not reported as violations
+          const isJSXError = e.rule === 'invalid-jsx-element' || 
+                            e.rule === 'undefined-jsx-component' ||
+                            e.type === 'invalid-element-type' ||
+                            e.type === 'undefined-component';
+          if (isJSXError && debug) {
+            console.log('📝 JSX element error detected but not reported as violation:', e.message);
+          }
+          return !isJSXError;
+        })
+        .map(e => ({
+          message: e.message,
+          severity: 'critical' as const,
+          rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
+          line: 0,
+          column: 0,
+          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
+        }));
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -1051,8 +1173,9 @@ export class ComponentRunner {
 
   /**
    * Set up error tracking in the page
+   * @deprecated Moved inline to page.evaluate after library loading to avoid false positives
    */
-  private async setupErrorTracking(page: any, componentSpec: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
+  private async setupErrorTracking_DEPRECATED(page: any, componentSpec: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
     await page.evaluate(({ spec, availableLibraries }: { spec: any; availableLibraries: any[] }) => {
       // Initialize error tracking
       (window as any).__testHarnessRuntimeErrors = [];

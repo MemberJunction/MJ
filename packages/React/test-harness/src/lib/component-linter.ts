@@ -4128,42 +4128,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Extract declared queries and entities from dataRequirements
-        const declaredQueries = new Set<string>();
-        const declaredEntities = new Set<string>();
-        
-        if (componentSpec?.dataRequirements) {
-          // Handle queries in different possible locations
-          if (Array.isArray(componentSpec.dataRequirements)) {
-            // If it's an array directly
-            componentSpec.dataRequirements.forEach((req: any) => {
-              if (req.type === 'query' && req.name) {
-                declaredQueries.add(req.name.toLowerCase());
-              }
-              if (req.type === 'entity' && req.name) {
-                declaredEntities.add(req.name.toLowerCase());
-              }
-            });
-          } else if (typeof componentSpec.dataRequirements === 'object') {
-            // If it's an object with queries/entities properties
-            if (componentSpec.dataRequirements.queries) {
-              componentSpec.dataRequirements.queries.forEach((q: any) => {
-                if (q.name) declaredQueries.add(q.name.toLowerCase());
-              });
-            }
-            if (componentSpec.dataRequirements.entities) {
-              componentSpec.dataRequirements.entities.forEach((e: any) => {
-                if (e.name) declaredEntities.add(e.name.toLowerCase());
-              });
-            }
-          }
-        }
+        // NOTE: Entity/Query name validation removed from this rule to avoid duplication
+        // The 'data-requirements-validation' rule handles comprehensive entity/query validation
+        // This rule now focuses on RunQuery/RunView specific issues like SQL injection
         
         traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
             const callee = path.node.callee;
             
-            // Check for RunQuery calls
+            // Check for RunQuery calls - focus on SQL injection detection
             if (t.isMemberExpression(callee) && 
                 t.isIdentifier(callee.property) && 
                 callee.property.name === 'RunQuery') {
@@ -4200,19 +4173,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         message: `RunQuery cannot accept SQL statements. QueryName must be a registered query name, not SQL: "${queryName.substring(0, 50)}..."`,
                         code: value.value.substring(0, 100)
                       });
-                    } else if (declaredQueries.size > 0 && !declaredQueries.has(queryName.toLowerCase())) {
-                      // Only validate if we have declared queries
-                      violations.push({
-                        rule: 'runquery-runview-validation',
-                        severity: 'high',
-                        line: value.loc?.start.line || 0,
-                        column: value.loc?.start.column || 0,
-                        message: `Query "${queryName}" is not declared in dataRequirements.queries. Available queries: ${Array.from(declaredQueries).join(', ')}`,
-                        code: path.toString().substring(0, 100)
-                      });
                     }
                   } else if (t.isIdentifier(value) || t.isTemplateLiteral(value)) {
-                    // Dynamic query name - check if it might be SQL
+                    // Dynamic query name - warn that it shouldn't be SQL
                     violations.push({
                       rule: 'runquery-runview-validation',
                       severity: 'medium',
@@ -4226,49 +4189,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               }
             }
             
-            // Check for RunView calls
-            if (t.isMemberExpression(callee) && 
-                t.isIdentifier(callee.property) && 
-                (callee.property.name === 'RunView' || callee.property.name === 'RunViews')) {
-              
-              const args = path.node.arguments;
-              
-              // Handle both single object and array of objects
-              const checkEntityName = (objExpr: t.ObjectExpression) => {
-                const entityNameProp = objExpr.properties.find(p => 
-                  t.isObjectProperty(p) && 
-                  t.isIdentifier(p.key) && 
-                  p.key.name === 'EntityName'
-                );
-                
-                if (entityNameProp && t.isObjectProperty(entityNameProp) && t.isStringLiteral(entityNameProp.value)) {
-                  const entityName = entityNameProp.value.value;
-                  
-                  if (declaredEntities.size > 0 && !declaredEntities.has(entityName.toLowerCase())) {
-                    violations.push({
-                      rule: 'runquery-runview-validation',
-                      severity: 'high',
-                      line: entityNameProp.value.loc?.start.line || 0,
-                      column: entityNameProp.value.loc?.start.column || 0,
-                      message: `Entity "${entityName}" is not declared in dataRequirements.entities. Available entities: ${Array.from(declaredEntities).join(', ')}`,
-                      code: path.toString().substring(0, 100)
-                    });
-                  }
-                }
-              };
-              
-              if (args.length > 0) {
-                if (t.isObjectExpression(args[0])) {
-                  checkEntityName(args[0]);
-                } else if (t.isArrayExpression(args[0])) {
-                  args[0].elements.forEach(elem => {
-                    if (t.isObjectExpression(elem)) {
-                      checkEntityName(elem);
-                    }
-                  });
-                }
-              }
-            }
+            // RunView validation removed - handled by data-requirements-validation
           }
         });
         
