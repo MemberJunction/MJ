@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, QueryParameterEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, AIAgentActionEntity, AIModelPriceTypeEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ComponentEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, ComponentLibraryEntity, DashboardUserPreferenceEntity, QueryParameterEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1059,6 +1059,207 @@ export class AIAgentModelResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Component Registries
+//****************************************************************************
+@ObjectType({ description: `Registry catalog for component sources, similar to NPM registry but supporting multiple sources` })
+export class ComponentRegistry_ {
+    @Field({description: `Primary key for the component registry`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Name of the registry (e.g., MemberJunction Registry, NPM, Internal Registry)`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: `Description of the registry and its purpose`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Registry endpoint URI (e.g., https://registry.memberjunction.org)`}) 
+    @MaxLength(1000)
+    URI?: string;
+        
+    @Field({nullable: true, description: `Type of registry: public, private, or internal`}) 
+    @MaxLength(100)
+    Type?: string;
+        
+    @Field({nullable: true, description: `API version supported by the registry for compatibility`}) 
+    @MaxLength(100)
+    APIVersion?: string;
+        
+    @Field({nullable: true, description: `Current status of the registry: active, deprecated, or offline`}) 
+    @MaxLength(100)
+    Status?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [Component_])
+    MJ_Components_SourceRegistryIDArray: Component_[]; // Link to MJ_Components
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Registries
+//****************************************************************************
+@InputType()
+export class CreateComponentRegistryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    URI: string | null;
+
+    @Field({ nullable: true })
+    Type: string | null;
+
+    @Field({ nullable: true })
+    APIVersion: string | null;
+
+    @Field({ nullable: true })
+    Status: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Registries
+//****************************************************************************
+@InputType()
+export class UpdateComponentRegistryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    URI?: string | null;
+
+    @Field({ nullable: true })
+    Type?: string | null;
+
+    @Field({ nullable: true })
+    APIVersion?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Component Registries
+//****************************************************************************
+@ObjectType()
+export class RunComponentRegistryViewResult {
+    @Field(() => [ComponentRegistry_])
+    Results: ComponentRegistry_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ComponentRegistry_)
+export class ComponentRegistryResolver extends ResolverBase {
+    @Query(() => RunComponentRegistryViewResult)
+    async RunComponentRegistryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentRegistryViewResult)
+    async RunComponentRegistryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentRegistryViewResult)
+    async RunComponentRegistryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Component Registries';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => ComponentRegistry_, { nullable: true })
+    async ComponentRegistry(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ComponentRegistry_ | null> {
+        this.CheckUserReadPermissions('MJ: Component Registries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentRegistries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Registries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Component Registries', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [Component_])
+    async MJ_Components_SourceRegistryIDArray(@Root() componentregistry_: ComponentRegistry_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Components', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponents] WHERE [SourceRegistryID]='${componentregistry_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Components', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Components', rows);
+        return result;
+    }
+        
+    @Mutation(() => ComponentRegistry_)
+    async CreateComponentRegistry(
+        @Arg('input', () => CreateComponentRegistryInput) input: CreateComponentRegistryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Component Registries', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ComponentRegistry_)
+    async UpdateComponentRegistry(
+        @Arg('input', () => UpdateComponentRegistryInput) input: UpdateComponentRegistryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Component Registries', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ComponentRegistry_)
+    async DeleteComponentRegistry(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Component Registries', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for AI Agent Note Types
 //****************************************************************************
 @ObjectType({ description: `Defines categories and types for AI agent notes, enabling classification and organization of agent-generated observations, recommendations, and learnings.` })
@@ -1220,6 +1421,162 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Component Dependencies
+//****************************************************************************
+@ObjectType({ description: `Tracks component-to-component dependencies for composition` })
+export class ComponentDependency_ {
+    @Field({description: `Primary key for component dependency`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign key to parent Component that has the dependency`}) 
+    @MaxLength(16)
+    ComponentID: string;
+        
+    @Field({description: `Foreign key to the Component that is depended upon`}) 
+    @MaxLength(16)
+    DependencyComponentID: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(1000)
+    Component: string;
+        
+    @Field() 
+    @MaxLength(1000)
+    DependencyComponent: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Dependencies
+//****************************************************************************
+@InputType()
+export class CreateComponentDependencyInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    DependencyComponentID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Dependencies
+//****************************************************************************
+@InputType()
+export class UpdateComponentDependencyInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    DependencyComponentID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Component Dependencies
+//****************************************************************************
+@ObjectType()
+export class RunComponentDependencyViewResult {
+    @Field(() => [ComponentDependency_])
+    Results: ComponentDependency_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ComponentDependency_)
+export class ComponentDependencyResolver extends ResolverBase {
+    @Query(() => RunComponentDependencyViewResult)
+    async RunComponentDependencyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentDependencyViewResult)
+    async RunComponentDependencyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentDependencyViewResult)
+    async RunComponentDependencyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Component Dependencies';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => ComponentDependency_, { nullable: true })
+    async ComponentDependency(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ComponentDependency_ | null> {
+        this.CheckUserReadPermissions('MJ: Component Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentDependencies] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Component Dependencies', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => ComponentDependency_)
+    async CreateComponentDependency(
+        @Arg('input', () => CreateComponentDependencyInput) input: CreateComponentDependencyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Component Dependencies', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ComponentDependency_)
+    async UpdateComponentDependency(
+        @Arg('input', () => UpdateComponentDependencyInput) input: UpdateComponentDependencyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Component Dependencies', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ComponentDependency_)
+    async DeleteComponentDependency(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Component Dependencies', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Runs
 //****************************************************************************
 @ObjectType({ description: `Tracks individual execution runs of AI agents, including hierarchical sub-agent runs. Provides basic logging, state persistence, and resource tracking for agent executions. Supports pause/resume functionality through state serialization.` })
@@ -1352,6 +1709,13 @@ each time the agent processes a prompt step.`})
         
     @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this agent run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt defaults.`}) 
     EffortLevel?: number;
+        
+    @Field({nullable: true, description: `Optional name for the agent run to help identify and tag runs for easier reference`}) 
+    @MaxLength(510)
+    RunName?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this agent run`}) 
+    Comments?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -1497,6 +1861,12 @@ export class CreateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    RunName: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -1609,6 +1979,12 @@ export class UpdateAIAgentRunInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    RunName?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2419,6 +2795,9 @@ if this limit is exceeded.`})
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_AgentIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
     
+    @Field(() => [AIAgentRelationship_])
+    MJ_AIAgentRelationships_AgentIDArray: AIAgentRelationship_[]; // Link to MJ_AIAgentRelationships
+    
     @Field(() => [AIAgentNote_])
     AIAgentNotes_AgentIDArray: AIAgentNote_[]; // Link to AIAgentNotes
     
@@ -2430,6 +2809,9 @@ if this limit is exceeded.`})
     
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_SubAgentIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
+    
+    @Field(() => [AIAgentRelationship_])
+    MJ_AIAgentRelationships_SubAgentIDArray: AIAgentRelationship_[]; // Link to MJ_AIAgentRelationships
     
     @Field(() => [AIResultCache_])
     AIResultCache_AgentIDArray: AIResultCache_[]; // Link to AIResultCache
@@ -2775,6 +3157,17 @@ export class AIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIAgentRelationship_])
+    async MJ_AIAgentRelationships_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Relationships', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRelationships] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Relationships', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [AIAgentNote_])
     async AIAgentNotes_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
@@ -2816,6 +3209,17 @@ export class AIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentSteps] WHERE [SubAgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Steps', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Steps', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRelationship_])
+    async MJ_AIAgentRelationships_SubAgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Relationships', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRelationships] WHERE [SubAgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Relationships', rows);
         return result;
     }
         
@@ -5546,8 +5950,6 @@ export class AIPromptCategory_ {
     @Field(() => [AIPromptCategory_])
     AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
-    @Field(() => [AIPromptCategory_])
-    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
 }
 
@@ -5659,29 +6061,7 @@ export class AIPromptCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
-        
-    @FieldResolver(() => [AIPromptCategory_])
-    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIPromptCategory_])
-    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', rows);
-        return result;
-    }
-        
+
     @Mutation(() => AIPromptCategory_)
     async CreateAIPromptCategory(
         @Arg('input', () => CreateAIPromptCategoryInput) input: CreateAIPromptCategoryInput,
@@ -8450,9 +8830,6 @@ export class EntityField_ {
     @Field({description: `Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`}) 
     @MaxLength(50)
     Status: string;
-        
-    @Field({nullable: true}) 
-    FieldCodeName?: string;
         
     @Field() 
     @MaxLength(510)
@@ -11847,16 +12224,12 @@ export class CompanyIntegrationRun_ {
     ConfigData?: string;
         
     @Field() 
-    @MaxLength(200)
-    Integration: string;
-        
-    @Field() 
     @MaxLength(100)
     Company: string;
         
     @Field() 
     @MaxLength(200)
-    RunByUser: string;
+    Integration: string;
         
     @Field(() => [CompanyIntegrationRunAPILog_])
     CompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
@@ -16890,9 +17263,6 @@ export class AIModel_ {
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
-    @Field(() => [AIResultCache_])
-    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
-    
     @Field(() => [AIAgentModel_])
     AIAgentModels_ModelIDArray: AIAgentModel_[]; // Link to AIAgentModels
     
@@ -16913,6 +17283,9 @@ export class AIModel_ {
     
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_OverrideModelIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+    @Field(() => [Query_])
+    Queries_EmbeddingModelIDArray: Query_[]; // Link to Queries
     
 }
 
@@ -17110,17 +17483,6 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIResultCache_])
-    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Result Cache', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ContentType_])
     async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Types', userPayload);
@@ -17217,6 +17579,17 @@ export class AIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [OverrideModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [Query_])
+    async Queries_EmbeddingModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Queries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Queries', rows);
         return result;
     }
         
@@ -23625,9 +23998,20 @@ export class Query_ {
     @Field(() => Int, {nullable: true, description: `Maximum number of cached result sets for this query. NULL uses default size limit.`}) 
     CacheMaxSize?: number;
         
+    @Field({nullable: true, description: `Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis`}) 
+    EmbeddingVector?: string;
+        
+    @Field({nullable: true, description: `The AI Model used to generate the embedding vector for this query. Required for vector similarity comparisons.`}) 
+    @MaxLength(16)
+    EmbeddingModelID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    EmbeddingModel?: string;
         
     @Field(() => [QueryField_])
     QueryFields_QueryIDArray: QueryField_[]; // Link to QueryFields
@@ -23701,6 +24085,12 @@ export class CreateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
 }
     
 
@@ -23759,6 +24149,12 @@ export class UpdateQueryInput {
 
     @Field(() => Int, { nullable: true })
     CacheMaxSize?: number | null;
+
+    @Field({ nullable: true })
+    EmbeddingVector?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -32907,8 +33303,6 @@ export class Template_ {
     @Field(() => [AIPrompt_])
     AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [AIPrompt_])
-    AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
     
     @Field(() => [EntityDocument_])
     EntityDocuments_TemplateIDArray: EntityDocument_[]; // Link to EntityDocuments
@@ -33062,28 +33456,6 @@ export class TemplateResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompts', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompts', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', rows);
         return result;
     }
         
@@ -37481,6 +37853,425 @@ export class DashboardUserStateResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Components
+//****************************************************************************
+@ObjectType({ description: `Main catalog of reusable components with versioning and registry support` })
+export class Component_ {
+    @Field({description: `Immutable UUID that remains the same across all systems`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({nullable: true, description: `Hierarchical namespace path (e.g., dashboards/sales for local, @memberjunction/dashboards/financial for external)`}) 
+    Namespace?: string;
+        
+    @Field({description: `Component name within the namespace (e.g., revenue-tracker)`}) 
+    @MaxLength(1000)
+    Name: string;
+        
+    @Field({description: `Semantic version number (e.g., 1.0.0, 1.2.3-beta)`}) 
+    @MaxLength(100)
+    Version: string;
+        
+    @Field(() => Int, {description: `Numeric sequence for sorting versions`}) 
+    VersionSequence: number;
+        
+    @Field({nullable: true, description: `User-friendly display title for the component`}) 
+    @MaxLength(2000)
+    Title?: string;
+        
+    @Field({nullable: true, description: `Detailed description of the component functionality`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other`}) 
+    @MaxLength(510)
+    Type?: string;
+        
+    @Field({nullable: true, description: `Publication status: draft, published, or deprecated`}) 
+    @MaxLength(100)
+    Status?: string;
+        
+    @Field({nullable: true, description: `Name of the component developer or author`}) 
+    @MaxLength(510)
+    DeveloperName?: string;
+        
+    @Field({nullable: true, description: `Contact email for the component developer`}) 
+    @MaxLength(510)
+    DeveloperEmail?: string;
+        
+    @Field({nullable: true, description: `Organization name of the component developer`}) 
+    @MaxLength(510)
+    DeveloperOrganization?: string;
+        
+    @Field({nullable: true, description: `Foreign key to ComponentRegistry - NULL for local components, populated for replicated ones`}) 
+    @MaxLength(16)
+    SourceRegistryID?: string;
+        
+    @Field({nullable: true, description: `Timestamp when the component was replicated from external registry (NULL for local components)`}) 
+    @MaxLength(10)
+    ReplicatedAt?: Date;
+        
+    @Field({nullable: true, description: `Last synchronization timestamp with the source registry`}) 
+    @MaxLength(10)
+    LastSyncedAt?: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({description: `Complete JSON specification object for the component`}) 
+    Specification: string;
+        
+    @Field({nullable: true, description: `Functional requirements describing what the component should accomplish`}) 
+    FunctionalRequirements?: string;
+        
+    @Field({nullable: true, description: `Technical design describing how the component is implemented`}) 
+    TechnicalDesign?: string;
+        
+    @Field({nullable: true, description: `Vector embedding of the functional requirements for similarity search`}) 
+    FunctionalRequirementsVector?: string;
+        
+    @Field({nullable: true, description: `Vector embedding of the technical design for similarity search`}) 
+    TechnicalDesignVector?: string;
+        
+    @Field(() => Boolean, {description: `Indicates if the component has custom properties defined in its specification. Components with custom props cannot be used directly by deterministic containers.`}) 
+    HasCustomProps: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates if the component has custom events defined in its specification. Components with custom events may have limited functionality in generic containers.`}) 
+    HasCustomEvents: boolean;
+        
+    @Field(() => Boolean, {description: `Indicates if the component requires data access (utilities object with md, rv, rq). Used to determine if component needs data context.`}) 
+    RequiresData: boolean;
+        
+    @Field(() => Int, {description: `Number of component dependencies defined in the specification. Used to assess component complexity.`}) 
+    DependencyCount: number;
+        
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the technical design`}) 
+    TechnicalDesignVectorEmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the functional requirements`}) 
+    FunctionalRequirementsVectorEmbeddingModelID?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`}) 
+    HasRequiredCustomProps: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceRegistry?: string;
+        
+    @Field(() => [ComponentDependency_])
+    MJ_ComponentDependencies_DependencyComponentIDArray: ComponentDependency_[]; // Link to MJ_ComponentDependencies
+    
+    @Field(() => [ComponentLibraryLink_])
+    MJ_ComponentLibraryLinks_ComponentIDArray: ComponentLibraryLink_[]; // Link to MJ_ComponentLibraryLinks
+    
+    @Field(() => [ComponentDependency_])
+    MJ_ComponentDependencies_ComponentIDArray: ComponentDependency_[]; // Link to MJ_ComponentDependencies
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Components
+//****************************************************************************
+@InputType()
+export class CreateComponentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Namespace: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field(() => Int, { nullable: true })
+    VersionSequence?: number;
+
+    @Field({ nullable: true })
+    Title: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Type: string | null;
+
+    @Field({ nullable: true })
+    Status: string | null;
+
+    @Field({ nullable: true })
+    DeveloperName: string | null;
+
+    @Field({ nullable: true })
+    DeveloperEmail: string | null;
+
+    @Field({ nullable: true })
+    DeveloperOrganization: string | null;
+
+    @Field({ nullable: true })
+    SourceRegistryID: string | null;
+
+    @Field({ nullable: true })
+    ReplicatedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastSyncedAt: Date | null;
+
+    @Field({ nullable: true })
+    Specification?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVector: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVector: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomProps?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomEvents?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresData?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasRequiredCustomProps?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Components
+//****************************************************************************
+@InputType()
+export class UpdateComponentInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Namespace?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Version?: string;
+
+    @Field(() => Int, { nullable: true })
+    VersionSequence?: number;
+
+    @Field({ nullable: true })
+    Title?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Type?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string | null;
+
+    @Field({ nullable: true })
+    DeveloperName?: string | null;
+
+    @Field({ nullable: true })
+    DeveloperEmail?: string | null;
+
+    @Field({ nullable: true })
+    DeveloperOrganization?: string | null;
+
+    @Field({ nullable: true })
+    SourceRegistryID?: string | null;
+
+    @Field({ nullable: true })
+    ReplicatedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastSyncedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Specification?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign?: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVector?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVector?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomProps?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    HasCustomEvents?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresData?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DependencyCount?: number;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorEmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorEmbeddingModelID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasRequiredCustomProps?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Components
+//****************************************************************************
+@ObjectType()
+export class RunComponentViewResult {
+    @Field(() => [Component_])
+    Results: Component_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Component_)
+export class ComponentResolver extends ResolverBase {
+    @Query(() => RunComponentViewResult)
+    async RunComponentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentViewResult)
+    async RunComponentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentViewResult)
+    async RunComponentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Components';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => Component_, { nullable: true })
+    async Component(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Component_ | null> {
+        this.CheckUserReadPermissions('MJ: Components', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Components', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Components', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [ComponentDependency_])
+    async MJ_ComponentDependencies_DependencyComponentIDArray(@Root() component_: Component_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Component Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentDependencies] WHERE [DependencyComponentID]='${component_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Component Dependencies', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ComponentLibraryLink_])
+    async MJ_ComponentLibraryLinks_ComponentIDArray(@Root() component_: Component_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Component Library Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentLibraryLinks] WHERE [ComponentID]='${component_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Library Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Component Library Links', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ComponentDependency_])
+    async MJ_ComponentDependencies_ComponentIDArray(@Root() component_: Component_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Component Dependencies', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentDependencies] WHERE [ComponentID]='${component_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Dependencies', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Component Dependencies', rows);
+        return result;
+    }
+        
+    @Mutation(() => Component_)
+    async CreateComponent(
+        @Arg('input', () => CreateComponentInput) input: CreateComponentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Components', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Component_)
+    async UpdateComponent(
+        @Arg('input', () => UpdateComponentInput) input: UpdateComponentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Components', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Component_)
+    async DeleteComponent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Components', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Artifact Types
 //****************************************************************************
 @ObjectType({ description: `Defines the types of artifacts that can be created within conversations` })
@@ -38289,6 +39080,255 @@ export class AIAgentPromptResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Component Libraries
+//****************************************************************************
+@ObjectType({ description: `Catalog of third-party JavaScript libraries that components can depend on` })
+export class ComponentLibrary_ {
+    @Field({description: `Primary key for the component library`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `NPM-style package name (e.g., recharts, lodash, @memberjunction/lib-name)`}) 
+    @MaxLength(1000)
+    Name: string;
+        
+    @Field({nullable: true, description: `User-friendly display name for the library`}) 
+    @MaxLength(1000)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `Library version number`}) 
+    @MaxLength(200)
+    Version?: string;
+        
+    @Field({nullable: true, description: `Global variable name when loaded (e.g., _ for lodash, React for react)`}) 
+    @MaxLength(510)
+    GlobalVariable?: string;
+        
+    @Field({nullable: true, description: `Library category: Core, Runtime, UI, Charting, Utility, or Other`}) 
+    @MaxLength(200)
+    Category?: string;
+        
+    @Field({nullable: true, description: `CDN URL for loading the library JavaScript`}) 
+    @MaxLength(2000)
+    CDNUrl?: string;
+        
+    @Field({nullable: true, description: `Optional CDN URL for loading library CSS`}) 
+    @MaxLength(2000)
+    CDNCssUrl?: string;
+        
+    @Field({nullable: true, description: `Description of the library and its capabilities`}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({description: `Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON configuration for library-specific lint rules that are applied during component validation. This field contains structured rules that define how components using this library should be validated, including DOM element requirements, initialization patterns, lifecycle methods, and common error patterns. Example structure: {"initialization": {"constructorName": "Chart", "elementType": "canvas"}, "lifecycle": {"requiredMethods": ["render"], "cleanupMethods": ["destroy"]}}. The linter dynamically applies these rules based on the libraries referenced in a component spec, enabling extensible validation without hardcoding library-specific logic.`}) 
+    LintRules?: string;
+        
+    @Field({nullable: true, description: `JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`}) 
+    Dependencies?: string;
+        
+    @Field(() => [ComponentLibraryLink_])
+    MJ_ComponentLibraryLinks_LibraryIDArray: ComponentLibraryLink_[]; // Link to MJ_ComponentLibraryLinks
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Libraries
+//****************************************************************************
+@InputType()
+export class CreateComponentLibraryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Version: string | null;
+
+    @Field({ nullable: true })
+    GlobalVariable: string | null;
+
+    @Field({ nullable: true })
+    Category: string | null;
+
+    @Field({ nullable: true })
+    CDNUrl: string | null;
+
+    @Field({ nullable: true })
+    CDNCssUrl: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LintRules: string | null;
+
+    @Field({ nullable: true })
+    Dependencies: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Libraries
+//****************************************************************************
+@InputType()
+export class UpdateComponentLibraryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Version?: string | null;
+
+    @Field({ nullable: true })
+    GlobalVariable?: string | null;
+
+    @Field({ nullable: true })
+    Category?: string | null;
+
+    @Field({ nullable: true })
+    CDNUrl?: string | null;
+
+    @Field({ nullable: true })
+    CDNCssUrl?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LintRules?: string | null;
+
+    @Field({ nullable: true })
+    Dependencies?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Component Libraries
+//****************************************************************************
+@ObjectType()
+export class RunComponentLibraryViewResult {
+    @Field(() => [ComponentLibrary_])
+    Results: ComponentLibrary_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ComponentLibrary_)
+export class ComponentLibraryResolver extends ResolverBase {
+    @Query(() => RunComponentLibraryViewResult)
+    async RunComponentLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentLibraryViewResult)
+    async RunComponentLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentLibraryViewResult)
+    async RunComponentLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Component Libraries';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => ComponentLibrary_, { nullable: true })
+    async ComponentLibrary(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ComponentLibrary_ | null> {
+        this.CheckUserReadPermissions('MJ: Component Libraries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Component Libraries', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [ComponentLibraryLink_])
+    async MJ_ComponentLibraryLinks_LibraryIDArray(@Root() componentlibrary_: ComponentLibrary_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Component Library Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentLibraryLinks] WHERE [LibraryID]='${componentlibrary_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Library Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Component Library Links', rows);
+        return result;
+    }
+        
+    @Mutation(() => ComponentLibrary_)
+    async CreateComponentLibrary(
+        @Arg('input', () => CreateComponentLibraryInput) input: CreateComponentLibraryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Component Libraries', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ComponentLibrary_)
+    async UpdateComponentLibrary(
+        @Arg('input', () => UpdateComponentLibraryInput) input: UpdateComponentLibraryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Component Libraries', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ComponentLibrary_)
+    async DeleteComponentLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Component Libraries', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Dashboard User Preferences
 //****************************************************************************
 @ObjectType({ description: `Stores dashboard preferences for users and system defaults. The absence of a record for a dashboard means it is not shown.` })
@@ -38699,6 +39739,338 @@ export class QueryParameterResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Query Parameters', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Relationships
+//****************************************************************************
+@ObjectType({ description: `Tracks relationships between AI agents for sub-agent orchestration` })
+export class AIAgentRelationship_ {
+    @Field({description: `Primary key for AI agent relationships`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign key to parent AIAgent that can invoke the sub-agent`}) 
+    @MaxLength(16)
+    AgentID: string;
+        
+    @Field({description: `Foreign key to sub-agent AIAgent that can be invoked`}) 
+    @MaxLength(16)
+    SubAgentID: string;
+        
+    @Field({description: `Status of the relationship: Pending (awaiting approval), Active (can invoke), or Revoked (no longer allowed)`}) 
+    @MaxLength(100)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SubAgent?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Relationships
+//****************************************************************************
+@InputType()
+export class CreateAIAgentRelationshipInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SubAgentID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Relationships
+//****************************************************************************
+@InputType()
+export class UpdateAIAgentRelationshipInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SubAgentID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Relationships
+//****************************************************************************
+@ObjectType()
+export class RunAIAgentRelationshipViewResult {
+    @Field(() => [AIAgentRelationship_])
+    Results: AIAgentRelationship_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIAgentRelationship_)
+export class AIAgentRelationshipResolver extends ResolverBase {
+    @Query(() => RunAIAgentRelationshipViewResult)
+    async RunAIAgentRelationshipViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRelationshipViewResult)
+    async RunAIAgentRelationshipViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRelationshipViewResult)
+    async RunAIAgentRelationshipDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Relationships';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => AIAgentRelationship_, { nullable: true })
+    async AIAgentRelationship(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRelationship_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Relationships', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRelationships] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: AI Agent Relationships', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => AIAgentRelationship_)
+    async CreateAIAgentRelationship(
+        @Arg('input', () => CreateAIAgentRelationshipInput) input: CreateAIAgentRelationshipInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Relationships', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAgentRelationship_)
+    async UpdateAIAgentRelationship(
+        @Arg('input', () => UpdateAIAgentRelationshipInput) input: UpdateAIAgentRelationshipInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Relationships', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIAgentRelationship_)
+    async DeleteAIAgentRelationship(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Relationships', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Component Library Links
+//****************************************************************************
+@ObjectType({ description: `Links components to their third-party library dependencies` })
+export class ComponentLibraryLink_ {
+    @Field({description: `Primary key for component-library relationship`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign key to Component that depends on the library`}) 
+    @MaxLength(16)
+    ComponentID: string;
+        
+    @Field({description: `Foreign key to ComponentLibrary that the component depends on`}) 
+    @MaxLength(16)
+    LibraryID: string;
+        
+    @Field({nullable: true, description: `Minimum version requirement using semantic versioning (e.g., ^1.0.0, ~2.5.0)`}) 
+    @MaxLength(200)
+    MinVersion?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(1000)
+    Component: string;
+        
+    @Field() 
+    @MaxLength(1000)
+    Library: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Library Links
+//****************************************************************************
+@InputType()
+export class CreateComponentLibraryLinkInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    LibraryID?: string;
+
+    @Field({ nullable: true })
+    MinVersion: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Component Library Links
+//****************************************************************************
+@InputType()
+export class UpdateComponentLibraryLinkInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    LibraryID?: string;
+
+    @Field({ nullable: true })
+    MinVersion?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Component Library Links
+//****************************************************************************
+@ObjectType()
+export class RunComponentLibraryLinkViewResult {
+    @Field(() => [ComponentLibraryLink_])
+    Results: ComponentLibraryLink_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ComponentLibraryLink_)
+export class ComponentLibraryLinkResolver extends ResolverBase {
+    @Query(() => RunComponentLibraryLinkViewResult)
+    async RunComponentLibraryLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentLibraryLinkViewResult)
+    async RunComponentLibraryLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunComponentLibraryLinkViewResult)
+    async RunComponentLibraryLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Component Library Links';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => ComponentLibraryLink_, { nullable: true })
+    async ComponentLibraryLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ComponentLibraryLink_ | null> {
+        this.CheckUserReadPermissions('MJ: Component Library Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwComponentLibraryLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Component Library Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Component Library Links', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => ComponentLibraryLink_)
+    async CreateComponentLibraryLink(
+        @Arg('input', () => CreateComponentLibraryLinkInput) input: CreateComponentLibraryLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Component Library Links', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ComponentLibraryLink_)
+    async UpdateComponentLibraryLink(
+        @Arg('input', () => UpdateComponentLibraryLinkInput) input: UpdateComponentLibraryLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Component Library Links', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ComponentLibraryLink_)
+    async DeleteComponentLibraryLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Component Library Links', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -41273,6 +42645,13 @@ export class AIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Effort level that was actually used during this prompt run execution (1-100, where 1=minimal effort, 100=maximum effort). This is the resolved effort level after applying the precedence hierarchy: runtime override > agent default > prompt default > provider default.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional name for the prompt run to help identify and tag runs for easier reference`}) 
+    @MaxLength(510)
+    RunName?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this prompt run`}) 
+    Comments?: string;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -41554,6 +42933,12 @@ export class CreateAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    RunName: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -41799,6 +43184,12 @@ export class UpdateAIPromptRunInput {
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
 
+    @Field({ nullable: true })
+    RunName?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -41992,6 +43383,16 @@ permanently, Warn means validation failed but execution continues.`})
 detailed information about what validation rules failed.`}) 
     FinalPayloadValidationMessages?: string;
         
+    @Field({nullable: true, description: `Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
+    Comments?: string;
+        
+    @Field(() => [AIAgentRunStep_])
+    MJ_AIAgentRunSteps_ParentIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
+    
 }
 
 //****************************************************************************
@@ -42052,6 +43453,12 @@ export class CreateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMessages: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -42113,6 +43520,12 @@ export class UpdateAIAgentRunStepInput {
 
     @Field({ nullable: true })
     FinalPayloadValidationMessages?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -42176,6 +43589,17 @@ export class AIAgentRunStepResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [AIAgentRunStep_])
+    async MJ_AIAgentRunSteps_ParentIDArray(@Root() aiagentrunstep_: AIAgentRunStep_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [ParentID]='${aiagentrunstep_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
+        return result;
+    }
+        
     @Mutation(() => AIAgentRunStep_)
     async CreateAIAgentRunStep(
         @Arg('input', () => CreateAIAgentRunStepInput) input: CreateAIAgentRunStepInput,

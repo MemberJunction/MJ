@@ -1,57 +1,67 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { CompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Company Integration Runs.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Component Libraries.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-companyintegrationrun-form-details',
+    selector: 'gen-componentlibrary-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationID"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Version"
             Type="textbox"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="RunByUserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="StartedAt"
-            Type="datepicker"
+            FieldName="GlobalVariable"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EndedAt"
-            Type="datepicker"
+            FieldName="Category"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TotalRecords"
-            Type="numerictextbox"
+            FieldName="CDNUrl"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Comments"
+            FieldName="CDNCssUrl"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -79,29 +89,15 @@ import { CompanyIntegrationRunEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ErrorLog"
+            FieldName="LintRules"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ConfigData"
+            FieldName="Dependencies"
             Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Company"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Integration"
-            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -109,12 +105,12 @@ import { CompanyIntegrationRunEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class CompanyIntegrationRunDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: CompanyIntegrationRunEntity;
+export class ComponentLibraryDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ComponentLibraryEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadCompanyIntegrationRunDetailsComponent() {
+export function LoadComponentLibraryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
