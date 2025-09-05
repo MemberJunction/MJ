@@ -16,7 +16,7 @@ import {
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
-import { unwrapComponent, unwrapComponents, unwrapAllComponents } from '../utilities/component-unwrapper';
+import { unwrapLibraryComponent, unwrapLibraryComponents, unwrapAllLibraryComponents } from '../utilities/component-unwrapper';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -250,13 +250,19 @@ export class ComponentCompiler {
       function createComponent(
         React, ReactDOM, 
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
-        libraries, styles, console, components
+        libraries, styles, console, components,
+        unwrapLibraryComponent, unwrapLibraryComponents, unwrapAllLibraryComponents
       ) {
         if (!React)
             console.log('[React-Runtime-JS] React is not defined');
         if (!ReactDOM)
             console.log('[React-Runtime-JS] ReactDOM is not defined');
 
+        // Make unwrap functions available with legacy names for backward compatibility
+        const unwrapComponent = unwrapLibraryComponent;
+        const unwrapComponents = unwrapLibraryComponents;
+        const unwrapAllComponents = unwrapAllLibraryComponents;
+        
         // Code for ${componentName}
         ${componentCode}
         
@@ -720,7 +726,7 @@ export class ComponentCompiler {
         'React', 'ReactDOM',
         'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
         'libraries', 'styles', 'console', 'components',
-        'unwrapComponent', 'unwrapComponents', 'unwrapAllComponents',
+        'unwrapLibraryComponent', 'unwrapLibraryComponents', 'unwrapAllLibraryComponents',
         `${transpiledCode}; return createComponent;`
       );
 
@@ -765,9 +771,9 @@ export class ComponentCompiler {
         });
 
         // Create bound versions of unwrap functions with debug flag
-        const boundUnwrapComponent = (lib: any, name: string) => unwrapComponent(lib, name, this.config.debug);
-        const boundUnwrapComponents = (lib: any, names: string[]) => unwrapComponents(lib, names, this.config.debug);
-        const boundUnwrapAllComponents = (lib: any) => unwrapAllComponents(lib, this.config.debug);
+        const boundUnwrapLibraryComponent = (lib: any, name: string) => unwrapLibraryComponent(lib, name, this.config.debug);
+        const boundUnwrapLibraryComponents = (lib: any, ...names: string[]) => unwrapLibraryComponents(lib, ...names, this.config.debug as any);
+        const boundUnwrapAllLibraryComponents = (lib: any) => unwrapAllLibraryComponents(lib, this.config.debug);
 
         // Execute the factory creator to get the createComponent function
         let createComponentFn;
@@ -787,9 +793,9 @@ export class ComponentCompiler {
             styles,
             console,
             components,
-            boundUnwrapComponent,
-            boundUnwrapComponents,
-            boundUnwrapAllComponents
+            boundUnwrapLibraryComponent,
+            boundUnwrapLibraryComponents,
+            boundUnwrapAllLibraryComponents
           );
         } catch (error: any) {
           console.error('🔴 CRITICAL: Error calling factoryCreator with React hooks!');
@@ -819,9 +825,9 @@ export class ComponentCompiler {
           styles,
           console,
           components,
-          boundUnwrapComponent,
-          boundUnwrapComponents,
-          boundUnwrapAllComponents
+          boundUnwrapLibraryComponent,
+          boundUnwrapLibraryComponents,
+          boundUnwrapAllLibraryComponents
         );
 
         // Return the component directly
