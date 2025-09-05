@@ -729,7 +729,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component "${componentName}" is trying to destructure from window.${propertyName}. If this is a library, it should be added to the component's libraries array in the spec and accessed via its globalVariable name.`,
+                  message: `Component "${componentName}" is trying to access window.${propertyName}. Libraries must be accessed using unwrapComponents, not through the window object. If this library is in your spec, use: const { ... } = unwrapComponents(${propertyName}, [...]); If it's not in your spec, you cannot use it.`,
                   code: path.toString().substring(0, 100)
                 });
               } else {
@@ -994,6 +994,73 @@ export class ComponentLinter {
     },
     
     {
+      name: 'use-unwrap-components',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build a set of library global variables
+        const libraryGlobals = new Set<string>();
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            if (lib.globalVariable) {
+              libraryGlobals.add(lib.globalVariable);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for direct destructuring from library globals
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              const sourceVar = path.node.init.name;
+              
+              // Check if this is destructuring from a library global
+              if (libraryGlobals.has(sourceVar)) {
+                // Extract the destructured component names
+                const componentNames: string[] = [];
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop)) {
+                    if (t.isIdentifier(prop.key)) {
+                      componentNames.push(prop.key.name);
+                    }
+                  }
+                }
+                
+                violations.push({
+                  rule: 'use-unwrap-components',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Direct destructuring from library "${sourceVar}" is not allowed. You MUST use unwrapComponents to access library components. Replace "const { ${componentNames.join(', ')} } = ${sourceVar};" with "const { ${componentNames.join(', ')} } = unwrapComponents(${sourceVar}, [${componentNames.map(n => `'${n}'`).join(', ')}]);"`
+                });
+              }
+            }
+            
+            // Also check for MemberExpression destructuring like const { Button } = antd.Button
+            if (t.isObjectPattern(path.node.id) && t.isMemberExpression(path.node.init)) {
+              const memberExpr = path.node.init;
+              if (t.isIdentifier(memberExpr.object)) {
+                const objName = memberExpr.object.name;
+                if (libraryGlobals.has(objName)) {
+                  violations.push({
+                    rule: 'use-unwrap-components',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Direct destructuring from library member expression is not allowed. Use unwrapComponents to safely access library components. Example: Instead of "const { Something } = ${objName}.Something;", use "const { Something } = unwrapComponents(${objName}, ['Something']);"`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'library-variable-names',
       appliesTo: 'all', 
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1031,7 +1098,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Incorrect library global variable "${sourceVar}". Use the exact globalVariable from the library spec: "${correctGlobal}". Change "const { ... } = ${sourceVar};" to "const { ... } = ${correctGlobal};"`
+                    message: `Incorrect library global variable "${sourceVar}". Use unwrapComponents with the correct global: "const { ... } = unwrapComponents(${correctGlobal}, [...]);"`
                   });
                 }
               }
@@ -3988,7 +4055,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         severity: 'critical',
                         line: openingElement.loc?.start.line || 0,
                         column: openingElement.loc?.start.column || 0,
-                        message: `JSX component "${tagName}" is not defined. This looks like it should be destructured from the ${libraryNames[0]} library. Add: const { ${tagName} } = ${libraryNames[0]}; at the top of your component function.`,
+                        message: `JSX component "${tagName}" is not defined. This looks like it should be from the ${libraryNames[0]} library. Add: const { ${tagName} } = unwrapComponents(${libraryNames[0]}, ['${tagName}']); at the top of your component function.`,
                         code: `<${tagName} ... />`
                       });
                     } else {
@@ -3998,7 +4065,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         severity: 'critical',
                         line: openingElement.loc?.start.line || 0,
                         column: openingElement.loc?.start.column || 0,
-                        message: `JSX component "${tagName}" is not defined. Available libraries: ${libraryNames.join(', ')}. Destructure it from the appropriate library, e.g., const { ${tagName} } = LibraryName;`,
+                        message: `JSX component "${tagName}" is not defined. Available libraries: ${libraryNames.join(', ')}. Use unwrapComponents to access it: const { ${tagName} } = unwrapComponents(LibraryName, ['${tagName}']);`,
                         code: `<${tagName} ... />`
                       });
                     }
@@ -4031,7 +4098,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is not defined. Either define it in your component, add it to dependencies, or check if it should be destructured from a library.`,
+                      message: `JSX component "${tagName}" is not defined. You must either: (1) define it in your component, (2) use a component that's already in the spec's dependencies, or (3) destructure it from a library that's already in the spec's libraries.`,
                       code: `<${tagName} ... />`
                     });
                   }
@@ -4061,42 +4128,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Extract declared queries and entities from dataRequirements
-        const declaredQueries = new Set<string>();
-        const declaredEntities = new Set<string>();
-        
-        if (componentSpec?.dataRequirements) {
-          // Handle queries in different possible locations
-          if (Array.isArray(componentSpec.dataRequirements)) {
-            // If it's an array directly
-            componentSpec.dataRequirements.forEach((req: any) => {
-              if (req.type === 'query' && req.name) {
-                declaredQueries.add(req.name.toLowerCase());
-              }
-              if (req.type === 'entity' && req.name) {
-                declaredEntities.add(req.name.toLowerCase());
-              }
-            });
-          } else if (typeof componentSpec.dataRequirements === 'object') {
-            // If it's an object with queries/entities properties
-            if (componentSpec.dataRequirements.queries) {
-              componentSpec.dataRequirements.queries.forEach((q: any) => {
-                if (q.name) declaredQueries.add(q.name.toLowerCase());
-              });
-            }
-            if (componentSpec.dataRequirements.entities) {
-              componentSpec.dataRequirements.entities.forEach((e: any) => {
-                if (e.name) declaredEntities.add(e.name.toLowerCase());
-              });
-            }
-          }
-        }
+        // NOTE: Entity/Query name validation removed from this rule to avoid duplication
+        // The 'data-requirements-validation' rule handles comprehensive entity/query validation
+        // This rule now focuses on RunQuery/RunView specific issues like SQL injection
         
         traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
             const callee = path.node.callee;
             
-            // Check for RunQuery calls
+            // Check for RunQuery calls - focus on SQL injection detection
             if (t.isMemberExpression(callee) && 
                 t.isIdentifier(callee.property) && 
                 callee.property.name === 'RunQuery') {
@@ -4133,19 +4173,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         message: `RunQuery cannot accept SQL statements. QueryName must be a registered query name, not SQL: "${queryName.substring(0, 50)}..."`,
                         code: value.value.substring(0, 100)
                       });
-                    } else if (declaredQueries.size > 0 && !declaredQueries.has(queryName.toLowerCase())) {
-                      // Only validate if we have declared queries
-                      violations.push({
-                        rule: 'runquery-runview-validation',
-                        severity: 'high',
-                        line: value.loc?.start.line || 0,
-                        column: value.loc?.start.column || 0,
-                        message: `Query "${queryName}" is not declared in dataRequirements.queries. Available queries: ${Array.from(declaredQueries).join(', ')}`,
-                        code: path.toString().substring(0, 100)
-                      });
                     }
                   } else if (t.isIdentifier(value) || t.isTemplateLiteral(value)) {
-                    // Dynamic query name - check if it might be SQL
+                    // Dynamic query name - warn that it shouldn't be SQL
                     violations.push({
                       rule: 'runquery-runview-validation',
                       severity: 'medium',
@@ -4159,49 +4189,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               }
             }
             
-            // Check for RunView calls
-            if (t.isMemberExpression(callee) && 
-                t.isIdentifier(callee.property) && 
-                (callee.property.name === 'RunView' || callee.property.name === 'RunViews')) {
-              
-              const args = path.node.arguments;
-              
-              // Handle both single object and array of objects
-              const checkEntityName = (objExpr: t.ObjectExpression) => {
-                const entityNameProp = objExpr.properties.find(p => 
-                  t.isObjectProperty(p) && 
-                  t.isIdentifier(p.key) && 
-                  p.key.name === 'EntityName'
-                );
-                
-                if (entityNameProp && t.isObjectProperty(entityNameProp) && t.isStringLiteral(entityNameProp.value)) {
-                  const entityName = entityNameProp.value.value;
-                  
-                  if (declaredEntities.size > 0 && !declaredEntities.has(entityName.toLowerCase())) {
-                    violations.push({
-                      rule: 'runquery-runview-validation',
-                      severity: 'high',
-                      line: entityNameProp.value.loc?.start.line || 0,
-                      column: entityNameProp.value.loc?.start.column || 0,
-                      message: `Entity "${entityName}" is not declared in dataRequirements.entities. Available entities: ${Array.from(declaredEntities).join(', ')}`,
-                      code: path.toString().substring(0, 100)
-                    });
-                  }
-                }
-              };
-              
-              if (args.length > 0) {
-                if (t.isObjectExpression(args[0])) {
-                  checkEntityName(args[0]);
-                } else if (t.isArrayExpression(args[0])) {
-                  args[0].elements.forEach(elem => {
-                    if (t.isObjectExpression(elem)) {
-                      checkEntityName(elem);
-                    }
-                  });
-                }
-              }
-            }
+            // RunView validation removed - handled by data-requirements-validation
           }
         });
         
@@ -8314,34 +8302,24 @@ await utilities.rq.RunQuery({
           
         case 'component-props-validation':
           violation.suggestion = {
-            text: 'Components can only accept standard props and props explicitly defined in the component spec. Additional props must be declared in the spec\'s properties array.',
+            text: 'Components can only accept standard props and props explicitly defined in the component spec. The spec is provided by the architect and cannot be modified - your code must match the spec exactly.',
             example: `// ❌ WRONG - Component with undeclared props:
 function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // customers, orders, selectedId are NOT allowed unless defined in spec
+  // ERROR: customers, orders, selectedId are NOT in the spec
+  // The spec defines what props are allowed - you cannot add new ones
 }
 
-// ✅ CORRECT Option 1 - Use only standard props and load data internally:
+// ✅ CORRECT - Use only standard props and props defined in the spec:
 function MyComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load data internally using utilities
+  // If you need data like customers/orders, load it internally using utilities
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
-}
-
-// ✅ CORRECT Option 2 - Define props in component spec:
-// In spec.properties array:
-// [
-//   { name: "customers", type: "array", required: false, description: "Customer list" },
-//   { name: "orders", type: "array", required: false, description: "Order list" },
-//   { name: "selectedId", type: "string", required: false, description: "Selected item ID" }
-// ]
-// Then the component can accept them:
-function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // These props are now allowed because they're defined in the spec
   
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Load customers data internally
         const result = await utilities.rv.RunView({
           EntityName: 'Customers',
           Fields: ['ID', 'Name', 'Status']
@@ -8356,8 +8334,12 @@ function MyComponent({ utilities, styles, components, customers, orders, selecte
     loadData();
   }, []);
   
-  return <div>{/* Use state, not props */}</div>;
-}`
+  return <div>{/* Use state variables, not props */}</div>;
+}
+
+// NOTE: If the spec DOES define additional props (e.g., customers, orders),
+// then you MUST accept and use them. Check the spec's properties array
+// to see what props are required/optional beyond the standard ones.`
           };
           break;
           

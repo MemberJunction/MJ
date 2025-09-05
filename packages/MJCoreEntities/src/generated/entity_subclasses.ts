@@ -9627,6 +9627,17 @@ export const ComponentLibrarySchema = z.object({
         * * Display Name: Dependencies
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`),
+    UsageType: z.union([z.literal('Direct'), z.literal('Dependency'), z.literal('Both')]).describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+        * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -39280,6 +39291,25 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     }
     set Dependencies(value: string | null) {
         this.Set('Dependencies', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+    * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both
+    */
+    get UsageType(): 'Direct' | 'Dependency' | 'Both' {
+        return this.Get('UsageType');
+    }
+    set UsageType(value: 'Direct' | 'Dependency' | 'Both') {
+        this.Set('UsageType', value);
     }
 }
 

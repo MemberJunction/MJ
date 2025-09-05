@@ -476,6 +476,17 @@ export class LibraryLoader {
         continue;
       }
 
+      // Check library status
+      if (library.Status) {
+        if (library.Status === 'Disabled') {
+          console.error(`🚫 ERROR: Library '${library.Name}' is DISABLED and should not be used`);
+          // Continue loading anyway per requirements
+        } else if (library.Status === 'Deprecated') {
+          console.warn(`⚠️ WARNING: Library '${library.Name}' is DEPRECATED. Consider using an alternative.`);
+        }
+        // Active status is fine, no message needed
+      }
+
       if (debug) {
         console.log(`📥 Loading '${library.Name}@${library.Version}'`);
       }
@@ -602,6 +613,17 @@ export class LibraryLoader {
           result.set(library.Name, (window as any)[state.globalVariable]);
         }
         continue;
+      }
+
+      // Check library status
+      if (library.Status) {
+        if (library.Status === 'Disabled') {
+          console.error(`🚫 ERROR: Library '${library.Name}' is DISABLED and should not be used`);
+          // Continue loading anyway per requirements
+        } else if (library.Status === 'Deprecated') {
+          console.warn(`⚠️ WARNING: Library '${library.Name}' is DEPRECATED. Consider using an alternative.`);
+        }
+        // Active status is fine, no message needed
       }
 
       if (debug) {

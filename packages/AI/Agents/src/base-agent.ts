@@ -2691,6 +2691,9 @@ export class BaseAgent {
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
 
+            // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
+            finalPayload = updatedNextStep.newPayload || finalPayload;
+
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
             // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntityExtended)

@@ -16,6 +16,7 @@ import {
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
+import { unwrapComponent, unwrapComponents, unwrapAllComponents } from '../utilities/component-unwrapper';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -98,7 +99,8 @@ export class ComponentCompiler {
       const componentFactory = this.createComponentFactory(
         transpiledCode,
         options.componentName,
-        loadedLibraries
+        loadedLibraries,
+        options
       );
 
       // Build the compiled component
@@ -703,19 +705,22 @@ export class ComponentCompiler {
    * @param transpiledCode - Transpiled JavaScript code
    * @param componentName - Name of the component
    * @param loadedLibraries - Map of loaded libraries
+   * @param options - Compile options containing spec and other metadata
    * @returns Component factory function
    */
   private createComponentFactory(
     transpiledCode: string, 
     componentName: string,
-    loadedLibraries: Map<string, any>
+    loadedLibraries: Map<string, any>,
+    options: CompileOptions
   ): (context: RuntimeContext, styles?: ComponentStyles) => ComponentObject {
     try {
-      // Create the factory function with all React hooks
+      // Create the factory function with all React hooks and utility functions
       const factoryCreator = new Function(
         'React', 'ReactDOM',
         'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
         'libraries', 'styles', 'console', 'components',
+        'unwrapComponent', 'unwrapComponents', 'unwrapAllComponents',
         `${transpiledCode}; return createComponent;`
       );
 
@@ -723,29 +728,80 @@ export class ComponentCompiler {
       return (context: RuntimeContext, styles: any = {}, components: Record<string, any> = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
         
+        // Diagnostic: Check if React is null when creating component
+        if (!React) {
+          console.error('🔴 CRITICAL: React is NULL in createComponentFactory!');
+          console.error('Context provided:', context);
+          console.error('Context keys:', Object.keys(context));
+          throw new Error('React is null in runtime context when creating component factory');
+        }
+        
+        // Additional diagnostic for React hooks
+        if (!React.useState || !React.useEffect) {
+          console.error('🔴 CRITICAL: React hooks are missing!');
+          console.error('React object keys:', React ? Object.keys(React) : 'React is null');
+          console.error('useState:', typeof React?.useState);
+          console.error('useEffect:', typeof React?.useEffect);
+        }
+        
         // Merge loaded libraries with context libraries
+        // IMPORTANT: Only include libraries that are NOT dependency-only
+        // We need to filter based on the libraries array from options
         const mergedLibraries = { ...libraries };
+        
+        // Only add libraries that are explicitly requested in the component
+        // This prevents dependency-only libraries from being accessible
+        const specLibraryNames = new Set(
+          (options.libraries || []).map((lib: any) => lib.globalVariable).filter(Boolean)
+        );
+        
         loadedLibraries.forEach((value, key) => {
-          mergedLibraries[key] = value;
+          // Only add if this library is in the spec (not just a dependency)
+          if (specLibraryNames.has(key)) {
+            mergedLibraries[key] = value;
+          } else if (this.config.debug) {
+            console.log(`⚠️ Filtering out dependency-only library: ${key}`);
+          }
         });
 
+        // Create bound versions of unwrap functions with debug flag
+        const boundUnwrapComponent = (lib: any, name: string) => unwrapComponent(lib, name, this.config.debug);
+        const boundUnwrapComponents = (lib: any, names: string[]) => unwrapComponents(lib, names, this.config.debug);
+        const boundUnwrapAllComponents = (lib: any) => unwrapAllComponents(lib, this.config.debug);
+
         // Execute the factory creator to get the createComponent function
-        const createComponentFn = factoryCreator(
-          React,
-          ReactDOM,
-          React.useState,
-          React.useEffect,
-          React.useCallback,
-          React.useMemo,
-          React.useRef,
-          React.useContext,
-          React.useReducer,
-          React.useLayoutEffect,
-          mergedLibraries,
-          styles,
-          console,
-          components
-        );
+        let createComponentFn;
+        try {
+          createComponentFn = factoryCreator(
+            React,
+            ReactDOM,
+            React.useState,
+            React.useEffect,
+            React.useCallback,
+            React.useMemo,
+            React.useRef,
+            React.useContext,
+            React.useReducer,
+            React.useLayoutEffect,
+            mergedLibraries,
+            styles,
+            console,
+            components,
+            boundUnwrapComponent,
+            boundUnwrapComponents,
+            boundUnwrapAllComponents
+          );
+        } catch (error: any) {
+          console.error('🔴 CRITICAL: Error calling factoryCreator with React hooks!');
+          console.error('Error:', error?.message || error);
+          console.error('React is:', React);
+          console.error('React type:', typeof React);
+          if (React) {
+            console.error('React.useState:', typeof React.useState);
+            console.error('React.useEffect:', typeof React.useEffect);
+          }
+          throw new Error(`Failed to create component factory: ${error?.message || error}`);
+        }
 
         // Call createComponent to get the actual component
         const Component = createComponentFn(
@@ -762,7 +818,10 @@ export class ComponentCompiler {
           mergedLibraries,
           styles,
           console,
-          components
+          components,
+          boundUnwrapComponent,
+          boundUnwrapComponents,
+          boundUnwrapAllComponents
         );
 
         // Return the component directly
