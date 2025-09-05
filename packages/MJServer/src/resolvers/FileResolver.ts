@@ -107,7 +107,7 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     // if the name is changing, rename the target object as well
-    const md = GetReadOnlyProvider(context.providers);
+    const md = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
@@ -135,7 +135,7 @@ export class FileResolver extends FileResolverBase {
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
-    const md = GetReadOnlyProvider(context.providers);
+    const md = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const userInfo = this.GetUserFromPayload(context.userPayload);
 
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);
