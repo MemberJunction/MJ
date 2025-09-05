@@ -1528,6 +1528,16 @@ export class AutotagBaseEngine extends AIEngine {
         return dataDOCX
     }
 
+    /**
+     * 
+     * @param dataBuffer
+     * @returns 
+     */
+    public async parseXLSX(dataBuffer: Buffer): Promise<string> {
+        const dataXLSX = await officeparser.parseOfficeAsync(dataBuffer);
+        return dataXLSX;
+    }
+
     public async parseHTML(data: string): Promise<string> {
         try {
             let $: cheerio.CheerioAPI;
@@ -1561,6 +1571,8 @@ export class AutotagBaseEngine extends AIEngine {
                 return await this.parsePDF(dataBuffer)
             case 'docx':
                 return await this.parseDOCX(dataBuffer)
+            case 'xlsx':
+                return await this.parseXLSX(dataBuffer)
             default:
                 throw new Error('File type not supported');
         }
