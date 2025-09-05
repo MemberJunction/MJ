@@ -117,6 +117,16 @@ export {
   CacheOptions
 } from './utilities/cache-manager';
 
+export {
+  unwrapLibraryComponent,
+  unwrapLibraryComponents,
+  unwrapAllLibraryComponents,
+  // Legacy exports for backward compatibility
+  unwrapComponent,
+  unwrapComponents,
+  unwrapAllComponents
+} from './utilities/component-unwrapper';
+
 // Version information
 export const VERSION = '2.69.1';
 
