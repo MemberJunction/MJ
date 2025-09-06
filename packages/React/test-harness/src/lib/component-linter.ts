@@ -3400,8 +3400,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         // React special props that are automatically provided by React
         const reactSpecialProps = new Set(['children']);
         
-        // Build set of allowed props: standard props + React special props + componentSpec properties
+        // Build set of allowed props: standard props + React special props + componentSpec properties + events
         const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
+        
+        // Track required props separately for validation
+        const requiredProps = new Set<string>();
         
         // Add props from componentSpec.properties if they exist
         // These are the architect-defined props that this component is allowed to accept
@@ -3411,6 +3414,22 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
             if (prop.name) {
               allowedProps.add(prop.name);
               specDefinedProps.push(prop.name);
+              if (prop.required) {
+                requiredProps.add(prop.name);
+              }
+            }
+          }
+        }
+        
+        // Add events from componentSpec.events if they exist
+        // Events are functions passed as props to the component
+        const specDefinedEvents: string[] = [];
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              allowedProps.add(event.name);
+              specDefinedEvents.push(event.name);
+              // Events are typically optional unless explicitly marked required
             }
           }
         }
@@ -3433,22 +3452,39 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
                 
+                // Check for missing required props
+                const missingRequired = Array.from(requiredProps).filter(prop => 
+                  !allProps.includes(prop) && !standardProps.has(prop)
+                );
+                
+                // Report missing required props
+                if (missingRequired.length > 0) {
+                  violations.push({
+                    rule: 'component-props-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component specification.`
+                  });
+                }
+                
                 // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
                   let message: string;
-                  if (specDefinedProps.length > 0) {
+                  if (specDefinedProps.length > 0 || specDefinedEvents.length > 0) {
                     message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                               `This component can only accept: ` +
                               `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
-                              `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
-                              `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                              `Any additional props must be defined in the component spec's properties array.`;
+                              (specDefinedProps.length > 0 ? `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` : '') +
+                              (specDefinedEvents.length > 0 ? `(3) Spec-defined events: ${specDefinedEvents.join(', ')}, ` : '') +
+                              `(4) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `Any additional props must be defined in the component spec's properties or events array.`;
                   } else {
                     message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                               `This component can only accept: ` +
                               `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
                               `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                              `To accept additional props, they must be defined in the component spec's properties array.`;
+                              `To accept additional props, they must be defined in the component spec's properties or events array.`;
                   }
                   
                   violations.push({
@@ -3483,28 +3519,45 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     }
                   }
                   
+                  // Check for missing required props
+                  const missingRequired = Array.from(requiredProps).filter(prop => 
+                    !allProps.includes(prop) && !standardProps.has(prop)
+                  );
+                  
+                  // Report missing required props
+                  if (missingRequired.length > 0) {
+                    violations.push({
+                      rule: 'component-props-validation',
+                      severity: 'critical',
+                      line: init.loc?.start.line || 0,
+                      column: init.loc?.start.column || 0,
+                      message: `Component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component specification.`
+                    });
+                  }
+                  
                   if (invalidProps.length > 0) {
                     let message: string;
-                    if (specDefinedProps.length > 0) {
+                    if (specDefinedProps.length > 0 || specDefinedEvents.length > 0) {
                       message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                                 `This component can only accept: ` +
                                 `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
-                                `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
-                                `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                                `Any additional props must be defined in the component spec's properties array.`;
+                                (specDefinedProps.length > 0 ? `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` : '') +
+                                (specDefinedEvents.length > 0 ? `(3) Spec-defined events: ${specDefinedEvents.join(', ')}, ` : '') +
+                                `(4) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `Any additional props must be defined in the component spec's properties or events array.`;
                     } else {
                       message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                                 `This component can only accept: ` +
                                 `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
                                 `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                                `To accept additional props, they must be defined in the component spec's properties array.`;
+                                `To accept additional props, they must be defined in the component spec's properties or events array.`;
                     }
                     
                     violations.push({
                       rule: 'component-props-validation',
                       severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
+                      line: init.loc?.start.line || 0,
+                      column: init.loc?.start.column || 0,
                       message
                     });
                   }
@@ -6847,6 +6900,275 @@ Correct pattern:
 const [state, setState] = useState(initialValue);`
                 }
               });
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'callbacks-usage-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Define the allowed methods on ComponentCallbacks interface
+        const allowedCallbackMethods = new Set(['OpenEntityRecord', 'RegisterMethod']);
+        
+        // Build list of component's event names from spec
+        const componentEvents = new Set<string>();
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              componentEvents.add(event.name);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check for callbacks.something access
+            if (t.isIdentifier(path.node.object) && path.node.object.name === 'callbacks') {
+              if (t.isIdentifier(path.node.property)) {
+                const methodName = path.node.property.name;
+                
+                // Check if it's trying to access an event
+                if (componentEvents.has(methodName)) {
+                  violations.push({
+                    rule: 'callbacks-usage-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Event "${methodName}" should not be accessed from callbacks. Events are passed as direct props to the component. Use the prop directly: ${methodName}`,
+                    suggestion: {
+                      text: `Events defined in the component spec are passed as direct props, not through callbacks. Access the event directly as a prop.`,
+                      example: `// ❌ WRONG - Accessing event from callbacks
+const { ${methodName} } = callbacks || {};
+callbacks?.${methodName}?.(data);
+
+// ✅ CORRECT - Event is a direct prop
+// In the component props destructuring:
+function MyComponent({ ..., ${methodName} }) {
+  // Use with null checking:
+  if (${methodName}) {
+    ${methodName}(data);
+  }
+}`
+                    }
+                  });
+                } else if (!allowedCallbackMethods.has(methodName)) {
+                  // It's not an allowed callback method
+                  violations.push({
+                    rule: 'callbacks-usage-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid callback method "${methodName}". The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    suggestion: {
+                      text: `The callbacks prop is reserved for specific MemberJunction framework methods. Custom events should be defined in the component spec's events array and passed as props.`,
+                      example: `// Allowed callbacks methods:
+callbacks?.OpenEntityRecord?.(entityName, key);
+callbacks?.RegisterMethod?.(methodName, handler);
+
+// For custom events, define them in the spec and use as props:
+function MyComponent({ onCustomEvent }) {
+  if (onCustomEvent) {
+    onCustomEvent(data);
+  }
+}`
+                    }
+                  });
+                }
+              }
+            }
+          },
+          
+          // Also check for destructuring from callbacks
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) && 
+                path.node.init.name === 'callbacks') {
+              // Check each destructured property
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const methodName = prop.key.name;
+                  
+                  if (componentEvents.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Event "${methodName}" should not be destructured from callbacks. Events are passed as direct props to the component.`,
+                      suggestion: {
+                        text: `Events should be destructured from the component props, not from callbacks.`,
+                        example: `// ❌ WRONG
+const { ${methodName} } = callbacks || {};
+
+// ✅ CORRECT
+function MyComponent({ utilities, styles, callbacks, ${methodName} }) {
+  // ${methodName} is now available as a prop
+}`
+                      }
+                    });
+                  } else if (!allowedCallbackMethods.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Invalid callback method "${methodName}" being destructured. The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Also check for: const { something } = callbacks || {}
+            if (t.isObjectPattern(path.node.id) && 
+                t.isLogicalExpression(path.node.init) && 
+                path.node.init.operator === '||' &&
+                t.isIdentifier(path.node.init.left) && 
+                path.node.init.left.name === 'callbacks') {
+              // Check each destructured property
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const methodName = prop.key.name;
+                  
+                  if (componentEvents.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Event "${methodName}" should not be destructured from callbacks. Events are passed as direct props to the component.`,
+                      suggestion: {
+                        text: `Events should be destructured from the component props, not from callbacks.`,
+                        example: `// ❌ WRONG
+const { ${methodName} } = callbacks || {};
+
+// ✅ CORRECT
+function MyComponent({ utilities, styles, callbacks, ${methodName} }) {
+  // ${methodName} is now available as a prop
+}`
+                      }
+                    });
+                  } else if (!allowedCallbackMethods.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Invalid callback method "${methodName}" being destructured. The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'event-invocation-pattern',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build list of component's event names from spec
+        const componentEvents = new Set<string>();
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              componentEvents.add(event.name);
+            }
+          }
+        }
+        
+        // If no events defined, skip this rule
+        if (componentEvents.size === 0) {
+          return violations;
+        }
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check if calling an event without null checking
+            if (t.isIdentifier(path.node.callee)) {
+              const eventName = path.node.callee.name;
+              if (componentEvents.has(eventName)) {
+                // Check if this call is inside a conditional that checks for the event
+                let hasNullCheck = false;
+                let currentPath: NodePath<t.Node> | null = path.parentPath;
+                
+                // Walk up the tree to see if we're inside an if statement that checks this event
+                while (currentPath && !hasNullCheck) {
+                  if (t.isIfStatement(currentPath.node)) {
+                    const test = currentPath.node.test;
+                    // Check if the test checks for the event (simple cases)
+                    if (t.isIdentifier(test) && test.name === eventName) {
+                      hasNullCheck = true;
+                    } else if (t.isLogicalExpression(test) && test.operator === '&&') {
+                      // Check for patterns like: eventName && ...
+                      if (t.isIdentifier(test.left) && test.left.name === eventName) {
+                        hasNullCheck = true;
+                      }
+                    }
+                  } else if (t.isLogicalExpression(currentPath.node) && currentPath.node.operator === '&&') {
+                    // Check for inline conditional: eventName && eventName()
+                    if (t.isIdentifier(currentPath.node.left) && currentPath.node.left.name === eventName) {
+                      hasNullCheck = true;
+                    }
+                  } else if (t.isConditionalExpression(currentPath.node)) {
+                    // Check for ternary: eventName ? eventName() : null
+                    if (t.isIdentifier(currentPath.node.test) && currentPath.node.test.name === eventName) {
+                      hasNullCheck = true;
+                    }
+                  }
+                  currentPath = currentPath.parentPath || null;
+                }
+                
+                if (!hasNullCheck) {
+                  violations.push({
+                    rule: 'event-invocation-pattern',
+                    severity: 'medium',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Event "${eventName}" is being invoked without null-checking. Events are optional props and should be checked before invocation.`,
+                    suggestion: {
+                      text: `Always check that an event prop exists before invoking it, as events are optional.`,
+                      example: `// ❌ WRONG - No null check
+${eventName}(data);
+
+// ✅ CORRECT - With null check
+if (${eventName}) {
+  ${eventName}(data);
+}
+
+// ✅ ALSO CORRECT - Inline check
+${eventName} && ${eventName}(data);
+
+// ✅ ALSO CORRECT - Optional chaining
+${eventName}?.(data);`
+                    }
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for optional chaining on events (this is good!)
+          OptionalCallExpression(path: NodePath<t.OptionalCallExpression>) {
+            if (t.isIdentifier(path.node.callee)) {
+              const eventName = path.node.callee.name;
+              if (componentEvents.has(eventName)) {
+                // This is actually the correct pattern, no violation
+                return;
+              }
             }
           }
         });
