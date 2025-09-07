@@ -852,13 +852,6 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // Check if this is a Chat step from a sub-agent - we need to bubble it up immediately
-        if (step.step === 'Chat') {
-            // Chat steps should bubble up immediately to the user
-            // Don't continue the flow, just return the chat step as-is
-            return step;
-        }
-        
         // we only want to do special processing for retry or success steps, other ones can use default logic in Base Agent
         if (step.step !== 'Retry' && step.step !== 'Success') {
             // Not a retry or success step, use default processing
