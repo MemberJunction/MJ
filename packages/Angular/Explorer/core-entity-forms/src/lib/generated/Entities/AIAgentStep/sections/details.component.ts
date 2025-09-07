@@ -160,13 +160,6 @@ import { AIAgentStepEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="TerminateOnSubAgentChat"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"

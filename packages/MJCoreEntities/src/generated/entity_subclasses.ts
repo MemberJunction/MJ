@@ -1263,6 +1263,16 @@ if this limit is exceeded.`),
         * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
+    ChatHandlingOption: z.union([z.literal('Success'), z.literal('Failed'), z.literal('Retry')]).nullable().describe(`
+        * * Field Name: ChatHandlingOption
+        * * Display Name: Chat Handling Option
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+        * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -8200,11 +8210,6 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Action Input Mapping
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
-    TerminateOnSubAgentChat: z.boolean().nullable().describe(`
-        * * Field Name: TerminateOnSubAgentChat
-        * * Display Name: Terminate On Sub Agent Chat
-        * * SQL Data Type: bit
-        * * Description: When true, if this Sub-Agent step returns a Chat next step, the flow will terminate and bubble the Chat message to the user. When false, the flow continues normally. Only applies to Sub-Agent step types.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -17330,6 +17335,24 @@ if this limit is exceeded.
     }
     set DefaultPromptEffortLevel(value: number | null) {
         this.Set('DefaultPromptEffortLevel', value);
+    }
+
+    /**
+    * * Field Name: ChatHandlingOption
+    * * Display Name: Chat Handling Option
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+    * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    */
+    get ChatHandlingOption(): 'Success' | 'Failed' | 'Retry' | null {
+        return this.Get('ChatHandlingOption');
+    }
+    set ChatHandlingOption(value: 'Success' | 'Failed' | 'Retry' | null) {
+        this.Set('ChatHandlingOption', value);
     }
 
     /**
@@ -35395,19 +35418,6 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
     set ActionInputMapping(value: string | null) {
         this.Set('ActionInputMapping', value);
-    }
-
-    /**
-    * * Field Name: TerminateOnSubAgentChat
-    * * Display Name: Terminate On Sub Agent Chat
-    * * SQL Data Type: bit
-    * * Description: When true, if this Sub-Agent step returns a Chat next step, the flow will terminate and bubble the Chat message to the user. When false, the flow continues normally. Only applies to Sub-Agent step types.
-    */
-    get TerminateOnSubAgentChat(): boolean | null {
-        return this.Get('TerminateOnSubAgentChat');
-    }
-    set TerminateOnSubAgentChat(value: boolean | null) {
-        this.Set('TerminateOnSubAgentChat', value);
     }
 
     /**

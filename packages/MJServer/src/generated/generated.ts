@@ -2408,14 +2408,14 @@ export class AIConfiguration_ {
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_ConfigurationIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
-    @Field(() => [AIPromptRun_])
-    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
-    
     @Field(() => [AIPromptModel_])
     MJ_AIPromptModels_ConfigurationIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [AIResultCache_])
     AIResultCache_ConfigurationIDArray: AIResultCache_[]; // Link to AIResultCache
+    
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_ConfigurationIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -2560,17 +2560,6 @@ export class AIConfigurationResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptRun_])
-    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIPromptModel_])
     async MJ_AIPromptModels_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -2590,6 +2579,17 @@ export class AIConfigurationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -2768,6 +2768,10 @@ if this limit is exceeded.`})
     @Field(() => Int, {nullable: true, description: `Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`}) 
     DefaultPromptEffortLevel?: number;
         
+    @Field({nullable: true, description: `Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`}) 
+    @MaxLength(60)
+    ChatHandlingOption?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2930,6 +2934,9 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption: string | null;
 }
     
 
@@ -3039,6 +3046,9 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3364,9 +3374,6 @@ export class AIAgentStep_ {
     @Field({nullable: true, description: `JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`}) 
     ActionInputMapping?: string;
         
-    @Field(() => Boolean, {nullable: true, description: `When true, if this Sub-Agent step returns a Chat next step, the flow will terminate and bubble the Chat message to the user. When false, the flow continues normally. Only applies to Sub-Agent step types.`}) 
-    TerminateOnSubAgentChat?: boolean;
-        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -3452,9 +3459,6 @@ export class CreateAIAgentStepInput {
 
     @Field({ nullable: true })
     ActionInputMapping: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    TerminateOnSubAgentChat: boolean | null;
 }
     
 
@@ -3519,9 +3523,6 @@ export class UpdateAIAgentStepInput {
 
     @Field({ nullable: true })
     ActionInputMapping?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    TerminateOnSubAgentChat?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5132,11 +5133,11 @@ export class AIPrompt_ {
     @Field(() => [AIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: AIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [AIAgentPrompt_])
-    MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
-    
     @Field(() => [AIPromptModel_])
     MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
+    
+    @Field(() => [AIAgentPrompt_])
+    MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -5572,17 +5573,6 @@ export class AIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIAgentPrompt_])
-    async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIPromptModel_])
     async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -5591,6 +5581,17 @@ export class AIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentPrompt_])
+    async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
         
