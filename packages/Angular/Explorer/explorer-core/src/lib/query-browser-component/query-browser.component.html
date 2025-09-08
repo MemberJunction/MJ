@@ -1,34 +1,331 @@
-<mj-resource-browser
-    #resourceBrowserQueries
-    ResourceTypeName="Queries"
-    [EnableCategories]="false"
-    [EnableItemEdit]="false"
-    [EnableItemDelete]="false"
-    [CurrentCategoryID]="selectedFolderID"
-    Title="Queries"
-    DisplayMode="Tile"
-    [NewItemOptions]="NewItemOptions"
-    (ResourceSelected)="itemClick($event)"
-    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
-/>
-<!--
-<app-generic-browser-list 
-title="Queries" 
-itemType="query"
-iconName="data" 
-[items]="items"
-addText="Create New Query"
-ItemEntityName="Queries"
-CategoryEntityName="Query Categories"
-(itemClickEvent)="itemClick($event)"
-(AfterAddFolderEvent)="onEvent($event)"
-(AfterAddItemEvent)="onEvent($event)"
-(AfterDeleteItemEvent)="onEvent($event)"
-(AfterDeleteFolderEvent)="onEvent($event)"
-[selectedFolderID]="selectedFolderID"
-[showLoader]="showLoader"
-[disableEditButton]="true"
-(viewModeChangeEvent)="onViewModeChange($event)"
-(BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
-/>
--->
+<div class="query-browser-container">
+  <!-- Header with Title and View Mode Toggles -->
+  <div class="query-browser-header">
+    <div class="header-left">
+      <h2 class="page-title">
+        <i class="fa-solid fa-database"></i>
+        Queries
+      </h2>
+    </div>
+    
+    <div class="header-right">
+      <!-- Search Bar -->
+      <div class="search-container">
+        <i class="fa-solid fa-search search-icon"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Search queries..." 
+          [(ngModel)]="searchText"
+          (ngModelChange)="onSearchChange($event)"
+        />
+      </div>
+
+      <!-- View Mode Toggles -->
+      <div class="view-mode-toggles">
+        <button 
+          class="view-mode-btn"
+          [class.active]="viewMode === 'category'"
+          (click)="setViewMode('category')"
+          title="Category View"
+        >
+          <i class="fa-solid fa-folder-tree"></i>
+        </button>
+        <button 
+          class="view-mode-btn"
+          [class.active]="viewMode === 'list'"
+          (click)="setViewMode('list')"
+          title="List View"
+        >
+          <i class="fa-solid fa-list"></i>
+        </button>
+        <button 
+          class="view-mode-btn"
+          [class.active]="viewMode === 'panel'"
+          (click)="setViewMode('panel')"
+          title="Panel View"
+        >
+          <i class="fa-solid fa-grip"></i>
+        </button>
+      </div>
+
+      <!-- Create New Query Button -->
+      <button class="btn btn-primary create-query-btn" (click)="createNewQuery()">
+        <i class="fa-solid fa-plus"></i>
+        New Query
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Status:</label>
+      <kendo-dropdownlist
+        [data]="statusOptions"
+        [value]="getSelectedStatusOption()"
+        textField="text"
+        valueField="value"
+        (valueChange)="handleStatusChange($event)"
+        [style.width.px]="150"
+      >
+      </kendo-dropdownlist>
+    </div>
+
+    <div class="filter-group">
+      <label>Sort by:</label>
+      <kendo-dropdownlist
+        [data]="sortOptions"
+        [value]="getSelectedSortOption()"
+        textField="text"
+        valueField="value"
+        (valueChange)="handleSortChange($event)"
+        [style.width.px]="200"
+      >
+      </kendo-dropdownlist>
+    </div>
+
+    @if (hasActiveFilters()) {
+      <button class="clear-filters-btn" (click)="clearAllFilters()">
+        <i class="fa-solid fa-times"></i>
+        Clear Filters
+      </button>
+    }
+  </div>
+
+  <!-- Loading Indicator -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      Loading queries...
+    </div>
+  }
+
+  <!-- Content Area -->
+  <div class="query-browser-content" [class.loading]="isLoading">
+    <!-- Category Path Mode -->
+    @if (viewMode === 'category' && !isLoading) {
+      <div class="category-view">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb">
+          <span class="breadcrumb-item" (click)="navigateToRoot()">
+            ./
+          </span>
+          @for (pathItem of currentCategoryPath; track pathItem.id) {
+            <i class="fa-solid fa-chevron-right breadcrumb-separator"></i>
+            <span 
+              class="breadcrumb-item" 
+              [class.current]="pathItem.id === currentCategoryId"
+              (click)="navigateToCategory(pathItem.id)"
+            >
+              {{ pathItem.name }}
+            </span>
+          }
+        </div>
+
+        <!-- Categories (Folders) -->
+        @if (filteredCategories.length > 0) {
+          <div class="category-folders">
+            <h4 class="section-title">
+              <i class="fa-solid fa-folder"></i>
+              Categories
+            </h4>
+            <div class="folder-grid">
+              @for (category of filteredCategories; track category.ID) {
+                <div 
+                  class="folder-item"
+                  (click)="navigateToCategory(category.ID)"
+                  [title]="category.Description || category.Name"
+                >
+                  <i class="fa-solid fa-folder folder-icon"></i>
+                  <span class="folder-name">{{ category.Name }}</span>
+                  @if (category.QueryCount && category.QueryCount > 0) {
+                    <span class="item-count">{{ category.QueryCount }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Queries in Current Category -->
+        @if (filteredQueries.length > 0) {
+          <div class="category-queries">
+            <h4 class="section-title">
+              <i class="fa-solid fa-file-code"></i>
+              Queries
+              <span class="count">({{ filteredQueries.length }})</span>
+            </h4>
+            <div class="query-list">
+              @for (query of filteredQueries; track query.ID) {
+                <div 
+                  class="query-list-item"
+                  (click)="selectQuery(query)"
+                  [class.selected]="selectedQuery?.ID === query.ID"
+                >
+                  <div class="query-icon">
+                    <i class="fa-solid fa-code"></i>
+                  </div>
+                  <div class="query-info">
+                    <div class="query-name">{{ query.Name }}</div>
+                    @if (query.Description) {
+                      <div class="query-description">{{ query.Description }}</div>
+                    }
+                  </div>
+                  <div class="query-status" [class]="'status-' + (query.Status || 'pending').toLowerCase()">
+                    {{ query.Status || 'Pending' }}
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (filteredCategories.length === 0 && filteredQueries.length === 0) {
+          <div class="empty-state">
+            <i class="fa-solid fa-folder-open"></i>
+            <p>No categories or queries found</p>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- List Mode -->
+    @if (viewMode === 'list' && !isLoading) {
+      <div class="list-view">
+        @if (filteredQueries.length > 0) {
+          <div class="list-header">
+            <div class="col-name">Name</div>
+            <div class="col-description">Description</div>
+            <div class="col-category">Category</div>
+            <div class="col-status">Status</div>
+            <div class="col-updated">Last Updated</div>
+            <div class="col-actions">Actions</div>
+          </div>
+          <div class="list-body">
+            @for (query of filteredQueries; track query.ID) {
+              <div 
+                class="list-row"
+                (click)="selectQuery(query)"
+                [class.selected]="selectedQuery?.ID === query.ID"
+              >
+                <div class="col-name">
+                  <i class="fa-solid fa-code"></i>
+                  {{ query.Name }}
+                </div>
+                <div class="col-description">
+                  {{ query.Description || '-' }}
+                </div>
+                <div class="col-category">
+                  {{ getCategoryName(query.CategoryID) || '-' }}
+                </div>
+                <div class="col-status">
+                  <span class="status-badge" [class]="'status-' + (query.Status || 'pending').toLowerCase()">
+                    {{ query.Status || 'Pending' }}
+                  </span>
+                </div>
+                <div class="col-updated">
+                  {{ formatDate(query.__mj_UpdatedAt) }}
+                </div>
+                <div class="col-actions">
+                  <button 
+                    class="action-btn"
+                    (click)="runQuery(query, $event)"
+                    title="Run"
+                  >
+                    <i class="fa-solid fa-play"></i>
+                  </button>
+                  <button 
+                    class="action-btn danger"
+                    (click)="deleteQuery(query, $event)"
+                    title="Delete"
+                  >
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-database"></i>
+            <p>No queries found</p>
+            @if (searchText || selectedStatus !== 'all') {
+              <p class="empty-hint">Try adjusting your filters</p>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Panel Mode -->
+    @if (viewMode === 'panel' && !isLoading) {
+      <div class="panel-view">
+        @if (filteredQueries.length > 0) {
+          <div class="panel-grid">
+            @for (query of filteredQueries; track query.ID) {
+              <div 
+                class="query-panel"
+                (click)="selectQuery(query)"
+                [class.selected]="selectedQuery?.ID === query.ID"
+              >
+                <div class="panel-header">
+                  <div class="panel-title">
+                    <i class="fa-solid fa-code"></i>
+                    {{ query.Name }}
+                  </div>
+                  <span class="status-badge" [class]="'status-' + (query.Status || 'pending').toLowerCase()">
+                    {{ query.Status || 'Pending' }}
+                  </span>
+                </div>
+                
+                @if (query.Description) {
+                  <div class="panel-description">
+                    {{ query.Description }}
+                  </div>
+                }
+                
+                <div class="panel-sql-preview">
+                  <div class="sql-label">SQL Preview:</div>
+                  <pre class="sql-code">{{ getQueryPreview(query.SQL) }}</pre>
+                </div>
+                
+                <div class="panel-footer">
+                  <div class="panel-meta">
+                    @if (query.CategoryID) {
+                      <span class="meta-item">
+                        <i class="fa-solid fa-folder"></i>
+                        {{ getCategoryName(query.CategoryID) }}
+                      </span>
+                    }
+                    <span class="meta-item">
+                      <i class="fa-solid fa-clock"></i>
+                      {{ formatDate(query.__mj_UpdatedAt) }}
+                    </span>
+                  </div>
+                  <div class="panel-actions">
+                    <button 
+                      class="action-btn"
+                      (click)="runQuery(query, $event)"
+                      title="Run"
+                    >
+                      <i class="fa-solid fa-play"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-grip"></i>
+            <p>No queries to display</p>
+            @if (searchText || selectedStatus !== 'all') {
+              <p class="empty-hint">Try adjusting your filters</p>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

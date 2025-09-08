@@ -445,7 +445,9 @@ type BaseSkipRequest = {
   /** API key for the calling server */
   callingServerAPIKey: string,
   /** Access token for the calling server */
-  callingServerAccessToken: string
+  callingServerAccessToken: string,
+  /** Email of the user making the request */
+  userEmail: string
 }
 /**
  * Resolver for Skip AI interactions
@@ -1054,6 +1056,7 @@ cycle.`);
       queries,
       notes,
       noteTypes,
+      userEmail: contextUser.Email,
       requests, 
       accessToken,
       organizationID: skipConfigInfo.orgID,

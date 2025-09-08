@@ -729,7 +729,7 @@ export class ComponentLinter {
                   severity: 'critical',
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
-                  message: `Component "${componentName}" is trying to destructure from window.${propertyName}. If this is a library, it should be added to the component's libraries array in the spec and accessed via its globalVariable name.`,
+                  message: `Component "${componentName}" is trying to access window.${propertyName}. Libraries must be accessed using unwrapComponents, not through the window object. If this library is in your spec, use: const { ... } = unwrapComponents(${propertyName}, [...]); If it's not in your spec, you cannot use it.`,
                   code: path.toString().substring(0, 100)
                 });
               } else {
@@ -994,6 +994,73 @@ export class ComponentLinter {
     },
     
     {
+      name: 'use-unwrap-components',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build a set of library global variables
+        const libraryGlobals = new Set<string>();
+        if (componentSpec?.libraries) {
+          for (const lib of componentSpec.libraries) {
+            if (lib.globalVariable) {
+              libraryGlobals.add(lib.globalVariable);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            // Check for direct destructuring from library globals
+            if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
+              const sourceVar = path.node.init.name;
+              
+              // Check if this is destructuring from a library global
+              if (libraryGlobals.has(sourceVar)) {
+                // Extract the destructured component names
+                const componentNames: string[] = [];
+                for (const prop of path.node.id.properties) {
+                  if (t.isObjectProperty(prop)) {
+                    if (t.isIdentifier(prop.key)) {
+                      componentNames.push(prop.key.name);
+                    }
+                  }
+                }
+                
+                violations.push({
+                  rule: 'use-unwrap-components',
+                  severity: 'critical',
+                  line: path.node.loc?.start.line || 0,
+                  column: path.node.loc?.start.column || 0,
+                  message: `Direct destructuring from library "${sourceVar}" is not allowed. You MUST use unwrapComponents to access library components. Replace "const { ${componentNames.join(', ')} } = ${sourceVar};" with "const { ${componentNames.join(', ')} } = unwrapComponents(${sourceVar}, [${componentNames.map(n => `'${n}'`).join(', ')}]);"`
+                });
+              }
+            }
+            
+            // Also check for MemberExpression destructuring like const { Button } = antd.Button
+            if (t.isObjectPattern(path.node.id) && t.isMemberExpression(path.node.init)) {
+              const memberExpr = path.node.init;
+              if (t.isIdentifier(memberExpr.object)) {
+                const objName = memberExpr.object.name;
+                if (libraryGlobals.has(objName)) {
+                  violations.push({
+                    rule: 'use-unwrap-components',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Direct destructuring from library member expression is not allowed. Use unwrapComponents to safely access library components. Example: Instead of "const { Something } = ${objName}.Something;", use "const { Something } = unwrapComponents(${objName}, ['Something']);"`
+                  });
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+    
+    {
       name: 'library-variable-names',
       appliesTo: 'all', 
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
@@ -1031,7 +1098,7 @@ export class ComponentLinter {
                     severity: 'critical',
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
-                    message: `Incorrect library global variable "${sourceVar}". Use the exact globalVariable from the library spec: "${correctGlobal}". Change "const { ... } = ${sourceVar};" to "const { ... } = ${correctGlobal};"`
+                    message: `Incorrect library global variable "${sourceVar}". Use unwrapComponents with the correct global: "const { ... } = unwrapComponents(${correctGlobal}, [...]);"`
                   });
                 }
               }
@@ -3228,6 +3295,100 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         return violations;
       }
     },
+
+    {
+      name: 'string-replace-all-occurrences',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Template patterns that are HIGH severity (likely to have multiple occurrences)
+        const templatePatterns = [
+          { pattern: /\{\{[^}]+\}\}/, example: '{{field}}', desc: 'double curly braces' },
+          { pattern: /\{[^}]+\}/, example: '{field}', desc: 'single curly braces' },
+          { pattern: /<<[^>]+>>/, example: '<<field>>', desc: 'double angle brackets' },
+          { pattern: /<[^>]+>/, example: '<field>', desc: 'single angle brackets' }
+        ];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+            
+            // Check if it's a .replace() method call
+            if (t.isMemberExpression(callee) && 
+                t.isIdentifier(callee.property) && 
+                callee.property.name === 'replace') {
+              
+              const args = path.node.arguments;
+              if (args.length >= 2) {
+                const [searchArg, replaceArg] = args;
+                
+                // Handle string literal search patterns
+                if (t.isStringLiteral(searchArg)) {
+                  const searchValue = searchArg.value;
+                  
+                  // Check if it matches any template pattern
+                  let matchedPattern = null;
+                  for (const tp of templatePatterns) {
+                    if (tp.pattern.test(searchValue)) {
+                      matchedPattern = tp;
+                      break;
+                    }
+                  }
+                  
+                  if (matchedPattern) {
+                    // HIGH severity for template patterns
+                    violations.push({
+                      rule: 'string-replace-all-occurrences',
+                      severity: 'high',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Using replace() with ${matchedPattern.desc} template '${searchValue}' only replaces the first occurrence. This will cause bugs if the template appears multiple times.`,
+                      suggestion: {
+                        text: `Use .replaceAll('${searchValue}', ...) to replace all occurrences`,
+                        example: `str.replaceAll('${searchValue}', value)`
+                      }
+                    });
+                  } else {
+                    // LOW severity for general replace() usage
+                    violations.push({
+                      rule: 'string-replace-all-occurrences',
+                      severity: 'low',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Note: replace() only replaces the first occurrence of '${searchValue}'. If you need to replace all occurrences, use replaceAll() or a global regex.`,
+                      suggestion: {
+                        text: `Consider if you need replaceAll() instead`,
+                        example: `str.replaceAll('${searchValue}', value) or str.replace(/${searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/g, value)`
+                      }
+                    });
+                  }
+                } 
+                // Handle regex patterns - only warn if not global
+                else if (t.isRegExpLiteral(searchArg)) {
+                  const flags = searchArg.flags || '';
+                  if (!flags.includes('g')) {
+                    violations.push({
+                      rule: 'string-replace-all-occurrences',
+                      severity: 'low',
+                      line: path.node.loc?.start.line || 0,
+                      column: path.node.loc?.start.column || 0,
+                      message: `Regex pattern without 'g' flag only replaces first match. Add 'g' flag for global replacement.`,
+                      suggestion: {
+                        text: `Add 'g' flag to replace all matches`,
+                        example: `str.replace(/${searchArg.pattern}/${flags}g, value)`
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
     
     {
       name: 'component-props-validation',
@@ -3239,8 +3400,11 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         // React special props that are automatically provided by React
         const reactSpecialProps = new Set(['children']);
         
-        // Build set of allowed props: standard props + React special props + componentSpec properties
+        // Build set of allowed props: standard props + React special props + componentSpec properties + events
         const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
+        
+        // Track required props separately for validation
+        const requiredProps = new Set<string>();
         
         // Add props from componentSpec.properties if they exist
         // These are the architect-defined props that this component is allowed to accept
@@ -3250,6 +3414,22 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
             if (prop.name) {
               allowedProps.add(prop.name);
               specDefinedProps.push(prop.name);
+              if (prop.required) {
+                requiredProps.add(prop.name);
+              }
+            }
+          }
+        }
+        
+        // Add events from componentSpec.events if they exist
+        // Events are functions passed as props to the component
+        const specDefinedEvents: string[] = [];
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              allowedProps.add(event.name);
+              specDefinedEvents.push(event.name);
+              // Events are typically optional unless explicitly marked required
             }
           }
         }
@@ -3272,22 +3452,39 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                   }
                 }
                 
+                // Check for missing required props
+                const missingRequired = Array.from(requiredProps).filter(prop => 
+                  !allProps.includes(prop) && !standardProps.has(prop)
+                );
+                
+                // Report missing required props
+                if (missingRequired.length > 0) {
+                  violations.push({
+                    rule: 'component-props-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component specification.`
+                  });
+                }
+                
                 // Only report if there are non-allowed props
                 if (invalidProps.length > 0) {
                   let message: string;
-                  if (specDefinedProps.length > 0) {
+                  if (specDefinedProps.length > 0 || specDefinedEvents.length > 0) {
                     message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                               `This component can only accept: ` +
                               `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
-                              `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
-                              `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                              `Any additional props must be defined in the component spec's properties array.`;
+                              (specDefinedProps.length > 0 ? `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` : '') +
+                              (specDefinedEvents.length > 0 ? `(3) Spec-defined events: ${specDefinedEvents.join(', ')}, ` : '') +
+                              `(4) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                              `Any additional props must be defined in the component spec's properties or events array.`;
                   } else {
                     message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                               `This component can only accept: ` +
                               `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
                               `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                              `To accept additional props, they must be defined in the component spec's properties array.`;
+                              `To accept additional props, they must be defined in the component spec's properties or events array.`;
                   }
                   
                   violations.push({
@@ -3322,28 +3519,45 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     }
                   }
                   
+                  // Check for missing required props
+                  const missingRequired = Array.from(requiredProps).filter(prop => 
+                    !allProps.includes(prop) && !standardProps.has(prop)
+                  );
+                  
+                  // Report missing required props
+                  if (missingRequired.length > 0) {
+                    violations.push({
+                      rule: 'component-props-validation',
+                      severity: 'critical',
+                      line: init.loc?.start.line || 0,
+                      column: init.loc?.start.column || 0,
+                      message: `Component "${componentName}" is missing required props: ${missingRequired.join(', ')}. These props are marked as required in the component specification.`
+                    });
+                  }
+                  
                   if (invalidProps.length > 0) {
                     let message: string;
-                    if (specDefinedProps.length > 0) {
+                    if (specDefinedProps.length > 0 || specDefinedEvents.length > 0) {
                       message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                                 `This component can only accept: ` +
                                 `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
-                                `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` +
-                                `(3) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                                `Any additional props must be defined in the component spec's properties array.`;
+                                (specDefinedProps.length > 0 ? `(2) Spec-defined props: ${specDefinedProps.join(', ')}, ` : '') +
+                                (specDefinedEvents.length > 0 ? `(3) Spec-defined events: ${specDefinedEvents.join(', ')}, ` : '') +
+                                `(4) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
+                                `Any additional props must be defined in the component spec's properties or events array.`;
                     } else {
                       message = `Component "${componentName}" accepts undeclared props: ${invalidProps.join(', ')}. ` +
                                 `This component can only accept: ` +
                                 `(1) Standard props: ${Array.from(standardProps).join(', ')}, ` +
                                 `(2) React props: ${Array.from(reactSpecialProps).join(', ')}. ` +
-                                `To accept additional props, they must be defined in the component spec's properties array.`;
+                                `To accept additional props, they must be defined in the component spec's properties or events array.`;
                     }
                     
                     violations.push({
                       rule: 'component-props-validation',
                       severity: 'critical',
-                      line: path.node.loc?.start.line || 0,
-                      column: path.node.loc?.start.column || 0,
+                      line: init.loc?.start.line || 0,
+                      column: init.loc?.start.column || 0,
                       message
                     });
                   }
@@ -3988,7 +4202,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         severity: 'critical',
                         line: openingElement.loc?.start.line || 0,
                         column: openingElement.loc?.start.column || 0,
-                        message: `JSX component "${tagName}" is not defined. This looks like it should be destructured from the ${libraryNames[0]} library. Add: const { ${tagName} } = ${libraryNames[0]}; at the top of your component function.`,
+                        message: `JSX component "${tagName}" is not defined. This looks like it should be from the ${libraryNames[0]} library. Add: const { ${tagName} } = unwrapComponents(${libraryNames[0]}, ['${tagName}']); at the top of your component function.`,
                         code: `<${tagName} ... />`
                       });
                     } else {
@@ -3998,7 +4212,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         severity: 'critical',
                         line: openingElement.loc?.start.line || 0,
                         column: openingElement.loc?.start.column || 0,
-                        message: `JSX component "${tagName}" is not defined. Available libraries: ${libraryNames.join(', ')}. Destructure it from the appropriate library, e.g., const { ${tagName} } = LibraryName;`,
+                        message: `JSX component "${tagName}" is not defined. Available libraries: ${libraryNames.join(', ')}. Use unwrapComponents to access it: const { ${tagName} } = unwrapComponents(LibraryName, ['${tagName}']);`,
                         code: `<${tagName} ... />`
                       });
                     }
@@ -4031,7 +4245,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                       severity: 'high',
                       line: openingElement.loc?.start.line || 0,
                       column: openingElement.loc?.start.column || 0,
-                      message: `JSX component "${tagName}" is not defined. Either define it in your component, add it to dependencies, or check if it should be destructured from a library.`,
+                      message: `JSX component "${tagName}" is not defined. You must either: (1) define it in your component, (2) use a component that's already in the spec's dependencies, or (3) destructure it from a library that's already in the spec's libraries.`,
                       code: `<${tagName} ... />`
                     });
                   }
@@ -4061,42 +4275,15 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
       test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
         const violations: Violation[] = [];
         
-        // Extract declared queries and entities from dataRequirements
-        const declaredQueries = new Set<string>();
-        const declaredEntities = new Set<string>();
-        
-        if (componentSpec?.dataRequirements) {
-          // Handle queries in different possible locations
-          if (Array.isArray(componentSpec.dataRequirements)) {
-            // If it's an array directly
-            componentSpec.dataRequirements.forEach((req: any) => {
-              if (req.type === 'query' && req.name) {
-                declaredQueries.add(req.name.toLowerCase());
-              }
-              if (req.type === 'entity' && req.name) {
-                declaredEntities.add(req.name.toLowerCase());
-              }
-            });
-          } else if (typeof componentSpec.dataRequirements === 'object') {
-            // If it's an object with queries/entities properties
-            if (componentSpec.dataRequirements.queries) {
-              componentSpec.dataRequirements.queries.forEach((q: any) => {
-                if (q.name) declaredQueries.add(q.name.toLowerCase());
-              });
-            }
-            if (componentSpec.dataRequirements.entities) {
-              componentSpec.dataRequirements.entities.forEach((e: any) => {
-                if (e.name) declaredEntities.add(e.name.toLowerCase());
-              });
-            }
-          }
-        }
+        // NOTE: Entity/Query name validation removed from this rule to avoid duplication
+        // The 'data-requirements-validation' rule handles comprehensive entity/query validation
+        // This rule now focuses on RunQuery/RunView specific issues like SQL injection
         
         traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
             const callee = path.node.callee;
             
-            // Check for RunQuery calls
+            // Check for RunQuery calls - focus on SQL injection detection
             if (t.isMemberExpression(callee) && 
                 t.isIdentifier(callee.property) && 
                 callee.property.name === 'RunQuery') {
@@ -4133,19 +4320,9 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         message: `RunQuery cannot accept SQL statements. QueryName must be a registered query name, not SQL: "${queryName.substring(0, 50)}..."`,
                         code: value.value.substring(0, 100)
                       });
-                    } else if (declaredQueries.size > 0 && !declaredQueries.has(queryName.toLowerCase())) {
-                      // Only validate if we have declared queries
-                      violations.push({
-                        rule: 'runquery-runview-validation',
-                        severity: 'high',
-                        line: value.loc?.start.line || 0,
-                        column: value.loc?.start.column || 0,
-                        message: `Query "${queryName}" is not declared in dataRequirements.queries. Available queries: ${Array.from(declaredQueries).join(', ')}`,
-                        code: path.toString().substring(0, 100)
-                      });
                     }
                   } else if (t.isIdentifier(value) || t.isTemplateLiteral(value)) {
-                    // Dynamic query name - check if it might be SQL
+                    // Dynamic query name - warn that it shouldn't be SQL
                     violations.push({
                       rule: 'runquery-runview-validation',
                       severity: 'medium',
@@ -4159,49 +4336,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
               }
             }
             
-            // Check for RunView calls
-            if (t.isMemberExpression(callee) && 
-                t.isIdentifier(callee.property) && 
-                (callee.property.name === 'RunView' || callee.property.name === 'RunViews')) {
-              
-              const args = path.node.arguments;
-              
-              // Handle both single object and array of objects
-              const checkEntityName = (objExpr: t.ObjectExpression) => {
-                const entityNameProp = objExpr.properties.find(p => 
-                  t.isObjectProperty(p) && 
-                  t.isIdentifier(p.key) && 
-                  p.key.name === 'EntityName'
-                );
-                
-                if (entityNameProp && t.isObjectProperty(entityNameProp) && t.isStringLiteral(entityNameProp.value)) {
-                  const entityName = entityNameProp.value.value;
-                  
-                  if (declaredEntities.size > 0 && !declaredEntities.has(entityName.toLowerCase())) {
-                    violations.push({
-                      rule: 'runquery-runview-validation',
-                      severity: 'high',
-                      line: entityNameProp.value.loc?.start.line || 0,
-                      column: entityNameProp.value.loc?.start.column || 0,
-                      message: `Entity "${entityName}" is not declared in dataRequirements.entities. Available entities: ${Array.from(declaredEntities).join(', ')}`,
-                      code: path.toString().substring(0, 100)
-                    });
-                  }
-                }
-              };
-              
-              if (args.length > 0) {
-                if (t.isObjectExpression(args[0])) {
-                  checkEntityName(args[0]);
-                } else if (t.isArrayExpression(args[0])) {
-                  args[0].elements.forEach(elem => {
-                    if (t.isObjectExpression(elem)) {
-                      checkEntityName(elem);
-                    }
-                  });
-                }
-              }
-            }
+            // RunView validation removed - handled by data-requirements-validation
           }
         });
         
@@ -6771,6 +6906,275 @@ const [state, setState] = useState(initialValue);`
         
         return violations;
       }
+    },
+
+    {
+      name: 'callbacks-usage-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Define the allowed methods on ComponentCallbacks interface
+        const allowedCallbackMethods = new Set(['OpenEntityRecord', 'RegisterMethod']);
+        
+        // Build list of component's event names from spec
+        const componentEvents = new Set<string>();
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              componentEvents.add(event.name);
+            }
+          }
+        }
+        
+        traverse(ast, {
+          MemberExpression(path: NodePath<t.MemberExpression>) {
+            // Check for callbacks.something access
+            if (t.isIdentifier(path.node.object) && path.node.object.name === 'callbacks') {
+              if (t.isIdentifier(path.node.property)) {
+                const methodName = path.node.property.name;
+                
+                // Check if it's trying to access an event
+                if (componentEvents.has(methodName)) {
+                  violations.push({
+                    rule: 'callbacks-usage-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Event "${methodName}" should not be accessed from callbacks. Events are passed as direct props to the component. Use the prop directly: ${methodName}`,
+                    suggestion: {
+                      text: `Events defined in the component spec are passed as direct props, not through callbacks. Access the event directly as a prop.`,
+                      example: `// ❌ WRONG - Accessing event from callbacks
+const { ${methodName} } = callbacks || {};
+callbacks?.${methodName}?.(data);
+
+// ✅ CORRECT - Event is a direct prop
+// In the component props destructuring:
+function MyComponent({ ..., ${methodName} }) {
+  // Use with null checking:
+  if (${methodName}) {
+    ${methodName}(data);
+  }
+}`
+                    }
+                  });
+                } else if (!allowedCallbackMethods.has(methodName)) {
+                  // It's not an allowed callback method
+                  violations.push({
+                    rule: 'callbacks-usage-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Invalid callback method "${methodName}". The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    suggestion: {
+                      text: `The callbacks prop is reserved for specific MemberJunction framework methods. Custom events should be defined in the component spec's events array and passed as props.`,
+                      example: `// Allowed callbacks methods:
+callbacks?.OpenEntityRecord?.(entityName, key);
+callbacks?.RegisterMethod?.(methodName, handler);
+
+// For custom events, define them in the spec and use as props:
+function MyComponent({ onCustomEvent }) {
+  if (onCustomEvent) {
+    onCustomEvent(data);
+  }
+}`
+                    }
+                  });
+                }
+              }
+            }
+          },
+          
+          // Also check for destructuring from callbacks
+          VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+            if (t.isObjectPattern(path.node.id) && 
+                t.isIdentifier(path.node.init) && 
+                path.node.init.name === 'callbacks') {
+              // Check each destructured property
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const methodName = prop.key.name;
+                  
+                  if (componentEvents.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Event "${methodName}" should not be destructured from callbacks. Events are passed as direct props to the component.`,
+                      suggestion: {
+                        text: `Events should be destructured from the component props, not from callbacks.`,
+                        example: `// ❌ WRONG
+const { ${methodName} } = callbacks || {};
+
+// ✅ CORRECT
+function MyComponent({ utilities, styles, callbacks, ${methodName} }) {
+  // ${methodName} is now available as a prop
+}`
+                      }
+                    });
+                  } else if (!allowedCallbackMethods.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Invalid callback method "${methodName}" being destructured. The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    });
+                  }
+                }
+              }
+            }
+            
+            // Also check for: const { something } = callbacks || {}
+            if (t.isObjectPattern(path.node.id) && 
+                t.isLogicalExpression(path.node.init) && 
+                path.node.init.operator === '||' &&
+                t.isIdentifier(path.node.init.left) && 
+                path.node.init.left.name === 'callbacks') {
+              // Check each destructured property
+              for (const prop of path.node.id.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  const methodName = prop.key.name;
+                  
+                  if (componentEvents.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Event "${methodName}" should not be destructured from callbacks. Events are passed as direct props to the component.`,
+                      suggestion: {
+                        text: `Events should be destructured from the component props, not from callbacks.`,
+                        example: `// ❌ WRONG
+const { ${methodName} } = callbacks || {};
+
+// ✅ CORRECT
+function MyComponent({ utilities, styles, callbacks, ${methodName} }) {
+  // ${methodName} is now available as a prop
+}`
+                      }
+                    });
+                  } else if (!allowedCallbackMethods.has(methodName)) {
+                    violations.push({
+                      rule: 'callbacks-usage-validation',
+                      severity: 'critical',
+                      line: prop.loc?.start.line || 0,
+                      column: prop.loc?.start.column || 0,
+                      message: `Invalid callback method "${methodName}" being destructured. The callbacks prop only supports: ${Array.from(allowedCallbackMethods).join(', ')}`,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'event-invocation-pattern',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        // Build list of component's event names from spec
+        const componentEvents = new Set<string>();
+        if (componentSpec?.events) {
+          for (const event of componentSpec.events) {
+            if (event.name) {
+              componentEvents.add(event.name);
+            }
+          }
+        }
+        
+        // If no events defined, skip this rule
+        if (componentEvents.size === 0) {
+          return violations;
+        }
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check if calling an event without null checking
+            if (t.isIdentifier(path.node.callee)) {
+              const eventName = path.node.callee.name;
+              if (componentEvents.has(eventName)) {
+                // Check if this call is inside a conditional that checks for the event
+                let hasNullCheck = false;
+                let currentPath: NodePath<t.Node> | null = path.parentPath;
+                
+                // Walk up the tree to see if we're inside an if statement that checks this event
+                while (currentPath && !hasNullCheck) {
+                  if (t.isIfStatement(currentPath.node)) {
+                    const test = currentPath.node.test;
+                    // Check if the test checks for the event (simple cases)
+                    if (t.isIdentifier(test) && test.name === eventName) {
+                      hasNullCheck = true;
+                    } else if (t.isLogicalExpression(test) && test.operator === '&&') {
+                      // Check for patterns like: eventName && ...
+                      if (t.isIdentifier(test.left) && test.left.name === eventName) {
+                        hasNullCheck = true;
+                      }
+                    }
+                  } else if (t.isLogicalExpression(currentPath.node) && currentPath.node.operator === '&&') {
+                    // Check for inline conditional: eventName && eventName()
+                    if (t.isIdentifier(currentPath.node.left) && currentPath.node.left.name === eventName) {
+                      hasNullCheck = true;
+                    }
+                  } else if (t.isConditionalExpression(currentPath.node)) {
+                    // Check for ternary: eventName ? eventName() : null
+                    if (t.isIdentifier(currentPath.node.test) && currentPath.node.test.name === eventName) {
+                      hasNullCheck = true;
+                    }
+                  }
+                  currentPath = currentPath.parentPath || null;
+                }
+                
+                if (!hasNullCheck) {
+                  violations.push({
+                    rule: 'event-invocation-pattern',
+                    severity: 'medium',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `Event "${eventName}" is being invoked without null-checking. Events are optional props and should be checked before invocation.`,
+                    suggestion: {
+                      text: `Always check that an event prop exists before invoking it, as events are optional.`,
+                      example: `// ❌ WRONG - No null check
+${eventName}(data);
+
+// ✅ CORRECT - With null check
+if (${eventName}) {
+  ${eventName}(data);
+}
+
+// ✅ ALSO CORRECT - Inline check
+${eventName} && ${eventName}(data);
+
+// ✅ ALSO CORRECT - Optional chaining
+${eventName}?.(data);`
+                    }
+                  });
+                }
+              }
+            }
+          },
+          
+          // Check for optional chaining on events (this is good!)
+          OptionalCallExpression(path: NodePath<t.OptionalCallExpression>) {
+            if (t.isIdentifier(path.node.callee)) {
+              const eventName = path.node.callee.name;
+              if (componentEvents.has(eventName)) {
+                // This is actually the correct pattern, no violation
+                return;
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
     }
   ];
   
@@ -8314,34 +8718,24 @@ await utilities.rq.RunQuery({
           
         case 'component-props-validation':
           violation.suggestion = {
-            text: 'Components can only accept standard props and props explicitly defined in the component spec. Additional props must be declared in the spec\'s properties array.',
+            text: 'Components can only accept standard props and props explicitly defined in the component spec. The spec is provided by the architect and cannot be modified - your code must match the spec exactly.',
             example: `// ❌ WRONG - Component with undeclared props:
 function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // customers, orders, selectedId are NOT allowed unless defined in spec
+  // ERROR: customers, orders, selectedId are NOT in the spec
+  // The spec defines what props are allowed - you cannot add new ones
 }
 
-// ✅ CORRECT Option 1 - Use only standard props and load data internally:
+// ✅ CORRECT - Use only standard props and props defined in the spec:
 function MyComponent({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  // Load data internally using utilities
+  // If you need data like customers/orders, load it internally using utilities
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(savedUserSettings?.selectedId);
-}
-
-// ✅ CORRECT Option 2 - Define props in component spec:
-// In spec.properties array:
-// [
-//   { name: "customers", type: "array", required: false, description: "Customer list" },
-//   { name: "orders", type: "array", required: false, description: "Order list" },
-//   { name: "selectedId", type: "string", required: false, description: "Selected item ID" }
-// ]
-// Then the component can accept them:
-function MyComponent({ utilities, styles, components, customers, orders, selectedId }) {
-  // These props are now allowed because they're defined in the spec
   
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Load customers data internally
         const result = await utilities.rv.RunView({
           EntityName: 'Customers',
           Fields: ['ID', 'Name', 'Status']
@@ -8356,8 +8750,12 @@ function MyComponent({ utilities, styles, components, customers, orders, selecte
     loadData();
   }, []);
   
-  return <div>{/* Use state, not props */}</div>;
-}`
+  return <div>{/* Use state variables, not props */}</div>;
+}
+
+// NOTE: If the spec DOES define additional props (e.g., customers, orders),
+// then you MUST accept and use them. Check the spec's properties array
+// to see what props are required/optional beyond the standard ones.`
           };
           break;
           

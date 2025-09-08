@@ -2768,6 +2768,10 @@ if this limit is exceeded.`})
     @Field(() => Int, {nullable: true, description: `Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`}) 
     DefaultPromptEffortLevel?: number;
         
+    @Field({nullable: true, description: `Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`}) 
+    @MaxLength(60)
+    ChatHandlingOption?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2930,6 +2934,9 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption: string | null;
 }
     
 
@@ -3039,6 +3046,9 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39164,6 +39174,10 @@ export class ComponentLibrary_ {
     @Field({nullable: true, description: `JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`}) 
     Dependencies?: string;
         
+    @Field({description: `Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`}) 
+    @MaxLength(100)
+    UsageType: string;
+        
     @Field(() => [ComponentLibraryLink_])
     MJ_ComponentLibraryLinks_LibraryIDArray: ComponentLibraryLink_[]; // Link to MJ_ComponentLibraryLinks
     
@@ -39209,6 +39223,9 @@ export class CreateComponentLibraryInput {
 
     @Field({ nullable: true })
     Dependencies: string | null;
+
+    @Field({ nullable: true })
+    UsageType?: string;
 }
     
 
@@ -39252,6 +39269,9 @@ export class UpdateComponentLibraryInput {
 
     @Field({ nullable: true })
     Dependencies?: string | null;
+
+    @Field({ nullable: true })
+    UsageType?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

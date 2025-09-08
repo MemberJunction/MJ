@@ -1263,6 +1263,16 @@ if this limit is exceeded.`),
         * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
+    ChatHandlingOption: z.union([z.literal('Success'), z.literal('Failed'), z.literal('Retry')]).nullable().describe(`
+        * * Field Name: ChatHandlingOption
+        * * Display Name: Chat Handling Option
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+        * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -9627,6 +9637,17 @@ export const ComponentLibrarySchema = z.object({
         * * Display Name: Dependencies
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`),
+    UsageType: z.union([z.literal('Direct'), z.literal('Dependency'), z.literal('Both')]).describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+        * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -17314,6 +17335,24 @@ if this limit is exceeded.
     }
     set DefaultPromptEffortLevel(value: number | null) {
         this.Set('DefaultPromptEffortLevel', value);
+    }
+
+    /**
+    * * Field Name: ChatHandlingOption
+    * * Display Name: Chat Handling Option
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+    * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    */
+    get ChatHandlingOption(): 'Success' | 'Failed' | 'Retry' | null {
+        return this.Get('ChatHandlingOption');
+    }
+    set ChatHandlingOption(value: 'Success' | 'Failed' | 'Retry' | null) {
+        this.Set('ChatHandlingOption', value);
     }
 
     /**
@@ -39280,6 +39319,25 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     }
     set Dependencies(value: string | null) {
         this.Set('Dependencies', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+    * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both
+    */
+    get UsageType(): 'Direct' | 'Dependency' | 'Both' {
+        return this.Get('UsageType');
+    }
+    set UsageType(value: 'Direct' | 'Dependency' | 'Both') {
+        this.Set('UsageType', value);
     }
 }
 
