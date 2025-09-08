@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/core
 
+## 2.99.0
+
+### Patch Changes
+
+- 8bbb0a9: - Updated RunView resolver and GraphQL data provider to work with any
+  primary key configuration
+  - Changed from hardcoded "ID" field to dynamic PrimaryKey array from
+    entity metadata
+  - Added utility functions for handling primary key values in client code
+  - Supports single non-ID primary keys (e.g., ProductID) and composite
+    primary keys
+  - Fixes compatibility with databases like AdventureWorks that use
+    non-standard primary key names
+  - @memberjunction/global@2.99.0
+
 ## 2.98.0
 
 ### Patch Changes
