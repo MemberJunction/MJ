@@ -3076,12 +3076,10 @@ export class BaseAgent {
             
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, preserving the parent's terminateAfter setting
-                // This allows the parent agent to decide whether to continue after receiving
-                // the Chat response from the sub-agent, potentially processing it further
+                // Return the Chat step
                 return {
                     step: 'Chat',
-                    terminate: shouldTerminate, // Respect parent's terminateAfter setting
+                    terminate: true, // Bubble up to the main loop to handle Chat
                     message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
                     newPayload: previousDecision?.newPayload // Don't modify payload on Chat
