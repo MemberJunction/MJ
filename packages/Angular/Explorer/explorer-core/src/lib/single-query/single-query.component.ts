@@ -20,8 +20,15 @@ export class SingleQueryComponent implements OnInit {
   public queryData!: any[];
  
   ngOnInit(): void {
-
-    this.queryId = this.EnsureIDHasQuotesIfNeeded(this.queryId);
+    console.log('SingleQueryComponent - Raw queryId received:', this.queryId);
+    console.log('SingleQueryComponent - queryId type:', typeof this.queryId);
+    
+    // Clean any quotes that might have been added upstream
+    if (this.queryId && typeof this.queryId === 'string') {
+      this.queryId = this.queryId.replace(/^['"]|['"]$/g, '');
+    }
+    console.log('SingleQueryComponent - Cleaned queryId:', this.queryId);
+    
     this.doLoad();
   }
 
@@ -31,12 +38,15 @@ export class SingleQueryComponent implements OnInit {
       this.loadStarted.emit();
       const md = new Metadata();
       this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries', md.CurrentUser);
+      
+      // Use the clean ID without quotes for GraphQL/entity loading
       const loadResult = await this.queryEntity.Load(this.queryId);
       if(!loadResult) {
         LogError(`Failed to load query with ID: ${this.queryId}`, undefined, this.queryEntity.LatestResult);
       }
 
       const runReport = new RunQuery();
+      // RunQuery also should use the clean ID
       const result = await runReport.RunQuery({QueryID: this.queryId});
       if (result && result.Success && result.Results.length > 0) {
         this.queryData = result.Results;
@@ -48,23 +58,6 @@ export class SingleQueryComponent implements OnInit {
     }
   }
 
-  EnsureIDHasQuotesIfNeeded(id: string): string {
-    const md = new Metadata(); 
-    const queryInfo = md.EntityByName("Queries");
-    if (!queryInfo) {
-      return id;
-    }
-
-    if(!queryInfo.FirstPrimaryKey.NeedsQuotes) {
-      return id;
-    }
-
-    if (id.startsWith("'") && id.endsWith("'")) {
-      return id;
-    }
-
-    return `'${id}'`;
-  }
 }
 
 

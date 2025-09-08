@@ -635,7 +635,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 query RunViewsQuery ($input: [RunViewGenericInput!]!) {
                 RunViews(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }

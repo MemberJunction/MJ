@@ -1,5 +1,14 @@
 # @memberjunction/react-test-harness
 
+## 2.99.0
+
+### Patch Changes
+
+- 5af2d74: updates to react runtime
+- Updated dependencies [5af2d74]
+  - @memberjunction/react-runtime@2.99.0
+  - @memberjunction/interactive-component-types@2.99.0
+
 ## 2.98.0
 
 ### Minor Changes

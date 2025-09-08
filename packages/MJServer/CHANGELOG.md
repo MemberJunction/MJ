@@ -1,5 +1,79 @@
 # Change Log - @memberjunction/server
 
+## 2.99.0
+
+### Minor Changes
+
+- eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
+  handling
+
+  - Add ChatHandlingOption field to AIAgent table with values:
+    Success, Failed, Retry
+  - Implement Chat step remapping in
+    BaseAgent.validateChatNextStep() based on agent configuration
+  - Fix executeChatStep to mark Chat steps as successful
+    (they're valid terminal states for user interaction)
+  - Remove complex sub-agent Chat handling from FlowAgentType in
+    favor of agent-level configuration
+  - Enables agents like Requirements Expert to request user
+    clarification without breaking parent flows
+  - Parent agents can control whether Chat steps should continue
+    (Success), fail (Failed), or retry (Retry)
+
+### Patch Changes
+
+- f1a08f2: fallback for file resolver
+- 8bbb0a9: - Updated RunView resolver and GraphQL data provider to work with any
+  primary key configuration
+  - Changed from hardcoded "ID" field to dynamic PrimaryKey array from
+    entity metadata
+  - Added utility functions for handling primary key values in client code
+  - Supports single non-ID primary keys (e.g., ProductID) and composite
+    primary keys
+  - Fixes compatibility with databases like AdventureWorks that use
+    non-standard primary key names
+- Updated dependencies [eb7677d]
+- Updated dependencies [830815e]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/ai-agents@2.99.0
+  - @memberjunction/actions-apollo@2.99.0
+  - @memberjunction/graphql-dataprovider@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ai-agent-manager-actions@2.99.0
+  - @memberjunction/ai-core-plus@2.99.0
+  - @memberjunction/aiengine@2.99.0
+  - @memberjunction/ai-prompts@2.99.0
+  - @memberjunction/actions-bizapps-accounting@2.99.0
+  - @memberjunction/actions-bizapps-lms@2.99.0
+  - @memberjunction/actions-bizapps-social@2.99.0
+  - @memberjunction/core-actions@2.99.0
+  - @memberjunction/actions@2.99.0
+  - @memberjunction/entity-communications-server@2.99.0
+  - @memberjunction/doc-utils@2.99.0
+  - @memberjunction/external-change-detection@2.99.0
+  - @memberjunction/core-entities-server@2.99.0
+  - @memberjunction/data-context@2.99.0
+  - @memberjunction/queue@2.99.0
+  - @memberjunction/storage@2.99.0
+  - @memberjunction/sqlserver-dataprovider@2.99.0
+  - @memberjunction/templates@2.99.0
+  - @memberjunction/ai-vectors-pinecone@2.99.0
+  - @memberjunction/actions-bizapps-crm@2.99.0
+  - @memberjunction/skip-types@2.99.0
+  - @memberjunction/data-context-server@2.99.0
+  - @memberjunction/ai@2.99.0
+  - @memberjunction/ai-anthropic@2.99.0
+  - @memberjunction/ai-cerebras@2.99.0
+  - @memberjunction/ai-groq@2.99.0
+  - @memberjunction/ai-lmstudio@2.99.0
+  - @memberjunction/ai-local-embeddings@2.99.0
+  - @memberjunction/ai-mistral@2.99.0
+  - @memberjunction/ai-ollama@2.99.0
+  - @memberjunction/ai-openai@2.99.0
+  - @memberjunction/ai-openrouter@2.99.0
+  - @memberjunction/global@2.99.0
+
 ## 2.98.0
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/aiengine@2.99.0
+  - @memberjunction/actions@2.99.0
+  - @memberjunction/core-entities-server@2.99.0
+  - @memberjunction/sqlserver-dataprovider@2.99.0
+  - @memberjunction/ai@2.99.0
+  - @memberjunction/ai-anthropic@2.99.0
+  - @memberjunction/ai-groq@2.99.0
+  - @memberjunction/ai-mistral@2.99.0
+  - @memberjunction/ai-openai@2.99.0
+  - @memberjunction/global@2.99.0
+
 ## 2.98.0
 
 ### Patch Changes

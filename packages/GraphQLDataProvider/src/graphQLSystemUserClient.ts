@@ -1,4 +1,4 @@
-import { CompositeKey, LogError } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -271,7 +271,10 @@ export class GraphQLSystemUserClient {
             const query = `query RunViewByNameSystemUser($input: RunViewByNameInput!) {
                 RunViewByNameSystemUser(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }
@@ -315,7 +318,10 @@ export class GraphQLSystemUserClient {
             const query = `query RunViewByIDSystemUser($input: RunViewByIDInput!) {
                 RunViewByIDSystemUser(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }
@@ -359,7 +365,10 @@ export class GraphQLSystemUserClient {
             const query = `query RunDynamicViewSystemUser($input: RunDynamicViewInput!) {
                 RunDynamicViewSystemUser(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }
@@ -404,7 +413,10 @@ export class GraphQLSystemUserClient {
             const query = `query RunViewsSystemUser($input: [RunViewGenericInput!]!) {
                 RunViewsSystemUser(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }
@@ -1632,14 +1644,15 @@ export interface RunViewSystemUserInput {
     StartRow?: number;
 }
 
+
 /**
  * Result row type for view execution results - represents a single data row
  */
 export interface RunViewSystemUserResultRow {
     /**
-     * Unique identifier of the record
+     * Primary key fields and values for the record
      */
-    ID: string;
+    PrimaryKey: KeyValuePair[];
     /**
      * ID of the entity type this record belongs to
      */

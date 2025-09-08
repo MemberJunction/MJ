@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.99.0
+
+### Patch Changes
+
+- c91e416: Redesign query browser with multiple view modes and improved UX
+
+  - Add three view modes: category (hierarchical folders), list (table),
+    and panel (cards with SQL preview)
+  - Implement breadcrumb navigation for category hierarchy with
+    folder-based organization
+  - Add search, status filter, and sort functionality with proper state
+    management
+  - Fix navigation to use proper MJ routing pattern (/resource/record/) for
+    entity forms
+  - Fix delete functionality to handle BaseEntity objects from RunView
+    correctly
+  - Add "New Query" button that navigates to empty form with optional
+    CategoryID pre-population
+  - Remove edit buttons in favor of single-click navigation to query form
+  - Show query counts in category folders for better organization
+    visibility
+  - Fix SQL syntax errors caused by double-quoted GUIDs in query parameters
+  - Improve performance with batch data loading and client-side filtering
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [2eaf6c9]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/ng-auth-services@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ng-dashboards@2.99.0
+  - @memberjunction/ng-ask-skip@2.99.0
+  - @memberjunction/ng-compare-records@2.99.0
+  - @memberjunction/ng-entity-form-dialog@2.99.0
+  - @memberjunction/ng-explorer-settings@2.99.0
+  - @memberjunction/ng-shared@2.99.0
+  - @memberjunction/ng-user-view-grid@2.99.0
+  - @memberjunction/ng-user-view-properties@2.99.0
+  - @memberjunction/ng-file-storage@2.99.0
+  - @memberjunction/ng-query-grid@2.99.0
+  - @memberjunction/ng-record-selector@2.99.0
+  - @memberjunction/ng-resource-permissions@2.99.0
+  - @memberjunction/ng-skip-chat@2.99.0
+  - @memberjunction/communication-types@2.99.0
+  - @memberjunction/entity-communications-client@2.99.0
+  - @memberjunction/templates-base-types@2.99.0
+  - @memberjunction/ng-base-forms@2.99.0
+  - @memberjunction/ng-record-changes@2.99.0
+  - @memberjunction/ng-container-directives@2.99.0
+  - @memberjunction/ng-tabstrip@2.99.0
+  - @memberjunction/global@2.99.0
+
 ## 2.98.0
 
 ### Patch Changes
