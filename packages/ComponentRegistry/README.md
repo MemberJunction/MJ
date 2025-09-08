@@ -198,6 +198,92 @@ class FilteredRegistryServer extends ComponentRegistryAPIServer {
 }
 ```
 
+### Using Different Database Tables
+
+Override the route handlers to pull components from different tables or entities:
+
+```typescript
+class CustomTableRegistryServer extends ComponentRegistryAPIServer {
+  /**
+   * Use a different entity/table for components
+   * For example, using a "Custom Components" entity instead of "MJ: Components"
+   */
+  protected async listComponents(req: Request, res: Response): Promise<void> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView({
+        EntityName: 'Custom Components',  // Your custom entity name
+        ExtraFilter: "IsActive = 1 AND IsPublished = 1",
+        OrderBy: 'CategoryName, ComponentName, Version DESC',
+        ResultType: 'entity_object'
+      });
+      
+      if (!result.Success) {
+        res.status(500).json({ error: result.ErrorMessage });
+        return;
+      }
+      
+      // Map your custom fields to the API response format
+      const components = (result.Results || []).map(c => ({
+        namespace: c.CategoryName,     // Map your fields
+        name: c.ComponentName,          // to the expected
+        version: c.Version,             // API format
+        title: c.DisplayName,
+        description: c.Summary,
+        type: c.ComponentType,
+        status: c.PublishStatus
+      }));
+      
+      res.json({ components, total: components.length });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to list components' });
+    }
+  }
+  
+  protected async getComponent(req: Request, res: Response): Promise<void> {
+    const { namespace, name } = req.params;
+    
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'Custom Components',
+      ExtraFilter: `CategoryName = '${namespace}' AND ComponentName = '${name}'`,
+      OrderBy: 'Version DESC',
+      MaxRows: 1,
+      ResultType: 'entity_object'
+    });
+    
+    if (!result.Success || !result.Results?.length) {
+      res.status(404).json({ error: 'Component not found' });
+      return;
+    }
+    
+    const component = result.Results[0];
+    res.json({
+      id: component.ID,
+      namespace: component.CategoryName,
+      name: component.ComponentName,
+      version: component.Version,
+      specification: JSON.parse(component.ComponentSpec)  // Your spec field
+    });
+  }
+  
+  // Override search to use your custom table
+  protected async searchComponents(req: Request, res: Response): Promise<void> {
+    const { q, type } = req.query;
+    
+    let filter = "IsActive = 1 AND IsPublished = 1";
+    if (q) {
+      filter += ` AND (ComponentName LIKE '%${q}%' OR DisplayName LIKE '%${q}%')`;
+    }
+    if (type) {
+      filter += ` AND ComponentType = '${type}'`;
+    }
+    
+    // ... rest of implementation
+  }
+}
+```
+
 ### Custom Routes and Middleware
 
 Add additional routes or modify middleware:
