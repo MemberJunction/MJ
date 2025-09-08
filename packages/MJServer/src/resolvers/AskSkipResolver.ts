@@ -2610,7 +2610,7 @@ cycle.`);
 
   protected buildSkipPostHeaders(): { [key: string]: string } {
     return {
-      'X-API-Key': configInfo.askSkip?.apiKey ?? '',
+      'x-api-key': configInfo.askSkip?.apiKey ?? '',
     };
   }
 
