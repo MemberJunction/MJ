@@ -17,3 +17,10 @@ export type {
     EmbedTextParams,
     EmbedTextResult
 } from './graphQLAIClient';
+export { GraphQLComponentRegistryClient } from './GraphQLComponentRegistryClient';
+export type {
+    GetRegistryComponentParams,
+    SearchRegistryComponentsParams,
+    RegistryComponentSearchResult,
+    ComponentDependencyTree
+} from './GraphQLComponentRegistryClient';

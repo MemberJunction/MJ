@@ -8,8 +8,10 @@ import {
 } from '@memberjunction/core';
 import { ComponentEntity, ComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import * as sql from 'mssql';
-import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
+import sql from 'mssql';
+import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
+import createMSSQLConfig from './orm.js';
+import { DataSourceInfo } from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
@@ -36,6 +38,8 @@ export class ComponentRegistryAPIServer {
   protected registry: ComponentRegistryEntity | null = null;
   protected metadata: Metadata;
   protected pool: sql.ConnectionPool | null = null;
+  protected readOnlyPool: sql.ConnectionPool | null = null;
+  protected dataSources: DataSourceInfo[] = [];
   
   constructor() {
     this.app = express();
@@ -83,37 +87,58 @@ export class ComponentRegistryAPIServer {
   
   /**
    * Set up the database connection using MemberJunction's SQL Server provider.
-   * Override this method to use a different database provider or connection strategy.
+   * Follows the same pattern as MJServer for consistency.
    * 
    * @protected
    * @virtual
    */
   protected async setupDatabase(): Promise<void> {
-    const poolConfig: sql.config = {
-      server: dbHost,
-      port: dbPort,
-      user: dbUsername,
-      password: dbPassword,
-      database: dbDatabase,
-      requestTimeout: configInfo.databaseSettings.requestTimeout,
-      connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-      options: {
-        encrypt: true,
-        enableArithAbort: true,
-        trustServerCertificate: dbTrustServerCertificate === 'Y'
-      }
-    };
-    
-    if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-      poolConfig.options!.instanceName = dbInstanceName;
-    }
-    
-    this.pool = new sql.ConnectionPool(poolConfig);
+    // Create the main connection pool using the same config pattern as MJServer
+    this.pool = new sql.ConnectionPool(createMSSQLConfig());
     await this.pool.connect();
     
-    const config = new SQLServerProviderConfigData(this.pool, configInfo.mjCoreSchema);
+    // Get cache refresh interval from config (default to 0 if not set)
+    const cacheRefreshInterval = configInfo.databaseSettings?.metadataCacheRefreshInterval || 0;
+    
+    // Setup MemberJunction SQL Server client with cache refresh interval
+    const config = new SQLServerProviderConfigData(this.pool, configInfo.mjCoreSchema, cacheRefreshInterval);
     await setupSQLServerClient(config);
-    LogStatus('Database connection established');
+    
+    // Initialize metadata and log entity count like MJServer does
+    const md = new Metadata();
+    LogStatus(`Database connection established. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+    
+    // Create data sources array
+    this.dataSources = [new DataSourceInfo({
+      dataSource: this.pool, 
+      type: 'Read-Write', 
+      host: dbHost, 
+      port: dbPort, 
+      database: dbDatabase, 
+      userName: dbUsername
+    })];
+    
+    // Establish a second read-only connection if credentials are provided
+    if (dbReadOnlyUsername && dbReadOnlyPassword) {
+      const readOnlyConfig = {
+        ...createMSSQLConfig(),
+        user: dbReadOnlyUsername,
+        password: dbReadOnlyPassword,
+      };
+      this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+      await this.readOnlyPool.connect();
+      
+      // Add read-only pool to data sources
+      this.dataSources.push(new DataSourceInfo({
+        dataSource: this.readOnlyPool, 
+        type: 'Read-Only', 
+        host: dbHost, 
+        port: dbPort, 
+        database: dbDatabase, 
+        userName: dbReadOnlyUsername
+      }));
+      LogStatus('Read-only connection pool has been initialized.');
+    }
   }
   
   /**

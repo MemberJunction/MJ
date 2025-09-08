@@ -13,6 +13,13 @@ const databaseSettingsInfoSchema = z.object({
   requestTimeout: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  metadataCacheRefreshInterval: z.number().optional().default(0),
+  connectionPool: z.object({
+    max: z.number().optional(),
+    min: z.number().optional(),
+    idleTimeoutMillis: z.number().optional(),
+    acquireTimeoutMillis: z.number().optional()
+  }).optional()
 });
 
 const componentRegistrySettingsSchema = z.object({
@@ -58,10 +65,11 @@ export const {
   dbTrustServerCertificate,
   dbInstanceName,
   mjCoreSchema: mj_core_schema,
-  dbReadOnlyUsername,
-  dbReadOnlyPassword,
   componentRegistrySettings,
 } = configInfo;
+
+export const dbReadOnlyUsername = configInfo.dbReadOnlyUsername || configInfo.databaseSettings?.dbReadOnlyUsername;
+export const dbReadOnlyPassword = configInfo.dbReadOnlyPassword || configInfo.databaseSettings?.dbReadOnlyPassword;
 
 export function loadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());

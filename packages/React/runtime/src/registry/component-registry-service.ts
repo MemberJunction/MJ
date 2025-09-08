@@ -34,6 +34,18 @@ interface CachedCompiledComponent {
 }
 
 /**
+ * GraphQL client interface for registry operations
+ */
+export interface IComponentRegistryClient {
+  GetRegistryComponent(params: {
+    registryId: string;
+    namespace: string;
+    name: string;
+    version?: string;
+  }): Promise<ComponentSpec | null>;
+}
+
+/**
  * Service for managing component loading from registries with compilation caching
  */
 export class ComponentRegistryService {
@@ -49,15 +61,18 @@ export class ComponentRegistryService {
   private componentEngine = ComponentMetadataEngine.Instance;
   private registryProviders = new Map<string, RegistryProvider>();
   private debug: boolean = false;
+  private graphQLClient?: IComponentRegistryClient;
   
   private constructor(
     compiler: ComponentCompiler,
     runtimeContext: RuntimeContext,
-    debug: boolean = false
+    debug: boolean = false,
+    graphQLClient?: IComponentRegistryClient
   ) {
     this.compiler = compiler;
     this.runtimeContext = runtimeContext;
     this.debug = debug;
+    this.graphQLClient = graphQLClient;
   }
   
   /**
@@ -66,12 +81,23 @@ export class ComponentRegistryService {
   static getInstance(
     compiler: ComponentCompiler, 
     context: RuntimeContext,
-    debug: boolean = false
+    debug: boolean = false,
+    graphQLClient?: IComponentRegistryClient
   ): ComponentRegistryService {
     if (!ComponentRegistryService.instance) {
-      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug);
+      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug, graphQLClient);
     }
     return ComponentRegistryService.instance;
+  }
+  
+  /**
+   * Set the GraphQL client for registry operations
+   */
+  setGraphQLClient(client: IComponentRegistryClient): void {
+    this.graphQLClient = client;
+    if (this.debug) {
+      console.log('✅ GraphQL client configured for component registry');
+    }
   }
   
   /**
@@ -226,17 +252,36 @@ export class ComponentRegistryService {
       throw new Error(`Registry not found: ${component.SourceRegistryID}`);
     }
     
-    if (!registry) {
-      throw new Error(`Registry not found: ${component.SourceRegistryID}`);
-    }
+    // Try GraphQL client first if available
+    let spec: ComponentSpec;
     
-    const spec = await this.fetchFromExternalRegistry(
-      registry.URI || '',
-      component.Name,
-      component.Namespace || '',
-      component.Version,
-      this.getRegistryApiKey(registry.ID) // API keys stored in env vars or secure config
-    );
+    if (this.graphQLClient) {
+      if (this.debug) {
+        console.log(`Fetching from registry via GraphQL: ${component.Name}`);
+      }
+      
+      const result = await this.graphQLClient.GetRegistryComponent({
+        registryId: registry.ID,
+        namespace: component.Namespace || '',
+        name: component.Name,
+        version: component.Version
+      });
+      
+      if (!result) {
+        throw new Error(`Component not found in registry: ${component.Name}`);
+      }
+      
+      spec = result;
+    } else {
+      // Fallback to direct HTTP if no GraphQL client
+      spec = await this.fetchFromExternalRegistry(
+        registry.URI || '',
+        component.Name,
+        component.Namespace || '',
+        component.Version,
+        this.getRegistryApiKey(registry.ID)
+      );
+    }
     
     // Store in local database for future use
     await this.cacheExternalComponent(componentId, spec, contextUser);

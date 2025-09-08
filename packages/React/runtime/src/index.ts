@@ -30,7 +30,8 @@ export {
   ComponentResolver,
   ComponentSpec,
   ResolvedComponents,
-  ComponentRegistryService
+  ComponentRegistryService,
+  IComponentRegistryClient
 } from './registry';
 
 // Export runtime APIs
