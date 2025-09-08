@@ -3,6 +3,12 @@
   "version": "2.99.0",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./Server": "./dist/Server.js",
+    "./config": "./dist/config.js"
+  },
   "bin": {
     "MemberJunction": "./dist/index.js"
   },
