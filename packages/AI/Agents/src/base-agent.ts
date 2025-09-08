@@ -1482,10 +1482,29 @@ export class BaseAgent {
         const chatHandlingOption = params.agent.ChatHandlingOption;
         
         if (chatHandlingOption) {
+            // Use a switch to validate and map the ChatHandlingOption value
+            let mappedStep: 'Success' | 'Failed' | 'Retry';
+            
+            switch (chatHandlingOption) {
+                case 'Success':
+                    mappedStep = 'Success';
+                    break;
+                case 'Failed':
+                    mappedStep = 'Failed';
+                    break;
+                case 'Retry':
+                    mappedStep = 'Retry';
+                    break;
+                default:
+                    // Log error and treat as null (default behavior)
+                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    return nextStep;
+            }
+            
             // Remap the Chat step to the configured option
             const remappedStep: BaseAgentNextStep<P> = {
                 ...nextStep,
-                step: chatHandlingOption as 'Success' | 'Failed' | 'Retry'
+                step: mappedStep
             };
             
             // Log the remapping for debugging
@@ -3057,11 +3076,13 @@ export class BaseAgent {
             
             // Check if sub-agent returned a Chat step
             if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Return the Chat step, but let the agent type decide what to do with it
+                // Return the Chat step, preserving the parent's terminateAfter setting
+                // This allows the parent agent to decide whether to continue after receiving
+                // the Chat response from the sub-agent, potentially processing it further
                 return {
                     step: 'Chat',
-                    terminate: false, // Let agent type decide termination in PreProcessNextStep
-                    message: subAgentResult.agentRun?.Message || 'Additional information needed',
+                    terminate: shouldTerminate, // Respect parent's terminateAfter setting
+                    message: subAgentResult.agentRun?.Message || null,
                     previousPayload: previousDecision?.newPayload,
                     newPayload: previousDecision?.newPayload // Don't modify payload on Chat
                 };

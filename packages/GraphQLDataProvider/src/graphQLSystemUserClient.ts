@@ -1,4 +1,4 @@
-import { CompositeKey, LogError } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -1644,19 +1644,6 @@ export interface RunViewSystemUserInput {
     StartRow?: number;
 }
 
-/**
- * Key-value pair type for primary key fields
- */
-export interface KeyValuePair {
-    /**
-     * Name of the primary key field
-     */
-    FieldName: string;
-    /**
-     * Value of the primary key field
-     */
-    Value: string;
-}
 
 /**
  * Result row type for view execution results - represents a single data row
