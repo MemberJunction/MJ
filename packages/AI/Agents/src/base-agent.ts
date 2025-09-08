@@ -1463,8 +1463,10 @@ export class BaseAgent {
     }
 
     /**
-     * Validates that the Chat next step is valid and can be executed by the current agent. Subclasses can override
-     * this method to implement custom validation logic if needed.
+     * Validates that the Chat next step is valid and can be executed by the current agent. 
+     * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
+     * the Chat step is remapped to the specified value (Success, Fail, or Retry).
+     * Subclasses can override this method to implement custom validation logic if needed.
      * @param params 
      * @param nextStep 
      * @returns 
@@ -1476,7 +1478,45 @@ export class BaseAgent {
         agentRun: AIAgentRunEntityExtended,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        // Check if the agent has ChatHandlingOption configured
+        const chatHandlingOption = params.agent.ChatHandlingOption;
+        
+        if (chatHandlingOption) {
+            // Use a switch to validate and map the ChatHandlingOption value
+            let mappedStep: 'Success' | 'Failed' | 'Retry';
+            
+            switch (chatHandlingOption) {
+                case 'Success':
+                    mappedStep = 'Success';
+                    break;
+                case 'Failed':
+                    mappedStep = 'Failed';
+                    break;
+                case 'Retry':
+                    mappedStep = 'Retry';
+                    break;
+                default:
+                    // Log error and treat as null (default behavior)
+                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    return nextStep;
+            }
+            
+            // Remap the Chat step to the configured option
+            const remappedStep: BaseAgentNextStep<P> = {
+                ...nextStep,
+                step: mappedStep
+            };
+            
+            // Log the remapping for debugging
+            if (params.verbose === true || IsVerboseLoggingEnabled()) {
+                LogStatus(`Remapping Chat step to ${chatHandlingOption} based on agent's ChatHandlingOption`);
+            }
+            
+            // Re-validate the remapped step using the appropriate validator
+            return await this.validateNextStep(params, remappedStep, currentPayload, agentRun, currentStep);
+        }
+        
+        // Default behavior: let Chat propagate up (no remapping)
         return nextStep;
     }
 
@@ -3034,6 +3074,18 @@ export class BaseAgent {
             await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
                 subAgentResult.agentRun?.ErrorMessage, outputData);
             
+            // Check if sub-agent returned a Chat step
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                // Return the Chat step
+                return {
+                    step: 'Chat',
+                    terminate: true, // Bubble up to the main loop to handle Chat
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: previousDecision?.newPayload // Don't modify payload on Chat
+                };
+            }
+            
             // Build a clean summary of sub-agent result
             const subAgentSummary = {
                 agentName: params.agent.Name,
@@ -3358,7 +3410,8 @@ export class BaseAgent {
     }
 
     /**
-     * Executes a chat step (not implemented in base class).
+     * Executes a chat step - these should bubble up to the user for interaction.
+     * Chat steps are terminal and indicate the agent needs user input.
      * 
      * @private
      */
@@ -3368,11 +3421,13 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep> {
         const stepEntity = await this.createStepEntity('Chat', 'User Interaction', params.contextUser);
         
-        await this.finalizeStepEntity(stepEntity, false, 'Chat not implemented');
+        // Chat steps are successful - they indicate a need for user interaction
+        await this.finalizeStepEntity(stepEntity, true);
         
         return { 
             step: 'Chat',
             terminate: true,
+            message: previousDecision.message || 'Additional information needed from user',
             priorStepResult: previousDecision.message,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,

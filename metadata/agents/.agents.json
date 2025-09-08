@@ -353,6 +353,7 @@
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-feather",
+            "ChatHandlingOption": "Success",
             "PayloadDownstreamPaths": [
               "metadata.*",
               "content.*",
@@ -481,8 +482,8 @@
             "ID": "8A322A1B-27EE-4A89-A6C4-A47C856E5842"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.245Z",
-            "checksum": "380396175fa783efbfa5d62f8795835e98822403e9458bff96b754583e628b2a"
+            "lastModified": "2025-09-08T17:16:52.950Z",
+            "checksum": "34e03c0c65fe358c4089a15fbf684bf0d7b482fdfc81f24f980643b788f78bde"
           }
         },
         {
@@ -495,6 +496,7 @@
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-chart-line",
+            "ChatHandlingOption": "Success",
             "PayloadDownstreamPaths": [
               "metadata.*",
               "content.*",
@@ -580,8 +582,8 @@
             "ID": "62CF643B-18E5-4C3B-BD0A-B3206E87BCE8"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.329Z",
-            "checksum": "d99a6144c83db6cb350111d60471bb49e77d22fd5ad4337abf37ece1ef63cceb"
+            "lastModified": "2025-09-08T17:16:52.970Z",
+            "checksum": "13fc64da23630d6b86bd5b48de10401230a72d8a7c8875621dd1ed5de1adb71d"
           }
         },
         {
@@ -594,6 +596,7 @@
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-edit",
+            "ChatHandlingOption": "Success",
             "PayloadDownstreamPaths": [
               "metadata.*",
               "content.*",
@@ -693,8 +696,8 @@
             "ID": "383FA7A1-E654-4D65-BC88-6CFE1C90086E"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.367Z",
-            "checksum": "8cfd31d6ffd7a5f5ff8a066b0c6ff577ac2a6344de1513f95d83986171009ac6"
+            "lastModified": "2025-09-08T17:16:52.986Z",
+            "checksum": "459280efad57700c2d9d30890d95547affa9fcb28f7fa872c305701136589e62"
           }
         },
         {
@@ -707,6 +710,7 @@
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-shield-alt",
+            "ChatHandlingOption": "Success",
             "PayloadDownstreamPaths": [
               "metadata.*",
               "content.*",
@@ -778,8 +782,8 @@
             "ID": "414901EA-0BAE-43C1-9B9F-0A6B48B6B768"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.418Z",
-            "checksum": "d449eac083d41799ea583243cc8b2dca0514aa602af619820d4c1ce2eca0ed22"
+            "lastModified": "2025-09-08T17:16:53.000Z",
+            "checksum": "7b572549e421f25411e9b73560a550f4d33b1ca8b011470cf7a5e8ec1bbd8a84"
           }
         },
         {
@@ -792,6 +796,7 @@
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-paper-plane",
+            "ChatHandlingOption": "Success",
             "PayloadDownstreamPaths": [
               "metadata.*",
               "content.*",
@@ -871,8 +876,8 @@
             "ID": "6AD5B39D-CC3B-45E3-90F2-A00E2BC42E6D"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.456Z",
-            "checksum": "8190e266cedfbafc2fa13a6adc2465b74698443de62d7bfcd3eb4ebe2d42826f"
+            "lastModified": "2025-09-08T17:16:53.012Z",
+            "checksum": "9c67e5e1b81880c8a15bb5dc531548309b9bbcc7de6b57c0b43fb1c6fcde4b4a"
           }
         }
       ]
@@ -1135,7 +1140,8 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-clipboard-list"
+            "IconClass": "fa-solid fa-clipboard-list",
+            "ChatHandlingOption": "Success"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -1218,8 +1224,8 @@
             "ID": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.605Z",
-            "checksum": "4a6f237ce1b37585a23fa4939f39fdb2855fe31618b4ccd9a933807425769300"
+            "lastModified": "2025-09-08T17:16:53.224Z",
+            "checksum": "884d93640c5698dd8515d90e78bdc4430543e37d1db336a48c1184e164ca7022"
           }
         },
         {
@@ -1231,7 +1237,8 @@
             "Status": "Active",
             "ExecutionOrder": 2,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-sitemap"
+            "IconClass": "fa-solid fa-sitemap",
+            "ChatHandlingOption": "Success"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -1314,8 +1321,8 @@
             "ID": "644674DB-7791-44C4-8360-3914111C0E10"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.659Z",
-            "checksum": "89d1860a798c166e1132bb2dd6d8908d820a7b095bfbfae9f95d0d74a0b48854"
+            "lastModified": "2025-09-08T17:16:53.238Z",
+            "checksum": "f3c6a82fdf8ed25abeed4669ab2d85cd2c3e8185647da9876237ea4aabd8a9a8"
           }
         },
         {
@@ -1327,7 +1334,8 @@
             "Status": "Active",
             "ExecutionOrder": 3,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-pen-fancy"
+            "IconClass": "fa-solid fa-pen-fancy",
+            "ChatHandlingOption": "Success"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -1410,8 +1418,8 @@
             "ID": "82323658-FD6D-4F06-BAE5-39A0945C9DC0"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:43.717Z",
-            "checksum": "dbc9684a1ec7d8639fc83d653114195a5f6161d80d563611ea47644d973390d9"
+            "lastModified": "2025-09-08T17:16:53.248Z",
+            "checksum": "01ce9c0f75bd5854b3a0cc4ea63f0fcd4c86e94208b9b50584f3b32a8fa57956"
           }
         }
       ]

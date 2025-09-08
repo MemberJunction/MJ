@@ -2768,6 +2768,10 @@ if this limit is exceeded.`})
     @Field(() => Int, {nullable: true, description: `Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`}) 
     DefaultPromptEffortLevel?: number;
         
+    @Field({nullable: true, description: `Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`}) 
+    @MaxLength(60)
+    ChatHandlingOption?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -2930,6 +2934,9 @@ export class CreateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption: string | null;
 }
     
 
@@ -3039,6 +3046,9 @@ export class UpdateAIAgentInput {
 
     @Field(() => Int, { nullable: true })
     DefaultPromptEffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

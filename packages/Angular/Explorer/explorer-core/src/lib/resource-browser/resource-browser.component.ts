@@ -240,13 +240,14 @@ export class ResourceBrowserComponent {
     const md = new Metadata();
     const resourceTypeEntity = md.EntityByID(this.ResourceType.EntityID);  
     const categoryEntity = this.ResourceType.CategoryEntityID ? md.EntityByID(this.ResourceType.CategoryEntityID) : null;   
+    
+    // Always check for UserID field, not just when we have categories
+    const usersEntity = md.EntityByName("Users");
+    this._UserIDFieldName = resourceTypeEntity.Fields.find(f => f.RelatedEntityID === usersEntity.ID)?.Name;
+    
     // figure out the column inside the entity that points to the categoryEntity, if we have a category entity
     if (categoryEntity) {
       this._CategoryIDFieldName = resourceTypeEntity.Fields.find(f => f.RelatedEntityID === categoryEntity.ID)?.Name;
-
-      const usersEntity = md.EntityByName("Users");
-      this._UserIDFieldName = resourceTypeEntity.Fields.find(f => f.RelatedEntityID === usersEntity.ID)?.Name;
-
       this._CategoryParentIDFieldName = categoryEntity.Fields.find(f => f.RelatedEntityID === categoryEntity.ID)?.Name;
     }
     await this.Refresh();

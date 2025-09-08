@@ -21,6 +21,7 @@ export class MJOktaProvider extends MJAuthBase {
   type = MJOktaProvider.PROVIDER_TYPE;
   private oktaAuth: OktaAuth;
   private userClaims$ = new BehaviorSubject<any>(null);
+  private isRefreshing = false; // Flag to prevent re-triggering during refresh
   
   /**
    * Factory function to provide Angular dependencies required by Okta
@@ -63,10 +64,14 @@ export class MJOktaProvider extends MJAuthBase {
     this.oktaAuth.authStateManager.subscribe((authState: any) => {
       this.updateAuthState(authState.isAuthenticated || false);
       
-      if (authState.isAuthenticated && authState.idToken) {
-        this.userClaims$.next(authState.idToken as IDToken);
-      } else {
-        this.userClaims$.next(null);
+      // Don't update claims if we're in the middle of a refresh operation
+      // to avoid triggering handleLogin in app.component
+      if (!this.isRefreshing) {
+        if (authState.isAuthenticated && authState.idToken) {
+          this.userClaims$.next(authState.idToken as IDToken);
+        } else {
+          this.userClaims$.next(null);
+        }
       }
     });
     
@@ -218,18 +223,78 @@ export class MJOktaProvider extends MJAuthBase {
 
   async refresh(): Promise<Observable<any>> {
     try {
-      // Refresh tokens
-      await this.oktaAuth.tokenManager.renew('idToken');
-      await this.oktaAuth.tokenManager.renew('accessToken');
+      // Set flag to prevent authStateManager from updating userClaims$
+      this.isRefreshing = true;
       
-      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
-      if (idToken) {
-        this.userClaims$.next(idToken);
+      // First check if we're authenticated
+      const isAuthenticated = await this.oktaAuth.isAuthenticated();
+      
+      if (!isAuthenticated) {
+        // Not authenticated, can't refresh - return empty observable
+        console.warn('Cannot refresh tokens - user is not authenticated');
+        this.isRefreshing = false;
+        // Don't update the claims observable to avoid triggering handleLogin
+        return from([null]);
       }
       
-      return this.userClaims$.asObservable();
-    } catch (error) {
+      // Check if tokens exist and are not expired
+      const idToken = await this.oktaAuth.tokenManager.get('idToken') as IDToken;
+      const accessToken = await this.oktaAuth.tokenManager.get('accessToken') as AccessToken;
+      
+      if (!idToken || !accessToken) {
+        console.warn('No tokens available to refresh');
+        this.isRefreshing = false;
+        // Don't update the claims observable to avoid triggering handleLogin
+        return from([null]);
+      }
+      
+      // Attempt to renew tokens using the refresh token if available
+      // Note: For PKCE flow (which we're using), Okta will try to use refresh tokens if configured
+      // If refresh tokens aren't available, it will attempt silent authentication via iframe
+      const renewedTokens = await this.oktaAuth.token.renewTokens();
+      
+      // Store the renewed tokens - this will trigger authStateManager but we'll ignore it
+      if (renewedTokens.idToken) {
+        this.oktaAuth.tokenManager.setTokens(renewedTokens);
+        
+        // Update user claims with renewed token - but DON'T emit to userClaims$ 
+        // to avoid triggering handleLogin in app.component
+        const newIdToken = renewedTokens.idToken as IDToken;
+        const claims = {
+          ...newIdToken.claims,
+          idToken: newIdToken.idToken,
+          accessToken: renewedTokens.accessToken?.accessToken,
+        };
+        
+        // Wait a moment before resetting the flag to ensure authStateManager event is handled
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Reset flag after tokens are set
+        this.isRefreshing = false;
+        
+        // Return the claims directly without updating the BehaviorSubject
+        // This prevents the app component from re-initializing GraphQL
+        return from([claims]);
+      }
+      
+      this.isRefreshing = false;
+      return from([null]);
+    } catch (error: any) {
       console.error('Okta token refresh error:', error);
+      this.isRefreshing = false; // Reset flag on error
+      
+      // Check if the error is due to expired session or no prompt allowed
+      if (error?.errorCode === 'login_required' || 
+          error?.message?.includes('not to prompt') ||
+          error?.message?.includes('login_required')) {
+        // Session has expired, user needs to re-authenticate
+        console.warn('Session expired - user needs to re-authenticate');
+        
+        // Don't update the claims observable to avoid triggering handleLogin
+        return from([null]);
+      }
+      
+      // For other errors, still throw
       throw error;
     }
   }
@@ -283,6 +348,9 @@ export class MJOktaProvider extends MJAuthBase {
 
   checkExpiredTokenError(error: string): boolean {
     // Check for Okta-specific token expiration errors
+    if (!error || typeof error !== 'string') {
+      return false;
+    }
     const errorLower = error.toLowerCase();
     return errorLower.includes('token expired') ||
            errorLower.includes('invalid_token') ||
