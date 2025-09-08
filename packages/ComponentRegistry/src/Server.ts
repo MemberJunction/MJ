@@ -319,8 +319,7 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
-        OrderBy: 'Namespace, Name, VersionSequence DESC',
-        ResultType: 'entity_object'
+        OrderBy: 'Namespace, Name, VersionSequence DESC' 
       });
       
       if (!result.Success) {
@@ -379,8 +378,7 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
-        OrderBy: 'Namespace, Name, VersionSequence DESC',
-        ResultType: 'entity_object'
+        OrderBy: 'Namespace, Name, VersionSequence DESC' 
       });
       
       if (!result.Success) {
@@ -441,8 +439,7 @@ export class ComponentRegistryAPIServer {
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'VersionSequence DESC',
-        MaxRows: 1,
-        ResultType: 'entity_object'
+        MaxRows: 1
       });
       
       if (!result.Success || !result.Results?.length) {
