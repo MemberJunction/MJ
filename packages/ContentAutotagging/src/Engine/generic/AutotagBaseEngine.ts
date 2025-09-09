@@ -5,6 +5,7 @@ import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import pdf2pic from 'pdf2pic'
 import * as officeparser from 'officeparser'
+import * as XLSX from 'xlsx'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams, StructuredPDFContent, ContentItemProcessParamsExtended } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
@@ -764,6 +765,170 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
+     * Parse content from a ContentItem entity with full context and parameter support
+     * @param contentItem - The ContentItem entity containing metadata and file path
+     * @param contextUser - User context for database operations
+     * @returns Parsed text from the content item
+     */
+    public async parseContentItem(contentItem: ContentItemEntity, contextUser: UserInfo): Promise<string> {
+        try {
+            // 1. Load content source and parameters
+            const contentSource = await this.getContentSourceEntity(contentItem.ContentSourceID, contextUser);
+            const sourceParams = await this.getContentSourceParams(contentSource, contextUser);
+            
+            // 2. Get content file type information
+            const contentFileType = await this.getContentFileTypeEntity(contentItem.ContentFileTypeID, contextUser);
+            const fileExtension = contentFileType.FileExtension.toLowerCase();
+            
+            // 3. Read file data
+            const filePath = contentItem.URL; // Assuming URL contains file path for local files
+            const dataBuffer = await fs.promises.readFile(filePath);
+            
+            // 4. Parse based on file type with full context
+            switch (fileExtension) {
+                case '.pdf':
+                    return await this.parsePDF(dataBuffer);
+                case '.docx':
+                    return await this.parseDOCX(dataBuffer);
+                case '.xlsx':
+                    return await this.parseXLSXWithContext(dataBuffer, sourceParams);
+                default:
+                    throw new Error(`Unsupported file type: ${fileExtension}`);
+            }
+        } catch (error) {
+            console.error(`Failed to parse content item ${contentItem.ID}:`, error.message);
+            throw new Error(`Content parsing failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Parse Excel files with intelligent sheet selection based on content source parameters
+     * @param dataBuffer - Excel file buffer
+     * @param sourceParams - Content source parameters
+     * @returns Parsed text from selected sheet
+     */
+    private async parseXLSXWithContext(dataBuffer: Buffer, sourceParams: Map<string, any>): Promise<string> {
+        const workbook = XLSX.read(dataBuffer, { type: 'buffer' });
+        
+        // Single sheet? Direct processing
+        if (workbook.SheetNames.length === 1) {
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            return XLSX.utils.sheet_to_csv(firstSheet);
+        }
+        
+        // Multi-sheet processing with LLM sheet selection
+        const sheetSelectionPrompt = sourceParams.get('ExcelSheetSelectionPrompt');
+        if (sheetSelectionPrompt) {
+            console.log('Using LLM for multi-sheet Excel processing');
+            const selectedSheetName = await this.selectSheetWithLLM(workbook, sheetSelectionPrompt);
+            const selectedSheet = workbook.Sheets[selectedSheetName];
+            return XLSX.utils.sheet_to_csv(selectedSheet);
+        }
+        
+        // Fallback: use first sheet
+        console.log('No sheet selection prompt configured, using first sheet');
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        return XLSX.utils.sheet_to_csv(firstSheet);
+    }
+
+    /**
+     * Use LLM to select the most relevant sheet from a multi-sheet Excel file
+     * @param workbook - Parsed Excel workbook
+     * @param customPrompt - Custom prompt for sheet selection
+     * @returns Name of selected sheet
+     */
+    private async selectSheetWithLLM(workbook: any, customPrompt: string): Promise<string> {
+        try {
+            // Format all sheet contents for LLM analysis
+            const sheetContents = workbook.SheetNames.map(sheetName => {
+                const sheet = workbook.Sheets[sheetName];
+                const content = XLSX.utils.sheet_to_csv(sheet);
+                return `SHEET "${sheetName}":\n${content}`;
+            }).join('\n\n---\n\n');
+
+            // Find Gemini model for large context processing
+            const geminiModel = AIEngine.Instance.Models.find(m => 
+                m.DriverClass === 'GeminiLLM' || m.APIName.toLowerCase().includes('gemini')
+            );
+            
+            if (!geminiModel) {
+                console.warn('Gemini model not found for sheet selection, using first sheet');
+                return workbook.SheetNames[0];
+            }
+
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+                BaseLLM, geminiModel.DriverClass, GetAIAPIKey(geminiModel.DriverClass)
+            );
+
+            const userPrompt = `${customPrompt}
+
+Here are all the sheets in this Excel file:
+
+${sheetContents}
+
+Respond with ONLY the sheet name that contains the relevant data:`;
+
+            const response = await llm.ChatCompletion({
+                messages: [
+                    { role: 'user', content: userPrompt }
+                ],
+                model: geminiModel.APIName,
+                temperature: 0.0
+            });
+
+            const selectedSheet = response.data.choices[0]?.message?.content?.trim();
+            
+            if (selectedSheet && workbook.SheetNames.includes(selectedSheet)) {
+                console.log(`LLM selected sheet: "${selectedSheet}"`);
+                return selectedSheet;
+            } else {
+                console.warn(`LLM returned invalid sheet name: "${selectedSheet}", using first sheet`);
+                return workbook.SheetNames[0];
+            }
+            
+        } catch (error) {
+            console.error('LLM sheet selection failed:', error.message);
+            return workbook.SheetNames[0];
+        }
+    }
+
+    /**
+     * Get ContentSource entity by ID
+     */
+    private async getContentSourceEntity(contentSourceID: string, contextUser: UserInfo): Promise<ContentSourceEntity> {
+        const rv = new RunView();
+        const result = await rv.RunView<ContentSourceEntity>({
+            EntityName: 'Content Sources',
+            ExtraFilter: `ID='${contentSourceID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        } else {
+            throw new Error(`ContentSource with ID ${contentSourceID} not found`);
+        }
+    }
+
+    /**
+     * Get ContentFileType entity by ID
+     */
+    private async getContentFileTypeEntity(contentFileTypeID: string, contextUser: UserInfo): Promise<ContentFileTypeEntity> {
+        const rv = new RunView();
+        const result = await rv.RunView<ContentFileTypeEntity>({
+            EntityName: 'Content File Types',
+            ExtraFilter: `ID='${contentFileTypeID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        } else {
+            throw new Error(`ContentFileType with ID ${contentFileTypeID} not found`);
+        }
+    }
+
+    /**
     * Given a buffer of data, this function extracts text from a PDF file
     * @param dataBuffer: The buffer of data to extract text from
     * @returns The extracted text from the PDF file
@@ -1092,13 +1257,17 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
-     * 
-     * @param dataBuffer
-     * @returns 
+     * Parse Excel file (basic method - use parseContentItem for full functionality)
+     * @param dataBuffer - Excel file buffer
+     * @returns Parsed text from first sheet
      */
     public async parseXLSX(dataBuffer: Buffer): Promise<string> {
-        const dataXLSX = await officeparser.parseOfficeAsync(dataBuffer);
-        return dataXLSX;
+        const XLSX = require('xlsx');
+        const workbook = XLSX.read(dataBuffer, { type: 'buffer' });
+        
+        // Always use first sheet for basic parsing
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        return XLSX.utils.sheet_to_csv(firstSheet);
     }
 
     public async parseHTML(data: string): Promise<string> {
@@ -1120,48 +1289,5 @@ export class AutotagBaseEngine extends AIEngine {
         }
     }
 
-    /**
-    * Given a file path, as along as its one of the supported file types, this function choses the correct parser
-    * and returns the extracted text. 
-    * @param filePath - The path to the file to extract text from
-    * @returns - The extracted text from the file
-    */
-    public async parseFileFromPath(filePath: string): Promise<string> {
-        const dataBuffer = await fs.promises.readFile(filePath)
-        const fileExtension = filePath.split('.').pop();
-        switch (fileExtension) {
-            case 'pdf':
-                return await this.parsePDF(dataBuffer)
-            case 'docx':
-                return await this.parseDOCX(dataBuffer)
-            case 'xlsx':
-                return await this.parseXLSX(dataBuffer)
-            default:
-                throw new Error('File type not supported');
-        }
-    }
 
-    /**
-     * Enhanced file parsing that supports structured content extraction
-     * @param filePath - The path to the file to extract content from
-     * @param assumeTabularContent - Whether to assume content has tabular structure (for PDFs)
-     * @returns - Either plain text or structured content based on assumeTabularContent flag
-     */
-    public async parseFileFromPathWithStructure(filePath: string, assumeTabularContent: boolean = false): Promise<string | StructuredPDFContent> {
-        const dataBuffer = await fs.promises.readFile(filePath);
-        const fileExtension = filePath.split('.').pop();
-        
-        switch (fileExtension) {
-            case 'pdf':
-                if (assumeTabularContent) {
-                    return await this.parsePDFWithStructure(dataBuffer, assumeTabularContent);
-                } else {
-                    return await this.parsePDF(dataBuffer);
-                }
-            case 'docx':
-                return await this.parseDOCX(dataBuffer);
-            default:
-                throw new Error('File type not supported');
-        }
-    }
 } 
