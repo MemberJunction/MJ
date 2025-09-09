@@ -68,9 +68,16 @@ export class ComponentResolver {
     namespace: string = 'Global',
     contextUser?: UserInfo
   ): Promise<ResolvedComponents> {
-    if (this.debug) {
-      console.log(`🚀 [ComponentResolver] Starting component resolution for: ${spec.name}`);
-    }
+    console.log(`🚀 [ComponentResolver] Starting component resolution for: ${spec.name}`);
+    console.log(`📋 [ComponentResolver] Root component spec:`, {
+      name: spec.name,
+      location: spec.location,
+      registry: spec.registry,
+      namespace: spec.namespace,
+      hasCode: !!spec.code,
+      hasDependencies: !!(spec.dependencies && spec.dependencies.length > 0)
+    });
+    
     if (this.debug) {
       console.log(`📋 [ComponentResolver] Dependencies to resolve:`, (spec.dependencies || []).map(d => ({
         name: d.name,
@@ -93,7 +100,15 @@ export class ComponentResolver {
     }
     
     // Resolve the component hierarchy
+    console.log(`🔄 [ComponentResolver] About to call resolveComponentHierarchy for root: ${spec.name}`);
     await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
+    console.log(`✅ [ComponentResolver] Returned from resolveComponentHierarchy`);
+    console.log(`🔍 [ComponentResolver] Looking for root component '${spec.name}' in resolved:`, !!resolved[spec.name]);
+    
+    if (!resolved[spec.name]) {
+      console.error(`❌ [ComponentResolver] Root component '${spec.name}' was NOT added to resolved map!`);
+      console.log(`📦 [ComponentResolver] What IS in resolved map:`, Object.keys(resolved));
+    }
     
     if (this.debug) {
       console.log(`📊 [ComponentResolver] Resolved components before unwrapping:`, Object.keys(resolved));

@@ -728,17 +728,17 @@ export class ComponentRegistryExtendedResolver {
     private convertComponentSpec(spec: ComponentSpec): ComponentSpecType {
         return {
             name: spec.name,
-            location: spec.location,
+            location: spec.location || 'registry', // Default to 'registry' if not specified
             registry: spec.registry,
             namespace: spec.namespace,
             version: spec.version,
             selectionReasoning: spec.selectionReasoning,
             createNewVersion: spec.createNewVersion,
-            description: spec.description,
-            title: spec.title,
-            type: spec.type,
-            code: spec.code,
-            functionalRequirements: spec.functionalRequirements,
+            description: spec.description || '',
+            title: spec.title || '',
+            type: spec.type || 'component',
+            code: spec.code || '',
+            functionalRequirements: spec.functionalRequirements || '',
             dataRequirements: spec.dataRequirements ? {
                 entities: spec.dataRequirements.entities?.map(e => ({
                     name: e.name,
@@ -757,7 +757,7 @@ export class ComponentRegistryExtendedResolver {
                     returnType: 'object' // Default return type
                 }))
             } : undefined,
-            technicalDesign: spec.technicalDesign,
+            technicalDesign: spec.technicalDesign || '',
             properties: spec.properties?.map(p => ({
                 name: p.name,
                 type: p.type,
@@ -776,7 +776,7 @@ export class ComponentRegistryExtendedResolver {
                 }))
             })),
             libraries: spec.libraries?.map(l => ({
-                name: l.name,
+                name: l.name || 'unknown', // Provide default for required field
                 type: 'npm', // Default type since ComponentLibraryDependency doesn't have type
                 version: l.version,
                 provider: undefined, // ComponentLibraryDependency doesn't have provider
