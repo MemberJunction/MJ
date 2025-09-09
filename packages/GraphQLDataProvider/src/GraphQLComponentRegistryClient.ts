@@ -40,7 +40,7 @@ export interface ComponentSpecWithHash {
     /**
      * The component specification (undefined if not modified)
      */
-    specification?: ComponentSpec;
+    specification?: ComponentSpec | string; // Can be either parsed object or JSON string
     
     /**
      * SHA-256 hash of the specification
@@ -233,7 +233,7 @@ export class GraphQLComponentRegistryClient {
      */
     public async GetRegistryComponent(params: GetRegistryComponentParams): Promise<ComponentSpec | null> {
         try {
-            // Build the query
+            // Build the query - specification is now a JSON string
             const query = gql`
                 query GetRegistryComponent(
                     $registryName: String!,
@@ -252,83 +252,7 @@ export class GraphQLComponentRegistryClient {
                         hash
                         notModified
                         message
-                        specification {
-                            name
-                            location
-                            registry
-                            namespace
-                            version
-                            selectionReasoning
-                            createNewVersion
-                            description
-                            title
-                            type
-                            code
-                            functionalRequirements
-                            dataRequirements {
-                                entities {
-                                name
-                                type
-                                description
-                                fields
-                                filters
-                                sortBy
-                                joins {
-                                    sourceEntity
-                                    sourceField
-                                    targetEntity
-                                    targetField
-                                    type
-                                }
-                            }
-                            queries {
-                                name
-                                description
-                                query
-                                variables
-                                returnType
-                            }
-                        }
-                        technicalDesign
-                        properties {
-                            name
-                            type
-                            description
-                            required
-                            defaultValue
-                        }
-                        events {
-                            name
-                            description
-                            parameters {
-                                name
-                                type
-                                description
-                                required
-                            }
-                        }
-                        libraries {
-                            name
-                            type
-                            version
-                            provider
-                            cdn
-                            description
-                        }
-                        dependencies {
-                            name
-                            location
-                            registry
-                            namespace
-                            version
-                            selectionReasoning
-                            createNewVersion
-                            description
-                            title
-                            type
-                            code
-                        }
-                    }
+                        specification
                     }
                 }
             `;
@@ -360,8 +284,22 @@ export class GraphQLComponentRegistryClient {
                     return null;
                 }
                 
-                // Return the specification if available
-                return response.specification || null;
+                // Parse the JSON string specification if available
+                if (response.specification) {
+                    // If it's already an object, return it
+                    if (typeof response.specification === 'object') {
+                        return response.specification as ComponentSpec;
+                    }
+                    // Otherwise parse the JSON string
+                    try {
+                        return JSON.parse(response.specification) as ComponentSpec;
+                    } catch (e) {
+                        LogError(`Failed to parse component specification: ${e}`);
+                        return null;
+                    }
+                }
+                
+                return null;
             }
 
             return null;
@@ -416,83 +354,7 @@ export class GraphQLComponentRegistryClient {
                         hash
                         notModified
                         message
-                        specification {
-                            name
-                            location
-                            registry
-                            namespace
-                            version
-                            selectionReasoning
-                            createNewVersion
-                            description
-                            title
-                            type
-                            code
-                            functionalRequirements
-                            dataRequirements {
-                                entities {
-                                    name
-                                    type
-                                    description
-                                    fields
-                                    filters
-                                    sortBy
-                                    joins {
-                                        sourceEntity
-                                        sourceField
-                                        targetEntity
-                                        targetField
-                                        type
-                                    }
-                                }
-                                queries {
-                                    name
-                                    description
-                                    query
-                                    variables
-                                    returnType
-                                }
-                            }
-                            technicalDesign
-                            properties {
-                                name
-                                type
-                                description
-                                required
-                                defaultValue
-                            }
-                            events {
-                                name
-                                description
-                                parameters {
-                                    name
-                                    type
-                                    description
-                                    required
-                                }
-                            }
-                            libraries {
-                                name
-                                type
-                                version
-                                provider
-                                cdn
-                                description
-                            }
-                            dependencies {
-                                name
-                                location
-                                registry
-                                namespace
-                                version
-                                selectionReasoning
-                                createNewVersion
-                                description
-                                title
-                                type
-                                code
-                            }
-                        }
+                        specification
                     }
                 }
             `;
@@ -515,9 +377,24 @@ export class GraphQLComponentRegistryClient {
             // Execute the query
             const result = await this._dataProvider.ExecuteGQL(query, variables);
 
-            // Return the full response
+            // Return the full response with parsed specification
             if (result && result.GetRegistryComponent) {
-                return result.GetRegistryComponent as ComponentSpecWithHash;
+                const response = result.GetRegistryComponent;
+                let spec: ComponentSpec | undefined;
+                if (response.specification) {
+                    try {
+                        spec = JSON.parse(response.specification) as ComponentSpec;
+                    } catch (e) {
+                        LogError(`Failed to parse component specification in GetRegistryComponentWithHash: ${e}`);
+                        spec = undefined;
+                    }
+                }
+                return {
+                    specification: spec,
+                    hash: response.hash,
+                    notModified: response.notModified,
+                    message: response.message
+                } as ComponentSpecWithHash;
             }
 
             // Return empty response if nothing found
@@ -564,18 +441,7 @@ export class GraphQLComponentRegistryClient {
             const query = gql`
                 query SearchRegistryComponents($params: SearchRegistryComponentsInput!) {
                     SearchRegistryComponents(params: $params) {
-                        components {
-                            name
-                            location
-                            registry
-                            namespace
-                            version
-                            description
-                            title
-                            type
-                            functionalRequirements
-                            technicalDesign
-                        }
+                        components
                         total
                         offset
                         limit
@@ -586,9 +452,15 @@ export class GraphQLComponentRegistryClient {
             // Execute the query
             const result = await this._dataProvider.ExecuteGQL(query, { params });
 
-            // Return the search result
+            // Return the search result with parsed components
             if (result && result.SearchRegistryComponents) {
-                return result.SearchRegistryComponents as RegistryComponentSearchResult;
+                const searchResult = result.SearchRegistryComponents;
+                return {
+                    components: searchResult.components.map((json: string) => JSON.parse(json) as ComponentSpec),
+                    total: searchResult.total,
+                    offset: searchResult.offset,
+                    limit: searchResult.limit
+                } as RegistryComponentSearchResult;
             }
 
             return {

@@ -19,201 +19,9 @@ import { configInfo } from '../config';
  */
 
 @ObjectType()
-class ComponentPropertyType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    required: boolean;
-
-    @Field({ nullable: true })
-    defaultValue?: string;
-}
-
-@ObjectType()
-class ComponentEventParameterType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    required: boolean;
-}
-
-@ObjectType()
-class ComponentEventType {
-    @Field()
-    name: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field(() => [ComponentEventParameterType], { nullable: true })
-    parameters?: ComponentEventParameterType[];
-}
-
-@ObjectType()
-class ComponentLibraryType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    provider?: string;
-
-    @Field({ nullable: true })
-    cdn?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-}
-
-@ObjectType()
-class EntityJoinType {
-    @Field()
-    sourceEntity: string;
-
-    @Field()
-    sourceField: string;
-
-    @Field()
-    targetEntity: string;
-
-    @Field()
-    targetField: string;
-
-    @Field()
-    type: string;
-}
-
-@ObjectType()
-class EntityRequirementType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field(() => [String], { nullable: true })
-    fields?: string[];
-
-    @Field({ nullable: true })
-    filters?: string;
-
-    @Field({ nullable: true })
-    sortBy?: string;
-
-    @Field(() => [EntityJoinType], { nullable: true })
-    joins?: EntityJoinType[];
-}
-
-@ObjectType()
-class QueryRequirementType {
-    @Field()
-    name: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    query: string;
-
-    @Field({ nullable: true })
-    variables?: string;
-
-    @Field()
-    returnType: string;
-}
-
-@ObjectType()
-class ComponentDataRequirementsType {
-    @Field(() => [EntityRequirementType], { nullable: true })
-    entities?: EntityRequirementType[];
-
-    @Field(() => [QueryRequirementType], { nullable: true })
-    queries?: QueryRequirementType[];
-}
-
-@ObjectType()
-class ComponentSpecType {
-    @Field()
-    name: string;
-
-    @Field()
-    location: string;
-
-    @Field({ nullable: true })
-    registry?: string;
-
-    @Field({ nullable: true })
-    namespace?: string;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    selectionReasoning?: string;
-
-    @Field({ nullable: true })
-    createNewVersion?: boolean;
-
-    @Field()
-    description: string;
-
-    @Field()
-    title: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    code: string;
-
-    @Field()
-    functionalRequirements: string;
-
-    @Field(() => ComponentDataRequirementsType, { nullable: true })
-    dataRequirements?: ComponentDataRequirementsType;
-
-    @Field()
-    technicalDesign: string;
-
-    @Field(() => [ComponentPropertyType], { nullable: true })
-    properties?: ComponentPropertyType[];
-
-    @Field(() => [ComponentEventType], { nullable: true })
-    events?: ComponentEventType[];
-
-    @Field(() => [ComponentLibraryType], { nullable: true })
-    libraries?: ComponentLibraryType[];
-
-    @Field(() => [ComponentSpecType], { nullable: true })
-    dependencies?: ComponentSpecType[];
-}
-
-@ObjectType()
 class ComponentSpecWithHashType {
-    @Field(() => ComponentSpecType, { nullable: true })
-    specification?: ComponentSpecType;
+    @Field(() => String, { nullable: true })
+    specification?: string; // JSON string of ComponentSpec
     
     @Field(() => String)
     hash: string;
@@ -251,8 +59,8 @@ class SearchRegistryComponentsInput {
 
 @ObjectType()
 class RegistryComponentSearchResultType {
-    @Field(() => [ComponentSpecType])
-    components: ComponentSpecType[];
+    @Field(() => [String])
+    components: string[]; // Array of JSON strings of ComponentSpec
 
     @Field()
     total: number;
@@ -370,11 +178,9 @@ export class ComponentRegistryExtendedResolver {
                 await this.cacheComponent(component, registryName, user);
             }
             
-            // Convert to GraphQL type and return with hash
-            const convertedSpec = this.convertComponentSpec(component);
-            
+            // Return the ComponentSpec as a JSON string
             return {
-                specification: convertedSpec,
+                specification: JSON.stringify(component),
                 hash: response.hash,
                 notModified: false,
                 message: undefined
@@ -471,7 +277,7 @@ export class ComponentRegistryExtendedResolver {
             const paginatedResults = allResults.slice(offset, offset + limit);
             
             return {
-                components: this.convertComponentSpecs(paginatedResults),
+                components: paginatedResults.map(spec => JSON.stringify(spec)),
                 total: allResults.length,
                 offset,
                 limit
@@ -716,83 +522,11 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Convert ComponentSpec array to ComponentSpecType array
-     */
-    private convertComponentSpecs(specs: ComponentSpec[]): ComponentSpecType[] {
-        return specs.map(spec => this.convertComponentSpec(spec));
-    }
-    
-    /**
-     * Convert a single ComponentSpec to ComponentSpecType
-     */
-    private convertComponentSpec(spec: ComponentSpec): ComponentSpecType {
-        return {
-            name: spec.name,
-            location: spec.location || 'registry', // Default to 'registry' if not specified
-            registry: spec.registry,
-            namespace: spec.namespace,
-            version: spec.version,
-            selectionReasoning: spec.selectionReasoning,
-            createNewVersion: spec.createNewVersion,
-            description: spec.description || '',
-            title: spec.title || '',
-            type: spec.type || 'component',
-            code: spec.code || '',
-            functionalRequirements: spec.functionalRequirements || '',
-            dataRequirements: spec.dataRequirements ? {
-                entities: spec.dataRequirements.entities?.map(e => ({
-                    name: e.name,
-                    type: 'entity', // EntityRequirementType requires this field
-                    description: e.description,
-                    fields: e.displayFields, // Map displayFields to fields
-                    filters: e.filterFields?.join(', '), // Convert array to string
-                    sortBy: e.sortFields?.join(', '), // Convert array to string
-                    joins: undefined // ComponentEntityDataRequirement doesn't have joins
-                })),
-                queries: spec.dataRequirements.queries?.map(q => ({
-                    name: q.name,
-                    description: q.description,
-                    query: q.newQuerySQL || '', // Use newQuerySQL if available
-                    variables: q.parameters ? JSON.stringify(q.parameters) : undefined, // Map parameters to variables
-                    returnType: 'object' // Default return type
-                }))
-            } : undefined,
-            technicalDesign: spec.technicalDesign || '',
-            properties: spec.properties?.map(p => ({
-                name: p.name,
-                type: p.type,
-                description: p.description,
-                required: p.required,
-                defaultValue: p.defaultValue ? String(p.defaultValue) : undefined
-            })),
-            events: spec.events?.map(e => ({
-                name: e.name,
-                description: e.description,
-                parameters: e.parameters?.map(p => ({
-                    name: p.name,
-                    type: p.type,
-                    description: p.description,
-                    required: false // ComponentEventParameter doesn't have required field
-                }))
-            })),
-            libraries: spec.libraries?.map(l => ({
-                name: l.name || 'unknown', // Provide default for required field
-                type: 'npm', // Default type since ComponentLibraryDependency doesn't have type
-                version: l.version,
-                provider: undefined, // ComponentLibraryDependency doesn't have provider
-                cdn: undefined, // ComponentLibraryDependency doesn't have cdn
-                description: undefined // ComponentLibraryDependency doesn't have description
-            })),
-            dependencies: spec.dependencies ? this.convertComponentSpecs(spec.dependencies) : undefined
-        };
-    }
-    
-    /**
      * Map search result to GraphQL type
      */
     private mapSearchResult(result: ComponentSearchResult): RegistryComponentSearchResultType {
         return {
-            components: this.convertComponentSpecs(result.components),
+            components: result.components.map(spec => JSON.stringify(spec)),
             total: result.total,
             offset: result.offset,
             limit: result.limit

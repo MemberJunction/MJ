@@ -30,7 +30,7 @@ export class ComponentRegistry {
   private registry: Map<string, RegistryEntry>;
   private config: RegistryConfig;
   private cleanupTimer?: NodeJS.Timeout | number;
-  private registryId: string;
+  public readonly registryId: string;
   
   /**
    * Creates a new ComponentRegistry instance

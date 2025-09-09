@@ -175,6 +175,8 @@ export interface CompilationResult {
   duration: number;
   /** Size of compiled code in bytes */
   size?: number;
+  /** Libraries loaded during compilation */
+  loadedLibraries?: Map<string, any>;
 }
 
 /**
