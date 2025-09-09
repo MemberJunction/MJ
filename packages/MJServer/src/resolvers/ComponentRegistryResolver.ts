@@ -290,51 +290,10 @@ class ComponentDependencyTreeType {
  */
 @Resolver()
 export class ComponentRegistryExtendedResolver {
-    private registryClients = new Map<string, ComponentRegistryClient>();
     private componentEngine = ComponentMetadataEngine.Instance;
     
     constructor() {
-        this.initializeFromConfig();
-    }
-    
-    /**
-     * Initialize registry clients from configuration
-     */
-    private initializeFromConfig() {
-        try {
-            // Get component registries configuration
-            const registries = mjConfig.componentRegistries || [];
-            
-            // Initialize a client for each configured registry
-            registries.forEach((registry: any) => {
-                // Get API key from environment variable or config
-                const apiKey = process.env[`REGISTRY_API_KEY_${registry.id.replace(/-/g, '_').toUpperCase()}`] || 
-                               registry.apiKey;
-                
-                const client = new ComponentRegistryClient({
-                    baseUrl: registry.url,
-                    apiKey: apiKey,
-                    timeout: registry.timeout || 30000,
-                    retryPolicy: registry.retryPolicy || {
-                        maxRetries: 3,
-                        initialDelay: 1000,
-                        maxDelay: 10000,
-                        backoffMultiplier: 2
-                    },
-                    headers: registry.headers
-                });
-                
-                this.registryClients.set(registry.id, client);
-                
-                console.log(`Initialized Component Registry client for: ${registry.id} (${registry.url})`);
-            });
-            
-            if (registries.length === 0) {
-                console.warn('No component registries configured in mj.config.cjs');
-            }
-        } catch (error) {
-            console.error('Failed to initialize Component Registry clients:', error);
-        }
+        // No longer pre-initialize clients - create on demand
     }
     
     /**
@@ -342,7 +301,7 @@ export class ComponentRegistryExtendedResolver {
      */
     @Query(() => ComponentSpecType, { nullable: true })
     async GetRegistryComponent(
-        @Arg('registryId') registryId: string,
+        @Arg('registryName') registryName: string,
         @Arg('namespace') namespace: string,
         @Arg('name') name: string,
         @Ctx() { userPayload }: AppContext,
@@ -353,27 +312,20 @@ export class ComponentRegistryExtendedResolver {
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
-            // Check user permissions
-            await this.checkUserAccess(user, registryId);
+            // Get registry from database by name
+            const registry = await this.getRegistryByName(registryName, user);
+            if (!registry) {
+                throw new Error(`Registry not found: ${registryName}`);
+            }
+            
+            // Check user permissions (use registry ID for permission check)
+            await this.checkUserAccess(user, registry.ID);
             
             // Initialize component engine
             await this.componentEngine.Config(false, user);
             
-            // Get registry from database
-            const registry = await this.getRegistry(registryId, user);
-            if (!registry) {
-                throw new Error(`Registry not found: ${registryId}`);
-            }
-            
-            // Get client for this registry
-            const client = this.registryClients.get(registryId);
-            if (!client) {
-                // If no pre-configured client, create one dynamically
-                const dynamicClient = this.createDynamicClient(registry);
-                this.registryClients.set(registryId, dynamicClient);
-            }
-            
-            const registryClient = this.registryClients.get(registryId)!;
+            // Create client on-demand for this registry
+            const registryClient = this.createClientForRegistry(registry);
             
             // Fetch component from registry
             const component = await registryClient.getComponent({
@@ -385,7 +337,7 @@ export class ComponentRegistryExtendedResolver {
             
             // Optional: Cache in database if configured
             if (this.shouldCache(registry)) {
-                await this.cacheComponent(component, registryId, user);
+                await this.cacheComponent(component, registryName, user);
             }
             
             return component;
@@ -419,10 +371,13 @@ export class ComponentRegistryExtendedResolver {
             if (params.registryId) {
                 await this.checkUserAccess(user, params.registryId);
                 
-                const client = this.registryClients.get(params.registryId);
-                if (!client) {
-                    throw new Error(`No client configured for registry: ${params.registryId}`);
+                // Get registry and create client on-demand
+                const registry = await this.getRegistry(params.registryId, user);
+                if (!registry) {
+                    throw new Error(`Registry not found: ${params.registryId}`);
                 }
+                
+                const client = this.createClientForRegistry(registry);
                 
                 const result = await client.searchComponents({
                     namespace: params.namespace,
@@ -436,13 +391,20 @@ export class ComponentRegistryExtendedResolver {
                 return this.mapSearchResult(result);
             }
             
-            // Otherwise, search across all configured registries
+            // Otherwise, search across all active registries
             const allResults: ComponentSpec[] = [];
             
-            for (const [registryId, client] of this.registryClients.entries()) {
+            // Get all active registries from database
+            await this.componentEngine.Config(false, user);
+            const activeRegistries = this.componentEngine.ComponentRegistries?.filter(
+                r => r.Status === 'Active'
+            ) || [];
+            
+            for (const registry of activeRegistries) {
                 try {
-                    await this.checkUserAccess(user, registryId);
+                    await this.checkUserAccess(user, registry.ID);
                     
+                    const client = this.createClientForRegistry(registry);
                     const result = await client.searchComponents({
                         namespace: params.namespace,
                         query: params.query,
@@ -455,7 +417,7 @@ export class ComponentRegistryExtendedResolver {
                     allResults.push(...result.components);
                 } catch (error) {
                     // Log but continue with other registries
-                    LogError(`Failed to search registry ${registryId}:`);
+                    LogError(`Failed to search registry ${registry.Name}: ${error}`);
                 }
             }
             
@@ -481,7 +443,7 @@ export class ComponentRegistryExtendedResolver {
      */
     @Query(() => ComponentDependencyTreeType, { nullable: true })
     async ResolveComponentDependencies(
-        @Arg('registryId') registryId: string,
+        @Arg('registryName') registryName: string,
         @Arg('componentId') componentId: string,
         @Ctx() { userPayload }: AppContext
     ): Promise<ComponentDependencyTreeType | null> {
@@ -490,12 +452,16 @@ export class ComponentRegistryExtendedResolver {
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
-            await this.checkUserAccess(user, registryId);
-            
-            const client = this.registryClients.get(registryId);
-            if (!client) {
-                throw new Error(`No client configured for registry: ${registryId}`);
+            // Get registry to find its ID for permission check
+            const registry = await this.getRegistryByName(registryName, user);
+            if (!registry) {
+                throw new Error(`Registry not found: ${registryName}`);
             }
+            
+            await this.checkUserAccess(user, registry.ID);
+            
+            // Create client on-demand
+            const client = this.createClientForRegistry(registry);
             
             const tree = await client.resolveDependencies(componentId);
             return tree as ComponentDependencyTreeType;
@@ -517,7 +483,7 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Get registry entity from database
+     * Get registry entity from database by ID
      */
     private async getRegistry(registryId: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
         try {
@@ -535,21 +501,50 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Create a dynamic client for a registry not in config
+     * Get registry entity from database by Name
      */
-    private createDynamicClient(registry: ComponentRegistryEntity): ComponentRegistryClient {
-        const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`];
+    private async getRegistryByName(registryName: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
+        try {
+            await this.componentEngine.Config(false, userInfo);
+            
+            const registry = this.componentEngine.ComponentRegistries?.find(
+                r => r.Name === registryName && r.Status === 'Active'
+            );
+            
+            return registry || null;
+        } catch (error) {
+            LogError(error);
+            return null;
+        }
+    }
+    
+    /**
+     * Create a client for a registry on-demand
+     * Checks configuration first, then falls back to default settings
+     */
+    private createClientForRegistry(registry: ComponentRegistryEntity): ComponentRegistryClient {
+        // Check if there's a configuration for this registry
+        const config = mjConfig.componentRegistries?.find((r: any) => 
+            r.id === registry.ID || r.name === registry.Name
+        );
         
+        // Get API key from environment or config
+        const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`] ||
+                      process.env[`REGISTRY_API_KEY_${registry.Name?.replace(/-/g, '_').toUpperCase()}`] ||
+                      config?.apiKey;
+        
+        // Use config settings if available, otherwise defaults
         return new ComponentRegistryClient({
             baseUrl: registry.URI || '',
             apiKey: apiKey,
-            timeout: 30000,
-            retryPolicy: {
+            timeout: config?.timeout || 30000,
+            retryPolicy: config?.retryPolicy || {
                 maxRetries: 3,
                 initialDelay: 1000,
                 maxDelay: 10000,
                 backoffMultiplier: 2
-            }
+            },
+            headers: config?.headers
         });
     }
     

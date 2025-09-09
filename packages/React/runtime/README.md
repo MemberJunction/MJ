@@ -421,6 +421,48 @@ const removed = runtime.registry.cleanup();
 console.log(`Removed ${removed} unused components`);
 ```
 
+### External Registry Components
+
+The React Runtime supports loading components from external registries through the `ComponentRegistryService`:
+
+```typescript
+// Component specs can reference external registries
+const componentSpec = {
+  name: 'DataGrid',
+  location: 'registry',
+  registry: 'MJ',  // Registry name (globally unique)
+  namespace: 'core/ui',
+  version: 'latest',
+  // ... other spec fields
+};
+
+// The runtime will:
+// 1. Look up the registry by name in ComponentRegistries
+// 2. Fetch the component via GraphQL/MJServer
+// 3. Calculate SHA-256 hash of the spec for cache validation
+// 4. Compile and cache the component
+```
+
+#### Component Caching with SHA-256 Validation
+
+The runtime uses SHA-256 hashing to ensure cached components are up-to-date:
+
+```typescript
+// When fetching external components:
+// 1. Fetch spec from registry
+// 2. Calculate SHA-256 hash using Web Crypto API
+// 3. Compare with cached component's hash
+// 4. Recompile only if spec has changed
+
+// Note: Requires secure context (HTTPS or localhost)
+// Web Crypto API is used for consistent hashing across environments
+```
+
+#### Registry Types
+
+- **Local Registry** (`registry` field undefined): Components stored in local database
+- **External Registry** (`registry` field defined): Components fetched from remote registries via MJServer
+
 ## Configuration
 
 ### Compiler Configuration

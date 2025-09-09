@@ -8,9 +8,9 @@ import { ComponentSpec } from "@memberjunction/interactive-component-types";
  */
 export interface GetRegistryComponentParams {
     /**
-     * Registry ID from the database
+     * Registry name (globally unique)
      */
-    registryId: string;
+    registryName: string;
     
     /**
      * Component namespace
@@ -33,9 +33,9 @@ export interface GetRegistryComponentParams {
  */
 export interface SearchRegistryComponentsParams {
     /**
-     * Optional registry ID filter
+     * Optional registry name filter
      */
-    registryId?: string;
+    registryName?: string;
     
     /**
      * Optional namespace filter
@@ -148,7 +148,7 @@ export interface ComponentDependencyTree {
  * 
  * // Get a component from a registry
  * const component = await registryClient.GetRegistryComponent({
- *   registryId: "mj-central",
+ *   registryName: "MJ",
  *   namespace: "core/ui",
  *   name: "DataGrid",
  *   version: "1.0.0"
@@ -190,7 +190,7 @@ export class GraphQLComponentRegistryClient {
      * @example
      * ```typescript
      * const component = await registryClient.GetRegistryComponent({
-     *   registryId: "mj-central",
+     *   registryName: "MJ",
      *   namespace: "core/ui",
      *   name: "DataGrid",
      *   version: "2.0.0"
@@ -206,13 +206,13 @@ export class GraphQLComponentRegistryClient {
             // Build the query
             const query = gql`
                 query GetRegistryComponent(
-                    $registryId: String!,
+                    $registryName: String!,
                     $namespace: String!,
                     $name: String!,
                     $version: String
                 ) {
                     GetRegistryComponent(
-                        registryId: $registryId,
+                        registryName: $registryName,
                         namespace: $namespace,
                         name: $name,
                         version: $version
@@ -298,7 +298,7 @@ export class GraphQLComponentRegistryClient {
 
             // Prepare variables
             const variables: Record<string, any> = {
-                registryId: params.registryId,
+                registryName: params.registryName,
                 namespace: params.namespace,
                 name: params.name
             };
@@ -517,13 +517,13 @@ export class GraphQLComponentRegistryClient {
      * ```
      */
     public async GetLatestVersion(
-        registryId: string,
+        registryName: string,
         namespace: string,
         name: string
     ): Promise<string | null> {
         try {
             const component = await this.GetRegistryComponent({
-                registryId,
+                registryName,
                 namespace,
                 name,
                 version: 'latest'
