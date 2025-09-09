@@ -59,7 +59,7 @@ function EntityGrid({
     'SchemaName',
     'BaseTable',
     'Status',
-    '__mj_UpdatedAt'
+    '__mj_CreatedAt'
   ];
   
   // Define which fields to search when user types in filter box
@@ -70,7 +70,8 @@ function EntityGrid({
     'Description',
     'SchemaName',
     'BaseTable',
-    'BaseView'
+    'BaseView',
+    'Status'
   ];
   
   // Error state: Failed to load entities

@@ -69,76 +69,145 @@ function DataGrid({
   const statusColorMap = {
     // Green colors for positive states
     active: '#389e0d',      // darker green
-    approved: '#389e0d',
-    complete: '#389e0d',
-    completed: '#389e0d',
-    success: '#389e0d',
-    successful: '#389e0d',
-    enabled: '#389e0d',
-    published: '#389e0d',
+    approved: '#52c41a',    // green
+    complete: '#237804',    // dark green
+    completed: '#135200',   // very dark green
+    success: '#3f6600',     // olive green
+    successful: '#5b8c00',  // light olive
+    enabled: '#7cb305',     // lime
+    published: '#a0d911',   // light lime
     
     // Red colors for negative states
     inactive: '#cf1322',    // darker red
-    rejected: '#cf1322',
-    failed: '#cf1322',
-    error: '#cf1322',
-    disabled: '#cf1322',
-    cancelled: '#cf1322',
-    canceled: '#cf1322',
-    terminated: '#cf1322',
-    expired: '#cf1322',
+    rejected: '#f5222d',    // red
+    failed: '#a8071a',      // dark red
+    error: '#820014',       // very dark red
+    disabled: '#ff4d4f',    // light red
+    cancelled: '#ff7875',   // salmon
+    canceled: '#ff9c9c',    // light salmon
+    terminated: '#873800',  // burnt orange
+    expired: '#ad4e00',     // dark orange
+    deprecated: '#d4380d',  // rust orange
     
     // Yellow/Orange for pending states
     pending: '#d48806',     // darker orange
-    paused: '#d48806',
-    temporary: '#d48806',
-    draft: '#d48806',
-    review: '#d48806',
-    waiting: '#d48806',
+    paused: '#fa8c16',      // orange
+    temporary: '#faad14',   // gold
+    draft: '#d4b106',       // dark gold
+    review: '#ad8b00',      // darker gold
+    waiting: '#ffc53d',     // light gold
     
     // Blue for informational states
     processing: '#096dd9',  // darker blue
-    running: '#096dd9',
-    inprogress: '#096dd9',
-    'in progress': '#096dd9',
-    'in-progress': '#096dd9'
+    running: '#1890ff',     // blue
+    inprogress: '#0050b3',  // dark blue
+    'in progress': '#003a8c', // very dark blue
+    'in-progress': '#40a9ff' // light blue
   };
   
-  // Fallback colors for value lists (darker for better contrast)
+  // 50 distinct colors for value lists (excluding colors used in statusColorMap)
+  // These are carefully selected to be visually distinct from each other
   const fallbackColors = [
-    '#096dd9', // darker blue
-    '#389e0d', // darker green
-    '#d4380d', // darker orange
-    '#c41d7f', // darker magenta
-    '#531dab', // darker purple
-    '#08979c', // darker cyan
-    '#cf1322', // darker red/volcano
-    '#1d39c4', // darker geekblue
-    '#7cb305', // darker lime
-    '#d4b106'  // darker gold
+    '#722ed1', // purple
+    '#9254de', // light purple
+    '#531dab', // dark purple
+    '#391085', // very dark purple
+    '#b37feb', // lavender
+    
+    '#c41d7f', // magenta
+    '#eb2f96', // pink
+    '#f759ab', // light pink
+    '#9e1068', // dark magenta
+    '#780650', // very dark magenta
+    
+    '#08979c', // teal
+    '#13c2c2', // cyan
+    '#006d75', // dark teal
+    '#36cfc9', // light cyan
+    '#5cdbd3', // pale cyan
+    
+    '#1d39c4', // indigo
+    '#2f54eb', // royal blue
+    '#597ef7', // periwinkle
+    '#10239e', // dark indigo
+    '#061178', // navy
+    
+    '#fa541c', // vermillion
+    '#ff7a45', // coral
+    '#ff9c6e', // peach
+    '#d4380d', // rust (if not used above)
+    '#ad2102', // brick red
+    
+    '#8c8c8c', // gray
+    '#595959', // dark gray
+    '#bfbfbf', // light gray
+    '#434343', // charcoal
+    '#262626', // near black
+    
+    '#614700', // brown
+    '#874d00', // tan
+    '#a8730f', // amber
+    '#c79816', // mustard
+    '#d4a017', // goldenrod
+    
+    '#00474f', // dark cyan
+    '#006064', // petrol
+    '#004851', // dark petrol
+    '#1a535c', // ocean
+    '#2c5f2d', // forest green
+    
+    '#4a7c59', // sage
+    '#6b8e23', // olive drab
+    '#556b2f', // dark olive
+    '#8fbc8f', // dark sea green
+    '#3cb371', // medium sea green
+    
+    '#cd5c5c', // indian red
+    '#bc8f8f', // rosy brown
+    '#daa520', // goldenrod
+    '#b8860b', // dark goldenrod
+    '#ff6347'  // tomato
   ];
   
-  // Get color for a value in a value list
+  // Get color for a value in a value list - ensures unique colors for all values
   const getValueColor = (value, possibleValues) => {
     if (!value) return null;
     
-    // Check common status mapping first
     const normalized = value.toString().toLowerCase().trim();
+    
+    // Build a complete color assignment map for this column
+    const colorAssignments = new Map();
+    let nextColorIndex = 0;
+    
+    // First, assign colors to all possible values in order
+    if (possibleValues && Array.isArray(possibleValues)) {
+      possibleValues.forEach(pv => {
+        const pvValue = (pv.Value || pv.Code || '').toLowerCase().trim();
+        if (pvValue && !colorAssignments.has(pvValue)) {
+          // Check if this value has a predefined color in statusColorMap
+          if (statusColorMap[pvValue]) {
+            colorAssignments.set(pvValue, statusColorMap[pvValue]);
+          } else {
+            // Assign next available fallback color
+            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);
+            nextColorIndex++;
+          }
+        }
+      });
+    }
+    
+    // Return the assigned color for this value
+    if (colorAssignments.has(normalized)) {
+      return colorAssignments.get(normalized);
+    }
+    
+    // If value wasn't in possibleValues, check statusColorMap first
     if (statusColorMap[normalized]) {
       return statusColorMap[normalized];
     }
     
-    // Use consistent color based on position in possible values
-    if (possibleValues && Array.isArray(possibleValues)) {
-      const index = possibleValues.findIndex(v => 
-        v.Value?.toLowerCase() === normalized || v.Code?.toLowerCase() === normalized
-      );
-      if (index >= 0) {
-        return fallbackColors[index % fallbackColors.length];
-      }
-    }
-    
-    // Hash the value to get a consistent color
+    // Otherwise assign a fallback color based on hash
+    // This ensures consistency even for unexpected values
     let hash = 0;
     for (let i = 0; i < normalized.length; i++) {
       hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
@@ -572,14 +641,21 @@ function DataGrid({
     <div className="data-grid-component" style={{ width: '100%' }}>
       {filtering && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-          <Search
-            placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}
-            value={filterText}
-            onChange={e => setFilterText(e.target.value)}
-            allowClear
-            onClear={() => setFilterText('')}
-            style={{ width: '100%' }}  // Full width to match grid
-          />
+          <div style={{ position: 'relative' }}>
+            <Search
+              placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              allowClear
+              onClear={() => setFilterText('')}
+              style={{ width: '100%' }}  // Full width to match grid
+            />
+            <style>{`
+              .data-grid-component .ant-btn.ant-input-search-button {
+                margin-top: -1px;
+              }
+            `}</style>
+          </div>
           {debouncedFilter && (
             <Text type="secondary">
               Found {filteredData.length} matching records

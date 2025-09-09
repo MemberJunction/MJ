@@ -50,7 +50,6 @@
       "name": "DataGrid",
       "namespace": "Generic/UI",
       "location": "registry",
-      "registry": "MJ",
       "description": "Generic data grid"
     }
   ],
