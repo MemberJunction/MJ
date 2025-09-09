@@ -107,6 +107,15 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * Represents a single field change in the DiffObjects comparison result
+ */
+export type FieldChange = {
+  field: string;
+  oldValue: any;
+  newValue: any;
+};
+
+/**
  * Core SQL execution function - handles the actual database query execution
  * This is outside the class to allow both static and instance methods to use it
  * without creating circular dependencies or forcing everything to be static
@@ -819,6 +828,7 @@ export class SQLServerDataProvider
       };
     } catch (e) {
       LogError(e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
       return {
         Success: false,
         QueryID: params.QueryID,
@@ -827,7 +837,7 @@ export class SQLServerDataProvider
         RowCount: 0,
         TotalRowCount: 0,
         ExecutionTime: 0,
-        ErrorMessage: e.message,
+        ErrorMessage: errorMessage,
       };
     }
   }
@@ -838,7 +848,18 @@ export class SQLServerDataProvider
   protected async findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<QueryInfo> {
     const query = await this.findQuery(params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath, true);
     if (!query) {
-      throw new Error('Query not found');
+      let errorDetails = 'Query not found';
+      if (params.QueryName) {
+        errorDetails = `Query '${params.QueryName}' not found`;
+        if (params.CategoryPath) {
+          errorDetails += ` in category path '${params.CategoryPath}'`;
+        } else if (params.CategoryID) {
+          errorDetails += ` in category ID '${params.CategoryID}'`;
+        }
+      } else if (params.QueryID) {
+        errorDetails = `Query with ID '${params.QueryID}' not found`;
+      }
+      throw new Error(errorDetails);
     }
     
     // Check permissions and status
@@ -1070,6 +1091,10 @@ export class SQLServerDataProvider
   // START ---- IRunViewProvider
   /**************************************************************************/
   public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    // add call to pre-processor that was previously in the @memberjunction/core RunView class but now
+    // is handled in ProviderBase when sub-classes like this one invoke the pre/post process properly
+    await this.PreProcessRunView(params, contextUser);
+
     const startTime = new Date();
     try {
       if (params) {
@@ -1086,7 +1111,7 @@ export class SQLServerDataProvider
           // if we don't have viewEntity, that means it is a dynamic view, so we need EntityName at a minimum
           if (!params.EntityName || params.EntityName.length === 0) throw new Error(`EntityName is required when ViewID or ViewName is not provided`);
 
-          entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
+          entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
           if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
         } else {
           entityInfo = this.Entities.find((e) => e.ID === viewEntity.EntityID);
@@ -1104,12 +1129,16 @@ export class SQLServerDataProvider
         const saveViewResults: boolean = params.SaveViewResults;
 
         let topSQL: string = '';
+        // Only use TOP if we're NOT using OFFSET/FETCH pagination
+        const usingPagination = params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0);
+        
         if (params.IgnoreMaxRows === true) {
           // do nothing, leave it blank, this structure is here to make the code easier to read
-        } else if (params.StartRow && params.StartRow > 0) {
-          // do nothing, leave it blank, this structure is here to make the code easier to read
+        } else if (usingPagination) {
+          // When using OFFSET/FETCH, don't add TOP clause
+          // do nothing, leave it blank
         } else if (params.MaxRows && params.MaxRows > 0) {
-          // user provided a max rows, so we use that
+          // user provided a max rows, so we use that (but not using pagination)
           topSQL = 'TOP ' + params.MaxRows;
         } else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
           topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
@@ -1118,7 +1147,8 @@ export class SQLServerDataProvider
         const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
         let viewSQL: string = `SELECT ${topSQL} ${fields} FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}`;
-        let countSQL = topSQL && topSQL.length > 0 ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
+        // We need countSQL for pagination (to get total count) or when using TOP (to show limited vs total)
+        let countSQL = (usingPagination || (topSQL && topSQL.length > 0)) ? `SELECT COUNT(*) AS TotalRowCount FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}` : null;
         let whereSQL: string = '';
         let bHasWhere: boolean = false;
         let userViewRunID: string = '';
@@ -1225,8 +1255,12 @@ export class SQLServerDataProvider
           viewSQL += ` ORDER BY ${orderBy}`;
         }
 
-        if (params.StartRow && params.StartRow > 0 && params.MaxRows && params.MaxRows > 0 && entityInfo.FirstPrimaryKey) {
-          viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+        // Apply pagination using OFFSET/FETCH if both MaxRows and StartRow are specified
+        if (params.MaxRows && params.MaxRows > 0 && (params.StartRow !== undefined && params.StartRow >= 0) && entityInfo.FirstPrimaryKey) {
+          // If no ORDER BY was already added, add one based on primary key (required for OFFSET/FETCH)
+          if (!orderBy) {
+            viewSQL += ` ORDER BY ${entityInfo.FirstPrimaryKey.Name} `;
+          }
           viewSQL += ` OFFSET ${params.StartRow} ROWS FETCH NEXT ${params.MaxRows} ROWS ONLY`;
         }
 
@@ -1234,10 +1268,13 @@ export class SQLServerDataProvider
         const retData = params.ResultType === 'count_only' ? [] : await this.ExecuteSQL(viewSQL, undefined, undefined, contextUser);
 
         // finally, if we have a countSQL, we need to run that to get the row count
-        // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
-        // OR do that if we are doing a count_only
+        // Run the count query if:
+        // 1. We're using pagination (always need total count for pagination)
+        // 2. ResultType is 'count_only'
+        // 3. The number of returned rows equals the max limit (might be more rows available)
         let rowCount = null;
-        if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
+        const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
+        if (countSQL && (usingPagination || params.ResultType === 'count_only' || (maxRowsUsed && retData.length === maxRowsUsed))) {
           const countResult = await this.ExecuteSQL(countSQL, undefined, undefined, contextUser);
           if (countResult && countResult.length > 0) {
             rowCount = countResult[0].TotalRowCount;
@@ -1272,7 +1309,7 @@ export class SQLServerDataProvider
           );
         }
 
-        return {
+        const result =  {
           RowCount:
             params.ResultType === 'count_only'
               ? rowCount
@@ -1284,7 +1321,16 @@ export class SQLServerDataProvider
           Success: true,
           ErrorMessage: null,
         };
-      } else return null;
+
+        // add call to post-processor that was previously in the @memberjunction/core RunView class but now
+        // is handled in ProviderBase when sub-classes like this one invoke the post process properly
+        await this.PostProcessRunView(result, params, contextUser); 
+
+        return result;
+      } 
+      else {
+        return null;
+      }
     } catch (e) {
       const exceptionStopTime = new Date();
       LogError(e);
@@ -1301,8 +1347,17 @@ export class SQLServerDataProvider
   }
 
   public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    // pre-process in base class
+    await this.PreProcessRunViews(params, contextUser);
+
+    // do the work
     const promises = params.map((p) => this.RunView<T>(p, contextUser));
-    return Promise.all(promises);
+    const results = await Promise.all(promises);
+
+    // post-process in base class
+    await this.PostProcessRunViews(results, params, contextUser);
+
+    return results;
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
@@ -1427,7 +1482,7 @@ export class SQLServerDataProvider
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
-                                 ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`;
+                                 ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
   }
 
@@ -1734,7 +1789,7 @@ export class SQLServerDataProvider
           const parts = kv.split(CompositeKey.DefaultValueDelimiter);
           pkeys[parts[0]] = parts[1];
         });
-        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, keyValues);
+        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
 
         const recordDependency: RecordDependency = {
           EntityName: r.EntityName,
@@ -1971,7 +2026,18 @@ export class SQLServerDataProvider
    * @returns Object with fullSQL and simpleSQL properties
    */
   private GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): { fullSQL: string; simpleSQL: string } {
-    const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
+    // Generate the stored procedure parameters - now returns an object with structured SQL
+    const spParams = this.generateSPParams(entity, !bNewRecord);
+    
+    // Build the simple SQL - use the new DECLARE/SET/EXEC pattern
+    let sSimpleSQL: string;
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
+    if (spParams.variablesSQL) {
+      sSimpleSQL = `${spParams.variablesSQL}\n\n${spParams.setSQL}\n\n${execSQL}`;
+    } else {
+      sSimpleSQL = execSQL;
+    }
+    
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
     let sSQL: string = '';
     if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
@@ -1992,29 +2058,35 @@ export class SQLServerDataProvider
         sSQL = sSimpleSQL; 
       }
       else {
+        // For complex case with record change tracking, we need to insert DECLARE statements at the top
+        const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
         sSQL = `
-                      DECLARE @ResultTable TABLE (
-                          ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                      );
+                    ${spParams.variablesSQL}
+                    
+                    DECLARE @ResultTable TABLE (
+                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                    );
 
-                      INSERT INTO @ResultTable
-                      ${sSimpleSQL};
+                    ${spParams.setSQL}
 
-                      DECLARE @ID NVARCHAR(MAX);
-                      
-                      SELECT @ID = ${concatPKIDString} FROM @ResultTable;
-                      
-                      IF @ID IS NOT NULL
-                      BEGIN
-                          DECLARE @ResultChangesTable TABLE (
-                              ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                          );
+                    INSERT INTO @ResultTable
+                    ${execSQL};
 
-                          INSERT INTO @ResultChangesTable
-                          ${logRecordChangeSQL};
-                      END;
+                    DECLARE @ID NVARCHAR(MAX);
+                    
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+                    
+                    IF @ID IS NOT NULL
+                    BEGIN
+                        DECLARE @ResultChangesTable TABLE (
+                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                        );
 
-                      SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
+                        INSERT INTO @ResultChangesTable
+                        ${logRecordChangeSQL};
+                    END;
+
+                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
       }
     } else {
       // not doing track changes for this entity, keep it simple
@@ -2347,9 +2419,16 @@ export class SQLServerDataProvider
     return sRet;
   }
 
-  private generateSPParams(entity: BaseEntity, isUpdate: boolean): string {
-    let sRet: string = '',
-      bFirst: boolean = true;
+  private generateSPParams(entity: BaseEntity, isUpdate: boolean): { variablesSQL: string; setSQL: string; execParams: string; simpleParams: string } {
+    // Generate a unique suffix for variable names to avoid collisions in batch scripts
+    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    
+    const declarations: string[] = [];
+    const setStatements: string[] = [];
+    const execParams: string[] = [];
+    let simpleParams: string = '';
+    let bFirst: boolean = true;
+    
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
       // For CREATE operations, include primary keys that are not auto-increment and have actual values
@@ -2383,23 +2462,115 @@ export class SQLServerDataProvider
             }
           }
 
-          // if we get here, we have a value that we need to include in the SP call
-          sRet += this.generateSingleSPParam(f, value, bFirst);
+          // Generate variable name with unique suffix
+          const varName = `@${f.CodeName}${uniqueSuffix}`;
+          
+          // Add declaration with proper SQL type using existing SQLFullType property
+          declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+          
+          // Add SET statement if value is not null (SQL variables default to NULL)
+          if (value !== null && value !== undefined) {
+            const setValueSQL = this.generateSetStatementValue(f, value);
+            setStatements.push(`SET ${varName} = ${setValueSQL}`);
+          }
+          
+          // Add to EXEC parameters
+          execParams.push(`@${f.CodeName}=${varName}`);
+          
+          // Also build the old-style simple params for backward compatibility
+          simpleParams += this.generateSingleSPParam(f, value, bFirst);
           bFirst = false;
         }
       }
     }
-    if (isUpdate && bFirst === false) {
+    if (isUpdate && execParams.length > 0) {
       // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call
       for (const pkey of entity.PrimaryKey.KeyValuePairs) {
         const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === pkey.FieldName.trim().toLowerCase());
+        const varName = `@${f.CodeName}${uniqueSuffix}`;
+        
+        // Add declaration using existing SQLFullType property
+        declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+        
+        // Add SET statement
+        const setValueSQL = this.generateSetStatementValue(f, pkey.Value);
+        setStatements.push(`SET ${varName} = ${setValueSQL}`);
+        
+        // Add to EXEC parameters
+        execParams.push(`@${f.CodeName}=${varName}`);
+        
+        // Also add to simple params
         const pkeyQuotes = f.NeedsQuotes ? "'" : '';
-        sRet += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
+        simpleParams += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
       }
       bFirst = false;
     }
 
-    return sRet;
+    // Return the structured result with all components
+    return {
+      variablesSQL: declarations.length > 0 ? `DECLARE ${declarations.join(',\n        ')}` : '',
+      setSQL: setStatements.join('\n'),
+      execParams: execParams.join(',\n                '),
+      simpleParams: simpleParams
+    };
+  }
+
+  /**
+   * Generates the value portion of a SET statement for a field
+   * @param f The field info
+   * @param value The value to set
+   * @returns SQL value string
+   */
+  private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
+    let val: any = value;
+    
+    switch (f.TSType) {
+      case EntityFieldTSType.Boolean:
+        // check to see if the value is a string and if it is equal to true, if so, set the value to 1
+        if (typeof value === 'string' && value.trim().toLowerCase() === 'true') val = 1;
+        else if (typeof value === 'string' && value.trim().toLowerCase() === 'false') val = 0;
+        else val = value ? 1 : 0;
+        return val.toString();
+        
+      case EntityFieldTSType.String:
+        // Handle string escaping for SET statements
+        if (typeof val === 'string') {
+          val = val.replace(/'/g, "''");
+        }
+        else if (typeof val === 'object' && val !== null) {
+          // stringify the value
+          val = JSON.stringify(val);
+          // escape it
+          val = val.replace(/'/g, "''");
+        }
+        return `${f.UnicodePrefix}'${val}'`;
+        
+      case EntityFieldTSType.Date:
+        if (val !== null && val !== undefined) {
+          if (typeof val === 'number') {
+            // we have a timestamp - milliseconds since Unix Epoch
+            val = new Date(val);
+          } else if (typeof val === 'string') {
+            // we have a string, attempt to convert it to a date object
+            val = new Date(val);
+          }
+          val = val.toISOString(); // convert the date to ISO format for storage in the DB
+        }
+        return `'${val}'`;
+        
+      case EntityFieldTSType.Number:
+        return val.toString();
+        
+      default:
+        // For other types, convert to string and quote if needed
+        if (f.NeedsQuotes) {
+          if (typeof val === 'string') {
+            val = val.replace(/'/g, "''");
+          }
+          return `${f.UnicodePrefix}'${val}'`;
+        }
+        return val.toString();
+    }
   }
 
   private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean): string {
@@ -2551,32 +2722,112 @@ export class SQLServerDataProvider
     return value;
   }
 
+  /**
+   * Recursively escapes quotes in all string properties of an object or array.
+   * This method traverses through nested objects and arrays, escaping the specified
+   * quote character in all string values to prevent SQL injection and syntax errors.
+   * 
+   * @param obj - The object, array, or primitive value to process
+   * @param quoteToEscape - The quote character to escape (typically single quote "'")
+   * @returns A new object/array with all string values having quotes properly escaped.
+   *          Non-string values are preserved as-is.
+   * 
+   * @example
+   * // Escaping single quotes in a nested object
+   * const input = {
+   *   name: "John's Company",
+   *   details: {
+   *     description: "It's the best",
+   *     tags: ["Won't fail", "Can't stop"]
+   *   }
+   * };
+   * const escaped = this.escapeQuotesInProperties(input, "'");
+   * // Result: {
+   * //   name: "John''s Company",
+   * //   details: {
+   * //     description: "It''s the best",
+   * //     tags: ["Won''t fail", "Can''t stop"]
+   * //   }
+   * // }
+   * 
+   * @remarks
+   * This method is essential for preparing data to be embedded in SQL strings.
+   * It handles:
+   * - Nested objects of any depth
+   * - Arrays (including arrays of objects)
+   * - Mixed-type objects with strings, numbers, booleans, null values
+   * - Circular references are NOT handled and will cause stack overflow
+   */
   protected escapeQuotesInProperties(obj: any, quoteToEscape: string): any {
-    const sRet: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        const element = obj[key];
-        if (typeof element === 'string') {
-          const reg = new RegExp(quoteToEscape, 'g');
-          sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
-        } else sRet[key] = element;
-      }
+    // Handle null/undefined
+    if (obj === null || obj === undefined) {
+      return obj;
     }
-    return sRet;
+    
+    // Handle arrays recursively
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.escapeQuotesInProperties(item, quoteToEscape));
+    }
+    
+    // Handle objects recursively
+    if (typeof obj === 'object') {
+      const sRet: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const element = obj[key];
+          if (typeof element === 'string') {
+            const reg = new RegExp(quoteToEscape, 'g');
+            sRet[key] = element.replace(reg, quoteToEscape + quoteToEscape);
+          } else if (typeof element === 'object') {
+            // Recursively escape nested objects and arrays
+            sRet[key] = this.escapeQuotesInProperties(element, quoteToEscape);
+          } else {
+            // Keep primitive values as-is (numbers, booleans, etc.)
+            sRet[key] = element;
+          }
+        }
+      }
+      return sRet;
+    }
+    
+    // For non-object types (shouldn't normally happen), return as-is
+    return obj;
   }
 
   /**
-   * This method will create a changes object by comparing two javascript objects. Each property of the object will be named by the
-   * field name in the newData/oldData and will have a sub-object with the following properties:
-   *  * field: the field name
-   *  * oldValue: the old value
-   *  * newValue: the new value
-   * This is used to generate the object that will be saved into the ChangesJSON field in the Record Changes entity.
+   * Creates a changes object by comparing two javascript objects, identifying fields that have different values.
+   * Each property in the returned object represents a changed field, with the field name as the key.
+   * 
+   * @param oldData - The original data object to compare from
+   * @param newData - The new data object to compare to
+   * @param entityInfo - Entity metadata used to validate fields and determine comparison logic
+   * @param quoteToEscape - The quote character to escape in string values (typically "'")
+   * @returns A Record mapping field names to FieldChange objects containing the field name, old value, and new value.
+   *          Returns null if either oldData or newData is null/undefined.
+   *          Only includes fields that have actually changed and are not read-only.
+   * 
+   * @remarks
+   * - Read-only fields are never considered changed
+   * - null and undefined are treated as equivalent
+   * - Date fields are compared by timestamp
+   * - String and object values have quotes properly escaped for SQL
+   * - Objects/arrays are recursively escaped using escapeQuotesInProperties
+   * 
+   * @example
+   * ```typescript
+   * const changes = provider.DiffObjects(
+   *   { name: "John's Co", revenue: 1000 },
+   *   { name: "John's Co", revenue: 2000 },
+   *   entityInfo,
+   *   "'"
+   * );
+   * // Returns: { revenue: { field: "revenue", oldValue: 1000, newValue: 2000 } }
+   * ```
    */
-  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): any {
+  public DiffObjects(oldData: any, newData: any, entityInfo: EntityInfo, quoteToEscape: string): Record<string, FieldChange> | null {
     if (!oldData || !newData) return null;
     else {
-      const changes: any = {};
+      const changes: Record<string, FieldChange> = {};
       for (const key in newData) {
         const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
         if (!f) {
@@ -2604,9 +2855,26 @@ export class SQLServerDataProvider
         }
         if (bDiff) {
           // make sure we escape things properly
-          const r = new RegExp(quoteToEscape, 'g');
-          const o = oldData[key] && typeof oldData[key] === 'string' ? oldData[key].replace(r, quoteToEscape + quoteToEscape) : oldData[key];
-          const n = newData[key] && typeof newData[key] === 'string' ? newData[key].replace(r, quoteToEscape + quoteToEscape) : newData[key];
+          let o = oldData[key];
+          let n = newData[key];
+          
+          if (typeof o === 'string') {
+            // Escape strings directly
+            const r = new RegExp(quoteToEscape, 'g');
+            o = o.replace(r, quoteToEscape + quoteToEscape);
+          } else if (typeof o === 'object' && o !== null) {
+            // For objects/arrays, recursively escape all string properties
+            o = this.escapeQuotesInProperties(o, quoteToEscape);
+          }
+          
+          if (typeof n === 'string') {
+            // Escape strings directly
+            const r = new RegExp(quoteToEscape, 'g');
+            n = n.replace(r, quoteToEscape + quoteToEscape);
+          } else if (typeof n === 'object' && n !== null) {
+            // For objects/arrays, recursively escape all string properties
+            n = this.escapeQuotesInProperties(n, quoteToEscape);
+          }
 
           changes[key] = {
             field: key,

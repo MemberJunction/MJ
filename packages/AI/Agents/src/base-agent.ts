@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentEntity, AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntity, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
@@ -234,7 +234,7 @@ export class BaseAgent {
     protected logError(error: Error | string, options?: {
         category?: string;
         metadata?: Record<string, any>;
-        agent?: AIAgentEntity;
+        agent?: AIAgentEntityExtended;
         agentType?: AIAgentTypeEntity;
         severity?: 'warning' | 'error' | 'critical';
     }): void {
@@ -329,7 +329,7 @@ export class BaseAgent {
      * all required metadata is present and handles errors gracefully.
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution
-     * @param {AIAgentEntity} params.agent - The agent entity to execute
+     * @param {AIAgentEntityExtended} params.agent - The agent entity to execute
      * @param {ChatMessage[]} params.conversationMessages - Conversation history
      * @param {UserInfo} [params.contextUser] - Optional user context
      * @param {any} [params.context] - Optional context object passed to sub-agents and actions
@@ -600,11 +600,11 @@ export class BaseAgent {
     /**
      * Validates that the agent is active and ready for execution.
      * 
-     * @param {AIAgentEntity} agent - The agent to validate
+     * @param {AIAgentEntityExtended} agent - The agent to validate
      * @returns {ExecuteAgentResult | null} Error result if validation fails, null if valid
      * @protected
      */
-    protected async validateAgent(agent: AIAgentEntity): Promise<ExecuteAgentResult | null> {
+    protected async validateAgent(agent: AIAgentEntityExtended): Promise<ExecuteAgentResult | null> {
         if (agent.Status !== 'Active') {
             // Set error on the agent run
             if (this._agentRun) {
@@ -738,11 +738,11 @@ export class BaseAgent {
     /**
      * Loads all required configuration for agent execution.
      * 
-     * @param {AIAgentEntity} agent - The agent to load configuration for
+     * @param {AIAgentEntityExtended} agent - The agent to load configuration for
      * @returns {Promise<AgentConfiguration>} Configuration object with loaded entities
      * @protected
      */
-    protected async loadAgentConfiguration(agent: AIAgentEntity): Promise<AgentConfiguration> {
+    protected async loadAgentConfiguration(agent: AIAgentEntityExtended): Promise<AgentConfiguration> {
         const engine = AIEngine.Instance;
 
         // first check to see if we have a custom driver class if we do, we do NOT validate the rest of
@@ -809,8 +809,8 @@ export class BaseAgent {
      * Prepares prompt parameters for hierarchical execution.
      * 
      * @param {AIAgentTypeEntity} agentType - The agent type
-     * @param {AIPromptEntity} systemPrompt - The system prompt
-     * @param {AIPromptEntity} childPrompt - The child prompt
+     * @param {AIPromptEntityExtended} systemPrompt - The system prompt
+     * @param {AIPromptEntityExtended} childPrompt - The child prompt
      * @param {ExecuteAgentParams} params - Original execution parameters
      * @returns {Promise<AIPromptParams>} Configured prompt parameters
      * @protected
@@ -821,8 +821,8 @@ export class BaseAgent {
         params: ExecuteAgentParams
     ): Promise<AIPromptParams> {
         const agentType: AIAgentTypeEntity = config.agentType;
-        const systemPrompt: AIPromptEntity = config.systemPrompt;
-        const childPrompt: AIPromptEntity = config.childPrompt;
+        const systemPrompt: AIPromptEntityExtended = config.systemPrompt;
+        const childPrompt: AIPromptEntityExtended = config.childPrompt;
 
         // Gather context data
 
@@ -1463,8 +1463,10 @@ export class BaseAgent {
     }
 
     /**
-     * Validates that the Chat next step is valid and can be executed by the current agent. Subclasses can override
-     * this method to implement custom validation logic if needed.
+     * Validates that the Chat next step is valid and can be executed by the current agent. 
+     * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
+     * the Chat step is remapped to the specified value (Success, Fail, or Retry).
+     * Subclasses can override this method to implement custom validation logic if needed.
      * @param params 
      * @param nextStep 
      * @returns 
@@ -1476,7 +1478,45 @@ export class BaseAgent {
         agentRun: AIAgentRunEntityExtended,
         currentStep: AIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // currently the base class doesn't do anything, subclasses can implement any custom logic in their override
+        // Check if the agent has ChatHandlingOption configured
+        const chatHandlingOption = params.agent.ChatHandlingOption;
+        
+        if (chatHandlingOption) {
+            // Use a switch to validate and map the ChatHandlingOption value
+            let mappedStep: 'Success' | 'Failed' | 'Retry';
+            
+            switch (chatHandlingOption) {
+                case 'Success':
+                    mappedStep = 'Success';
+                    break;
+                case 'Failed':
+                    mappedStep = 'Failed';
+                    break;
+                case 'Retry':
+                    mappedStep = 'Retry';
+                    break;
+                default:
+                    // Log error and treat as null (default behavior)
+                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    return nextStep;
+            }
+            
+            // Remap the Chat step to the configured option
+            const remappedStep: BaseAgentNextStep<P> = {
+                ...nextStep,
+                step: mappedStep
+            };
+            
+            // Log the remapping for debugging
+            if (params.verbose === true || IsVerboseLoggingEnabled()) {
+                LogStatus(`Remapping Chat step to ${chatHandlingOption} based on agent's ChatHandlingOption`);
+            }
+            
+            // Re-validate the remapped step using the appropriate validator
+            return await this.validateNextStep(params, remappedStep, currentPayload, agentRun, currentStep);
+        }
+        
+        // Default behavior: let Chat propagate up (no remapping)
         return nextStep;
     }
 
@@ -1735,7 +1775,7 @@ export class BaseAgent {
      * structured to provide the LLM with comprehensive context about the agent's
      * capabilities and hierarchical relationships.
      * 
-     * @param {AIAgentEntity} agent - The agent to gather context for
+     * @param {AIAgentEntityExtended} agent - The agent to gather context for
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
      * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * 
@@ -1745,14 +1785,21 @@ export class BaseAgent {
      * 
      * @private
      */
-    private async gatherPromptTemplateData(agent: AIAgentEntity, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
+    private async gatherPromptTemplateData(agent: AIAgentEntityExtended, _contextUser?: UserInfo, extraData?: any): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
             
             // Find sub-agents using AIEngine
             const activeSubAgents = engine.Agents.filter(a => a.ParentID === agent.ID && a.Status === 'Active')
                 .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-            
+            const activeAgentRelationships = engine.AgentRelationships.filter(ar => ar.AgentID === agent.ID && ar.Status === 'Active');
+            // now combine the child sub-agents from the direct parentID relationships with the agentRelationships array, distinct to not repeat
+            // unique ID values
+            const uniqueActiveSubAgentIDs = new Set<string>();
+            activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
+            activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => a.ID === id));
+
             // Load available actions (placeholder for now - would integrate with Actions framework)
             const agentActions = engine.AgentActions.filter(aa => aa.AgentID === agent.ID && aa.Status === 'Active');
             const actions: ActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => aa.ActionID === a.ID));
@@ -1762,8 +1809,8 @@ export class BaseAgent {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
-                subAgentCount: activeSubAgents.length,
-                subAgentDetails: this.formatSubAgentDetails(activeSubAgents),
+                subAgentCount: uniqueActiveSubAgents.length,
+                subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
                 actionCount: actions.length,
                 actionDetails: this.formatActionDetails(activeActions),
             };
@@ -1952,15 +1999,15 @@ export class BaseAgent {
     /**
      * Formats sub-agent details for inclusion in prompt context.
      * 
-     * @param {AIAgentEntity[]} subAgents - Array of sub-agent entities
+     * @param {AIAgentEntityExtended[]} subAgents - Array of sub-agent entities
      * @returns {string} JSON formatted string with sub-agent details
      * @private
      */
-    private formatSubAgentDetails(subAgents: AIAgentEntity[]): string {
+    private formatSubAgentDetails(subAgents: AIAgentEntityExtended[]): string {
         return JSON.stringify(subAgents.map(sa => {
             const result = {
                 Name: sa.Name,
-                Description: sa.Description,
+                Description: sa.Description
             };
             if (sa.ExecutionMode !== 'Sequential') {
                 // no need to include these two attributes for sub-agents
@@ -1980,7 +2027,7 @@ export class BaseAgent {
      * prompt.
      * @param agent 
      */
-    protected getAgentPromptParameters(agent: AIAgentEntity): Array<TemplateParamEntity> {
+    protected getAgentPromptParameters(agent: AIAgentEntityExtended): Array<TemplateParamEntity> {
         const engine = AIEngine.Instance;
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
@@ -1995,7 +2042,7 @@ export class BaseAgent {
         return prompt.TemplateParams;
     }
 
-    protected getAgentPromptParametersJSON(agent: AIAgentEntity): string {
+    protected getAgentPromptParametersJSON(agent: AIAgentEntityExtended): string {
         const params = this.getAgentPromptParameters(agent);
         return JSON.stringify(params.map(param => ({
             Name: param.Name,
@@ -2096,7 +2143,7 @@ export class BaseAgent {
     }
  
     /**
-     * Initializes the agent run tracking by creating AIAgentRunEntity and setting up context.
+     * Initializes the agent run tracking by creating AIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
@@ -2218,10 +2265,10 @@ export class BaseAgent {
      * Validates the agent with tracking.
      * 
      * @private
-     * @param {AIAgentEntity} agent - The agent to validate
+     * @param {AIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
      */
-    private async validateAgentWithTracking(agent: AIAgentEntity, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
+    private async validateAgentWithTracking(agent: AIAgentEntityExtended, contextUser: UserInfo): Promise<ExecuteAgentResult | null> {
         try {
             // Original validation logic
             const validationResult = await this.validateAgent(agent);
@@ -2259,7 +2306,7 @@ export class BaseAgent {
      * @param {string} [targetId] - Optional ID of the target entity
      * @param {any} [inputData] - Optional input data to capture for this step
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
-     * @returns {Promise<AIAgentRunStepEntity>} - The created step entity
+     * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
      */
     private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
@@ -2312,7 +2359,7 @@ export class BaseAgent {
      * Finalizes a step entity with completion status.
      * 
      * @private
-     * @param {AIAgentRunStepEntity} stepEntity - The step entity to finalize
+     * @param {AIAgentRunStepEntityExtended} stepEntity - The step entity to finalize
      * @param {boolean} success - Whether the step was successful
      * @param {string} [errorMessage] - Optional error message
      * @param {any} [outputData] - Optional output data to capture for this step
@@ -2583,6 +2630,13 @@ export class BaseAgent {
                 systemPrompt: null // Custom prompts may not use system prompts
             } : config;
             
+            // Increment prompt iterations counter as we prepare as we are ATTEMPTING a prompt
+            // so we want to track this
+            if (this._agentRun) {
+                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
+                // don't need to save here, the run will be saved later
+            }
+
             const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution
@@ -2612,13 +2666,7 @@ export class BaseAgent {
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-            
-            // Increment prompt iterations counter
-            if (this._agentRun) {
-                this._agentRun.TotalPromptIterations = (this._agentRun.TotalPromptIterations || 0) + 1;
-                // We don't save here as the run will be saved later with all accumulated data
-            }
-            
+                        
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -2683,9 +2731,12 @@ export class BaseAgent {
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
 
+            // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
+            finalPayload = updatedNextStep.newPayload || finalPayload;
+
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
-            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntity)
+            // or the payload as those are stored already(prompt result via TargetLogID -> AIPromptRunEntityExtended)
             // and payload via the specialied PayloadAtStart/End fields on the step entity.
             const outputData = {
                 nextStep: {
@@ -2738,13 +2789,19 @@ export class BaseAgent {
             // instead retrun a helpful message in our return value that the parent loop can review and 
             // adjust
             const errString = error?.message || error || 'Unknown error';
-            return {
+            const errorNextStep = {
                 errorMessage: `Prompt execution failed: ${errString}`,
-                step: 'Failed',
+                step: 'Failed' as const,
                 terminate: false,
                 previousPayload: payload,
                 newPayload: payload
             };
+
+            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
+            if(guardailCheck && guardailCheck.exceeded) {
+                errorNextStep.terminate = true;
+            };
+            return errorNextStep;
         }
     }
 
@@ -2996,7 +3053,7 @@ export class BaseAgent {
             // Prepare output data
             const outputData = {
                 subAgentResult: {
-                    // we have a link to the AIAgentRunEntity via the TargetLogID above
+                    // we have a link to the AIAgentRunEntityExtended via the TargetLogID above
                     // but we throw in just a few things here for convenience/summary that are
                     // light - we don't want to store the payload again for example
                     // that is stored in PayloadAtEnd on the step and also in PayloadAtEnd in the sub-agent's run
@@ -3016,6 +3073,18 @@ export class BaseAgent {
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success, 
                 subAgentResult.agentRun?.ErrorMessage, outputData);
+            
+            // Check if sub-agent returned a Chat step
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                // Return the Chat step
+                return {
+                    step: 'Chat',
+                    terminate: true, // Bubble up to the main loop to handle Chat
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: previousDecision?.newPayload // Don't modify payload on Chat
+                };
+            }
             
             // Build a clean summary of sub-agent result
             const subAgentSummary = {
@@ -3186,7 +3255,13 @@ export class BaseAgent {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, undefined, undefined, currentPayload, currentPayload);
+                // Prepare input data for the action step
+                const actionInputData = {
+                    actionName: aa.name,
+                    actionParams: aa.params
+                };
+                
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload);
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -3335,7 +3410,8 @@ export class BaseAgent {
     }
 
     /**
-     * Executes a chat step (not implemented in base class).
+     * Executes a chat step - these should bubble up to the user for interaction.
+     * Chat steps are terminal and indicate the agent needs user input.
      * 
      * @private
      */
@@ -3345,11 +3421,13 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep> {
         const stepEntity = await this.createStepEntity('Chat', 'User Interaction', params.contextUser);
         
-        await this.finalizeStepEntity(stepEntity, false, 'Chat not implemented');
+        // Chat steps are successful - they indicate a need for user interaction
+        await this.finalizeStepEntity(stepEntity, true);
         
         return { 
             step: 'Chat',
             terminate: true,
+            message: previousDecision.message || 'Additional information needed from user',
             priorStepResult: previousDecision.message,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
@@ -3540,7 +3618,7 @@ export class BaseAgent {
      * @param agentRun - The current agent run
      * @returns Array of violation messages (empty if all requirements are met)
      */
-    protected async checkMinimumExecutionRequirements(agent: AIAgentEntity, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
+    protected async checkMinimumExecutionRequirements(agent: AIAgentEntityExtended, agentRun: AIAgentRunEntityExtended): Promise<string[]> {
         const violations: string[] = [];
         
         // Check action minimum requirements

@@ -7,6 +7,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  ViewChild,
   ViewEncapsulation,
   booleanAttribute,
   forwardRef,
@@ -26,13 +27,17 @@ import { sql } from '@codemirror/lang-sql';
 import { python } from '@codemirror/lang-python';
 import { languages } from '@codemirror/language-data';
 
+// Import toolbar configuration
+import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } from './toolbar-config';
+
 export type Setup = 'basic' | 'minimal' | null;
 
 export const External = Annotation.define<boolean>();
 
 @Component({
   selector: 'mj-code-editor',
-  template: '',
+  templateUrl: './ng-code-editor.component.html',
+  styleUrls: ['./ng-code-editor.component.scss'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
@@ -223,6 +228,18 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   /** Event emitted when the editor has lost focus. */
   @Output() blur = new EventEmitter<void>();
 
+  /** 
+   * Toolbar configuration. Defaults to disabled.
+   * Set enabled: true to show the toolbar.
+   */
+  @Input() toolbar: ToolbarConfig = { enabled: false };
+
+  /** Event emitted when a toolbar button is clicked */
+  @Output() toolbarAction = new EventEmitter<ToolbarActionEvent>();
+
+  /** Reference to the editor content container */
+  @ViewChild('editorContent', { static: true }) editorContent!: ElementRef;
+
   private _onChange: (value: string) => void = () => {};
   private _onTouched: () => void = () => {};
 
@@ -321,10 +338,65 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   }
 
 
+  /**
+   * Get toolbar groups for rendering
+   */
+  get toolbarGroups(): ToolbarButtonGroup[] {
+    if (!this.toolbar?.enabled) return [];
+    
+    if (this.toolbar.groups) {
+      return this.toolbar.groups;
+    }
+    
+    // Single group from buttons array
+    if (this.toolbar.buttons) {
+      return [{
+        id: 'default',
+        buttons: this.toolbar.buttons,
+        separator: false
+      }];
+    }
+    
+    return [];
+  }
+
+  /**
+   * Handle toolbar button click
+   */
+  handleButtonClick(button: ToolbarButton): void {
+    if (!this.view) return;
+    
+    if (button.handler) {
+      // Execute the button's handler
+      const result = button.handler(this.view);
+      
+      // Handle async handlers
+      if (result instanceof Promise) {
+        result.catch(err => {
+          console.error(`Toolbar button "${button.id}" handler error:`, err);
+        });
+      }
+    }
+    
+    // Emit the toolbar action event
+    this.toolbarAction.emit({
+      buttonId: button.id,
+      editor: this.view
+    });
+  }
+
+  /**
+   * Check if a group is the last one (for separator logic)
+   */
+  isLastGroup(group: ToolbarButtonGroup): boolean {
+    const groups = this.toolbarGroups;
+    return groups.indexOf(group) === groups.length - 1;
+  }
+
   ngOnInit(): void {
     this.view = new EditorView({
       root: this.root,
-      parent: this._elementRef.nativeElement,
+      parent: this.editorContent.nativeElement, // Use ViewChild reference
       state: EditorState.create({ doc: this._value, extensions: this._getAllExtensions() }),
     });
 

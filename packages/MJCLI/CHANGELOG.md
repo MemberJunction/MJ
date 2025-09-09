@@ -1,5 +1,175 @@
 # Change Log - @memberjunction/cli
 
+## 2.99.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.99.0
+- @memberjunction/codegen-lib@2.99.0
+- @memberjunction/metadata-sync@2.99.0
+- @memberjunction/sqlserver-dataprovider@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.98.0
+- @memberjunction/codegen-lib@2.98.0
+- @memberjunction/metadata-sync@2.98.0
+- @memberjunction/sqlserver-dataprovider@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.97.0
+- @memberjunction/codegen-lib@2.97.0
+- @memberjunction/metadata-sync@2.97.0
+- @memberjunction/sqlserver-dataprovider@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
+
+  - Added deleteRecord directive to mark records for deletion in JSON files
+  - Records with deleteRecord.delete=true are deleted during push operations
+  - After successful deletion, adds deletedAt timestamp to track when deleted
+
+- Updated dependencies [d7b5647]
+- Updated dependencies [8e1c946]
+  - @memberjunction/metadata-sync@2.96.0
+  - @memberjunction/ai-cli@2.96.0
+  - @memberjunction/codegen-lib@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.95.0
+- @memberjunction/codegen-lib@2.95.0
+- @memberjunction/metadata-sync@2.95.0
+- @memberjunction/sqlserver-dataprovider@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.94.0
+- @memberjunction/codegen-lib@2.94.0
+- @memberjunction/metadata-sync@2.94.0
+- @memberjunction/sqlserver-dataprovider@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [103e4a9]
+  - @memberjunction/sqlserver-dataprovider@2.93.0
+  - @memberjunction/metadata-sync@2.93.0
+  - @memberjunction/codegen-lib@2.93.0
+  - @memberjunction/ai-cli@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+  - @memberjunction/sqlserver-dataprovider@2.92.0
+  - @memberjunction/ai-cli@2.92.0
+  - @memberjunction/codegen-lib@2.92.0
+  - @memberjunction/metadata-sync@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [70bf265]
+  - @memberjunction/codegen-lib@2.91.0
+  - @memberjunction/ai-cli@2.91.0
+  - @memberjunction/metadata-sync@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.90.0
+- @memberjunction/sqlserver-dataprovider@2.90.0
+- @memberjunction/ai-cli@2.90.0
+- @memberjunction/metadata-sync@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [34d456e]
+  - @memberjunction/sqlserver-dataprovider@2.89.0
+  - @memberjunction/ai-cli@2.89.0
+  - @memberjunction/codegen-lib@2.89.0
+  - @memberjunction/metadata-sync@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/ai-cli@2.88.0
+  - @memberjunction/codegen-lib@2.88.0
+  - @memberjunction/metadata-sync@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.87.0
+- @memberjunction/codegen-lib@2.87.0
+- @memberjunction/metadata-sync@2.87.0
+- @memberjunction/sqlserver-dataprovider@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7675555]
+  - @memberjunction/metadata-sync@2.86.0
+  - @memberjunction/ai-cli@2.86.0
+  - @memberjunction/codegen-lib@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [9b74582]
+  - @memberjunction/metadata-sync@2.85.0
+  - @memberjunction/ai-cli@2.85.0
+  - @memberjunction/codegen-lib@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/sqlserver-dataprovider@2.84.0
+  - @memberjunction/ai-cli@2.84.0
+  - @memberjunction/codegen-lib@2.84.0
+  - @memberjunction/metadata-sync@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@2.83.0
+- @memberjunction/codegen-lib@2.83.0
+- @memberjunction/metadata-sync@2.83.0
+- @memberjunction/sqlserver-dataprovider@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

@@ -4,7 +4,8 @@
  * @module @memberjunction/react-runtime/runtime
  */
 
-import { ComponentProps, ComponentCallbacks, ComponentStyles } from '../types';
+import { ComponentStyles, ComponentCallbacks } from '@memberjunction/interactive-component-types';
+import { ComponentProps } from '../types';
 import { Subject, debounceTime, Subscription } from 'rxjs';
 
 /**
@@ -38,7 +39,10 @@ export function buildComponentProps(
   data: any = {},
   userState: any = {},
   utilities: any = {},
-  callbacks: ComponentCallbacks = {},
+  callbacks: ComponentCallbacks = {
+    OpenEntityRecord: () => {},
+    RegisterMethod: () => {}
+  },
   components: Record<string, any> = {},
   styles?: ComponentStyles,
   options: PropBuilderOptions = {},
@@ -115,15 +119,19 @@ function deepEqual(obj1: any, obj2: any): boolean {
  * @returns Normalized callbacks
  */
 export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
-  const normalized: ComponentCallbacks = {};
+  // Provide default implementations for required callbacks
+  const normalized: ComponentCallbacks = {
+    OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
+    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+  };
 
-  // Ensure all callbacks are functions
-  if (callbacks.RefreshData && typeof callbacks.RefreshData === 'function') {
-    normalized.RefreshData = callbacks.RefreshData;
-  }
-
-  if (callbacks.OpenEntityRecord && typeof callbacks.OpenEntityRecord === 'function') {
-    normalized.OpenEntityRecord = callbacks.OpenEntityRecord;
+  // Copy any additional callbacks that might exist
+  if (callbacks) {
+    Object.keys(callbacks).forEach(key => {
+      if (typeof callbacks[key] === 'function' && !normalized.hasOwnProperty(key)) {
+        (normalized as any)[key] = callbacks[key];
+      }
+    });
   }
 
   return normalized;
@@ -187,7 +195,7 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
     utilities: {},
     callbacks: {},
     components: {},
-    styles: {}
+    styles: {} as ComponentStyles
   };
 
   for (const props of propsList) {
@@ -263,19 +271,32 @@ export function wrapCallbacksWithLogging(
   callbacks: ComponentCallbacks,
   componentName: string
 ): ComponentCallbacks {
-  const wrapped: ComponentCallbacks = {};
+  const wrapped: ComponentCallbacks = {
+    OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
+    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+  };
 
-  if (callbacks.RefreshData) {
-    wrapped.RefreshData = () => {
-      console.log(`[${componentName}] RefreshData called`);
-      callbacks.RefreshData!();
-    };
-  }
+  // Wrap any additional callbacks that might exist
+  Object.keys(callbacks).forEach(key => {
+    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && typeof (callbacks as any)[key] === 'function') {
+      (wrapped as any)[key] = (...args: any[]) => {
+        console.log(`[${componentName}] ${key} called with args:`, args);
+        return (callbacks as any)[key](...args);
+      };
+    }
+  });
 
   if (callbacks.OpenEntityRecord) {
     wrapped.OpenEntityRecord = (entityName: string, key: any) => {
       console.log(`[${componentName}] OpenEntityRecord called:`, { entityName, key });
       callbacks.OpenEntityRecord!(entityName, key);
+    };
+  }
+
+  if (callbacks.RegisterMethod) {
+    wrapped.RegisterMethod = (methodName: any, handler: any) => {
+      console.log(`[${componentName}] RegisterMethod called for:`, methodName);
+      callbacks.RegisterMethod!(methodName, handler);
     };
   }
 

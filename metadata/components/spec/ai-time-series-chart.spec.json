@@ -1,0 +1,126 @@
+{
+  "name": "AITimeSeriesChart",
+  "location": "embedded",
+  "title": "AI Time Series Chart",
+  "description": "Multi-line time series chart with dual Y-axes showing AI runs, token usage, and costs over time",
+  "type": "chart",
+  "functionalRequirements": "## Time Series Chart Requirements\n\n### Core Functionality\n- Display three data series: total runs, total tokens, total cost\n- Dual Y-axis configuration (left: tokens, right: runs and cost)\n- Interactive tooltips showing all values on hover\n- Click on data points to trigger drill-down\n- Smooth line interpolation with data point markers\n- Legend with series toggle capability\n- Responsive to container size changes\n\n### Visual Features\n- Consistent color coding (runs: blue, tokens: green, cost: orange)\n- Grid lines for better readability\n- Axis labels with appropriate formatting\n- Highlighted selection state for clicked points\n- Animated transitions on data updates\n- Zero-baseline for better comparison",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives aggregated time series data from parent component",
+    "entities": [ 
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Historical prompt execution data for performance analysis",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "Prompt",
+          "ModelID",
+          "Model",
+          "RunAt",
+          "CompletedAt",
+          "Success",
+          "TokensUsed",
+          "TotalCost"
+        ],
+        "filterFields": [
+          "RunAt",
+          "Success",
+          "PromptID",
+          "ModelID"
+        ],
+        "sortFields": [
+          "RunAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "isPrimaryKey": true,
+            "allowsNull": false,
+            "description": "Unique run identifier"
+          },
+          {
+            "name": "PromptID",
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "description": "Reference to AI Prompt"
+          },
+          {
+            "name": "Prompt",
+            "type": "nvarchar",
+            "allowsNull": true,
+            "description": "Prompt name (denormalized)"
+          },
+          {
+            "name": "RunAt",
+            "type": "datetime",
+            "allowsNull": false,
+            "description": "Execution timestamp"
+          },
+          {
+            "name": "TokensUsed",
+            "type": "int",
+            "allowsNull": true,
+            "description": "Total tokens consumed"
+          },
+          {
+            "name": "TotalCost",
+            "type": "decimal",
+            "allowsNull": true,
+            "description": "Total cost in USD"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- data: Array of aggregated data points with date, runs, tokens, cost\n- groupBy: Current grouping (day/week/month/quarter)\n- activeTab: Current view (agents/prompts)\n- selectedPoint: Currently selected data point\n- onPointClick: Callback when point is clicked\n\n### Chart Configuration\n- Uses recharts library for rendering\n- Dual Y-axis setup with synchronized tooltips\n- Custom tick formatters for large numbers\n- Responsive container with aspect ratio preservation",
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "required": true,
+      "description": "Array of time series data points"
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "required": true,
+      "description": "Time grouping: day, week, month, or quarter"
+    },
+    {
+      "name": "activeTab",
+      "type": "string",
+      "required": true,
+      "description": "Current tab: agents or prompts"
+    },
+    {
+      "name": "selectedPoint",
+      "type": "object",
+      "required": true,
+      "description": "Currently selected data point"
+    },
+    {
+      "name": "onPointClick",
+      "type": "function",
+      "required": true,
+      "description": "Callback when a data point is clicked"
+    }
+  ],
+  "events": [
+    {
+      "name": "onPointClick",
+      "description": "Fired when user clicks on a data point",
+      "payload": "Data point object with date and values"
+    }
+  ],
+  "exampleUsage": "<AITimeSeriesChart data={chartData} groupBy=\"day\" activeTab=\"agents\" onPointClick={handleChartClick} />",
+  "code": "@file:../code/ai-time-series-chart.js",
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,43 @@
+{
+  "name": "TrendChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/trend-chart.js",
+  "functionalRequirements": "## Trend Chart\n\n### Purpose\nDisplay velocity trends over time.\n\n### Features\n- Line chart with multiple series\n- Time axis\n- Velocity metrics\n- Smooth curves\n- Interactive tooltips\n- Legend",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Visualizes time-series trends derived from Deals entity",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Source data for trend analysis",
+        "displayFields": ["CloseDate", "Amount", "Stage", "__mj_CreatedAt"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Deal data aggregated over time for trend visualization"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- trendData: Array of time series data\n- metrics: Array of metric names\n\n### Chart\n- ECharts line chart\n- Multiple series\n- Responsive sizing",
+  "properties": [
+    {
+      "name": "trendData",
+      "type": "Array<{date: string, [key: string]: number}>",
+      "required": true,
+      "description": "Time series data points"
+    },
+    {
+      "name": "metrics",
+      "type": "Array<string>",
+      "required": true,
+      "description": "Metric names to display as series"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

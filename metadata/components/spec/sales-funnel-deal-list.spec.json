@@ -1,0 +1,43 @@
+{
+  "name": "SalesFunnelDealList",
+  "namespace": "CRM/Analytics",
+  "type": "List",
+  "location": "embedded",
+  "code": "@file:../code/sales-funnel-deal-list.js",
+  "functionalRequirements": "## Deal List Sub-Component\n\n### Purpose\nDisplay deals in a compact table format.\n\n### Core Features\n- **Tabular Display**: Compact list view\n- **Key Metrics**: Amount, probability, dates\n- **Interactive Rows**: Click to open deals\n- **Responsive Design**: Fits container width",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays deals in a compact table format",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records for list display",
+        "displayFields": ["ID", "Name", "Amount", "Probability", "CloseDate", "Account"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Deal list display"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Table Structure\n- Responsive table layout\n- Hover effects on rows\n- Optimized for scanning",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "Array<{ID: string, Name: string, Amount: number, Probability: number, CloseDate: string, Account: string}>",
+      "description": "Array of deal entities",
+      "required": true
+    },
+    {
+      "name": "formatCurrency",
+      "type": "(value: number) => string",
+      "description": "Currency formatting function",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

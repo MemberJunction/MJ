@@ -1,0 +1,33 @@
+{
+  "name": "ActionPanel",
+  "namespace": "CRM/Finance",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/action-panel.js",
+  "functionalRequirements": "## Action Panel\n\n### Purpose\nPanel with collection actions and tasks.\n\n### Features\n- Action buttons\n- Task list\n- Priority indicators\n- Quick actions",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Manages collection actions and tasks",
+    "entities": [
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- actions: Array of available actions\n- tasks: Array of tasks",
+  "properties": [
+    {
+      "name": "actions",
+      "type": "Array<{id: string, name: string, description: string, priority: number}>",
+      "required": true,
+      "description": "Available actions"
+    },
+    {
+      "name": "tasks",
+      "type": "Array<{id: string, title: string, status: string, priority: number}>",
+      "required": true,
+      "description": "Collection tasks"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

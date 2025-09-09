@@ -4,12 +4,16 @@
  * @module @memberjunction/react-runtime/types
  */
 
+import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
+
 /**
  * Represents a compiled React component with its metadata
  */
 export interface CompiledComponent {
-  /** The compiled React component function or class */
-  component: any;
+  /** Factory function that creates a ComponentObject when called with context */
+  factory: (context: RuntimeContext, styles?: ComponentStyles, components?: Record<string, any>) => ComponentObject;
   /** Unique identifier for the component */
   id: string;
   /** Original component name */
@@ -36,26 +40,26 @@ export interface CompileOptions {
   babelPlugins?: string[];
   /** Custom Babel presets to use */
   babelPresets?: string[];
+
+  /** Library dependencies that the component requires */
+  libraries?: ComponentLibraryDependency[];
+  
+  /** Child component dependencies that the component requires */
+  dependencies?: Array<{ name: string; code?: string }>;
+
+  /**
+   * Required, metadata for all possible libraries allowed by the system
+   */
+  allLibraries: ComponentLibraryEntity[];
 }
 
-/**
- * Component styles that can be applied
- */
-export interface ComponentStyles {
-  /** CSS classes to apply */
-  className?: string;
-  /** Inline styles */
-  style?: Record<string, any>;
-  /** Global CSS to inject */
-  globalCss?: string;
-}
 
 /**
  * Registry entry for a compiled component
  */
 export interface RegistryEntry {
-  /** The compiled component */
-  component: any;
+  /** The compiled component object with all methods */
+  component: ComponentObject;
   /** Component metadata */
   metadata: ComponentMetadata;
   /** Last access time for LRU cache */
@@ -109,27 +113,13 @@ export interface ComponentProps {
   /** Utility functions available to the component */
   utilities: any;
   /** Callback functions */
-  callbacks: ComponentCallbacks;
+  callbacks: any;
   /** Child components available for use */
   components?: Record<string, any>;
   /** Component styles */
   styles?: ComponentStyles;
   /** Standard state change handler for controlled components */
   onStateChanged?: (stateUpdate: Record<string, any>) => void;
-}
-
-/**
- * Callbacks available to React components
- */
-export interface ComponentCallbacks {
-  /** Request data refresh */
-  RefreshData?: () => void;
-  /** Open an entity record */
-  OpenEntityRecord?: (entityName: string, key: any) => void;
-  /** Update user state */
-  UpdateUserState?: (state: any) => void;
-  /** Notify of a custom event */
-  NotifyEvent?: (event: string, data: any) => void;
 }
 
 /**
@@ -151,6 +141,8 @@ export interface CompilerConfig {
   cache: boolean;
   /** Maximum cache size */
   maxCacheSize: number;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**
@@ -165,6 +157,8 @@ export interface RegistryConfig {
   useLRU: boolean;
   /** Namespace isolation */
   enableNamespaces: boolean;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**
@@ -229,3 +223,9 @@ export interface ErrorBoundaryOptions {
 
 // Export library configuration types
 export * from './library-config';
+
+// Export dependency types
+export * from './dependency-types';
+
+// Re-export ComponentObject for convenience
+export { ComponentObject } from '@memberjunction/interactive-component-types';

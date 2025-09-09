@@ -1,0 +1,75 @@
+{
+  "name": "Customer360View",
+  "description": "Comprehensive customer profile showing all interactions, transactions, and insights",
+  "category": "CRM",
+  "type": "dashboard",
+  "location": "embedded",
+  "code": "@file:../code/customer-360-view.js",
+  "functionalRequirements": "- Display comprehensive customer profile with key metrics\n- Show interaction timeline chronologically\n- Display contacts and deals associated with account\n- Calculate and show engagement score\n- Provide tabbed interface for different views\n- Enable drill-down into related entities\n- Show customer insights and recommendations",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "Industry", "AnnualRevenue", "CreatedAt"],
+        "filterFields": ["ID"] 
+      },
+      {
+        "name": "Contacts",
+        "displayFields": ["FirstName", "LastName", "Email", "Phone", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "AccountID"],
+        "filterFields": ["AccountID"] 
+      },
+      {
+        "name": "Activities",
+        "displayFields": ["Subject", "Type", "CreatedAt", "AccountID"],
+        "filterFields": ["AccountID"] 
+      }
+    ]
+  },
+  "technicalDesign": "Main orchestrator component that loads customer data and manages sub-components. Uses parallel data loading for performance. Calculates engagement score based on activities and deals. Implements tab-based navigation with state persistence.",
+  "properties": [
+    {
+      "name": "utilities",
+      "type": "object",
+      "description": "MemberJunction utilities for data access"
+    },
+    {
+      "name": "styles",
+      "type": "object",
+      "description": "Style utilities and theme configuration"
+    },
+    {
+      "name": "components",
+      "type": "object",
+      "description": "Registry of available child components"
+    },
+    {
+      "name": "callbacks",
+      "type": "object",
+      "description": "Event callbacks including OpenEntityRecord"
+    },
+    {
+      "name": "savedUserSettings",
+      "type": "object",
+      "description": "Persisted user preferences"
+    },
+    {
+      "name": "onSaveUserSettings",
+      "type": "function",
+      "description": "Callback to persist user settings"
+    }
+  ],
+  "events": [],
+  "dependencies": [
+    "@include:customer-360-view-tab-navigation.spec.json",
+    "@include:customer-360-view-overview.spec.json",
+    "@include:customer-360-view-timeline.spec.json"
+  ],
+  "libraries": [],
+  "usageExample": "```javascript\n<Customer360View\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>\n```"
+}

@@ -1,0 +1,53 @@
+{
+  "name": "TeamLeaderboard",
+  "namespace": "CRM/Dashboards",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/team-leaderboard.js",
+  "functionalRequirements": "## Team Leaderboard\n\n### Purpose\nDisplay top performing sales representatives with key metrics.\n\n### Features\n- Ranked list of sales reps\n- Key metrics: deals closed, revenue, win rate\n- Visual ranking indicators\n- Click to view rep details\n- Top 3 highlighting",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays sales team performance leaderboard",
+    "entities": [
+      {
+        "name": "Users",
+        "description": "Sales representative user data",
+        "displayFields": ["ID", "Name", "Email"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Sales reps displayed in leaderboard"
+      },
+      {
+        "name": "Deals",
+        "description": "Source data for performance metrics",
+        "displayFields": ["OwnerID", "Amount", "Stage", "CloseDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Aggregated by owner for performance calculations"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- repData: Array of rep performance objects\n- onRepClick: Callback for rep selection\n\n### Display\n- Ranked table with medals for top 3\n- Formatted metrics\n- Hover effects",
+  "properties": [
+    {
+      "name": "repData",
+      "type": "Array<{id: string, name: string, dealsClosed: number, revenue: number, winRate: number}>",
+      "required": true,
+      "description": "Array of rep performance metrics"
+    },
+    {
+      "name": "onRepClick",
+      "type": "(repId: string) => void",
+      "required": true,
+      "description": "Callback for rep selection"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

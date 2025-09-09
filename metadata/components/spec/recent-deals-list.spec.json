@@ -1,0 +1,30 @@
+{
+  "name": "RecentDealsList",
+  "title": "Recent Deals List",
+  "description": "Displays a list of the most recent deals with stage indicators and key metrics",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "CRM/Sales",
+  "functionalRequirements": "## Recent Deals Display\n\n### Core Features\n- Display 10-20 most recent deals\n- Show key deal information: name, account, amount, stage\n- Color-code rows by stage for quick visual scanning\n- Format currency values appropriately\n- Show days until close date\n\n### Interactivity\n- Clickable rows to view deal details\n- Hover effects for better UX\n- Optional refresh button to reload data\n\n### Visual Design\n- Clean table layout with good spacing\n- Stage badges with semantic colors\n- Highlight deals closing soon\n- Show probability as progress bar",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Fetches recent deals data using RunView",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "CRM deals/opportunities data",
+        "displayFields": ["ID", "DealName", "AccountID", "Account", "Stage", "Amount", "Probability", "CloseDate", "DealSource", "OwnerID", "Owner", "__mj_CreatedAt"],
+        "filterFields": ["CloseDate", "Stage"],
+        "sortFields": ["CloseDate", "Amount", "DealName", "__mj_CreatedAt"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Displays recent deals with stage indicators and metrics"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Data Loading\n- Use RunView to load recent deals\n- Sort by CreatedDate DESC or CloseDate ASC\n- Limit to configurable number of rows (default 15)\n\n### Stage Styling\n- Prospecting: Gray\n- Qualification: Blue\n- Proposal: Yellow\n- Negotiation: Orange\n- Closed Won: Green\n- Closed Lost: Red\n\n### Calculations\n- Days to close: CloseDate - today\n- Expected revenue: Amount * Probability / 100\n- Format amounts with currency symbol",
+  "properties": [],
+  "exampleUsage": "<RecentDealsList\n  maxRows={20}\n  sortBy=\"CloseDate\"\n  onDealClick={handleDealClick}\n/>",
+  "code": "@file:../code/recent-deals-list.js"
+}

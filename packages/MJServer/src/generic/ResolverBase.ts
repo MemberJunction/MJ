@@ -16,7 +16,7 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { AuditLogEntity, ErrorLogEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { AuditLogEntity, ErrorLogEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
@@ -117,7 +117,7 @@ export class ResolverBase {
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<UserViewEntity>({
+      const result = await rv.RunView<UserViewEntityExtended>({
         EntityName: 'User Views',
         ExtraFilter: "Name='" + viewInput.ViewName + "'",
       }, userPayload.userRecord);
@@ -139,7 +139,8 @@ export class ResolverBase {
           viewInput.AuditLogDescription,
           viewInput.ResultType,
           userPayload,
-          viewInput.MaxRows
+          viewInput.MaxRows,
+          viewInput.StartRow
         );
       }
       else {
@@ -155,7 +156,7 @@ export class ResolverBase {
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const contextUser = this.GetUserFromPayload(userPayload);
-      const viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
+      const viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
       await viewInfo.Load(viewInput.ViewID);
       return this.RunViewGenericInternal(
         provider,
@@ -173,7 +174,8 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        viewInput.MaxRows
+        viewInput.MaxRows,
+        viewInput.StartRow
       );
     } catch (err) {
       console.log(err);
@@ -187,12 +189,12 @@ export class ResolverBase {
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
-      const viewInfo: UserViewEntity = {
+      const viewInfo: UserViewEntityExtended = {
         ID: '',
         Entity: viewInput.EntityName,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
-      } as UserViewEntity; // only providing a few bits of data here, but it's enough to get the view to run
+      } as UserViewEntityExtended; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
         provider,
@@ -210,7 +212,8 @@ export class ResolverBase {
         viewInput.AuditLogDescription,
         viewInput.ResultType,
         userPayload,
-        viewInput.MaxRows
+        viewInput.MaxRows,
+        viewInput.StartRow
       );
     } catch (err) {
       console.log(err);
@@ -228,12 +231,12 @@ export class ResolverBase {
     let params: RunViewGenericParams[] = [];
     for (const viewInput of viewInputs) {
       try {
-        let viewInfo: UserViewEntity | null = null;
+        let viewInfo: UserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
           viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<UserViewEntity>('User Views', contextUser);
+          viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
         } else if (viewInput.EntityName) {
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -247,7 +250,7 @@ export class ResolverBase {
             Entity: viewInput.EntityName,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
-          } as UserViewEntity;
+          } as UserViewEntityExtended;
         } else {
           throw new Error('Unable to determine input type');
         }
@@ -263,6 +266,8 @@ export class ResolverBase {
           saveViewResults: viewInput.EntityName ? false : viewInput.SaveViewResults,
           fields: viewInput.Fields,
           ignoreMaxRows: viewInput.IgnoreMaxRows,
+          maxRows: viewInput.MaxRows,
+          startRow: viewInput.StartRow,
           excludeDataFromAllPriorViewRuns: viewInput.EntityName ? false : viewInput.ExcludeDataFromAllPriorViewRuns,
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
@@ -354,7 +359,7 @@ export class ResolverBase {
    */
   protected async RunViewGenericInternal(
     provider: DatabaseProviderBase,
-    viewInfo: UserViewEntity,
+    viewInfo: UserViewEntityExtended,
     extraFilter: string,
     orderBy: string,
     userSearchString: string,
@@ -368,7 +373,8 @@ export class ResolverBase {
     auditLogDescription: string | undefined,
     resultType: string | undefined,
     userPayload: UserPayload | null,
-    maxRows: number | undefined
+    maxRows: number | undefined,
+    startRow: number | undefined
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -418,6 +424,7 @@ export class ResolverBase {
           ExcludeDataFromAllPriorViewRuns: excludeDataFromAllPriorViewRuns,
           IgnoreMaxRows: ignoreMaxRows,
           MaxRows: maxRows,
+          StartRow: startRow,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
@@ -514,6 +521,8 @@ export class ResolverBase {
           SaveViewResults: param.saveViewResults,
           ExcludeDataFromAllPriorViewRuns: param.excludeDataFromAllPriorViewRuns,
           IgnoreMaxRows: param.ignoreMaxRows,
+          MaxRows: param.maxRows,
+          StartRow: param.startRow,
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,

@@ -15,6 +15,8 @@ export * from './custom/reportEntity.server';
 export * from './custom/TemplateContentEntity.server';
 export * from './custom/userViewEntity.server';
 export * from './custom/ActionEntity.server';
+export * from './custom/ComponentEntity.server';
+export * from './custom/util';
 
 // Call the stub functions to ensure that the custom subclasses are not tree shaken out.
 export function LoadCoreEntitiesServerSubClasses(): void {

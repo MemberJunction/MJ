@@ -32,6 +32,12 @@ export default class Push extends Command {
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
+    'parallel-batch-size': Flags.integer({ 
+      description: 'Number of records to process in parallel (default: 10)', 
+      default: 10,
+      min: 1,
+      max: 50 
+    }),
   };
 
   async run(): Promise<void> {
@@ -113,6 +119,7 @@ export default class Push extends Command {
           dryRun: flags['dry-run'],
           verbose: flags.verbose,
           noValidate: flags['no-validate'],
+          parallelBatchSize: flags['parallel-batch-size'],
         },
         {
           onProgress: (message) => {
@@ -125,7 +132,29 @@ export default class Push extends Command {
             this.error(message);
           },
           onWarn: (message) => {
-            this.warn(message);
+            // Check if this is a user-friendly warning that doesn't need a stack trace
+            const userFriendlyPatterns = [
+              'Record not found:',
+              'To auto-create missing records',
+              'Circular dependencies detected',
+              'Skipping',
+              'File backups rolled back',
+              'Failed to rollback file backups',
+              'SQL logging requested but provider does not support it',
+              'Failed to close SQL logging session'
+            ];
+            
+            const isUserFriendly = userFriendlyPatterns.some(pattern => 
+              message.includes(pattern)
+            );
+            
+            if (isUserFriendly) {
+              // Log as a styled warning without stack trace
+              this.log(chalk.yellow(`⚠️  ${message}`));
+            } else {
+              // Use standard warn for unexpected warnings that need debugging info
+              this.warn(message);
+            }
           },
           onLog: (message) => {
             this.log(message);
@@ -146,8 +175,8 @@ export default class Push extends Command {
         created: result.created,
         updated: result.updated,
         unchanged: result.unchanged,
-        deleted: 0,
-        skipped: 0,
+        deleted: result.deleted || 0,
+        skipped: result.skipped || 0,
         errors: result.errors,
         duration: endTime - startTime,
       });

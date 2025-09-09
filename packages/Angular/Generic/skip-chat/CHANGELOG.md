@@ -1,5 +1,438 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/graphql-dataprovider@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ng-base-types@2.99.0
+  - @memberjunction/ng-code-editor@2.99.0
+  - @memberjunction/ng-data-context@2.99.0
+  - @memberjunction/ng-notifications@2.99.0
+  - @memberjunction/ng-resource-permissions@2.99.0
+  - @memberjunction/data-context@2.99.0
+  - @memberjunction/ng-container-directives@2.99.0
+  - @memberjunction/ng-react@2.99.0
+  - @memberjunction/interactive-component-types@2.99.0
+  - @memberjunction/skip-types@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- a6a99c4: Add full component `Spec` button back to artifact view.
+- Updated dependencies [56a4e9d]
+- Updated dependencies [ce949f4]
+  - @memberjunction/ng-react@2.98.0
+  - @memberjunction/ng-base-types@2.98.0
+  - @memberjunction/ng-code-editor@2.98.0
+  - @memberjunction/ng-container-directives@2.98.0
+  - @memberjunction/ng-data-context@2.98.0
+  - @memberjunction/ng-notifications@2.98.0
+  - @memberjunction/ng-resource-permissions@2.98.0
+  - @memberjunction/graphql-dataprovider@2.98.0
+  - @memberjunction/interactive-component-types@2.98.0
+  - @memberjunction/core@2.98.0
+  - @memberjunction/core-entities@2.98.0
+  - @memberjunction/data-context@2.98.0
+  - @memberjunction/global@2.98.0
+  - @memberjunction/skip-types@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- ecacab3: Improve Skip-Chat report viewer UI and functionality
+
+  ### 🎯 Key Improvements
+
+  **Report Viewer Architecture**
+
+  - Refactored from toggle-based panels to clean nested tab
+    structure
+  - Implemented proper tabs: Component, Functional,
+    Technical, Data Spec, and Code
+  - Removed complex resize and toggle functionality for
+    simpler, more maintainable code
+  - Improved tab formatting with better heights and spacing
+
+  **Save Report Functionality**
+
+  - Fixed "Save Report" button state management
+  - Added proper notification display using
+    MJNotificationService
+  - Button now correctly updates to "Open Saved Report"
+    after creation
+  - Fixed isCreatingReport flag reset on completion
+
+  **Print Report Enhancement**
+
+  - Implemented iframe-based printing to isolate component
+    content
+  - Captures current DOM state using cloneNode(true) to
+    preserve user interactions
+  - Prints exactly what user is viewing including toggles,
+    filters, and view changes
+  - No new windows/tabs - seamless print experience
+
+  **Conversation Sync**
+
+  - Fixed conversation name synchronization when artifacts
+    are created
+  - UI now updates immediately when Skip renames
+    conversations
+
+- Updated dependencies [dc497d5]
+  - @memberjunction/interactive-component-types@2.97.0
+  - @memberjunction/core-entities@2.97.0
+  - @memberjunction/skip-types@2.97.0
+  - @memberjunction/ng-base-types@2.97.0
+  - @memberjunction/ng-code-editor@2.97.0
+  - @memberjunction/ng-data-context@2.97.0
+  - @memberjunction/ng-notifications@2.97.0
+  - @memberjunction/ng-resource-permissions@2.97.0
+  - @memberjunction/graphql-dataprovider@2.97.0
+  - @memberjunction/data-context@2.97.0
+  - @memberjunction/ng-react@2.97.0
+  - @memberjunction/ng-container-directives@2.97.0
+  - @memberjunction/core@2.97.0
+  - @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+- Updated dependencies [8f34e55]
+- Updated dependencies [22e365f]
+- Updated dependencies [a3d32ec]
+- Updated dependencies [ad06a79]
+- Updated dependencies [8e1c946]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ng-react@2.96.0
+  - @memberjunction/ng-base-types@2.96.0
+  - @memberjunction/ng-code-editor@2.96.0
+  - @memberjunction/ng-container-directives@2.96.0
+  - @memberjunction/ng-data-context@2.96.0
+  - @memberjunction/ng-notifications@2.96.0
+  - @memberjunction/ng-resource-permissions@2.96.0
+  - @memberjunction/graphql-dataprovider@2.96.0
+  - @memberjunction/interactive-component-types@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/data-context@2.96.0
+  - @memberjunction/skip-types@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- 4b52f29: Skip Chat UI improvements and auth provider fixes
+
+  - **Skip Chat UI Enhancements**:
+
+    - Fixed timer display persistence when switching between conversations
+    - Prevented clock icon from disappearing when other conversations complete
+    - Eliminated delay when displaying status messages on conversation switch
+    - Fixed status message and timer persistence across page refreshes
+    - Preserved whitespace formatting in chat messages
+    - Updated chat input style to match MS Teams design
+    - Fixed text overflow issues under buttons in chat input area
+
+  - **Auth Provider Improvements**:
+
+    - Simplified Load function implementation across auth providers (Auth0, MSAL,
+      Okta)
+
+  - **MJAPI Configuration**:
+    - Added configurable public URL support for MJAPI callbacks to enable hybrid
+      development scenarios
+
+- Updated dependencies [3cd7db6]
+- Updated dependencies [a54c014]
+- Updated dependencies [85985bd]
+  - @memberjunction/ng-react@2.95.0
+  - @memberjunction/core@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+  - @memberjunction/ng-base-types@2.95.0
+  - @memberjunction/ng-code-editor@2.95.0
+  - @memberjunction/ng-container-directives@2.95.0
+  - @memberjunction/ng-data-context@2.95.0
+  - @memberjunction/ng-notifications@2.95.0
+  - @memberjunction/ng-resource-permissions@2.95.0
+  - @memberjunction/graphql-dataprovider@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/data-context@2.95.0
+  - @memberjunction/skip-types@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- Updated dependencies [98afc80]
+- Updated dependencies [eed16e0]
+  - @memberjunction/ng-react@2.94.0
+  - @memberjunction/interactive-component-types@2.94.0
+  - @memberjunction/core-entities@2.94.0
+  - @memberjunction/skip-types@2.94.0
+  - @memberjunction/ng-base-types@2.94.0
+  - @memberjunction/ng-code-editor@2.94.0
+  - @memberjunction/ng-data-context@2.94.0
+  - @memberjunction/ng-notifications@2.94.0
+  - @memberjunction/ng-resource-permissions@2.94.0
+  - @memberjunction/graphql-dataprovider@2.94.0
+  - @memberjunction/data-context@2.94.0
+  - @memberjunction/ng-container-directives@2.94.0
+  - @memberjunction/core@2.94.0
+  - @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- a94d422: UI updates
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+- Updated dependencies [1461a44]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/ng-react@2.93.0
+  - @memberjunction/graphql-dataprovider@2.93.0
+  - @memberjunction/interactive-component-types@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ng-base-types@2.93.0
+  - @memberjunction/ng-code-editor@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+  - @memberjunction/ng-data-context@2.93.0
+  - @memberjunction/ng-notifications@2.93.0
+  - @memberjunction/ng-resource-permissions@2.93.0
+  - @memberjunction/data-context@2.93.0
+  - @memberjunction/skip-types@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [b303b84]
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/ng-code-editor@2.92.0
+  - @memberjunction/interactive-component-types@2.92.0
+  - @memberjunction/core@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/skip-types@2.92.0
+  - @memberjunction/ng-react@2.92.0
+  - @memberjunction/ng-base-types@2.92.0
+  - @memberjunction/ng-container-directives@2.92.0
+  - @memberjunction/ng-data-context@2.92.0
+  - @memberjunction/ng-notifications@2.92.0
+  - @memberjunction/ng-resource-permissions@2.92.0
+  - @memberjunction/graphql-dataprovider@2.92.0
+  - @memberjunction/data-context@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- d670e2c: Fixed critical issues in Skip Chat component including orphaned artifact cleanup and UI update problems. When deleting conversation messages,
+  associated ConversationArtifact and ConversationArtifactVersion records are now properly deleted to prevent orphaned database records. Fixed UI not
+  updating immediately after message deletion by adding proper change detection. Resolved ExpressionChangedAfterItHasBeenCheckedError in elapsed time
+  display by initializing values correctly and deferring updates to the next microtask.
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ng-code-editor@2.91.0
+  - @memberjunction/ng-react@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/ng-base-types@2.91.0
+  - @memberjunction/ng-container-directives@2.91.0
+  - @memberjunction/ng-data-context@2.91.0
+  - @memberjunction/ng-notifications@2.91.0
+  - @memberjunction/ng-resource-permissions@2.91.0
+  - @memberjunction/graphql-dataprovider@2.91.0
+  - @memberjunction/interactive-component-types@2.91.0
+  - @memberjunction/data-context@2.91.0
+  - @memberjunction/skip-types@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [d4530d7]
+- Updated dependencies [146ebcc]
+- Updated dependencies [187527b]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [da3eb4f]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/interactive-component-types@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/ng-react@2.90.0
+  - @memberjunction/skip-types@2.90.0
+  - @memberjunction/ng-base-types@2.90.0
+  - @memberjunction/ng-code-editor@2.90.0
+  - @memberjunction/ng-container-directives@2.90.0
+  - @memberjunction/ng-data-context@2.90.0
+  - @memberjunction/ng-notifications@2.90.0
+  - @memberjunction/ng-resource-permissions@2.90.0
+  - @memberjunction/graphql-dataprovider@2.90.0
+  - @memberjunction/data-context@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+- Updated dependencies [604ef0c]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/graphql-dataprovider@2.89.0
+  - @memberjunction/ng-base-types@2.89.0
+  - @memberjunction/ng-code-editor@2.89.0
+  - @memberjunction/ng-data-context@2.89.0
+  - @memberjunction/ng-notifications@2.89.0
+  - @memberjunction/ng-resource-permissions@2.89.0
+  - @memberjunction/data-context@2.89.0
+  - @memberjunction/skip-types@2.89.0
+  - @memberjunction/ng-container-directives@2.89.0
+  - @memberjunction/ng-react@2.89.0
+  - @memberjunction/interactive-component-types@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/graphql-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ng-notifications@2.88.0
+  - @memberjunction/ng-base-types@2.88.0
+  - @memberjunction/ng-code-editor@2.88.0
+  - @memberjunction/ng-data-context@2.88.0
+  - @memberjunction/ng-resource-permissions@2.88.0
+  - @memberjunction/data-context@2.88.0
+  - @memberjunction/skip-types@2.88.0
+  - @memberjunction/ng-container-directives@2.88.0
+  - @memberjunction/ng-react@2.88.0
+  - @memberjunction/interactive-component-types@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ng-base-types@2.87.0
+  - @memberjunction/ng-code-editor@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-data-context@2.87.0
+  - @memberjunction/ng-notifications@2.87.0
+  - @memberjunction/ng-react@2.87.0
+  - @memberjunction/ng-resource-permissions@2.87.0
+  - @memberjunction/graphql-dataprovider@2.87.0
+  - @memberjunction/interactive-component-types@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/data-context@2.87.0
+  - @memberjunction/skip-types@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [8846ccc]
+- Updated dependencies [7dd2409]
+  - @memberjunction/skip-types@2.86.0
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/ng-base-types@2.86.0
+  - @memberjunction/ng-code-editor@2.86.0
+  - @memberjunction/ng-data-context@2.86.0
+  - @memberjunction/ng-notifications@2.86.0
+  - @memberjunction/ng-resource-permissions@2.86.0
+  - @memberjunction/graphql-dataprovider@2.86.0
+  - @memberjunction/data-context@2.86.0
+  - @memberjunction/interactive-component-types@2.86.0
+  - @memberjunction/ng-react@2.86.0
+  - @memberjunction/ng-container-directives@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/skip-types@2.85.0
+  - @memberjunction/ng-base-types@2.85.0
+  - @memberjunction/ng-code-editor@2.85.0
+  - @memberjunction/ng-data-context@2.85.0
+  - @memberjunction/ng-notifications@2.85.0
+  - @memberjunction/ng-resource-permissions@2.85.0
+  - @memberjunction/graphql-dataprovider@2.85.0
+  - @memberjunction/data-context@2.85.0
+  - @memberjunction/interactive-component-types@2.85.0
+  - @memberjunction/ng-react@2.85.0
+  - @memberjunction/ng-container-directives@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/graphql-dataprovider@2.84.0
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ng-notifications@2.84.0
+  - @memberjunction/ng-base-types@2.84.0
+  - @memberjunction/ng-code-editor@2.84.0
+  - @memberjunction/ng-container-directives@2.84.0
+  - @memberjunction/ng-data-context@2.84.0
+  - @memberjunction/ng-react@2.84.0
+  - @memberjunction/ng-resource-permissions@2.84.0
+  - @memberjunction/interactive-component-types@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/data-context@2.84.0
+  - @memberjunction/skip-types@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+- Updated dependencies [87f7308]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/ng-react@2.83.0
+  - @memberjunction/ng-base-types@2.83.0
+  - @memberjunction/ng-code-editor@2.83.0
+  - @memberjunction/ng-container-directives@2.83.0
+  - @memberjunction/ng-data-context@2.83.0
+  - @memberjunction/ng-notifications@2.83.0
+  - @memberjunction/ng-resource-permissions@2.83.0
+  - @memberjunction/graphql-dataprovider@2.83.0
+  - @memberjunction/interactive-component-types@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/data-context@2.83.0
+  - @memberjunction/skip-types@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

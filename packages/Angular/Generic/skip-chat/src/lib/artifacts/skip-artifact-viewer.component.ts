@@ -316,7 +316,8 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         // Set properties on the report component
         instance.SkipData = configData;
         instance.Provider = this.ProviderToUse;
-        
+        instance.ShowOpenReportButton = false; // we don't want this feature because artifacts show this button within, but in linear report format when shown IN a conversation this button is okay by default just not here
+
         // Set up event handlers
         instance.NavigateToMatchingReport.subscribe((reportID: string) => {
           this.NavigateToMatchingReport.emit(reportID); // bubble up
@@ -329,7 +330,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         instance.DrillDownEvent.subscribe((drillDownInfo: any) => {
           this.DrillDownEvent.emit(drillDownInfo); // bubble up
         });
-        
+
         // Set additional properties
         if (this.DataContext) {
           instance.DataContext = this.DataContext;

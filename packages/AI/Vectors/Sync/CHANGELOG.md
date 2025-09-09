@@ -1,5 +1,293 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core@2.99.0
+  - @memberjunction/aiengine@2.99.0
+  - @memberjunction/ai-vectors@2.99.0
+  - @memberjunction/templates-base-types@2.99.0
+  - @memberjunction/templates@2.99.0
+  - @memberjunction/ai-vectors-pinecone@2.99.0
+  - @memberjunction/ai-vectordb@2.99.0
+  - @memberjunction/ai@2.99.0
+  - @memberjunction/ai-mistral@2.99.0
+  - @memberjunction/ai-openai@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.98.0
+- @memberjunction/aiengine@2.98.0
+- @memberjunction/ai-mistral@2.98.0
+- @memberjunction/ai-openai@2.98.0
+- @memberjunction/ai-vectors-pinecone@2.98.0
+- @memberjunction/ai-vectors@2.98.0
+- @memberjunction/ai-vectordb@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/global@2.98.0
+- @memberjunction/templates-base-types@2.98.0
+- @memberjunction/templates@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/ai-vectors@2.97.0
+- @memberjunction/templates-base-types@2.97.0
+- @memberjunction/templates@2.97.0
+- @memberjunction/ai-vectors-pinecone@2.97.0
+- @memberjunction/ai@2.97.0
+- @memberjunction/ai-mistral@2.97.0
+- @memberjunction/ai-openai@2.97.0
+- @memberjunction/ai-vectordb@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/aiengine@2.96.0
+  - @memberjunction/ai-vectors-pinecone@2.96.0
+  - @memberjunction/ai-vectors@2.96.0
+  - @memberjunction/ai-vectordb@2.96.0
+  - @memberjunction/templates-base-types@2.96.0
+  - @memberjunction/templates@2.96.0
+  - @memberjunction/ai@2.96.0
+  - @memberjunction/ai-mistral@2.96.0
+  - @memberjunction/ai-openai@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/aiengine@2.95.0
+  - @memberjunction/ai-vectors-pinecone@2.95.0
+  - @memberjunction/ai-vectors@2.95.0
+  - @memberjunction/ai-vectordb@2.95.0
+  - @memberjunction/templates-base-types@2.95.0
+  - @memberjunction/templates@2.95.0
+  - @memberjunction/ai@2.95.0
+  - @memberjunction/ai-mistral@2.95.0
+  - @memberjunction/ai-openai@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.94.0
+- @memberjunction/ai-vectors@2.94.0
+- @memberjunction/templates-base-types@2.94.0
+- @memberjunction/templates@2.94.0
+- @memberjunction/ai-vectors-pinecone@2.94.0
+- @memberjunction/ai@2.94.0
+- @memberjunction/ai-mistral@2.94.0
+- @memberjunction/ai-openai@2.94.0
+- @memberjunction/ai-vectordb@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/aiengine@2.93.0
+  - @memberjunction/ai-vectors-pinecone@2.93.0
+  - @memberjunction/ai-vectors@2.93.0
+  - @memberjunction/ai-vectordb@2.93.0
+  - @memberjunction/templates-base-types@2.93.0
+  - @memberjunction/templates@2.93.0
+  - @memberjunction/ai@2.93.0
+  - @memberjunction/ai-mistral@2.93.0
+  - @memberjunction/ai-openai@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+  - @memberjunction/aiengine@2.92.0
+  - @memberjunction/ai-vectors-pinecone@2.92.0
+  - @memberjunction/ai-vectors@2.92.0
+  - @memberjunction/ai-vectordb@2.92.0
+  - @memberjunction/templates-base-types@2.92.0
+  - @memberjunction/templates@2.92.0
+  - @memberjunction/ai@2.92.0
+  - @memberjunction/ai-mistral@2.92.0
+  - @memberjunction/ai-openai@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/aiengine@2.91.0
+  - @memberjunction/ai-vectors-pinecone@2.91.0
+  - @memberjunction/ai-vectors@2.91.0
+  - @memberjunction/ai-vectordb@2.91.0
+  - @memberjunction/templates-base-types@2.91.0
+  - @memberjunction/templates@2.91.0
+  - @memberjunction/ai@2.91.0
+  - @memberjunction/ai-mistral@2.91.0
+  - @memberjunction/ai-openai@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+  - @memberjunction/aiengine@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/ai-vectors-pinecone@2.90.0
+  - @memberjunction/ai-vectors@2.90.0
+  - @memberjunction/templates@2.90.0
+  - @memberjunction/ai-vectordb@2.90.0
+  - @memberjunction/templates-base-types@2.90.0
+  - @memberjunction/ai@2.90.0
+  - @memberjunction/ai-mistral@2.90.0
+  - @memberjunction/ai-openai@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.89.0
+- @memberjunction/ai-vectors@2.89.0
+- @memberjunction/templates-base-types@2.89.0
+- @memberjunction/templates@2.89.0
+- @memberjunction/ai-vectors-pinecone@2.89.0
+- @memberjunction/ai@2.89.0
+- @memberjunction/ai-mistral@2.89.0
+- @memberjunction/ai-openai@2.89.0
+- @memberjunction/ai-vectordb@2.89.0
+- @memberjunction/core@2.89.0
+- @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.88.0
+- @memberjunction/ai-vectors@2.88.0
+- @memberjunction/templates-base-types@2.88.0
+- @memberjunction/templates@2.88.0
+- @memberjunction/ai-vectors-pinecone@2.88.0
+- @memberjunction/ai@2.88.0
+- @memberjunction/ai-mistral@2.88.0
+- @memberjunction/ai-openai@2.88.0
+- @memberjunction/ai-vectordb@2.88.0
+- @memberjunction/core@2.88.0
+- @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/ai-vectors-pinecone@2.87.0
+  - @memberjunction/ai-vectors@2.87.0
+  - @memberjunction/ai-vectordb@2.87.0
+  - @memberjunction/templates-base-types@2.87.0
+  - @memberjunction/templates@2.87.0
+  - @memberjunction/ai@2.87.0
+  - @memberjunction/ai-mistral@2.87.0
+  - @memberjunction/ai-openai@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.86.0
+- @memberjunction/ai-vectors@2.86.0
+- @memberjunction/templates-base-types@2.86.0
+- @memberjunction/templates@2.86.0
+- @memberjunction/ai-vectors-pinecone@2.86.0
+- @memberjunction/ai@2.86.0
+- @memberjunction/ai-mistral@2.86.0
+- @memberjunction/ai-openai@2.86.0
+- @memberjunction/ai-vectordb@2.86.0
+- @memberjunction/core@2.86.0
+- @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [dbef064]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/ai-vectors@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-mistral@2.85.0
+  - @memberjunction/ai-openai@2.85.0
+  - @memberjunction/templates@2.85.0
+  - @memberjunction/templates-base-types@2.85.0
+  - @memberjunction/ai-vectors-pinecone@2.85.0
+  - @memberjunction/ai-vectordb@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [75badca]
+- Updated dependencies [0b9d691]
+- Updated dependencies [25e3697]
+  - @memberjunction/ai-openai@2.84.0
+  - @memberjunction/core@2.84.0
+  - @memberjunction/aiengine@2.84.0
+  - @memberjunction/ai-vectors-pinecone@2.84.0
+  - @memberjunction/ai-vectors@2.84.0
+  - @memberjunction/ai-vectordb@2.84.0
+  - @memberjunction/templates-base-types@2.84.0
+  - @memberjunction/templates@2.84.0
+  - @memberjunction/ai@2.84.0
+  - @memberjunction/ai-mistral@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+- Updated dependencies [1dc69bf]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/aiengine@2.83.0
+  - @memberjunction/ai-vectors-pinecone@2.83.0
+  - @memberjunction/ai-vectors@2.83.0
+  - @memberjunction/ai-vectordb@2.83.0
+  - @memberjunction/templates-base-types@2.83.0
+  - @memberjunction/templates@2.83.0
+  - @memberjunction/ai@2.83.0
+  - @memberjunction/ai-mistral@2.83.0
+  - @memberjunction/ai-openai@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

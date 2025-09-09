@@ -13,7 +13,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
      * Sends a single message using the provider
      */
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
-        
+
         const from: string = message.From
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
@@ -34,6 +34,13 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 }
             }
         };
+
+        /*
+        * Should be ready to go - but needs SG testing.
+        if(message.Headers){
+            msg.headers = Object.fromEntries(Object.entries(message.Headers).map(([key, value]) => [`X-${key}`, value])) as Record<string, string>;
+        }
+        */
 
         if(message.SendAt){
             const time = message.SendAt.getTime();

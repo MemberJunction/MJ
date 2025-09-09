@@ -1,0 +1,1201 @@
+[
+  {
+    "fields": {
+      "Name": "dayjs",
+      "DisplayName": "Day.js",
+      "Version": "1.11.10",
+      "GlobalVariable": "dayjs",
+      "Category": "Utility",
+      "CDNUrl": "https://unpkg.com/dayjs@1.11.10/dayjs.min.js",
+      "UsageType": "Dependency",
+      "CDNCssUrl": null,
+      "Description": "Fast 2KB alternative to Moment.js with the same modern API"
+    },
+    "primaryKey": {
+      "ID": "C8659859-FEA7-4CBA-B670-85729102213F"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.559Z",
+      "checksum": "a0bac24413ab5125d549517b95f6c5200f232524570fc4be2d078dbddcb6ae11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "antd",
+      "DisplayName": "Ant Design",
+      "Version": "5.20.2",
+      "GlobalVariable": "antd",
+      "Category": "UI",
+      "CDNUrl": "https://unpkg.com/antd@5.20.2/dist/antd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Enterprise-class UI design language and React components",
+      "Dependencies": {
+        "dayjs": "^1.11.10"
+      }
+    },
+    "primaryKey": {
+      "ID": "91591953-DB49-4E61-A81D-4F7755E2FF73"
+    },
+    "sync": {
+      "lastModified": "2025-08-27T21:52:53.782Z",
+      "checksum": "995f76a01225fa0e928d00fb0c8e921200aa0e994cdd2787d62e7c460a67a28c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "d3",
+      "DisplayName": "D3.js",
+      "Version": "7.8.5",
+      "GlobalVariable": "d3",
+      "Category": "Charting",
+      "CDNUrl": "https://unpkg.com/d3@7.8.5/dist/d3.min.js",
+      "CDNCssUrl": null,
+      "Description": "Data visualization library for creating custom charts",
+      "LintRules": "@file:lint-rules/d3/lint.json"
+    },
+    "primaryKey": {
+      "ID": "12416186-FBBD-4973-A7F4-D030FD84994B"
+    },
+    "sync": {
+      "lastModified": "2025-09-02T18:19:30.526Z",
+      "checksum": "173d83dae1d276a65070b7c708e40f61a04d3aa29e9ebb3f7dadaa73c6ae1e88"
+    }
+  },
+  {
+    "fields": {
+      "Name": "chart.js",
+      "DisplayName": "Chart.js",
+      "Version": "4.4.1",
+      "GlobalVariable": "Chart",
+      "Category": "Charting",
+      "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
+      "CDNCssUrl": null,
+      "Description": "Simple yet flexible JavaScript charting library",
+      "LintRules": "@file:lint-rules/chart-js/lint.json"
+    },
+    "primaryKey": {
+      "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T22:26:19.491Z",
+      "checksum": "9de60a9eef68247a1cb77c932a0a5bfe54de3a9f6a4b1efad8f03d8ccbfef43e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Recharts",
+      "DisplayName": "Recharts",
+      "Version": "2.10.4",
+      "GlobalVariable": "Recharts",
+      "Category": "Charting",
+      "Status": "Disabled",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/recharts@2.10.4/umd/Recharts.min.js",
+      "CDNCssUrl": null,
+      "Description": "React charting library built on D3",
+      "LintRules": "@file:lint-rules/recharts/lint.json"
+    },
+    "primaryKey": {
+      "ID": "5A8C6518-889B-4868-BA20-4E50531309C6"
+    },
+    "sync": {
+      "lastModified": "2025-09-02T18:19:30.554Z",
+      "checksum": "bdbe038c4f1dc1280a2ccf489385c0cfc462507c9d37fd6d52b7c6a33c0731d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plotly",
+      "DisplayName": "Plotly.js",
+      "Version": "2.27.1",
+      "Status": "Disabled",
+      "GlobalVariable": "Plotly",
+      "Category": "Charting",
+      "CDNUrl": "https://cdn.plot.ly/plotly-2.27.1.min.js",
+      "CDNCssUrl": null,
+      "Description": "Scientific graphing library for creating interactive charts"
+    },
+    "primaryKey": {
+      "ID": "404D72E9-14AA-4A7B-A594-56FF8802BF73"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.571Z",
+      "checksum": "a344068e070bf8787091d341a0efa590c9b5d54233a6e5f3a08c2790dabee610"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ApexCharts",
+      "DisplayName": "ApexCharts",
+      "Version": "3.45.1",
+      "GlobalVariable": "ApexCharts",
+      "Category": "Charting",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css",
+      "Description": "Modern interactive JavaScript charts library",
+      "LintRules": "@file:lint-rules/apexcharts/lint.json"
+    },
+    "primaryKey": {
+      "ID": "91E9DB43-6688-4838-939E-C4FC1F15C6CE"
+    },
+    "sync": {
+      "lastModified": "2025-09-09T13:08:55.954Z",
+      "checksum": "801658cb3c81b3266e67e3f5e2807dfe4dd688f3f4a83543466e0656806ac56f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ECharts",
+      "DisplayName": "Apache ECharts",
+      "Version": "5.4.3",
+      "GlobalVariable": "echarts",
+      "Status": "Disabled",
+      "Category": "Charting",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js",
+      "CDNCssUrl": null,
+      "Description": "Powerful charting and visualization library from Apache"
+    },
+    "primaryKey": {
+      "ID": "02C59617-1113-4D86-8320-B4D76B6B6BD0"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.584Z",
+      "checksum": "6cdf2c98525d9a611b26b8b216b7fdd19c65c4ca717d9759a4fae51f8ca8eaf8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Highcharts",
+      "DisplayName": "Highcharts",
+      "Version": "11.2.0",
+      "GlobalVariable": "Highcharts",
+      "Status": "Disabled",
+      "Category": "Charting",
+      "CDNUrl": "https://code.highcharts.com/11.2.0/highcharts.js",
+      "CDNCssUrl": null,
+      "Description": "Enterprise-grade interactive charting library"
+    },
+    "primaryKey": {
+      "ID": "E31952AB-C0B4-45F3-91F6-B1A885752D43"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.594Z",
+      "checksum": "f896a325f5e04fd370e754f0194980c6bd3efd14275dc36b38e7706aab677d30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Victory",
+      "DisplayName": "Victory",
+      "Version": "36.9.1",
+      "Status": "Disabled",
+      "GlobalVariable": "Victory",
+      "Category": "Charting",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/victory@36.9.1/dist/victory.min.js",
+      "CDNCssUrl": null,
+      "Description": "Modular charting components for React"
+    },
+    "primaryKey": {
+      "ID": "51377687-DA3B-4BDD-8EB2-6CD44CE96E3D"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T19:02:06.729Z",
+      "checksum": "6ed6712aa1b667c5e7992ff71a291f221e7c70430f1ab11d56ea7e02309f1450"
+    }
+  },
+  {
+    "fields": {
+      "Name": "topojson-client",
+      "DisplayName": "TopoJSON Client",
+      "Version": "3.1.0",
+      "GlobalVariable": "topojson",
+      "Category": "Other",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js",
+      "CDNCssUrl": null,
+      "Description": "Manipulate TopoJSON topology data for maps"
+    },
+    "primaryKey": {
+      "ID": "9466CC2D-96FE-417A-A520-BF1DCC212B7F"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.398Z",
+      "checksum": "5a5111705f3b3e50831b84b165f92e11234b84dcd78fc36402517ec0bb1cec15"
+    }
+  },
+  {
+    "fields": {
+      "Name": "moment",
+      "DisplayName": "Moment.js",
+      "Version": "2.29.4",
+      "GlobalVariable": "moment",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js",
+      "CDNCssUrl": null,
+      "Description": "Parse, validate, manipulate, and display dates and times",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "BD75009E-D2C6-4FA1-9FC6-D78F5F04301A"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.649Z",
+      "checksum": "a2426cc91202aa8c4934cf9dcfb5e42d33b8102d5dec6c5b514adc957e0448ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "date-fns",
+      "DisplayName": "date-fns",
+      "Version": "3.6.0",
+      "Status": "Deprecated",
+      "GlobalVariable": "dateFns",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js",
+      "CDNCssUrl": null,
+      "Description": "Modern JavaScript date utility library",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "94552655-B996-4791-9008-A2D6AAC526AC"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.662Z",
+      "checksum": "4dfca09d7f01be9f8d56b85ff171dfdcbc2ace9ea9be3b64f73724d88eb38362"
+    }
+  },
+  {
+    "fields": {
+      "Name": "lodash",
+      "DisplayName": "Lodash",
+      "Version": "4.17.21",
+      "GlobalVariable": "_",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js",
+      "CDNCssUrl": null,
+      "Description": "Modern JavaScript utility library delivering consistency and performance"
+    },
+    "primaryKey": {
+      "ID": "0E802CC1-344E-41EE-925E-3E4314090CC5"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.425Z",
+      "checksum": "c6927ecd3a18d847987c274ff717d15d58dcd598cafe33f922c067e72574f2a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "axios",
+      "DisplayName": "Axios",
+      "Version": "1.6.5",
+      "GlobalVariable": "axios",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/axios@1.6.5/dist/axios.min.js",
+      "CDNCssUrl": null,
+      "Description": "Promise based HTTP client for the browser and node.js",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "D4B056DB-D299-4B0D-9CB4-D2DAAAA7DE73"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.672Z",
+      "checksum": "01511d79c07389d428f9dbda493ac3e27179dfa87d05e4bae752acecec06989e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "uuid",
+      "DisplayName": "UUID",
+      "Version": "9.0.1",
+      "GlobalVariable": "uuid",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/uuid@9.0.1/dist/umd/uuid.min.js",
+      "CDNCssUrl": null,
+      "Description": "RFC4122 UUIDs generator for JavaScript"
+    },
+    "primaryKey": {
+      "ID": "1D095CA3-9990-4608-A8F9-02B1A620CD27"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.449Z",
+      "checksum": "eaa9ff9ee265f5b9aef18747a5ba8d80d297757540b79d41afe1c114351589ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "classnames",
+      "DisplayName": "Classnames",
+      "Version": "2.5.1",
+      "Status": "Deprecated",
+      "GlobalVariable": "classNames",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/classnames@2.5.1/index.min.js",
+      "CDNCssUrl": null,
+      "Description": "Utility for conditionally joining classNames together"
+    },
+    "primaryKey": {
+      "ID": "8086FB43-A9A6-4CB4-B0BA-64DF478429F7"
+    },
+    "sync": {
+      "lastModified": "2025-08-21T18:23:28.684Z",
+      "checksum": "d7986fbea3e73883514e44c9b5d3dc273859e58f2f06e0038a6095635f968ec3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DOMPurify",
+      "DisplayName": "DOMPurify",
+      "Version": "3.0.8",
+      "GlobalVariable": "DOMPurify",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js",
+      "CDNCssUrl": null,
+      "Description": "DOM-only XSS sanitizer for HTML, MathML and SVG",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "9B9E990F-DBD9-45E2-A929-E360DBE270F5"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.684Z",
+      "checksum": "e0825a00f30e8ed018fec23faa6d209dfd540f57ee384d71e526c6fe41646d9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "numeral",
+      "DisplayName": "Numeral.js",
+      "Version": "2.0.6",
+      "GlobalVariable": "numeral",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/numeral@2.0.6/numeral.min.js",
+      "CDNCssUrl": null,
+      "Description": "Library for formatting and manipulating numbers",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "7FAB0832-8655-4205-BD9F-AFA929B2ED74"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.695Z",
+      "checksum": "8d534b8f93dbe97da16137b81586bcc6f7dd495c34791ff62233053877f9373b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "accounting",
+      "DisplayName": "Accounting.js",
+      "Version": "0.4.1",
+      "GlobalVariable": "accounting",
+      "Status": "Disabled",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/accounting@0.4.1/accounting.min.js",
+      "CDNCssUrl": null,
+      "Description": "Number, money and currency formatting library"
+    },
+    "primaryKey": {
+      "ID": "B31B4161-F90D-45B0-8B5A-8CAC9DCB0D47"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.704Z",
+      "checksum": "453a01ad2f236c9d9ac3e81302385744650398a2e4e4eb0558eb98dc8ad670a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@mui/material",
+      "DisplayName": "Material-UI",
+      "Version": "5.15.2",
+      "GlobalVariable": "MaterialUI",
+      "Status": "Disabled",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@mui/material@5.15.2/umd/material-ui.production.min.js",
+      "CDNCssUrl": null,
+      "Description": "React components implementing Google's Material Design",
+      "UsageType": "Direct",
+      "Dependencies": {
+        "@emotion/styled": "^11.11.0",
+        "@popperjs/core": "^2.11.8"
+      }
+    },
+    "primaryKey": {
+      "ID": "CCCD65AF-004F-4D3A-8282-1BB7FB7DC9E5"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.751Z",
+      "checksum": "bd922884981d1b62687137cc88f1f7ca786cf9ea88214c0824e271579c66eb1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@emotion/react",
+      "DisplayName": "Emotion React",
+      "Version": "11.11.4",
+      "GlobalVariable": "emotionReact",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@emotion/react@11.14.0/dist/emotion-react.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "CSS-in-JS library designed for high performance style composition",
+      "Status": "Active",
+      "UsageType": "Dependency"
+    },
+    "primaryKey": {
+      "ID": "D4D4C1C7-5991-499B-A68F-FB5362A9A540"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.576Z",
+      "checksum": "a16ca5da280408bdd6f3ca5fbde3f3554f47ed5703df7e682563da377e91607b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@emotion/styled",
+      "DisplayName": "Emotion Styled",
+      "Version": "11.11.0",
+      "GlobalVariable": "emotionStyled",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@emotion/styled@11.14.1/dist/emotion-styled.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Styled API for @emotion/react",
+      "Status": "Active",
+      "UsageType": "Dependency",
+      "Dependencies": {
+        "@emotion/react": "^11.11.4"
+      }
+    },
+    "primaryKey": {
+      "ID": "68822D3C-7A8F-40B9-8579-711B02860FE2"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.598Z",
+      "checksum": "d12ce9a99354579bbf92311d391256593fc25d3b5469db073afbfa2ef52b443e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@popperjs/core",
+      "DisplayName": "Popper.js",
+      "Version": "2.11.8",
+      "GlobalVariable": "Popper",
+      "Category": "Utility",
+      "UsageType": "Dependency",
+      "CDNUrl": "https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js",
+      "CDNCssUrl": null,
+      "Description": "Tooltip and popover positioning engine",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A16223DC-3660-4E64-811D-FA2914CE2A84"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.588Z",
+      "checksum": "5dc34fc8397a2370ec07c0c8c137a7fe2e2535127e4b397f94a91dfdfbc6ee97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "bootstrap",
+      "DisplayName": "Bootstrap",
+      "Version": "5.3.2",
+      "Status": "Disabled",
+      "GlobalVariable": "bootstrap",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css",
+      "Description": "Popular CSS framework for responsive web design"
+    },
+    "primaryKey": {
+      "ID": "D6327DEF-1173-4D62-9EB4-0DD6910A6E31"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.761Z",
+      "checksum": "cd6617f513b9adc4705f970aa1e6c9def79341ee3fa08a781358d9c4cd1f206f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "semantic-ui",
+      "DisplayName": "Semantic UI",
+      "Version": "2.5.0",
+      "Status": "Disabled",
+      "GlobalVariable": "semanticUI",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.css",
+      "Description": "User interface framework based on natural language principles"
+    },
+    "primaryKey": {
+      "ID": "92EBA87E-E830-407F-90C2-5472CB598777"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.772Z",
+      "checksum": "6294e1bd1cd04aeeba520d45f4b59a7553dbd093fe98e05173efa25a07d92418"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ag-grid",
+      "DisplayName": "AG-Grid",
+      "Version": "31.0.1",
+      "GlobalVariable": "agGrid",
+      "UsageType": "Dependency",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/dist/ag-grid-community.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/styles/ag-grid.css",
+      "Description": "Base AG-Grid grid with sorting, filtering, and editing. Use the ag-grid-react library for React coding"
+    },
+    "primaryKey": {
+      "ID": "F7881AA4-83AF-4841-8475-55BBFD5187CC"
+    },
+    "sync": {
+      "lastModified": "2025-09-04T23:20:48.646Z",
+      "checksum": "d4cba23c43df35b89b7d9209bbf104cd758cda875a3f28ced96e4a6e250d6046"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ag-grid-react",
+      "DisplayName": "AG-Grid React",
+      "Version": "31.0.1",
+      "Status": "Disabled",
+      "GlobalVariable": "AgGridReact",
+      "Category": "UI",
+      "CDNUrl": "https://unpkg.com/ag-grid-react@31.0.1/bundles/ag-grid-react.min.js",
+      "Dependencies": {
+        "ag-grid": "^31.0.1"
+      },
+      "Description": "Correct library to use for React use of ag-grid, a sophisticated enterprise caliber data grid",
+      "LintRules": "@file:lint-rules/ag-grid-react/lint.json"
+    },
+    "primaryKey": {
+      "ID": "BFD00569-1E06-450E-BFD0-FBD19EFF9BB6"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.782Z",
+      "checksum": "1a2d66dd08d54a8d05b199987d8e2224974d0872bd3c087c5fd41d5fe21dda11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "react-table",
+      "DisplayName": "React Table",
+      "Version": "7.8.0",
+      "Status": "Disabled",
+      "GlobalVariable": "ReactTable",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/react-table@7.8.0/dist/react-table.production.min.js",
+      "CDNCssUrl": null,
+      "Description": "Lightweight and extensible data tables for React"
+    },
+    "primaryKey": {
+      "ID": "4FAA7445-54C9-4D3E-9A1D-4858B6E61496"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.791Z",
+      "checksum": "bf18575d3817adab096b73fa4aa9f66f2765e4018d4521ff81ffd7f0abefe6e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "material-table",
+      "DisplayName": "Material Table",
+      "Version": "2.0.5",
+      "GlobalVariable": "MaterialTable",
+      "Status": "Disabled",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/material-table@2.0.5/dist/material-table.min.js",
+      "CDNCssUrl": null,
+      "Description": "Datatable for React based on Material-UI"
+    },
+    "primaryKey": {
+      "ID": "BBABE030-7C12-4080-8DFD-ECB634C8615E"
+    },
+    "sync": {
+      "lastModified": "2025-08-21T18:23:28.761Z",
+      "checksum": "3f8c386ffc094c0bf308983c34d96cbc3f32787beb8aa1f11080dd3d3162a2fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "leaflet",
+      "DisplayName": "Leaflet",
+      "Version": "1.9.4",
+      "GlobalVariable": "L",
+      "Category": "Other",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+      "Description": "Open-source JavaScript library for mobile-friendly interactive maps"
+    },
+    "primaryKey": {
+      "ID": "5D6B8BCA-1F76-4363-8A66-02C09D1167CE"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.583Z",
+      "checksum": "c7ea2064d6bdff4bc6d14245a736ecf92b9c752be6af9ebe09dad346463dd66a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "mapbox-gl",
+      "DisplayName": "Mapbox GL JS",
+      "Version": "3.0.1",
+      "GlobalVariable": "mapboxgl",
+      "Category": "Other",
+      "CDNUrl": "https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js",
+      "CDNCssUrl": "https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css",
+      "Description": "JavaScript library for vector maps with GL JS"
+    },
+    "primaryKey": {
+      "ID": "81E5E531-B32C-4143-B35D-BA05669E6A3F"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.594Z",
+      "checksum": "0cdd16745cf4176789e36bc992d7bb69cfab81e65e94ce9b81dad9e9e4fbe806"
+    }
+  },
+  {
+    "fields": {
+      "Name": "framer-motion",
+      "DisplayName": "Framer Motion",
+      "Version": "10.16.16",
+      "Status": "Disabled",
+      "GlobalVariable": "FramerMotion",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/framer-motion@10.16.16/dist/framer-motion.js",
+      "CDNCssUrl": null,
+      "Description": "Production-ready motion library for React"
+    },
+    "primaryKey": {
+      "ID": "DB3D64C3-0D00-4D40-9AA7-99243916CF38"
+    },
+    "sync": {
+      "lastModified": "2025-08-21T18:23:28.781Z",
+      "checksum": "fe5eec1b81d5754a0c0a313477dd16042e9bc9640e893c1180df8eb017f82c35"
+    }
+  },
+  {
+    "fields": {
+      "Name": "gsap",
+      "DisplayName": "GSAP",
+      "Version": "3.12.4",
+      "GlobalVariable": "gsap",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/gsap.min.js",
+      "CDNCssUrl": null,
+      "Description": "Professional-grade JavaScript animation library"
+    },
+    "primaryKey": {
+      "ID": "C0CEA9AC-D33B-4F4E-A689-4CE6F7CE8ED7"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.613Z",
+      "checksum": "7050f74fae1e46edf76ab4571b896f5a173a0fa731c9e7c697aec9a0b21d3b3c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "lottie-web",
+      "DisplayName": "Lottie Web",
+      "Version": "5.12.2",
+      "GlobalVariable": "lottie",
+      "Status": "Disabled",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js",
+      "CDNCssUrl": null,
+      "Description": "Render After Effects animations natively on web"
+    },
+    "primaryKey": {
+      "ID": "A7CAEC83-913A-4D81-A8E9-CB69B8296569"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.836Z",
+      "checksum": "73208d1a8979e7c59233e13658fc948fc688bf6f1d871d971eb72056b8363f43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "react-hook-form",
+      "DisplayName": "React Hook Form",
+      "Version": "7.62.0",
+      "Status": "Disabled",
+      "GlobalVariable": "ReactHookForm",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/react-hook-form@7.62.0/dist/index.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Performant forms with easy validation"
+    },
+    "primaryKey": {
+      "ID": "1EEA6E0B-FB75-43FA-996D-B6F920577FF8"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.846Z",
+      "checksum": "50f909dfad9048e4da1cf964db5523c67524ad721b0d9c1dfcee9dee83034c9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "formik",
+      "DisplayName": "Formik",
+      "Version": "2.4.5",
+      "GlobalVariable": "Formik",
+      "Status": "Disabled",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/formik@2.4.5/dist/formik.umd.production.min.js",
+      "CDNCssUrl": null,
+      "Description": "Build forms in React without tears"
+    },
+    "primaryKey": {
+      "ID": "A83BA4DC-070B-4C62-B08F-7B1602F8159F"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.857Z",
+      "checksum": "0f4752caf1f24f2991cf0243a8be79ece146a57e660fb2c3ba7531dff2826ad3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "react-select",
+      "DisplayName": "React Select",
+      "Version": "2.1.2",
+      "GlobalVariable": "ReactSelect",
+      "Status": "Disabled",
+      "Category": "UI",
+      "CDNUrl": "https://unpkg.com/react-select@2.1.2/dist/react-select.min.js",
+      "CDNCssUrl": null,
+      "Description": "Flexible and customizable Select Input control for React"
+    },
+    "primaryKey": {
+      "ID": "3B520A11-731D-4C7B-9699-18906BB4CA53"
+    },
+    "sync": {
+      "lastModified": "2025-08-21T18:23:28.848Z",
+      "checksum": "d0f044f83cf858ba12192e8d448a3e3ae77f6b5de60d8272b61eab8b9442b506"
+    }
+  },
+  {
+    "fields": {
+      "Name": "joi",
+      "DisplayName": "Joi",
+      "Status": "Disabled",
+      "Version": "17.11.0",
+      "GlobalVariable": "Joi",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/joi-browser@13.4.0/dist/joi-browser.min.js",
+      "CDNCssUrl": null,
+      "Description": "Object schema validation library"
+    },
+    "primaryKey": {
+      "ID": "B80F7368-CB2A-457D-BB27-DC90FA17FD46"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.867Z",
+      "checksum": "74b16cce538e4957cd044e5412cea24357129f64e20efa64cfea5a6e45a65f2e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "yup",
+      "DisplayName": "Yup",
+      "Version": "1.3.3",
+      "Status": "Disabled",
+      "GlobalVariable": "yup",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/yup@1.3.3/lib/index.umd.js",
+      "CDNCssUrl": null,
+      "Description": "Schema builder for value parsing and validation"
+    },
+    "primaryKey": {
+      "ID": "A4B70D48-C7E5-413E-8393-10ADF64A24C4"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.876Z",
+      "checksum": "c21e61f8922852de4504d68edad280247515f86cf9eb0bff1b974bc162b89ebe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "zustand",
+      "DisplayName": "Zustand",
+      "Status": "Disabled",
+      "Version": "4.4.7",
+      "GlobalVariable": "zustand",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/zustand@4.4.7/dist/umd.production.js",
+      "CDNCssUrl": null,
+      "Description": "Small, fast and scalable state management"
+    },
+    "primaryKey": {
+      "ID": "34077C8C-B996-47CC-92F1-BD189E423F6C"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.924Z",
+      "checksum": "a06151bbf3f3aca0f01eeb87985e14e4a73f6d4364213a32a3c326eb70839017"
+    }
+  },
+  {
+    "fields": {
+      "Name": "valtio",
+      "DisplayName": "Valtio",
+      "Status": "Disabled",
+      "Version": "1.12.1",
+      "GlobalVariable": "valtio",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/valtio@1.12.1/dist/index.umd.js",
+      "CDNCssUrl": null,
+      "Description": "Proxy-based state management for React"
+    },
+    "primaryKey": {
+      "ID": "6C659293-C079-480D-BBE8-2C34ED6A8132"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.934Z",
+      "checksum": "8bd38e2e49a035ca10598caa248304cc3f42c84d97eb7e16a3bbfb40951feda3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "simple-statistics",
+      "DisplayName": "Simple Statistics",
+      "Version": "7.8.3",
+      "GlobalVariable": "ss",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/simple-statistics@7.8.3/dist/simple-statistics.min.js",
+      "CDNCssUrl": null,
+      "Description": "Statistical functions for JavaScript"
+    },
+    "primaryKey": {
+      "ID": "B0A62770-94E2-4B1E-8258-D6363B239191"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.737Z",
+      "checksum": "1f6e39700101c14724b1293f74b28144f521bb684744994d55ed65f62446a3a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "mathjs",
+      "DisplayName": "Math.js",
+      "Version": "12.2.1",
+      "GlobalVariable": "math",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/mathjs@12.2.1/lib/browser/math.js",
+      "CDNCssUrl": null,
+      "Description": "Extensive math library for JavaScript and Node.js"
+    },
+    "primaryKey": {
+      "ID": "0EA86853-D7E3-4073-BA06-E89BB85F5D7D"
+    },
+    "sync": {
+      "lastModified": "2025-08-18T03:51:05.746Z",
+      "checksum": "f769e4a181cc81771558677b8a1eca24ede51f787220d84a98b5ab921f96298a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "chroma-js",
+      "DisplayName": "Chroma.js",
+      "UsageType": "Dependency",
+      "Version": "2.4.2",
+      "GlobalVariable": "chroma",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/chroma-js@2.4.2/chroma.min.js",
+      "CDNCssUrl": null,
+      "Description": "JavaScript library for color conversions and color scales"
+    },
+    "primaryKey": {
+      "ID": "D22C219B-FC2E-4426-BA8E-334702B6A7E2"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.943Z",
+      "checksum": "0d998a54bca982372460bc0da72492448f0f873a80e023fada5b5ed04f0101f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "tinycolor2",
+      "DisplayName": "TinyColor",
+      "Status": "Disabled",
+      "Version": "1.6.0",
+      "GlobalVariable": "tinycolor",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/tinycolor2@1.6.0/dist/tinycolor-min.js",
+      "CDNCssUrl": null,
+      "Description": "Fast, small color manipulation and conversion library"
+    },
+    "primaryKey": {
+      "ID": "3A305046-15AD-4A5E-8255-07D614768BB7"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.955Z",
+      "checksum": "81b09e9b3dae2ba7d7651dd725547a3cd7fe105bfe6d4383f497f85471520d84"
+    }
+  },
+  {
+    "fields": {
+      "Name": "quill",
+      "DisplayName": "Quill",
+      "Status": "Disabled",
+      "Version": "1.3.7",
+      "GlobalVariable": "Quill",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.quilljs.com/1.3.7/quill.min.js",
+      "CDNCssUrl": "https://cdn.quilljs.com/1.3.7/quill.snow.css",
+      "Description": "Modern rich text editor built for compatibility and extensibility"
+    },
+    "primaryKey": {
+      "ID": "DF923C1E-8B6D-4AAC-AEC9-E31E18F8413D"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.966Z",
+      "checksum": "d0fb397c420838f61ab59292fd8e4f72c83b63ea14fc6bbec3ff5f0268ea0dab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "tinymce",
+      "DisplayName": "TinyMCE",
+      "Status": "Disabled",
+      "Version": "6.7.3",
+      "GlobalVariable": "tinymce",
+      "Category": "UI",
+      "CDNUrl": "https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js",
+      "CDNCssUrl": null,
+      "Description": "Advanced web-based rich text editor"
+    },
+    "primaryKey": {
+      "ID": "A6307AF7-B340-4E99-81DE-215C050C3837"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.977Z",
+      "checksum": "6cf54f5a7030d92d78ebc3988656786815e2adc8ab783ef89fe39f8a0e312d78"
+    }
+  },
+  {
+    "fields": {
+      "Name": "dropzone",
+      "DisplayName": "Dropzone.js",
+      "Status": "Disabled",
+      "Version": "6.0.0-beta.2",
+      "GlobalVariable": "Dropzone",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/dropzone@6.0.0-beta.2/dist/dropzone-min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/dropzone@6.0.0-beta.2/dist/dropzone.css",
+      "Description": "Drag and drop file uploads with image previews"
+    },
+    "primaryKey": {
+      "ID": "A22A08BE-9DF8-4047-BE45-B982D88CB1B5"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.988Z",
+      "checksum": "1a845999f1e495eacd4a124aef53c1b38e1c8414fde9fd1b2258a4b4d474792e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "three",
+      "GlobalVariable": "THREE",
+      "Description": "JavaScript 3D library - create and display animated 3D computer graphics in a web browser using WebGL",
+      "Category": "UI",
+      "Version": "r128",
+      "CDNUrl": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "24F3C236-7F27-487A-B394-390A76E22B51"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:44.996Z",
+      "checksum": "86b17759f8418438a38ae8ca7e1a14fead2ab68e9109b3ffa48ba41bad7fcc75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "xlsx",
+      "GlobalVariable": "XLSX",
+      "Description": "SheetJS - Parser and writer for spreadsheet formats including Excel XLSX, CSV, and more",
+      "Category": "Other",
+      "Version": "0.18.5",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "15303B03-E102-40E9-8A40-92CBB68050B1"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T20:03:40.160Z",
+      "checksum": "fd01116d4a6a769791a1a7e3f55181241987e4a70cc8deebf3a335c9a28292d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "luxon",
+      "GlobalVariable": "luxon",
+      "Description": "A powerful, modern, and friendly wrapper for JavaScript dates and times",
+      "UsageType": "Dependency",
+      "Category": "UI",
+      "Version": "3.7.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/luxon@3.7.1/build/global/luxon.min.js",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A9A8612A-20A1-4787-BB90-D0F18727AC67"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:45.044Z",
+      "checksum": "d99f7f68d0363d723568bb05a7333170c8bb8d2e516dc82adbf7ae50d1fff51d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "@turf/turf",
+      "GlobalVariable": "turf",
+      "Description": "Advanced geospatial analysis for browsers and Node.js",
+      "Category": "UI",
+      "Version": "7.2.0",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "0F9A4301-8F1A-4811-8735-54BB94F37C42"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:45.056Z",
+      "checksum": "32fe18b5814267b5d8cf7c884874d139d195ad8338051e2e9fd8495599b591ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "openlayers",
+      "GlobalVariable": "ol",
+      "Description": "OpenLayers - High-performance, feature-packed library for creating interactive maps on the web",
+      "Category": "UI",
+      "Version": "10.6.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "BB19F62C-6430-42FD-9E00-4C1A5AE2282D"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:45.066Z",
+      "checksum": "dbfce5b73ac0eb4e4dff0dff5d0a5991517decf7902f1d9c82e91f75931f23db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "sortablejs",
+      "GlobalVariable": "Sortable",
+      "Description": "Reorderable drag-and-drop lists for modern browsers and touch devices",
+      "Category": "UI",
+      "Version": "1.15.6",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js",
+      "CDNCssUrl": null,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F56A8E34-2317-48E6-8C4C-7739FA6F1873"
+    },
+    "sync": {
+      "lastModified": "2025-08-19T21:46:53.993Z",
+      "checksum": "4b8d041a8c0080717a3e98aede893db5d2a017558ab22fedbd6d3d1c8a355f5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "c3",
+      "GlobalVariable": "c3",
+      "Description": "D3-based reusable chart library that enables deeper integration of charts into web applications",
+      "Category": "Charting",
+      "Version": "0.7.20",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/c3@0.7.20/c3.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/c3@0.7.20/c3.min.css",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "09C90CD3-3A4A-4A55-94D1-BEB54B44C43D"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:45.076Z",
+      "checksum": "6a6b8a277f8f73dbbe4a116ea5da1368c8204b1f563397c7a6410320784faa37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "vis-network",
+      "GlobalVariable": "vis",
+      "Description": "Display dynamic, automatically organised, customizable network views for visualization of networks and graphs",
+      "Category": "Charting",
+      "Version": "10.0.1",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/vis-network@10.0.1/dist/vis-network.min.js",
+      "CDNCssUrl": "https://cdn.jsdelivr.net/npm/vis-network@10.0.1/dist/dist/vis-network.min.css",
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "8F3F27E7-2C43-4BC3-85AF-5B0DC2CFE638"
+    },
+    "sync": {
+      "lastModified": "2025-09-05T11:52:45.083Z",
+      "checksum": "1c6d11c9d7e0acf0efdcce012ea6662de86e66741b56ac82b833f76335c88ae9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "marked",
+      "DisplayName": "Marked",
+      "Version": "11.1.1",
+      "GlobalVariable": "marked",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js",
+      "CDNCssUrl": null,
+      "Description": "Fast markdown parser and compiler for rendering markdown content",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F7AE9497-3E49-43AA-9319-2B81988CAE7D"
+    },
+    "sync": {
+      "lastModified": "2025-08-25T22:55:52.775Z",
+      "checksum": "a66058ccb89d9bd9f3f104360047c5f10db6af406f24e3ecc7d14fe92471dc33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "jspdf",
+      "DisplayName": "jspdf",
+      "Version": "3.0.2",
+      "GlobalVariable": "jspdf",
+      "Category": "Other",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/jspdf@3.0.2/dist/jspdf.umd.min.js",
+      "CDNCssUrl": null,
+      "Description": "Client-side JavaScript PDF generation library for creating PDF documents",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4AAF4A70-9C30-496B-9324-51BD8F24D090"
+    },
+    "sync": {
+      "lastModified": "2025-08-31T00:44:58.471Z",
+      "checksum": "0ffb764e657ffa5ac1d31cbdb672b2e9ec269eaaa31842d07c2ef29a46027818"
+    }
+  },
+  {
+    "fields": {
+      "Name": "html2canvas",
+      "DisplayName": "html2canvas",
+      "Version": "1.4.1",
+      "GlobalVariable": "html2canvas",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+      "CDNCssUrl": null,
+      "Description": "JavaScript library for capturing screenshots of DOM elements and converting them to canvas/images",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "85D7C9F6-5BC7-4378-A7CE-B6CD92C3EFC5"
+    },
+    "sync": {
+      "lastModified": "2025-08-27T21:48:53.321Z",
+      "checksum": "ab8f1bc426de0ff3ae9e9a57cdb7b3356a4b0be217cedff912c8b316d4c2c917"
+    }
+  }
+]

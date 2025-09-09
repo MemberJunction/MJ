@@ -20,18 +20,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.82.0",
-    "@memberjunction/global": "2.82.0",
-    "@memberjunction/core-entities": "2.82.0",
-    "@memberjunction/sqlserver-dataprovider": "2.82.0",
-    "@memberjunction/codegen-lib": "2.82.0",
+    "@memberjunction/core": "2.99.0",
+    "@memberjunction/global": "2.99.0",
+    "@memberjunction/core-entities": "2.99.0",
+    "@memberjunction/sqlserver-dataprovider": "2.99.0",
+    "@memberjunction/codegen-lib": "2.99.0",
     "@types/axios": "^0.14.0",
     "@types/mssql": "^9.1.5",
     "axios": "^1.6.7",
     "compression": "^1.7.4",
     "dotenv": "^16.4.1",
     "env-var": "^7.4.1",
-    "express": "^4.18.2",
+    "express": "^5.1.0",
     "fs-extra": "^11.2.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "^7.8.1",
@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.3",
     "@types/node": "20.14.2",
     "rimraf": "5.0.7"
   }

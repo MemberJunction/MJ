@@ -12,90 +12,9 @@
       </button>
     </div>  
   }
-  <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" (ResizeContainer)="sharedService.InvokeManualResize()">
-    <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsInteractive">
-      <span class="fa-solid fa-magnifying-glass-chart"></span>
-      <span class="report-tab-title">Report</span>
-    </mj-tab>
-    <mj-tab-body *ngIf="IsInteractive">
-      <div class="report-tab-contents">
-        <skip-dynamic-ui-component #theUIComponent [SkipData]="SkipData"  (DrillDownEvent)="handleUIComponentDrillDown($event)" style="display:block;">
-        </skip-dynamic-ui-component>  
-      </div>
-    </mj-tab-body>
-
-    <mj-tab [TabSelected]="isTabSelected(1)" *ngIf="IsChart">
-      <span class="fa-solid fa-chart-line"></span>
-      <span class="report-tab-title">Chart</span>
-    </mj-tab>
-    <mj-tab-body *ngIf="IsChart">
-      <div class="report-tab-contents" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
-        <skip-dynamic-chart  #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
-        </skip-dynamic-chart>  
-      </div>
-    </mj-tab-body>
-
-    <mj-tab [TabSelected]="isTabSelected(2)">
-      <span class="fa-solid fa-table"></span>
-      <span class="report-tab-title">Table</span>
-    </mj-tab>
-    <mj-tab-body>
-      <div class="report-tab-contents">
-        <skip-dynamic-grid  #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
-        </skip-dynamic-grid>
-      </div>
-    </mj-tab-body>
-
-    <mj-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [TabSelected]="isTabSelected(3)">
-      <span class="fa-solid fa-table-columns"></span>
-      <span class="report-tab-title">Drill Down</span>
-    </mj-tab>
-    <mj-tab-body *ngIf="AllowDrillDown && DrillDowns.length > 0">
-      <div class="report-tab-contents">
-        <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns"  style="display:block;"></mj-dynamic-report-drill-down>
-      </div>  
-    </mj-tab-body>
-
-    <mj-tab [TabSelected]="isTabSelected(4)">
-      <span class="fa-solid fa-circle-info"></span>
-      <!-- <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" /> -->
-      <span class="report-tab-title">Analysis</span>
-    </mj-tab>
-    <mj-tab-body>
-      <div class="report-tab-contents" style="overflow-x: hidden">
-        <markdown [data]="SkipData.analysis"></markdown>
-      </div>
-    </mj-tab-body>
-
-    <mj-tab [TabSelected]="isTabSelected(5)">
-      <span class="fa-solid fa-file"></span>
-      <span class="report-tab-title">Explanation</span>
-    </mj-tab> 
-    <mj-tab-body>
-      <div class="report-tab-contents">
-        {{SkipData.userExplanation || 'No Explanation Provided'}}
-      </div>
-    </mj-tab-body>
-
-    <mj-tab [TabSelected]="isTabSelected(6)">
-      <span class="fa-solid fa-code"></span>
-      <span class="report-tab-title">Details</span>
-    </mj-tab>
-    <mj-tab-body>
-      <div class="report-tab-contents">
-        <div *ngIf="ConversationID!==null"><b>Skip Conversation ID:</b><span>{{ConversationID}}</span></div>
-        <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
-        <div *ngIf="SkipData?.techExplanation">
-          <span><b>Technical Explanation</b></span>
-          <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData.techExplanation}}</textarea></span>
-        </div>
-        <div *ngIf="SkipData?.scriptText" >
-          <span><b>Script</b></span>
-          <span><textarea  [disabled]="true">{{SkipData.scriptText}}</textarea></span>
-        </div>
-      </div>
-    </mj-tab-body>
-  </mj-tabstrip>
+  
+  <skip-dynamic-ui-component #theUIComponent [SkipData]="SkipData"  (DrillDownEvent)="handleUIComponentDrillDown($event)" style="display:block;">
+  </skip-dynamic-ui-component>  
  
   <kendo-dialog
     title="Please confirm"

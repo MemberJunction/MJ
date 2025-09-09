@@ -1,5 +1,190 @@
 # @memberjunction/react-test-harness
 
+## 2.99.0
+
+### Patch Changes
+
+- 5af2d74: updates to react runtime
+- Updated dependencies [5af2d74]
+  - @memberjunction/react-runtime@2.99.0
+  - @memberjunction/interactive-component-types@2.99.0
+
+## 2.98.0
+
+### Minor Changes
+
+- ce949f4: migration
+
+### Patch Changes
+
+- 56a4e9d: tweaks to linter
+- Updated dependencies [56a4e9d]
+- Updated dependencies [ce949f4]
+  - @memberjunction/react-runtime@2.98.0
+  - @memberjunction/interactive-component-types@2.98.0
+
+## 2.97.0
+
+### Minor Changes
+
+- dc497d5: migration
+
+### Patch Changes
+
+- Updated dependencies [dc497d5]
+  - @memberjunction/interactive-component-types@2.97.0
+  - @memberjunction/react-runtime@2.97.0
+
+## 2.96.0
+
+### Minor Changes
+
+- 8f34e55: migration
+- 22e365f: migration
+- ad06a79: migration
+- 8e1c946: migration
+
+### Patch Changes
+
+- a3d32ec: tweaks
+- Updated dependencies [8f34e55]
+- Updated dependencies [22e365f]
+- Updated dependencies [a3d32ec]
+- Updated dependencies [ad06a79]
+- Updated dependencies [8e1c946]
+  - @memberjunction/react-runtime@2.96.0
+  - @memberjunction/interactive-component-types@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- 3cd7db6: fix rendering issue
+- Updated dependencies [3cd7db6]
+- Updated dependencies [85985bd]
+  - @memberjunction/react-runtime@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+
+## 2.94.0
+
+### Minor Changes
+
+- 7c27b04: migration
+- 98afc80: migrations
+
+### Patch Changes
+
+- Updated dependencies [455654e]
+- Updated dependencies [7c27b04]
+- Updated dependencies [98afc80]
+- Updated dependencies [eed16e0]
+  - @memberjunction/react-runtime@2.94.0
+  - @memberjunction/interactive-component-types@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- f8757aa: bug fixes
+- bfcd737: Refactoring and new AI functionality
+- Updated dependencies [bfcd737]
+- Updated dependencies [1461a44]
+  - @memberjunction/interactive-component-types@2.93.0
+  - @memberjunction/react-runtime@2.93.0
+
+## 2.92.0
+
+### Minor Changes
+
+- b303b84: migrations
+
+### Patch Changes
+
+- 3f61d1a: linter rule changes
+- Updated dependencies [b303b84]
+  - @memberjunction/interactive-component-types@2.92.0
+  - @memberjunction/react-runtime@2.92.0
+
+## 2.91.0
+
+### Minor Changes
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [6476d74]
+  - @memberjunction/react-runtime@2.91.0
+  - @memberjunction/interactive-component-types@2.91.0
+
+## 2.90.0
+
+### Minor Changes
+
+- 187527b: migration
+- da3eb4f: migration
+
+### Patch Changes
+
+- 55bc586: changed testing approach
+- Updated dependencies [d4530d7]
+- Updated dependencies [187527b]
+- Updated dependencies [da3eb4f]
+  - @memberjunction/interactive-component-types@2.90.0
+  - @memberjunction/react-runtime@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.89.0
+- @memberjunction/react-runtime@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.88.0
+- @memberjunction/react-runtime@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.87.0
+- @memberjunction/react-runtime@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.86.0
+- @memberjunction/react-runtime@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.85.0
+- @memberjunction/react-runtime@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.84.0
+- @memberjunction/react-runtime@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- 87f7308: registration improvements
+- 7fef004: Improved Static Linter
+- Updated dependencies [87f7308]
+  - @memberjunction/react-runtime@2.83.0
+  - @memberjunction/interactive-component-types@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

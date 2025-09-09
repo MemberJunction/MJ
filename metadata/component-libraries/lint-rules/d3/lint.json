@@ -1,0 +1,24 @@
+{
+  "initialization": {
+    "factoryMethod": "select",
+    "elementType": "svg",
+    "requiresNew": false
+  },
+  "lifecycle": {
+    "cleanupMethods": ["remove", "interrupt"],
+    "requiredMethods": [],
+    "updateMethods": ["data", "attr", "style"]
+  },
+  "validators": {
+    "checkSelectionCleanup": {
+      "description": "Ensure D3 selections are properly cleaned up.",
+      "severity": "high",
+      "validate": "@file:check-selection-cleanup.js"
+    },
+    "checkJoinPattern": {
+      "description": "Recommend modern join() pattern over enter/exit",
+      "severity": "low",
+      "validate": "@file:check-join-pattern.js"
+    }
+  }
+}

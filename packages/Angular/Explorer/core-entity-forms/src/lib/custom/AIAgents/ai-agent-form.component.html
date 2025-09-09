@@ -1,6 +1,8 @@
 <div class="record-form-container">
     <!-- Dialog container for Kendo dialogs -->
     <div kendoDialogContainer></div>
+    <!-- Window container for Kendo windows -->
+    <div kendoWindowContainer></div>
     <form *ngIf="record" class="record-form" #form="ngForm">
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
@@ -86,9 +88,14 @@
 
                 <!-- Requests & History -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.executionHistory">
                         <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-history"></i> Execution History{{ executionHistoryCount > 0 ? ' (' + executionHistoryCount + ')' : '' }}
+                            <i class="fa-solid fa-history"></i> Execution History
+                            @if (loadingStates.executionHistory) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            } @else if (executionHistoryCount > 0) {
+                                <span> ({{ executionHistoryCount }})@if(executionHistoryCount < totalExecutionHistoryCount){ of {{ totalExecutionHistoryCount }} }</span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content execution-history-panel">
@@ -137,7 +144,7 @@
                                                             <div class="metric-item">
                                                                 <i class="fa-solid fa-clock"></i>
                                                                 <span class="metric-label">Running:</span>
-                                                                <span class="metric-value">{{ getRunningTime(execution.StartedAt) }}</span>
+                                                                <!-- <span class="metric-value">{{ execution.StartedAt | runningTime }}</span> -->
                                                             </div>
                                                         }
                                                         
@@ -277,23 +284,34 @@
 
                 <!-- Actions -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.actions">
                         <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-bolt"></i> Actions{{ actionCount > 0 ? ' (' + actionCount + ')' : '' }}
+                            <i class="fa-solid fa-bolt"></i> Actions
+                            @if (loadingStates.actions) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            } @else if (actionCount > 0) {
+                                <span> ({{ actionCount }})</span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
-                                <div class="section-header">
-                                    <div class="header-actions">
-                                        @if (EditMode && UserCanCreateActions) {
-                                            <button kendoButton themeColor="primary" size="small" (click)="configureActions()">
-                                                <i class="fa-solid fa-plus"></i> Add Action
-                                            </button>
-                                        }
+                                @if (loadingStates.actions) {
+                                    <div class="loading-state">
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                        <p>Loading actions...</p>
                                     </div>
-                                </div>
-                                
-                                @if (actionCount === 0) {
+                                } @else {
+                                    <div class="section-header">
+                                        <div class="header-actions">
+                                            @if (EditMode && UserCanCreateActions) {
+                                                <button kendoButton themeColor="primary" size="small" (click)="configureActions()">
+                                                    <i class="fa-solid fa-plus"></i> Add Action
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                    
+                                    @if (actionCount === 0) {
                                     <div class="empty-state">
                                         <i class="fa-solid fa-bolt"></i>
                                         <h4>No Actions Configured</h4>
@@ -347,6 +365,7 @@
                                             </div>
                                         }
                                     </div>
+                                    }
                                 }
                             </div>
                         </ng-template>
@@ -355,9 +374,14 @@
 
                 <!-- Sub-Agents -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.subAgents">
                         <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-sitemap"></i> Sub-Agents{{ subAgentCount > 0 ? ' (' + subAgentCount + ')' : '' }}
+                            <i class="fa-solid fa-sitemap"></i> Sub-Agents
+                            @if (loadingStates.subAgents) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            } @else if (subAgentCount > 0) {
+                                <span> ({{ subAgentCount }})</span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
@@ -457,9 +481,14 @@
 
                 <!-- Prompts (With Model Selection) -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.prompts">
                         <ng-template kendoPanelBarItemTitle>
-                            <i class="fa-solid fa-comments"></i> Prompts{{ promptCount > 0 ? ' (' + promptCount + ')' : '' }}
+                            <i class="fa-solid fa-comments"></i> Prompts
+                            @if (loadingStates.prompts) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            } @else if (promptCount > 0) {
+                                <span> ({{ promptCount }})</span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
@@ -564,9 +593,12 @@
 
                 <!-- Learning & Analytics -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.learningCycles">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-brain"></i> Learning Cycles{{ learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '' }}
+                            @if (loadingStates.learningCycles) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
@@ -622,9 +654,12 @@
 
                 <!-- Notes & Documentation -->
                 @if (record.ID) {
-                    <kendo-panelbar-item [expanded]="false">
+                    <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.notes">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sticky-note"></i> Notes{{ noteCount > 0 ? ' (' + noteCount + ')' : '' }}
+                            @if (loadingStates.notes) {
+                                <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                            }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">

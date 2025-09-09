@@ -2334,8 +2334,9 @@ The AI Prompt Runner uses a sophisticated vendor selection system with clear pre
    - Configured in the database for prompt-specific vendor preferences
 
 3. **Highest Priority Vendor** (`AIModelVendor.Priority`)
-   - When no explicit vendor is specified, the system uses the vendor with the highest priority
+   - When no explicit vendor is specified, the system uses the vendor with the highest priority value
    - Priority is configured per model-vendor combination in the database
+   - **Higher Priority numbers = Higher preference** (e.g., Priority 100 is preferred over Priority 50)
 
 ### Vendor-Specific Configuration
 

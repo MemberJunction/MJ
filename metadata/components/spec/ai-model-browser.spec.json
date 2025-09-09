@@ -1,0 +1,217 @@
+{
+  "name": "AIModelBrowser",
+  "title": "AI Model Browser",
+  "description": "A comprehensive AI model browser with filtering by developers and inference providers, prompt usage analytics with pie charts, and detailed model specifications",
+  "type": "dashboard",
+  "functionalRequirements": "## AI Model Browser Requirements\n\n### Core Functionality\n- Display AI models in grid or list view with comprehensive information\n- Filter models by Model Type, Status, Model Developer, and Inference Provider\n- View detailed model specifications including context window, token limits, and cost ranking\n- Display all vendors associated with a model (model developers and inference providers)\n- Show prompt run history and usage statistics for selected models\n- Visualize prompt usage with pie charts showing distribution across different prompts\n- Display performance metrics with bar charts showing average execution times\n- Show time series data for model usage over time\n- Support sorting by multiple fields with visual indicators\n- Include search functionality for quick model filtering\n- Provide 'Open' button to trigger OpenEntityRecord callback for detailed editing\n\n### Analytics Features\n- Pie chart visualization of prompt usage distribution\n- Performance bar charts showing average execution times per prompt\n- Time series chart showing model usage trends over last 7 days\n- Summary statistics including total runs, success rates, and token usage\n- Grouped vendor display by type (Model Developer vs Inference Provider)\n\n### UX Considerations\n- Collapsible filter panel with active filter count indicator\n- Sliding details panel for comprehensive model information\n- Inline analytics panel with tabbed views for different visualizations\n- Smooth animations for panel transitions and chart rendering\n- Responsive design adapting to different screen sizes\n- Loading states while fetching data\n- Empty states with helpful messages\n- Visual feedback for hover and selection states\n- Maintain user preferences for view mode and filter state",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Models",
+        "description": "Core AI model definitions and specifications",
+        "displayFields": [
+          "ID",
+          "Name",
+          "APIName",
+          "Description",
+          "AIModelTypeID",
+          "InputTokenLimit",
+          "PowerRank",
+          "SpeedRank",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "AIModelTypeID",
+          "IsActive"
+        ],
+        "sortFields": [
+          "Name",
+          "InputTokenLimit",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the AI model"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the AI model"
+          },
+          {
+            "name": "APIName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "API identifier for the model"
+          },
+          {
+            "name": "InputTokenLimit",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum input token limit"
+          },
+          {
+            "name": "CostRank",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Relative cost ranking (1-5)"
+          }
+        ], 
+        "usageContext": "Main list of AI models"
+      },
+      {
+        "name": "MJ: AI Model Vendors",
+        "description": "Vendor associations for AI models",
+        "displayFields": [
+          "ID",
+          "ModelID",
+          "VendorID",
+          "TypeID",
+          "Model",
+          "Vendor",
+          "Type",
+          "Status",
+          "Priority",
+          "APIName",
+          "MaxInputTokens",
+          "MaxOutputTokens",
+          "SupportsStreaming",
+          "SupportsEffortLevel"
+        ],
+        "filterFields": [
+          "ModelID",
+          "Type",
+          "Status"
+        ],
+        "sortFields": [
+          "Vendor",
+          "Priority",
+          "Type"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ModelID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to AI Model"
+          },
+          {
+            "name": "Vendor",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor name"
+          },
+          {
+            "name": "Type",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor type (Model Developer or Inference Provider)"
+          }
+        ], 
+        "usageContext": "Vendor associations for models"
+      },
+      {
+        "name": "AI Model Types",
+        "description": "Types/categories of AI models",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Filter dropdown for model types"
+      },
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Execution history for AI prompts",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "ModelID",
+          "StartTime",
+          "EndTime",
+          "TotalExecutionTime",
+          "InputTokens",
+          "OutputTokens",
+          "TotalTokens",
+          "Status",
+          "Error"
+        ],
+        "filterFields": [
+          "ModelID",
+          "PromptID",
+          "Status"
+        ],
+        "sortFields": [
+          "StartTime",
+          "TotalExecutionTime"
+        ], 
+        "usageContext": "Analytics and usage history"
+      },
+      {
+        "name": "AI Prompts",
+        "description": "AI prompt definitions",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description",
+          "CategoryID"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Enrich prompt runs with names"
+      }
+    ]
+  },
+  "technicalDesign": "## Component Architecture\n\n### Root Component (AIModelBrowser)\n- Manages overall state and data loading\n- Coordinates between filter, list, details, and analytics components\n- Handles user preferences and saved settings\n- Manages search and sort state\n\n### Child Components\n1. **AIModelList**: Displays models in grid or list view with vendor information\n2. **AIModelDetails**: Sliding panel showing comprehensive model information and vendors\n3. **AIModelFilter**: Collapsible filter panel for model type, status, and vendor filtering\n4. **AIModelAnalytics**: Inline analytics panel with charts and statistics\n\n### Data Flow\n- Root component loads all models and vendor associations\n- Filters are applied at the root level and filtered data passed to list\n- Selection in list triggers detail loading and analytics calculation\n- Analytics component processes prompt runs to generate visualizations\n\n### Chart Implementation\n- Pie charts using SVG for prompt usage distribution\n- Bar charts for performance metrics\n- Time series charts for usage trends\n- All charts are responsive and interactive",
+  "properties": [],
+  "events": [],
+  "exampleUsage": "<AIModelBrowser\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>",
+  "dependencies": [
+    "@include:ai-model-list.spec.json",
+    "@include:ai-model-details.spec.json",
+    "@include:ai-model-filter.spec.json",
+    "@include:ai-model-analytics.spec.json"
+  ],
+  "libraries": [],
+  "code": "@file:../code/ai-model-browser.js"
+}

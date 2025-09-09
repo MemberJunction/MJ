@@ -1,10 +1,14 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView } from "@memberjunction/core";
-import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult } from "@memberjunction/core";
+import { QueryEntity, QueryParameterEntity, QueryFieldEntity, QueryEntityEntity } from "@memberjunction/core-entities";
+import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
+import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
+import { LoadLocalEmbedding } from "@memberjunction/ai-local-embeddings";
+import { EmbedTextLocalHelper } from "./util";
+
+LoadLocalEmbedding(); // Ensure local embedding model is registered
 
 interface ExtractedParameter {
     name: string;
@@ -58,11 +62,31 @@ export class QueryEntityExtended extends QueryEntity {
         return this._queryPermissions;
     }
 
+    /**
+     * Simple proxy to local helper method for embeddings. Needed for BaseEntity sub-classes that want to use embeddings built into BaseEntity
+     * @param textToEmbed 
+     * @returns 
+     */
+    protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
+        return EmbedTextLocalHelper(this, textToEmbed);
+    }
+    
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            // Check if this is a new record or if SQL has changed
+            // Check if this is a new record or if SQL/Description has changed
             const sqlField = this.GetFieldByName('SQL');
+            const descriptionField = this.GetFieldByName('Description');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
+            const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
+            
+            // Generate embedding for Description if needed, before saving
+            if (shouldGenerateEmbedding) {
+                await this.GenerateEmbeddingByFieldName("Description", "EmbeddingVector", "EmbeddingModelID");
+            } else if (!this.Description || this.Description.trim().length === 0) {
+                // Clear embedding if description is empty
+                this.EmbeddingVector = null;
+                this.EmbeddingModelID = null;
+            }
             
             // Save the query first without AI processing (no transaction needed for basic save)
             const saveResult = await super.Save(options);
@@ -73,27 +97,15 @@ export class QueryEntityExtended extends QueryEntity {
             // Extract and sync parameters AFTER saving, outside of any transaction
             // This prevents connection pool exhaustion from long-running AI operations
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                // AI processing happens asynchronously after the main save operation
-                // This ensures the connection is released quickly for the primary operation
                 await this.extractAndSyncDataAsync();
-                // setImmediate(() => {
-                //     this.extractAndSyncDataAsync().catch(e => {
-                //         LogError('Background AI processing failed for query:', e);
-                //     });
-                // });
+                await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 // If SQL is empty, ensure UsesTemplate is false and remove all related data
                 // This can also happen asynchronously since it's cleanup work
                 this.UsesTemplate = false;
                 await this.cleanupEmptyQueryAsync();
-                // setImmediate(() => {
-                //     this.cleanupEmptyQueryAsync().catch(e => {
-                //         LogError('Background cleanup failed for query:', e);
-                //     });
-                // });
+                await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
             }
-
-            await this.RefreshRelatedMetadata(true); // sync the related metadata so this entity is correct
 
             return true;
         } catch (e) {
@@ -102,7 +114,7 @@ export class QueryEntityExtended extends QueryEntity {
             return false;
         }
     }
-    
+     
     /**
      * Asynchronous version of extractAndSyncData that runs outside the main save operation
      * to prevent connection pool exhaustion
@@ -219,7 +231,7 @@ export class QueryEntityExtended extends QueryEntity {
         
         try {
             // Get existing query parameters
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingParams: QueryParameterEntity[] = [];
             if (this.IsSaved) {
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
@@ -331,7 +343,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (this.IsSaved) {
                 // Get all existing query parameters
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingParamsResult = await rv.RunView<QueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -364,7 +376,7 @@ export class QueryEntityExtended extends QueryEntity {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
                 // Get existing query fields
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                     EntityName: 'Query Fields',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -484,7 +496,7 @@ export class QueryEntityExtended extends QueryEntity {
             // Get existing query entities
             const existingEntities: QueryEntityEntity[] = [];
             if (this.IsSaved) {
-                const rv = this.ProviderToUse as any as IRunViewProvider;
+                const rv = this.RunViewProviderToUse
                 const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                     EntityName: 'Query Entities',
                     ExtraFilter: `QueryID='${this.ID}'`,
@@ -564,7 +576,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
 
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingFieldsResult = await rv.RunView<QueryFieldEntity>({
                 EntityName: 'Query Fields',
                 ExtraFilter: `QueryID='${this.ID}'`,
@@ -592,7 +604,7 @@ export class QueryEntityExtended extends QueryEntity {
         try {
             if (!this.IsSaved) return; // Nothing to remove if not saved
             
-            const rv = this.ProviderToUse as any as IRunViewProvider;
+            const rv = this.RunViewProviderToUse
             const existingEntitiesResult = await rv.RunView<QueryEntityEntity>({
                 EntityName: 'Query Entities',
                 ExtraFilter: `QueryID='${this.ID}'`,

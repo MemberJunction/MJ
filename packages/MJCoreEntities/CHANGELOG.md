@@ -1,5 +1,215 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.99.0
+
+### Minor Changes
+
+- eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
+  handling
+
+  - Add ChatHandlingOption field to AIAgent table with values:
+    Success, Failed, Retry
+  - Implement Chat step remapping in
+    BaseAgent.validateChatNextStep() based on agent configuration
+  - Fix executeChatStep to mark Chat steps as successful
+    (they're valid terminal states for user interaction)
+  - Remove complex sub-agent Chat handling from FlowAgentType in
+    favor of agent-level configuration
+  - Enables agents like Requirements Expert to request user
+    clarification without breaking parent flows
+  - Parent agents can control whether Chat steps should continue
+    (Success), fail (Failed), or retry (Retry)
+
+### Patch Changes
+
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core@2.99.0
+  - @memberjunction/interactive-component-types@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/global@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- Updated dependencies [dc497d5]
+  - @memberjunction/interactive-component-types@2.97.0
+  - @memberjunction/core@2.97.0
+  - @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/interactive-component-types@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+- Updated dependencies [85985bd]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/interactive-component-types@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- Updated dependencies [eed16e0]
+  - @memberjunction/interactive-component-types@2.94.0
+  - @memberjunction/core@2.94.0
+  - @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Minor Changes
+
+- 103e4a9: Added comprehensive tracking fields to AI execution entities:
+
+  - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
+  - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
+  - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
+  - **Flow Agent Type**: Added support for Chat message handling to properly bubble up messages from sub-agents to users
+  - **Action Execution**: Enhanced action execution logging by capturing input data (action name and parameters) in step entities
+  - **CodeGen SQL Execution**: Fixed QUOTED_IDENTIFIER issues by adding `-I` flag to sqlcmd execution (required for indexed views and computed columns)
+  - **MetadataSync Push Service**: Improved error reporting with detailed context for field processing failures, lookup failures, and save errors
+  - Database migration `V202508231445__v2.93.0` adds the new tracking fields with proper constraints and metadata
+  - Updated all generated entity classes, GraphQL types, and Angular forms to support the new fields
+  - Enhanced error diagnostics in push service to help identify root causes of sync failures
+
+- 7f465b5: migration
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [1461a44]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/interactive-component-types@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [b303b84]
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/interactive-component-types@2.92.0
+  - @memberjunction/core@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Minor Changes
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/interactive-component-types@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Minor Changes
+
+- 146ebcc: migration
+- d5d26d7: migration
+- 1e7eb76: migration
+
+### Patch Changes
+
+- Updated dependencies [d4530d7]
+- Updated dependencies [146ebcc]
+  - @memberjunction/interactive-component-types@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Minor Changes
+
+- d1911ed: migration
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.89.0
+- @memberjunction/core@2.89.0
+- @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Minor Changes
+
+- df4031f: migration
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.88.0
+- @memberjunction/core@2.88.0
+- @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Minor Changes
+
+- 7dd2409: migration for new entiites
+
+### Patch Changes
+
+- @memberjunction/core@2.86.0
+- @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Minor Changes
+
+- 747455a: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.85.0
+- @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Minor Changes

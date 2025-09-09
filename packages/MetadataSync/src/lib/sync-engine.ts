@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
+import { JsonPreprocessor } from './json-preprocessor';
 
 /**
  * Represents the structure of a metadata record with optional sync tracking
@@ -32,6 +33,15 @@ export interface RecordData {
     /** SHA256 checksum of the fields object */
     checksum: string;
   };
+  /** Delete record directive for removing records from the database */
+  deleteRecord?: {
+    /** Flag to indicate this record should be deleted */
+    delete: boolean;
+    /** ISO timestamp of when the deletion was performed */
+    deletedAt?: string;
+    /** Flag to indicate the record was not found when attempting deletion */
+    notFound?: boolean;
+  };
 }
 
 /**
@@ -41,7 +51,6 @@ export interface RecordData {
  * @example
  * ```typescript
  * const syncEngine = new SyncEngine(systemUser);
- * await syncEngine.initialize();
  * 
  * // Process a field value with special references
  * const value = await syncEngine.processFieldValue('@lookup:Users.Email=admin@example.com', '/path/to/base');
@@ -64,10 +73,9 @@ export class SyncEngine {
    * Initializes the sync engine by refreshing metadata cache
    * @returns Promise that resolves when initialization is complete
    */
-  async initialize(forceRefresh: boolean = false): Promise<void> {
-    if (forceRefresh) {
-      await this.metadata.Refresh();
-    }
+  async initialize(): Promise<void> {
+    // Currently no initialization needed as metadata is managed globally
+    // Keeping this method for backward compatibility and future use
   }
   
   /**
@@ -105,17 +113,19 @@ export class SyncEngine {
    * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
-  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0, batchContext?: Map<string, BaseEntity>): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
     if (depth > MAX_RECURSION_DEPTH) {
       throw new Error(`Maximum recursion depth (${MAX_RECURSION_DEPTH}) exceeded while processing field value: ${value}`);
     }
-    // Handle arrays and objects by converting them to JSON strings
+    // Handle arrays and objects that are directly defined in metadata files
+    // Note: Objects loaded from @file references are returned as-is to preserve proper escaping
     if (value !== null && typeof value === 'object') {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
-        // Convert to pretty-printed JSON string
+        // Convert to pretty-printed JSON string for inline metadata objects
+        // Objects from @file references will be handled by BaseEntity during save
         return JSON.stringify(value, null, 2);
       }
     }
@@ -123,6 +133,16 @@ export class SyncEngine {
     // If not a string, return as-is (numbers, booleans, null, etc.)
     if (typeof value !== 'string') {
       return value;
+    }
+    
+    // If string starts with @ but isn't one of our known reference types, return as-is
+    // This handles cases like npm package names (@mui/material, @angular/core, etc.)
+    if (value.startsWith('@')) {
+      const knownPrefixes = ['@parent:', '@root:', '@file:', '@lookup:', '@env:', '@template:', '@include'];
+      const isKnownReference = knownPrefixes.some(prefix => value.startsWith(prefix));
+      if (!isKnownReference) {
+        return value; // Not a MetadataSync reference, just a string that happens to start with @
+      }
     }
     
     // Check for @parent: reference
@@ -149,10 +169,45 @@ export class SyncEngine {
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
-        const fileContent = await fs.readFile(fullPath, 'utf-8');
-        
-        // Process the file content for {@include} references
-        return await this.processFileContentWithIncludes(fullPath, fileContent);
+        // Check if this is a JSON file that might contain @include directives
+        if (fullPath.endsWith('.json')) {
+          try {
+            // Parse as JSON and check for @include directives
+            const jsonContent = await fs.readJson(fullPath);
+            
+            // Check if the JSON contains any @include directives
+            const jsonString = JSON.stringify(jsonContent);
+            const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+            
+            let processedJson: any;
+            if (hasIncludes) {
+              // Process @include directives with a fresh preprocessor instance
+              const preprocessor = new JsonPreprocessor();
+              processedJson = await preprocessor.processFile(fullPath);
+            } else {
+              processedJson = jsonContent;
+            }
+            
+            // Now recursively process any @file references within the JSON
+            const fileDir = path.dirname(fullPath);
+            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
+            
+            // Return the processed JSON object directly without stringifying
+            // Let BaseEntity handle serialization when saving to database
+            // This ensures proper escaping of embedded code/scripts
+            return processedJson;
+          } catch (jsonError) {
+            // Not valid JSON or error processing, fall back to text file handling
+            const fileContent = await fs.readFile(fullPath, 'utf-8');
+            // Process the file content for {@include} references in text files
+            return await this.processFileContentWithIncludes(fileContent, fullPath);
+          }
+        } else {
+          // Not a JSON file, process as text with {@include} support
+          const fileContent = await fs.readFile(fullPath, 'utf-8');
+          // Process the file content for {@include} references
+          return await this.processFileContentWithIncludes(fileContent, fullPath);
+        }
       } else {
         throw new Error(`File not found: ${fullPath}`);
       }
@@ -205,7 +260,8 @@ export class SyncEngine {
           baseDir, 
           parentRecord, 
           rootRecord,
-          depth + 1
+          depth + 1,
+          batchContext
         );
         
         lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
@@ -230,13 +286,14 @@ export class SyncEngine {
               baseDir, 
               parentRecord, 
               rootRecord,
-              depth + 1
+              depth + 1,
+              batchContext
             );
           }
         }
       }
       
-      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields);
+      return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext);
     }
     
     // Check for @env: reference
@@ -281,10 +338,41 @@ export class SyncEngine {
     entityName: string, 
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
-    createFields: Record<string, any> = {}
+    createFields: Record<string, any> = {},
+    batchContext?: Map<string, BaseEntity>
   ): Promise<string> {
-    // Debug logging handled by caller if needed
+    // First check batch context for in-memory entities
+    if (batchContext) {
+      // Try to find the entity in batch context
+      for (const [, entity] of batchContext) {
+        // Check if this is the right entity type
+        if (entity.EntityInfo?.Name === entityName) {
+          // Check if all lookup fields match
+          let allMatch = true;
+          for (const {fieldName, fieldValue} of lookupFields) {
+            const entityValue = entity.Get(fieldName);
+            const normalizedEntityValue = entityValue?.toString() || '';
+            const normalizedLookupValue = fieldValue?.toString() || '';
+            
+            if (normalizedEntityValue !== normalizedLookupValue) {
+              allMatch = false;
+              break;
+            }
+          }
+          
+          if (allMatch) {
+            // Found in batch context, return primary key
+            const entityInfo = this.metadata.EntityByName(entityName);
+            if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+              const pkeyField = entityInfo.PrimaryKeys[0].Name;
+              return entity.Get(pkeyField);
+            }
+          }
+        }
+      }
+    }
     
+    // Not found in batch context, check database
     const rv = new RunView();
     const entityInfo = this.metadata.EntityByName(entityName);
     if (!entityInfo) {
@@ -518,9 +606,34 @@ export class SyncEngine {
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
           
           if (await fs.pathExists(fullPath)) {
-            const content = await fs.readFile(fullPath, 'utf-8');
-            // Process any @include directives within the file
-            const processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            let processedContent: string;
+            
+            // Check if this is a JSON file that might contain @include directives
+            if (fullPath.endsWith('.json')) {
+              try {
+                const jsonContent = await fs.readJson(fullPath);
+                const jsonString = JSON.stringify(jsonContent);
+                const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
+                
+                if (hasIncludes) {
+                  // Process @include directives
+                  const preprocessor = new JsonPreprocessor();
+                  const processedJson = await preprocessor.processFile(fullPath);
+                  processedContent = JSON.stringify(processedJson, null, 2);
+                } else {
+                  processedContent = JSON.stringify(jsonContent, null, 2);
+                }
+              } catch {
+                // Not valid JSON, process as text
+                const content = await fs.readFile(fullPath, 'utf-8');
+                processedContent = await this.processFileContentWithIncludes(content, fullPath);
+              }
+            } else {
+              // Text file - process {@include} references
+              const content = await fs.readFile(fullPath, 'utf-8');
+              processedContent = await this.processFileContentWithIncludes(content, fullPath);
+            }
+            
             result[key] = {
               _checksumType: 'file',
               _reference: value,
@@ -660,114 +773,6 @@ export class SyncEngine {
   }
   
   /**
-   * Process JSON object with template references
-   * 
-   * Recursively processes JSON data structures to resolve `@template` references.
-   * Templates can be defined at any level and support:
-   * - Single template references: `"@template:path/to/template.json"`
-   * - Object with @template field: `{ "@template": "file.json", "override": "value" }`
-   * - Array of templates for merging: `{ "@template": ["base.json", "overrides.json"] }`
-   * - Nested template references within templates
-   * 
-   * @param data - JSON data structure to process
-   * @param baseDir - Base directory for resolving relative template paths
-   * @returns Promise resolving to the processed data with all templates resolved
-   * @throws Error if template file is not found or contains invalid JSON
-   * 
-   * @example
-   * ```typescript
-   * // Input data with template reference
-   * const data = {
-   *   "@template": "defaults/ai-prompt.json",
-   *   "Name": "Custom Prompt",
-   *   "Prompt": "Override the template prompt"
-   * };
-   * 
-   * // Resolves template and merges with overrides
-   * const result = await syncEngine.processTemplates(data, '/path/to/dir');
-   * ```
-   */
-  async processTemplates(data: any, baseDir: string): Promise<any> {
-    // Handle arrays
-    if (Array.isArray(data)) {
-      const processedArray = [];
-      for (const item of data) {
-        processedArray.push(await this.processTemplates(item, baseDir));
-      }
-      return processedArray;
-    }
-    
-    // Handle objects
-    if (data && typeof data === 'object') {
-      // Check for @template reference
-      if (typeof data === 'string' && data.startsWith('@template:')) {
-        const templatePath = data.substring(10);
-        return await this.loadAndProcessTemplate(templatePath, baseDir);
-      }
-      
-      // Process object with possible @template field
-      const processed: any = {};
-      let templateData: any = {};
-      
-      // First, check if there's a @template field to process
-      if (data['@template']) {
-        const templates = Array.isArray(data['@template']) ? data['@template'] : [data['@template']];
-        
-        // Process templates in order, merging them
-        for (const templateRef of templates) {
-          const templateContent = await this.loadAndProcessTemplate(templateRef, baseDir);
-          templateData = this.deepMerge(templateData, templateContent);
-        }
-      }
-      
-      // Process all other fields
-      for (const [key, value] of Object.entries(data)) {
-        if (key === '@template') continue; // Skip the template field itself
-        
-        // Process the value recursively
-        processed[key] = await this.processTemplates(value, baseDir);
-      }
-      
-      // Merge template data with processed data (processed data takes precedence)
-      return this.deepMerge(templateData, processed);
-    }
-    
-    // Return primitive values as-is
-    return data;
-  }
-  
-  /**
-   * Load and process a template file
-   * 
-   * Loads a JSON template file from the filesystem and recursively processes any
-   * nested template references within it. Template paths are resolved relative to
-   * the template file's directory, enabling template composition.
-   * 
-   * @param templatePath - Path to the template file (relative or absolute)
-   * @param baseDir - Base directory for resolving relative paths
-   * @returns Promise resolving to the processed template content
-   * @throws Error if template file not found or contains invalid JSON
-   * @private
-   */
-  private async loadAndProcessTemplate(templatePath: string, baseDir: string): Promise<any> {
-    const fullPath = path.resolve(baseDir, templatePath);
-    
-    if (!await fs.pathExists(fullPath)) {
-      throw new Error(`Template file not found: ${fullPath}`);
-    }
-    
-    try {
-      const templateContent = await fs.readJson(fullPath);
-      
-      // Recursively process any nested templates
-      const templateDir = path.dirname(fullPath);
-      return await this.processTemplates(templateContent, templateDir);
-    } catch (error) {
-      throw new Error(`Failed to load template ${fullPath}: ${error}`);
-    }
-  }
-  
-  /**
    * Process file content with {@include} references
    * 
    * Recursively processes a file's content to resolve `{@include path}` references.
@@ -777,8 +782,8 @@ export class SyncEngine {
    * - Circular reference detection to prevent infinite loops
    * - Seamless content substitution maintaining surrounding text
    * 
-   * @param filePath - Path to the file being processed
    * @param content - The file content to process
+   * @param filePath - Path to the file being processed
    * @param visitedPaths - Set of already visited file paths for circular reference detection
    * @returns Promise resolving to the content with all includes resolved
    * @throws Error if circular reference detected or included file not found
@@ -794,8 +799,8 @@ export class SyncEngine {
    * ```
    */
   private async processFileContentWithIncludes(
+    content: string,
     filePath: string, 
-    content: string, 
     visitedPaths: Set<string> = new Set()
   ): Promise<string> {
     // Add current file to visited set
@@ -832,8 +837,8 @@ export class SyncEngine {
         
         // Recursively process the included content for nested includes
         const processedInclude = await this.processFileContentWithIncludes(
+          includedContent,
           resolvedPath, 
-          includedContent, 
           new Set(visitedPaths) // Pass a copy to allow the same file in different branches
         );
         
@@ -847,68 +852,74 @@ export class SyncEngine {
     
     return processedContent;
   }
-  
+
   /**
-   * Deep merge two objects with target taking precedence
+   * Recursively process field values in a JSON object
    * 
-   * Recursively merges two objects, with values from the target object overriding
-   * values from the source object. Arrays and primitive values are not merged but
-   * replaced entirely by the target value. Undefined values in target are skipped.
+   * Processes all string values in a JSON object through processFieldValue,
+   * which handles @file, @lookup, @parent, @root references. This ensures
+   * that nested @file references within JSON files are properly resolved.
    * 
-   * @param source - Base object to merge from
-   * @param target - Object with values that override source
-   * @returns New object with merged values
+   * @param obj - JSON object to process
+   * @param baseDir - Base directory for resolving relative file paths
+   * @param parentRecord - Parent entity record for @parent references
+   * @param rootRecord - Root entity record for @root references
+   * @param depth - Current recursion depth
+   * @param batchContext - Batch processing context
+   * @returns Promise resolving to processed JSON object
    * @private
-   * 
-   * @example
-   * ```typescript
-   * const source = {
-   *   a: 1,
-   *   b: { x: 10, y: 20 },
-   *   c: [1, 2, 3]
-   * };
-   * const target = {
-   *   a: 2,
-   *   b: { y: 30, z: 40 },
-   *   d: 'new'
-   * };
-   * const result = deepMerge(source, target);
-   * // Result: { a: 2, b: { x: 10, y: 30, z: 40 }, c: [1, 2, 3], d: 'new' }
-   * ```
    */
-  private deepMerge(source: any, target: any): any {
-    if (!source) return target;
-    if (!target) return source;
-    
-    // If target is not an object, it completely overrides source
-    if (typeof target !== 'object' || target === null || Array.isArray(target)) {
-      return target;
+  private async processJsonFieldValues(
+    obj: any,
+    baseDir: string,
+    parentRecord?: BaseEntity | null,
+    rootRecord?: BaseEntity | null,
+    depth: number = 0,
+    batchContext?: Map<string, BaseEntity>
+  ): Promise<any> {
+    // Handle null and undefined
+    if (obj === null || obj === undefined) {
+      return obj;
     }
-    
-    // If source is not an object, target wins
-    if (typeof source !== 'object' || source === null || Array.isArray(source)) {
-      return target;
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      return Promise.all(
+        obj.map(item => 
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)
+        )
+      );
     }
-    
-    // Both are objects, merge them
-    const result: any = { ...source };
-    
-    for (const [key, value] of Object.entries(target)) {
-      if (value === undefined) {
-        continue; // Skip undefined values
+
+    // Handle objects
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        // Process string values that might contain references
+        if (typeof value === 'string') {
+          // Check if this looks like a reference that needs processing
+          // Only process known reference types, ignore other @ strings (like npm packages)
+          if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
+              value.startsWith('@parent:') || value.startsWith('@root:') ||
+              value.startsWith('@env:') || value.startsWith('@template:') ||
+              value.startsWith('@include')) {
+            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+          } else {
+            result[key] = value;
+          }
+        } else if (typeof value === 'object') {
+          // Recursively process nested objects
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+        } else {
+          // Keep primitive values as-is
+          result[key] = value;
+        }
       }
-      
-      if (typeof value === 'object' && value !== null && !Array.isArray(value) &&
-          typeof result[key] === 'object' && result[key] !== null && !Array.isArray(result[key])) {
-        // Both are objects, merge recursively
-        result[key] = this.deepMerge(result[key], value);
-      } else {
-        // Otherwise, target value wins
-        result[key] = value;
-      }
+      return result;
     }
-    
-    return result;
+
+    // Return primitive values as-is
+    return obj;
   }
   
 }

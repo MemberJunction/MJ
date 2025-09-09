@@ -1,6 +1,6 @@
 import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, 
-         AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, 
+         AIModelActionEntity, AIModelEntityExtended,
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
          AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
@@ -16,7 +16,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIConfigurationEntity,
          AIConfigurationParamEntity,
          AIAgentStepEntity,
-         AIAgentStepPathEntity} from "@memberjunction/core-entities";
+         AIAgentStepPathEntity,
+         AIAgentRelationshipEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -32,6 +33,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _agentRelationships: AIAgentRelationshipEntity[] = [];
     private _agentTypes: AIAgentTypeEntity[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
@@ -90,6 +92,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agents',
                 EntityName: 'AI Agents'
+            },
+            {
+                PropertyName: '_agentRelationships',
+                EntityName: 'MJ: AI Agent Relationships'
             },
             {
                 PropertyName: '_agentTypes',
@@ -152,9 +158,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
         for(const PromptCategory of this._promptCategories){
-            this._prompts.filter((prompt: AIPromptEntity) => {
+            this._prompts.filter((prompt: AIPromptEntityExtended) => {
                 return prompt.CategoryID === PromptCategory.ID;
-            }).forEach((prompt: AIPromptEntity) => {
+            }).forEach((prompt: AIPromptEntityExtended) => {
                 PromptCategory.Prompts.push(prompt);
             });
         }
@@ -247,6 +253,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get Agents(): AIAgentEntityExtended[] {
         return this._agents;
+    }
+
+    public get AgentRelationships(): AIAgentRelationshipEntity[] {
+        return this._agentRelationships;
     }
 
     /**
@@ -482,7 +492,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     /**
      * Utility method that will cache the result of a prompt in the AI Result Cache entity
      */
-    public async CacheResult(model: AIModelEntity, prompt: AIPromptEntity, promptText: string, resultText: string): Promise<boolean> {
+    public async CacheResult(model: AIModelEntityExtended, prompt: AIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
         const md = new Metadata();
         const cacheItem = await md.GetEntityObject<AIResultCacheEntity>('AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;

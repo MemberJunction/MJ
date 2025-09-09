@@ -1,0 +1,72 @@
+{
+  "name": "USAccountHeatmap",
+  "namespace": "CRM/Geography",
+  "type": "Map",
+  "location": "embedded",
+  "code": "@file:../code/us-account-heatmap.js",
+  "functionalRequirements": "## US Account Distribution Heatmap\n\n### Purpose\nVisualize the geographic distribution of accounts across the United States using an interactive choropleth map.\n\n### Core Features\n- **Choropleth Map**: Color-coded US states based on account concentration\n- **Dual View Modes**: \n  - Count mode: Shows number of accounts per state\n  - Revenue mode: Shows total annual revenue per state\n- **Interactive States**: Hover for tooltips, click for detailed drill-down\n- **Summary Statistics**: Total accounts, states covered, top state, total revenue\n- **State Details Modal**: List of all accounts in selected state with sorting\n\n### Map Interactions\n- **Hover**: Shows tooltip with state metrics (count, total revenue, average revenue)\n- **Click**: Opens modal with detailed account list for that state\n- **Visual Feedback**: State highlighting on hover\n- **Color Gradient**: Darker shades indicate higher concentration\n\n### State Details View\n- Sortable table of accounts\n- Shows account name, city, industry, annual revenue\n- Direct link to open full account record\n- Clean modal interface with scrollable content\n\n### Visual Design\n- Blue gradient color scheme for data visualization\n- Gray for states with no accounts\n- State abbreviations displayed on map\n- Interactive legend showing value range\n- Responsive layout that adapts to container size",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Accounts",
+        "displayFields": ["AccountName", "City", "BillingState", "Industry", "AnnualRevenue"],
+        "filterFields": ["BillingState"],
+        "sortFields": ["AccountName", "AnnualRevenue"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "string",
+            "description": "Unique identifier for the account"
+          },
+          {
+            "name": "AccountName",
+            "type": "string",
+            "description": "Name of the account/company"
+          },
+          {
+            "name": "City",
+            "type": "string",
+            "description": "City where account is located"
+          },
+          {
+            "name": "BillingState",
+            "type": "string",
+            "description": "Billing state of the account (can be abbreviation or full name)"
+          },
+          {
+            "name": "Industry",
+            "type": "string",
+            "description": "Industry sector of the account"
+          },
+          {
+            "name": "AnnualRevenue",
+            "type": "number",
+            "description": "Annual revenue of the account"
+          }
+        ] 
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation Details\n\n### Component Function\n`USAccountHeatmap({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings })`\n\n### State Management\n- **accounts**: Array of all account records\n- **accountsByState**: Aggregated data by state\n- **selectedState**: Currently selected state for drill-down\n- **stateAccounts**: Accounts in selected state\n- **viewMode**: 'count' or 'revenue' display mode\n\n### Data Processing\n1. Load all accounts with state information\n2. Group accounts by state name\n3. Calculate metrics per state:\n   - Account count\n   - Total revenue\n   - Average revenue\n4. Map state names to abbreviations for display\n\n### Map Rendering with D3.js\n1. **Projection**: Uses `d3.geoAlbersUsa()` for US map\n2. **Data Source**: TopoJSON from CDN (us-atlas@3)\n3. **Color Scale**: `d3.interpolateBlues` sequential scale\n4. **Interactivity**: D3 event handlers for hover and click\n5. **Tooltip**: Dynamic positioning following cursor\n6. **Legend**: Gradient bar showing value range\n\n### Performance Considerations\n- Single data load for all accounts\n- Client-side aggregation and filtering\n- Efficient D3 rendering with proper cleanup\n- Lazy loading of TopoJSON data\n\n### Browser Compatibility\n- Requires modern browser with SVG support\n- D3.js v7 for visualization\n- TopoJSON for geographic data",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "Triggered when user clicks open button for an account"
+    }
+  ],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "d3",
+      "version": "^7.8.5",
+      "globalVariable": "d3"
+    },
+    {
+      "name": "topojson-client",
+      "version": "^3.1.0",
+      "globalVariable": "topojson"
+    }
+  ]
+}

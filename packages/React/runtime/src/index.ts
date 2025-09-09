@@ -29,7 +29,9 @@ export { ComponentRegistry } from './registry';
 export { 
   ComponentResolver,
   ComponentSpec,
-  ResolvedComponents
+  ResolvedComponents,
+  ComponentRegistryService,
+  IComponentRegistryClient
 } from './registry';
 
 // Export runtime APIs
@@ -71,10 +73,6 @@ export {
 } from './runtime';
 
 // Export utilities
-export { 
-  RuntimeUtilities, 
-  createRuntimeUtilities 
-} from './utilities/runtime-utilities';
 
 export { 
   SetupStyles,
@@ -94,6 +92,16 @@ export {
 } from './utilities/library-loader';
 
 export {
+  getCoreRuntimeLibraries,
+  isCoreRuntimeLibrary
+} from './utilities/core-libraries';
+
+export {
+  LibraryRegistry,
+  LibraryDefinition
+} from './utilities/library-registry';
+
+export {
   ComponentErrorAnalyzer,
   FailedComponentInfo
 } from './utilities/component-error-analyzer';
@@ -109,6 +117,16 @@ export {
   CacheEntry,
   CacheOptions
 } from './utilities/cache-manager';
+
+export {
+  unwrapLibraryComponent,
+  unwrapLibraryComponents,
+  unwrapAllLibraryComponents,
+  // Legacy exports for backward compatibility
+  unwrapComponent,
+  unwrapComponents,
+  unwrapAllComponents
+} from './utilities/component-unwrapper';
 
 // Version information
 export const VERSION = '2.69.1';
@@ -137,6 +155,8 @@ export const DEFAULT_CONFIGS = {
  * Creates a complete React runtime instance with all necessary components
  * @param babelInstance - Babel standalone instance for compilation
  * @param config - Optional configuration overrides
+ * @param runtimeContext - Optional runtime context for registry-based components
+ * @param debug - Enable debug logging (defaults to false)
  * @returns Object containing compiler, registry, and resolver instances
  */
 export function createReactRuntime(
@@ -144,18 +164,32 @@ export function createReactRuntime(
   config?: {
     compiler?: Partial<import('./types').CompilerConfig>;
     registry?: Partial<import('./types').RegistryConfig>;
-  }
+  },
+  runtimeContext?: import('./types').RuntimeContext,
+  debug: boolean = false
 ) {
-  const compiler = new ComponentCompiler(config?.compiler);
+  // Merge debug flag into configs
+  const compilerConfig = {
+    ...config?.compiler,
+    debug: config?.compiler?.debug ?? debug
+  };
+  
+  const registryConfig = {
+    ...config?.registry,
+    debug: config?.registry?.debug ?? debug
+  };
+  
+  const compiler = new ComponentCompiler(compilerConfig);
   compiler.setBabelInstance(babelInstance);
   
-  const registry = new ComponentRegistry(config?.registry);
-  const resolver = new ComponentResolver(registry);
+  const registry = new ComponentRegistry(registryConfig);
+  const resolver = new ComponentResolver(registry, compiler, runtimeContext);
 
   return {
     compiler,
     registry,
     resolver,
-    version: VERSION
+    version: VERSION,
+    debug
   };
 }

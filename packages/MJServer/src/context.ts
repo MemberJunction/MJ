@@ -5,24 +5,34 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { getSigningKeys, getSystemUser, validationOptions, verifyUserRecord } from './auth/index.js';
+import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload, TokenExpiredError } from './auth/index.js';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
-import { TokenExpiredError } from './auth/index.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
+import { Metadata } from '@memberjunction/core';
 
-const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
+const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
+    const options = getValidationOptions(issuer);
+    
+    if (!options) {
+      reject(new Error(`No validation options found for issuer ${issuer}`));
+      return;
+    }
+
     jwt.verify(token, getSigningKeys(issuer), options, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
-        console.log(`Valid token: ${payload.name} (${payload.email ? payload.email : payload.preferred_username})`); // temporary fix to check preferred_username if email is not present
+        // Use provider to extract user info for logging
+        const userInfo = extractUserInfoFromPayload(payload);
+        console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -81,15 +91,28 @@ export const getUserPayload = async (
         throw new AuthenticationError('Missing issuer claim on token');
       }
 
-      await verifyAsync(issuer, validationOptions[issuer], token);
+      // Verify issuer is supported
+      const factory = AuthProviderFactory.getInstance();
+      if (!factory.getByIssuer(issuer)) {
+        console.warn(`Unsupported issuer: ${issuer}`);
+        throw new AuthenticationError(`Unsupported authentication provider: ${issuer}`);
+      }
+
+      await verifyAsync(issuer, token);
       authCache.set(token, true);
     }
 
-    const email = payload?.email ? ((userEmailMap ?? {})[payload?.email] ?? payload?.email) : payload?.preferred_username; // temporary fix to check preferred_username if email is not present
-    const fullName = payload?.name;
-    const firstName = payload?.given_name || fullName?.split(' ')[0];
-    const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
-    const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, readWriteDataSource);
+    // Use provider to extract user information
+    const userInfo = extractUserInfoFromPayload(payload);
+    const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
+    
+    const userRecord = await verifyUserRecord(
+      email, 
+      userInfo.firstName, 
+      userInfo.lastName, 
+      requestDomain, 
+      readWriteDataSource
+    );
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -99,12 +122,13 @@ export const getUserPayload = async (
       throw new AuthorizationError();
     }
 
-    return { userRecord, email, sessionId };
-  } catch (e) {
-    console.error(e);
-    if (e instanceof TokenExpiredError) {
-      throw e;
-    } else return {} as UserPayload;
+    return { userRecord, email: userRecord.Email, sessionId };
+  } catch (error) {
+    console.error(error);
+    if (error instanceof TokenExpiredError) {
+      throw error;
+    }
+    throw new AuthenticationError('Unable to authenticate user');
   }
 };
 
@@ -133,6 +157,10 @@ export const contextFunction =
       requestDomain?.hostname ? requestDomain.hostname : undefined,
       apiKey 
     );
+
+    if (Metadata.Provider.Entities.length === 0 ) {
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
+    }
 
     // now create a new instance of SQLServerDataProvider for each request
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);

@@ -424,6 +424,15 @@
                         </ng-template>
                         
                         <div style="padding: 16px;">
+                            <!-- Add Result Code Button -->
+                            @if (EditMode && record.IsSaved) {
+                                <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                                    <button kendoButton [primary]="true" size="small" (click)="addResultCode()">
+                                        <i class="fa-solid fa-plus"></i> Add Result Code
+                                    </button>
+                                </div>
+                            }
+                            
                             @if (isLoadingResultCodes) {
                                 <div class="loading-state">
                                     <i class="fa-solid fa-spinner fa-spin"></i>
@@ -440,7 +449,11 @@
                             } @else {
                                 <div class="result-codes-grid">
                                     @for (code of resultCodes; track code.ID) {
-                                        <div class="result-code-card" [class.success]="code.IsSuccess" [class.failure]="!code.IsSuccess">
+                                        <div class="result-code-card" 
+                                             [class.success]="code.IsSuccess" 
+                                             [class.failure]="!code.IsSuccess"
+                                             [class.clickable]="true"
+                                             (click)="onResultCodeClick(code, $event)">
                                             <div class="result-icon">
                                                 <i [class]="code.IsSuccess ? 'fa-solid fa-check-circle' : 'fa-solid fa-times-circle'"></i>
                                             </div>
@@ -450,6 +463,16 @@
                                                     <div class="result-description">{{ code.Description }}</div>
                                                 }
                                             </div>
+                                            @if (EditMode) {
+                                                <div class="result-actions">
+                                                    <button class="result-edit-btn" (click)="editResultCode(code); $event.stopPropagation()" title="Edit result code">
+                                                        <i class="fa-solid fa-edit"></i>
+                                                    </button>
+                                                    <button class="result-delete-btn" (click)="deleteResultCode(code); $event.stopPropagation()" title="Delete result code">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            }
                                         </div>
                                     }
                                 </div>

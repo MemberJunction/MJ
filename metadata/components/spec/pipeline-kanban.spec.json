@@ -1,0 +1,49 @@
+{
+  "name": "PipelineKanban",
+  "namespace": "CRM/Dashboards",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/pipeline-kanban.js",
+  "functionalRequirements": "## Pipeline Kanban Board\n\n### Purpose\nDisplay deals in a Kanban board layout organized by pipeline stages.\n\n### Features\n- Column-based layout for stages\n- Deal cards in each column\n- Stage totals and counts\n- Scrollable columns\n- Color-coded stage headers\n- Deal value formatting",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays deals organized in kanban columns by stage",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal entities grouped by pipeline stage",
+        "displayFields": ["ID", "DealName", "Amount", "Stage", "CloseDate", "Probability", "Account"],
+        "filterFields": ["Stage"],
+        "sortFields": ["Amount", "CloseDate"],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Deals organized into kanban columns by stage"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- dealsByStage: Object with stages as keys, deals arrays as values\n- stages: Array of stage definitions\n- onDealClick: Callback for deal selection\n\n### Layout\n- Flexbox horizontal columns\n- Fixed height with scroll\n- Stage headers with colors",
+  "properties": [
+    {
+      "name": "dealsByStage",
+      "type": "Record<string, Array<{ID: string, DealName: string, Amount: number, CloseDate: string, Probability: number}>>",
+      "required": true,
+      "description": "Deals grouped by stage key"
+    },
+    {
+      "name": "stages",
+      "type": "Array<{name: string, color: string}>",
+      "required": true,
+      "description": "Stage definitions with names and colors"
+    },
+    {
+      "name": "onDealClick",
+      "type": "(deal: {ID: string, DealName: string}) => void",
+      "required": true,
+      "description": "Callback for deal selection"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

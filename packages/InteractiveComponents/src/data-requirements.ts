@@ -52,6 +52,12 @@ export type ComponentQueryDataRequirement = {
     fields: SimpleEntityFieldInfo[];
 
     /**
+     * A list of the entities that are part of this query. This is vital information for matching query requests
+     * against existing queries
+     */
+    entityNames: string[];
+
+    /**
      * Queries can have parameters (not all do). See @see ComponentQueryParameterValue for details.
      */
     parameters?: ComponentQueryParameterValue[];

@@ -1,5 +1,309 @@
 # @memberjunction/metadata-sync
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/graphql-dataprovider@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/core-entities-server@2.99.0
+  - @memberjunction/sqlserver-dataprovider@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/core-entities-server@2.98.0
+- @memberjunction/global@2.98.0
+- @memberjunction/sqlserver-dataprovider@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/graphql-dataprovider@2.97.0
+- @memberjunction/core-entities-server@2.97.0
+- @memberjunction/sqlserver-dataprovider@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Minor Changes
+
+- 8e1c946: migration
+
+### Patch Changes
+
+- d7b5647: feat(metadata-sync): add deleteRecord feature for removing records via sync
+
+  - Added deleteRecord directive to mark records for deletion in JSON files
+  - Records with deleteRecord.delete=true are deleted during push operations
+  - After successful deletion, adds deletedAt timestamp to track when deleted
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/graphql-dataprovider@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/core-entities-server@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+  - @memberjunction/global@2.96.0
+
+## Unreleased
+
+### Minor Changes
+
+- **deleteRecord Feature**: Added support for deleting records from the database through the metadata sync tool
+  - New `deleteRecord` directive allows marking records for deletion in JSON files
+  - Records are deleted when `deleteRecord.delete` is set to `true`
+  - After successful deletion, the tool updates the JSON with a `deletedAt` timestamp
+  - Delete operations are included in SQL logs when SQL logging is enabled
+  - Supports dry-run mode to preview deletions without executing them
+  - Handles foreign key constraint errors gracefully with helpful error messages
+  - Primary key is required to identify which record to delete
+  - Once deleted (indicated by `deletedAt`), subsequent push operations skip the deletion
+  - Takes precedence over normal create/update operations when present
+
+### Implementation Details
+
+- Modified `PushService.ts` to detect and process deleteRecord directives
+- Added new `processDeleteRecord` method to handle deletion logic
+- Updated `RecordData` interface to include optional `deleteRecord` field
+- Modified `JsonWriteHelper` to properly serialize the deleteRecord field
+- Delete operations generate appropriate SQL DELETE statements in migration logs
+- Error handling provides detailed context for troubleshooting failed deletions
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/graphql-dataprovider@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/core-entities-server@2.95.0
+  - @memberjunction/sqlserver-dataprovider@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/graphql-dataprovider@2.94.0
+- @memberjunction/core-entities-server@2.94.0
+- @memberjunction/sqlserver-dataprovider@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- 103e4a9: Added comprehensive tracking fields to AI execution entities:
+
+  - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
+  - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
+  - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
+  - **Flow Agent Type**: Added support for Chat message handling to properly bubble up messages from sub-agents to users
+  - **Action Execution**: Enhanced action execution logging by capturing input data (action name and parameters) in step entities
+  - **CodeGen SQL Execution**: Fixed QUOTED_IDENTIFIER issues by adding `-I` flag to sqlcmd execution (required for indexed views and computed columns)
+  - **MetadataSync Push Service**: Improved error reporting with detailed context for field processing failures, lookup failures, and save errors
+  - Database migration `V202508231445__v2.93.0` adds the new tracking fields with proper constraints and metadata
+  - Updated all generated entity classes, GraphQL types, and Angular forms to support the new fields
+  - Enhanced error diagnostics in push service to help identify root causes of sync failures
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/sqlserver-dataprovider@2.93.0
+  - @memberjunction/graphql-dataprovider@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/core-entities-server@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+  - @memberjunction/sqlserver-dataprovider@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/core-entities-server@2.92.0
+  - @memberjunction/graphql-dataprovider@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/core-entities-server@2.91.0
+  - @memberjunction/graphql-dataprovider@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/core-entities-server@2.90.0
+  - @memberjunction/sqlserver-dataprovider@2.90.0
+  - @memberjunction/graphql-dataprovider@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+- Updated dependencies [34d456e]
+- Updated dependencies [604ef0c]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/sqlserver-dataprovider@2.89.0
+  - @memberjunction/graphql-dataprovider@2.89.0
+  - @memberjunction/core-entities-server@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/graphql-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/core-entities-server@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/graphql-dataprovider@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/core-entities-server@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- 7675555: Fix critical MetadataSync issues with parent-child dependencies and record processing
+
+  **Fixed Issues:**
+
+  1. **One Record Per Run Bug**: Fixed issue where only one new related entity was processed per sync run when multiple records were added
+  2. **Parent-Child Dependencies**: Resolved "@parent:ID reference not found" errors by ensuring parents are saved before children
+  3. **Complex Lookup Resolution**: Enhanced dependency analyzer to handle compound lookups with @parent references (e.g., `Name=X&AgentID=@parent:AgentID`)
+  4. **Sync Metadata Regression**: Restored proper behavior where lastModified timestamps only update for actually changed records
+
+  **Technical Changes:**
+
+  - Use unique record IDs for batch context tracking instead of complex key building
+  - Parents are now saved and added to batch context before processing children
+  - Enhanced RecordDependencyAnalyzer to resolve @parent references within lookup criteria
+  - Restored dirty checking and file content checksum comparison before updating sync metadata
+  - Preserve original field values with @ references when writing back to files
+
+  This ensures MetadataSync correctly handles complex entity hierarchies with proper dependency ordering.
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/core-entities-server@2.86.0
+  - @memberjunction/graphql-dataprovider@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- 9b74582: Improved metadata sync push functionality with better dependency ordering and cleaner logging
+
+  ## Changes
+
+  ### Dependency Ordering
+
+  - Added RecordDependencyAnalyzer to handle complex nested entity relationships
+  - Records are now processed in correct dependency order using topological sorting
+  - Supports @lookup, @parent, @root references and direct foreign keys
+  - Handles circular dependencies gracefully with warnings
+
+  ### Logging Improvements
+
+  - Fixed confusing "Error in BaseEntity.Load" messages for missing records
+  - Now shows clear messages like "Creating missing [Entity] record with primaryKey {...}"
+  - Provides better visibility into what records are being created vs updated
+
+  ### Code Cleanup
+
+  - Removed 700+ lines of unused legacy code from PushService
+  - Removed unused template processing methods from SyncEngine
+  - Fixed parameter ordering in processFileContentWithIncludes method
+  - Simplified initialize method in SyncEngine
+
+  These improvements make the metadata sync tool more reliable when dealing with complex entity relationships and provide clearer feedback during push operations.
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/graphql-dataprovider@2.85.0
+  - @memberjunction/core-entities-server@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/graphql-dataprovider@2.84.0
+  - @memberjunction/core@2.84.0
+  - @memberjunction/sqlserver-dataprovider@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/core-entities-server@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/graphql-dataprovider@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/core-entities-server@2.83.0
+  - @memberjunction/sqlserver-dataprovider@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

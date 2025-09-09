@@ -3,7 +3,7 @@ import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentEntity, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface SubAgentAdvancedSettingsFormData {
@@ -26,8 +26,8 @@ export interface SubAgentAdvancedSettingsFormData {
 export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  subAgent!: AIAgentEntity;
-  allSubAgents: AIAgentEntity[] = []; // For execution order validation
+  subAgent!: AIAgentEntityExtended;
+  allSubAgents: AIAgentEntityExtended[] = []; // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();

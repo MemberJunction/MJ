@@ -1,0 +1,43 @@
+{
+  "name": "InteractionTimeline",
+  "namespace": "CRM/Customer",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/interaction-timeline.js",
+  "functionalRequirements": "## Interaction Timeline\n\n### Purpose\nDisplay chronological timeline of customer interactions.\n\n### Features\n- Chronological event list\n- Event type icons\n- Expandable details\n- Date filtering",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays chronological timeline of customer interactions",
+    "entities": [ 
+      {
+        "name": "Activities",
+        "description": "Customer activity records",
+        "displayFields": ["ID", "Type", "Description", "Date", "ContactID"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Activity timeline events"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- interactions: Array of interaction events\n- dateRange: Date filter range",
+  "properties": [
+    {
+      "name": "interactions",
+      "type": "Array<{id: string, type: string, subject: string, description: string, date: string, icon: string}>",
+      "required": true,
+      "description": "Customer interaction events"
+    },
+    {
+      "name": "dateRange",
+      "type": "{start: string, end: string}",
+      "required": false,
+      "description": "Date filter range"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

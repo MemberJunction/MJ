@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -11,6 +11,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
+import { RunView, RunViewParams } from "../views/runView";
 
 
 
@@ -23,17 +24,42 @@ import { Metadata } from "./metadata";
  */
 export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
     try {
-        const newObject = new AllMetadata();
+        const newObject = MetadataFromSimpleObjectWithoutUser(data, md);
         newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
 
-        // we now have to loop through the AllMetadataArray and use that info to build the metadata object with proper strongly typed object instances
+        return newObject;
+    }
+    catch (e) {
+        LogError(e);
+    }
+}
+
+/**
+ * Creates a new instance of AllMetadata from a simple object, but does NOT set the CurrentUser property
+ * Handles deserialization and proper instantiation of all metadata classes.
+ * @param data - The raw metadata object to convert
+ * @param md - The metadata provider for context
+ * @returns A fully populated AllMetadata instance with proper type instances
+ */
+export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProvider): AllMetadata {
+    try {
+        const returnMetadata: AllMetadata = new AllMetadata();
+        // now iterate through the AllMetadataMapping array and construct the return type
         for (let m of AllMetadataArrays) {
-            if (data.hasOwnProperty(m.key)) {
-                newObject[m.key] = data[m.key].map((d: any) => new m.class(d, md));
+            let simpleKey = m.key;
+            if (!data.hasOwnProperty(simpleKey)) {
+                simpleKey = simpleKey.substring(3); // remove the All prefix
+            }
+            if (data.hasOwnProperty(simpleKey)) {
+                // at this point, only do this particular property if we have a match, it is either prefixed with All or not
+                // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
+                // so we need to check for both which is what the above is doing.
+
+                // Build the array of the correct type and initialize with the simple object
+                returnMetadata[m.key] = data[simpleKey].map((d: any) => new m.class(d, md));
             }
         }
-
-        return newObject;
+        return returnMetadata;
     }
     catch (e) {
         LogError(e);
@@ -70,7 +96,7 @@ export const AllMetadataArrays = [
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
-export abstract class ProviderBase implements IMetadataProvider {
+export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -140,6 +166,142 @@ export abstract class ProviderBase implements IMetadataProvider {
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
+
+    /**
+     * Force sub-classes to implement RunView, base class doesn't provide an implementation
+     * @param params 
+     * @param contextUser 
+     */
+    public abstract RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>;
+
+    /**
+     * Force sub-classes to implement RunViews, base class doesn't provide an implementation
+     * @param params 
+     * @param contextUser 
+     */
+    public abstract RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]>;
+
+    /**
+     * Used to check to see if the entity in question is active or not
+     * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
+     * either Deprecated or Disabled.
+     * @param entityName 
+     * @param callerName 
+     */
+    protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
+        const entityName = await RunView.GetEntityNameFromRunViewParams(params, this);
+        const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
+        if (!entity) {
+            throw new Error(`Entity ${entityName} not found in metadata`);
+        }
+        EntityInfo.AssertEntityActiveStatus(entity, callerName);
+    }
+
+    /**
+     * Base class pre-processor that all sub-classes should call before they start their RunView process
+     * @param params 
+     * @param contextUser 
+     */
+    protected async PreProcessRunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        await this.EntityStatusCheck(params, 'PreProcessRunView');
+
+        // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
+        // so that we can get the data to populate the entity object with.
+        if (params.ResultType === 'entity_object') {
+            // we need to get the entity definition and then get all the fields for it
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            if (!entity)
+                throw new Error(`Entity ${params.EntityName} not found in metadata`);
+            params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+        }
+    }
+
+    /**
+     * Base class post-processor that all sub-classes should call after they finish their RunView process
+     * @param params 
+     * @param contextUser 
+     * @returns 
+     */
+    protected async PostProcessRunView(result: RunViewResult, params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        // Transform the result set into BaseEntity-derived objects, if needed
+        await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
+    }
+
+    /**
+     * Base class implementation for handling pre-processing of RunViews() each sub-class should call this 
+     * within their RunViews() method implementation
+     * @param params 
+     * @param contextUser 
+     * @returns 
+     */
+    protected async PreProcessRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
+        if (params && params.length > 0) {
+            for (const param of params) {
+                this.EntityStatusCheck(param, 'PreProcessRunViews');
+
+                // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
+                // so that we can get the data to populate the entity object with.
+                if (param.ResultType === 'entity_object') {
+                    // we need to get the entity definition and then get all the fields for it
+                    const entity: EntityInfo | undefined = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                    if (!entity){
+                        throw new Error(`Entity ${param.EntityName} not found in metadata`);
+                    }
+                    param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+                }
+            }
+        }
+    }
+
+    /**
+     * Base class utilty method that should be called after each sub-class handles its internal RunViews() process before returning results
+     * This handles the optional conversion of simple objects to entity objects for each requested view depending on if the params requests 
+     * a result_type === 'entity_object'
+     * @param results 
+     * @param params 
+     * @param contextUser 
+     */
+    protected async PostProcessRunViews(results: RunViewResult[], params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
+        if (params && params.length > 0) {
+            const promises = [];
+            for (let i = 0; i < results.length; i++) {
+                promises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
+            }
+            // await the promises for all transformations
+            await Promise.all(promises);
+        }
+    }
+
+
+    /**
+     * Transforms the result set from simple objects to entity objects if needed.
+     * @param param - The RunViewParams used for the request
+     * @param result - The RunViewResult returned from the request
+     * @param contextUser - The user context for permissions
+     */
+    protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
+        // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
+        if (param.ResultType === 'entity_object' && result && result.Success){
+            // we need to transform each of the items in the result set into a BaseEntity-derived object
+            // Create entities and load data in parallel for better performance
+            const entityPromises = result.Results.map(async (item) => {
+                if (item instanceof BaseEntity || (typeof item.Save === 'function')) {
+                    // the second check is a "duck-typing" check in case we have different runtime
+                    // loading sources where the instanceof will fail
+                    return item;
+                }
+                else {
+                    // not a base entity sub-class already so convert
+                    const entity = await this.GetEntityObject(param.EntityName, contextUser);
+                    await entity.LoadFromData(item);
+                    return entity;
+                } 
+            });
+            
+            result.Results = await Promise.all(entityPromises);
+        }
+    }
+
     /**
      * Returns the currently loaded local metadata from within the instance
      */
@@ -192,6 +354,14 @@ export abstract class ProviderBase implements IMetadataProvider {
         return true;
     }
 
+    protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
+        // we need to create a copy but can't do it the standard way becuase we need object instances
+        // for various things like EntityInfo
+        const newmd = MetadataFromSimpleObjectWithoutUser(toClone, this);
+        newmd.CurrentUser = this.CurrentUser;
+        return newmd;
+    }
+
     /**
      * Copies metadata from the global provider to the local instance.
      * This is used to ensure that the local instance has the latest metadata
@@ -200,7 +370,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
             if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = Metadata.Provider.AllMetadata
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
                 return true;
             }
             return false;
@@ -291,23 +461,9 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // rather than just plain JavaScript objects that we have in the allMetadata object.
 
                 // build the base return type
-                const returnMetadata: AllMetadata = new AllMetadata();
-                returnMetadata.CurrentUser = await this.GetCurrentUser(); // set the current user
-                // now iterate through the AllMetadataMapping array and construct the return type
-                for (let m of AllMetadataArrays) {
-                    let simpleKey = m.key;
-                    if (!simpleMetadata.hasOwnProperty(simpleKey)) {
-                        simpleKey = simpleKey.substring(3); // remove the All prefix
-                    }
-                    if (simpleMetadata.hasOwnProperty(simpleKey)) {
-                        // at this point, only do this particular property if we have a match, it is either prefixed with All or not
-                        // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
-                        // so we need to check for both which is what the above is doing.
+                const returnMetadata = MetadataFromSimpleObjectWithoutUser(simpleMetadata, this);
+                returnMetadata.CurrentUser = await this.GetCurrentUser();
 
-                        // Build the array of the correct type and initialize with the simple object
-                        returnMetadata[m.key] = simpleMetadata[simpleKey].map((d: any) => new m.class(d, this));
-                    }
-                }
                 return returnMetadata;
             }
             else {

@@ -49,11 +49,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
   public activeTabIndex: number = 0;
   public onTabSelect(e: TabEvent): void {
     this.activeTabIndex = e.index;
-    this.sharedService.InvokeManualResize(100); // for the first tab, chart, have a longer delay because that is the plotly chart which takes a moment to render and needs to be resized after
-    if (e.index === 0) {
-      // special case, do an extra resize after a longer delay since plotly charts take a moment to render
-      this.sharedService.InvokeManualResize(750);
-    }
+    this.sharedService.InvokeManualResize(100); 
   }
 
   public isTabSelected(index: number) {

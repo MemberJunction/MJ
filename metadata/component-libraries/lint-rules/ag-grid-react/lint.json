@@ -1,0 +1,20 @@
+{
+  "initialization": {
+    "factoryMethod": null,
+    "elementType": "div",
+    "requiresNew": false,
+    "requiredConfig": []
+  },
+  "lifecycle": {
+    "requiredMethods": [],
+    "cleanupMethods": [],
+    "updateMethods": []
+  },
+  "validators": {
+    "checkComponentAccess": {
+      "description": "Ensures AG-Grid React components are accessed with the correct namespace pattern",
+      "severity": "critical",
+      "validate": "@file:check-component-access.js"
+    }
+  }
+}

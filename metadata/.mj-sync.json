@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "push": {
-    "autoCreateMissingRecords": false
+    "autoCreateMissingRecords": true
   },
   "directoryOrder": [
     "action-categories",
@@ -11,7 +11,9 @@
     "agent-types",
     "agents",
     "query-categories",
-    "queries"
+    "queries",
+    "component-libraries",
+    "components"
   ],
   "sqlLogging": {
     "enabled": true,

@@ -1,0 +1,173 @@
+{
+  "name": "AIDetailTable",
+  "location": "embedded",
+  "title": "AI Detail Table",
+  "description": "Detailed table view showing individual runs for drill-down analysis with sorting and filtering",
+  "type": "table",
+  "functionalRequirements": "## Detail Table Requirements\n\n### Core Functionality\n- Display individual run records in a sortable table\n- Show key fields: timestamp, name, success status, tokens, cost, execution time\n- Color-coded success/failure indicators\n- Sortable columns with visual indicators\n- Paginated results for large datasets\n- Export to CSV functionality\n- Expandable rows for additional details\n\n### Table Features\n- Responsive column widths\n- Hover row highlighting\n- Sticky header during scroll\n- Loading state for data updates\n- Empty state message",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives detailed run data from parent component",
+    "entities": [
+ {
+        "name": "MJ: AI Agent Runs",
+        "description": "Historical agent execution data for performance analysis",
+        "displayFields": [
+          "ID",
+          "AgentID",
+          "Agent",
+          "StartedAt",
+          "CompletedAt",
+          "Success",
+          "TotalTokensUsed",
+          "TotalCost"
+        ],
+        "filterFields": [
+          "StartedAt",
+          "Success",
+          "AgentID"
+        ],
+        "sortFields": [
+          "StartedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "isPrimaryKey": true,
+            "allowsNull": false,
+            "description": "Unique run identifier"
+          },
+          {
+            "name": "AgentID",
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "description": "Reference to AI Agent"
+          },
+          {
+            "name": "Agent",
+            "type": "nvarchar",
+            "allowsNull": true,
+            "description": "Agent name (denormalized)"
+          },
+          {
+            "name": "StartedAt",
+            "type": "datetime",
+            "allowsNull": false,
+            "description": "Execution start timestamp"
+          },
+          {
+            "name": "TotalTokensUsed",
+            "type": "int",
+            "allowsNull": true,
+            "description": "Total tokens consumed"
+          },
+          {
+            "name": "TotalCost",
+            "type": "decimal",
+            "allowsNull": true,
+            "description": "Total cost in USD"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      },
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Historical prompt execution data for performance analysis",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "Prompt",
+          "ModelID",
+          "Model",
+          "RunAt",
+          "CompletedAt",
+          "Success",
+          "TokensUsed",
+          "TotalCost"
+        ],
+        "filterFields": [
+          "RunAt",
+          "Success",
+          "PromptID",
+          "ModelID"
+        ],
+        "sortFields": [
+          "RunAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "isPrimaryKey": true,
+            "allowsNull": false,
+            "description": "Unique run identifier"
+          },
+          {
+            "name": "PromptID",
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "description": "Reference to AI Prompt"
+          },
+          {
+            "name": "Prompt",
+            "type": "nvarchar",
+            "allowsNull": true,
+            "description": "Prompt name (denormalized)"
+          },
+          {
+            "name": "RunAt",
+            "type": "datetime",
+            "allowsNull": false,
+            "description": "Execution timestamp"
+          },
+          {
+            "name": "TokensUsed",
+            "type": "int",
+            "allowsNull": true,
+            "description": "Total tokens consumed"
+          },
+          {
+            "name": "TotalCost",
+            "type": "decimal",
+            "allowsNull": true,
+            "description": "Total cost in USD"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }      
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- data: Array of run records\n- activeTab: Current view context (agents/prompts)\n\n### Table Management\n- Client-side sorting\n- Pagination with 25 rows per page\n- Column sorting state management\n- Row expansion for details",
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "required": true,
+      "description": "Array of run records to display"
+    },
+    {
+      "name": "activeTab",
+      "type": "string",
+      "required": true,
+      "description": "Current tab: agents or prompts"
+    }
+  ],
+  "events": [],
+  "exampleUsage": "<AIDetailTable data={selectedPoint.items} activeTab=\"agents\" />",
+  "code": "@file:../code/ai-detail-table.js",
+  "dependencies": [
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    }
+  ],
+  "libraries": []
+}

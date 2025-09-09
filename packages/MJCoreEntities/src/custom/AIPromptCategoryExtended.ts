@@ -1,11 +1,12 @@
 import { BaseEntity } from "@memberjunction/core";
-import { AIPromptCategoryEntity, AIPromptEntity } from "../generated/entity_subclasses";
+import { AIPromptCategoryEntity } from "../generated/entity_subclasses";
+import { AIPromptEntityExtended } from "./AIPromptExtended";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, "AI Prompt Categories")
 export class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
-    private _prompts: AIPromptEntity[] = [];
-    public get Prompts(): AIPromptEntity[] {
+    private _prompts: AIPromptEntityExtended[] = [];
+    public get Prompts(): AIPromptEntityExtended[] {
         return this._prompts;
     }
 }

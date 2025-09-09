@@ -23,6 +23,7 @@
           ]"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedStatus$.value"
           (valueChange)="onStatusFilterChange($event)">
         </kendo-dropdownlist>
@@ -37,6 +38,7 @@
           ]"
           textField="text"
           valueField="value"
+          [valuePrimitive]="true"
           [value]="selectedType$.value"
           (valueChange)="onTypeFilterChange($event)">
         </kendo-dropdownlist>

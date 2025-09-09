@@ -1,5 +1,342 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/aiengine@2.99.0
+  - @memberjunction/actions@2.99.0
+  - @memberjunction/core-entities-server@2.99.0
+  - @memberjunction/sqlserver-dataprovider@2.99.0
+  - @memberjunction/ai@2.99.0
+  - @memberjunction/ai-anthropic@2.99.0
+  - @memberjunction/ai-groq@2.99.0
+  - @memberjunction/ai-mistral@2.99.0
+  - @memberjunction/ai-openai@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.98.0
+- @memberjunction/aiengine@2.98.0
+- @memberjunction/ai-anthropic@2.98.0
+- @memberjunction/ai-groq@2.98.0
+- @memberjunction/ai-mistral@2.98.0
+- @memberjunction/ai-openai@2.98.0
+- @memberjunction/actions@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/core-entities-server@2.98.0
+- @memberjunction/global@2.98.0
+- @memberjunction/sqlserver-dataprovider@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/actions@2.97.0
+- @memberjunction/core-entities-server@2.97.0
+- @memberjunction/sqlserver-dataprovider@2.97.0
+- @memberjunction/ai@2.97.0
+- @memberjunction/ai-anthropic@2.97.0
+- @memberjunction/ai-groq@2.97.0
+- @memberjunction/ai-mistral@2.97.0
+- @memberjunction/ai-openai@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/aiengine@2.96.0
+  - @memberjunction/actions@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/core-entities-server@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+  - @memberjunction/ai@2.96.0
+  - @memberjunction/ai-anthropic@2.96.0
+  - @memberjunction/ai-groq@2.96.0
+  - @memberjunction/ai-mistral@2.96.0
+  - @memberjunction/ai-openai@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/aiengine@2.95.0
+  - @memberjunction/actions@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/core-entities-server@2.95.0
+  - @memberjunction/sqlserver-dataprovider@2.95.0
+  - @memberjunction/ai@2.95.0
+  - @memberjunction/ai-anthropic@2.95.0
+  - @memberjunction/ai-groq@2.95.0
+  - @memberjunction/ai-mistral@2.95.0
+  - @memberjunction/ai-openai@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/aiengine@2.94.0
+- @memberjunction/actions@2.94.0
+- @memberjunction/core-entities-server@2.94.0
+- @memberjunction/sqlserver-dataprovider@2.94.0
+- @memberjunction/ai@2.94.0
+- @memberjunction/ai-anthropic@2.94.0
+- @memberjunction/ai-groq@2.94.0
+- @memberjunction/ai-mistral@2.94.0
+- @memberjunction/ai-openai@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- 103e4a9: Added comprehensive tracking fields to AI execution entities:
+
+  - **AIAgentRun**: Added `RunName`, `Comment`, and `ParentID` fields for better run identification and hierarchical tracking
+  - **AIPromptRun**: Added `RunName`, `Comment`, and `ParentID` fields for consistent tracking across prompt executions
+  - **AIAgentRunStep**: Added `Comment` and `ParentID` fields for detailed step-level tracking
+  - **Flow Agent Type**: Added support for Chat message handling to properly bubble up messages from sub-agents to users
+  - **Action Execution**: Enhanced action execution logging by capturing input data (action name and parameters) in step entities
+  - **CodeGen SQL Execution**: Fixed QUOTED_IDENTIFIER issues by adding `-I` flag to sqlcmd execution (required for indexed views and computed columns)
+  - **MetadataSync Push Service**: Improved error reporting with detailed context for field processing failures, lookup failures, and save errors
+  - Database migration `V202508231445__v2.93.0` adds the new tracking fields with proper constraints and metadata
+  - Updated all generated entity classes, GraphQL types, and Angular forms to support the new fields
+  - Enhanced error diagnostics in push service to help identify root causes of sync failures
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/sqlserver-dataprovider@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/aiengine@2.93.0
+  - @memberjunction/actions@2.93.0
+  - @memberjunction/core-entities-server@2.93.0
+  - @memberjunction/ai@2.93.0
+  - @memberjunction/ai-anthropic@2.93.0
+  - @memberjunction/ai-groq@2.93.0
+  - @memberjunction/ai-mistral@2.93.0
+  - @memberjunction/ai-openai@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+  - @memberjunction/sqlserver-dataprovider@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/core-entities-server@2.92.0
+  - @memberjunction/aiengine@2.92.0
+  - @memberjunction/actions@2.92.0
+  - @memberjunction/ai@2.92.0
+  - @memberjunction/ai-anthropic@2.92.0
+  - @memberjunction/ai-groq@2.92.0
+  - @memberjunction/ai-mistral@2.92.0
+  - @memberjunction/ai-openai@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- 70bf265: Fixed CodeGen Database Schema JSON generation errors caused by unescaped control characters
+
+  - Added comprehensive JSON string escaping function to handle all control characters (newlines, tabs, carriage returns, etc.)
+  - Fixed null reference errors when dbSchemaJSONOutput configuration is missing or incomplete
+  - Applied proper escaping to all string fields in JSON output (entity names, descriptions, field names, types, etc.)
+  - Ensures generated JSON files are valid and can be parsed without errors
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/core-entities-server@2.91.0
+  - @memberjunction/aiengine@2.91.0
+  - @memberjunction/actions@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+  - @memberjunction/ai@2.91.0
+  - @memberjunction/ai-anthropic@2.91.0
+  - @memberjunction/ai-groq@2.91.0
+  - @memberjunction/ai-mistral@2.91.0
+  - @memberjunction/ai-openai@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/aiengine@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/core-entities-server@2.90.0
+  - @memberjunction/actions@2.90.0
+  - @memberjunction/sqlserver-dataprovider@2.90.0
+  - @memberjunction/ai@2.90.0
+  - @memberjunction/ai-anthropic@2.90.0
+  - @memberjunction/ai-groq@2.90.0
+  - @memberjunction/ai-mistral@2.90.0
+  - @memberjunction/ai-openai@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+- Updated dependencies [34d456e]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/sqlserver-dataprovider@2.89.0
+  - @memberjunction/aiengine@2.89.0
+  - @memberjunction/actions@2.89.0
+  - @memberjunction/core-entities-server@2.89.0
+  - @memberjunction/ai@2.89.0
+  - @memberjunction/ai-anthropic@2.89.0
+  - @memberjunction/ai-groq@2.89.0
+  - @memberjunction/ai-mistral@2.89.0
+  - @memberjunction/ai-openai@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/core-entities-server@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/actions@2.88.0
+  - @memberjunction/ai@2.88.0
+  - @memberjunction/ai-anthropic@2.88.0
+  - @memberjunction/ai-groq@2.88.0
+  - @memberjunction/ai-mistral@2.88.0
+  - @memberjunction/ai-openai@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/actions@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/core-entities-server@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/ai@2.87.0
+  - @memberjunction/ai-anthropic@2.87.0
+  - @memberjunction/ai-groq@2.87.0
+  - @memberjunction/ai-mistral@2.87.0
+  - @memberjunction/ai-openai@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/core-entities-server@2.86.0
+  - @memberjunction/aiengine@2.86.0
+  - @memberjunction/actions@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/ai@2.86.0
+  - @memberjunction/ai-anthropic@2.86.0
+  - @memberjunction/ai-groq@2.86.0
+  - @memberjunction/ai-mistral@2.86.0
+  - @memberjunction/ai-openai@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [a96c1a7]
+- Updated dependencies [747455a]
+  - @memberjunction/ai@2.85.0
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-anthropic@2.85.0
+  - @memberjunction/ai-groq@2.85.0
+  - @memberjunction/ai-mistral@2.85.0
+  - @memberjunction/ai-openai@2.85.0
+  - @memberjunction/actions@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/core-entities-server@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [75badca]
+- Updated dependencies [0b9d691]
+- Updated dependencies [25e3697]
+  - @memberjunction/ai-openai@2.84.0
+  - @memberjunction/core@2.84.0
+  - @memberjunction/sqlserver-dataprovider@2.84.0
+  - @memberjunction/aiengine@2.84.0
+  - @memberjunction/actions@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/core-entities-server@2.84.0
+  - @memberjunction/ai@2.84.0
+  - @memberjunction/ai-anthropic@2.84.0
+  - @memberjunction/ai-groq@2.84.0
+  - @memberjunction/ai-mistral@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+- Updated dependencies [1dc69bf]
+- Updated dependencies [1eebeda]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/aiengine@2.83.0
+  - @memberjunction/ai-groq@2.83.0
+  - @memberjunction/actions@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/core-entities-server@2.83.0
+  - @memberjunction/sqlserver-dataprovider@2.83.0
+  - @memberjunction/ai@2.83.0
+  - @memberjunction/ai-anthropic@2.83.0
+  - @memberjunction/ai-mistral@2.83.0
+  - @memberjunction/ai-openai@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

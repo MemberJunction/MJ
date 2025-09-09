@@ -1,0 +1,67 @@
+{
+  "name": "PipelineKanban",
+  "location": "embedded",
+  "code": "@file:../code/sales-pipeline-dashboard-pipeline-kanban.js",
+  "description": "Visual representation of deals across pipeline stages in a kanban board layout",
+  "category": "Pipeline",
+  "type": "kanban",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["ID", "Dealname", "Accountname", "Stage", "Amount", "CloseDate", "Probability", "Owner", "CreatedAt"],
+        "filterFields": ["CloseDate", "Stage", "Owner"],
+        "sortFields": ["CloseDate", "Amount", "Probability"],
+        "permissions": ["read"]
+      } 
+    ]
+  },
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "description": "Array of deal objects to display",
+      "required": true
+    },
+    {
+      "name": "stages",
+      "type": "array",
+      "description": "Array of pipeline stage names",
+      "required": true
+    },
+    {
+      "name": "stageColors",
+      "type": "object",
+      "description": "Object mapping stage names to colors",
+      "required": true
+    },
+    {
+      "name": "onStageClick",
+      "type": "function",
+      "description": "Callback when a stage card is clicked",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onStageSelect",
+      "description": "Fired when a pipeline stage is clicked",
+      "parameters": [
+        {
+          "name": "stage",
+          "type": "string",
+          "description": "Name of the stage clicked"
+        },
+        {
+          "name": "stageDeals",
+          "type": "array",
+          "description": "Deals in the selected stage"
+        }
+      ]
+    }
+  ],
+  "usageExample": "```javascript\n<PipelineKanban\n  deals={deals}\n  stages={stages}\n  stageColors={stageColors}\n  onStageClick={(title, deals, type, stage) => handleDrillDown(title, deals, type, stage)}\n/>\n```",
+  "functionalRequirements": "- Display all pipeline stages in a horizontal grid\n- Show deal count and total value for each stage\n- Use stage-specific colors for visual distinction\n- Make each stage card clickable for drill-down\n- Show hover effects on stage cards",
+  "technicalDesign": "Renders a responsive grid of stage cards. Filters deals by stage and calculates metrics. Uses color-coded borders and hover animations. Formats currency values using helper function."
+}

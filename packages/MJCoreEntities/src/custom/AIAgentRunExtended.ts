@@ -110,7 +110,7 @@ export class AIAgentRunEntityExtended extends AIAgentRunEntity {
         try {
             if (this.ID?.length > 0) {
                 // only do this for existing records
-                const rv = new RunView();
+                const rv = this.RunViewProviderToUse;
                 const result = await rv.RunView<AIAgentRunStepEntityExtended>({
                     EntityName: "MJ: AI Agent Run Steps",
                     ExtraFilter: "AgentRunID='" + this.ID + "'",

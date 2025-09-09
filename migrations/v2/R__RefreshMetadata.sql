@@ -10,7 +10,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchem
 /* SQL text to delete unneeded entity fields */
 EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to update existingg entity fields from schema */
+/* SQL text to update existing entity fields from schema */
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
 
 /* SQL text to set default column width where needed */

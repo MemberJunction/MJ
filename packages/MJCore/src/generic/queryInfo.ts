@@ -74,12 +74,24 @@ export class QueryInfo extends BaseInfo {
      * Date and time when this query record was last updated
      */
     __mj_UpdatedAt: Date = null
+    /**
+     * Optional JSON-serialized embedding vector for the query, used for similarity search and query analysis
+     */
+    EmbeddingVector: string | null = null
+    /**
+     * The AI Model ID used to generate the embedding vector for this query. Required for vector similarity comparisons.
+     */
+    EmbeddingModelID: string | null = null
 
     // virtual fields - returned by the database VIEW
     /**
      * Category name from the related Query Categories entity
      */
     Category: string = null
+    /**
+     * The AI Model name used to generate the embedding vector
+     */
+    EmbeddingModel: string | null = null
 
     private _categoryPath: string | null = null;
     /**
@@ -519,10 +531,6 @@ export class QueryEntityInfo extends BaseInfo {
      * References the ID of the entity in the Entities table
      */
     public EntityID: string = null
-    /**
-     * Order sequence for multiple entities in a query
-     */
-    public Sequence: number = null
     /**
      * How this entity association was detected: AI (automatic) or Manual (user-specified)
      */

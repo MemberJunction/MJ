@@ -1263,6 +1263,16 @@ if this limit is exceeded.`),
         * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
+    ChatHandlingOption: z.union([z.literal('Success'), z.literal('Failed'), z.literal('Retry')]).nullable().describe(`
+        * * Field Name: ChatHandlingOption
+        * * Display Name: Chat Handling Option
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+        * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -9619,6 +9629,17 @@ export const ComponentLibrarySchema = z.object({
         * * Display Name: Dependencies
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object defining dependencies for this component library. Format: { "libraryName": "versionSpec", ... }. Version specifications follow NPM-style syntax (e.g., "~1.0.0", "^1.2.3", "2.3.4"). Dependencies are loaded before this library to ensure proper execution context.`),
+    UsageType: z.union([z.literal('Direct'), z.literal('Dependency'), z.literal('Both')]).describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+        * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
 });
 
 export type ComponentLibraryEntityType = z.infer<typeof ComponentLibrarySchema>;
@@ -17144,6 +17165,24 @@ if this limit is exceeded.
     }
     set DefaultPromptEffortLevel(value: number | null) {
         this.Set('DefaultPromptEffortLevel', value);
+    }
+
+    /**
+    * * Field Name: ChatHandlingOption
+    * * Display Name: Chat Handling Option
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Success
+    *   * Failed
+    *   * Retry
+    * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    */
+    get ChatHandlingOption(): 'Success' | 'Failed' | 'Retry' | null {
+        return this.Get('ChatHandlingOption');
+    }
+    set ChatHandlingOption(value: 'Success' | 'Failed' | 'Retry' | null) {
+        this.Set('ChatHandlingOption', value);
     }
 
     /**
@@ -33221,26 +33260,73 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
 
 
 /**
- * MJ: AI Agent Run Steps - strongly typed entity sub-class
+ * MJ: AI Agent Relationships - strongly typed entity sub-class
  * * Schema: __mj
- * * Base Table: AIAgentRunStep
- * * Base View: vwAIAgentRunSteps
- * * @description Provides basic, step-by-step tracking of agent execution. Each step represents a discrete action within an agent run, such as prompt execution, tool usage, decision making, or sub-agent coordination.
+ * * Base Table: AIAgentRelationship
+ * * Base View: vwAIAgentRelationships
+ * * @description Tracks relationships between AI agents for sub-agent orchestration
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
-export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
+@RegisterClass(BaseEntity, 'MJ: AI Agent Relationships')
+export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEntityType> {
     /**
-    * Loads the MJ: AI Agent Run Steps record from the database
-    * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
+    * Loads the MJ: AI Agent Relationships record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Relationships record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof AIAgentRunStepEntity
+    * @memberof AIAgentRelationshipEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * FinalPayloadValidationResult: This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
+    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateFinalPayloadValidationResultAllowedValues(result);
+        this.ValidateStepNumberGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    	if (this.FinalPayloadValidationResult !== null && !allowedValues.includes(this.FinalPayloadValidationResult)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FinalPayloadValidationResult",
+    			"If a final payload validation result is specified, it must be either 'Warn', 'Fail', 'Retry', or 'Pass'.",
+    			this.FinalPayloadValidationResult,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the step number must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
     * @method
     * @override
     */
@@ -38190,6 +38276,25 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     }
     set Dependencies(value: string | null) {
         this.Set('Dependencies', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Both
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Direct
+    *   * Dependency
+    *   * Both
+    * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both
+    */
+    get UsageType(): 'Direct' | 'Dependency' | 'Both' {
+        return this.Get('UsageType');
+    }
+    set UsageType(value: 'Direct' | 'Dependency' | 'Both') {
+        this.Set('UsageType', value);
     }
 }
 

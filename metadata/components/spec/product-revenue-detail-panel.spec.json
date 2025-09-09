@@ -1,0 +1,55 @@
+{
+  "name": "ProductRevenueDetailPanel",
+  "namespace": "Sales/Analytics",
+  "type": "Panel",
+  "location": "embedded",
+  "code": "@file:../code/product-revenue-detail-panel.js",
+  "functionalRequirements": "## Product Revenue Detail Panel Sub-Component\n\n### Purpose\nSlide-out panel displaying detailed product metrics and trends.\n\n### Core Features\n- **Performance Metrics**: Revenue, units, margin, customers\n- **Pricing Details**: List price, cost, average selling price\n- **Revenue Trend Chart**: 12-month trend visualization\n- **Explorer Link**: Open full product record\n- **Smooth Animations**: Slide-in/out transitions",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays detailed metrics for a selected product passed via props",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product entity being displayed in detail",
+        "displayFields": ["ID", "ProductName", "Category", "UnitPrice", "Cost"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Displays detailed information about a single selected product"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Panel Structure\n- Fixed position slide-out panel\n- Chart.js for trend visualization\n- Metric cards with color coding\n- Responsive layout",
+  "properties": [
+    {
+      "name": "product",
+      "type": "{id: string, name: string, category: string, price: number, cost: number, revenue: number, quantity: number, margin: number, customerCount: number, transactions: number, trend: number[]}",
+      "description": "Selected product metrics object with calculated values",
+      "required": false
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "description": "Panel visibility state",
+      "required": true
+    },
+    {
+      "name": "onClose",
+      "type": "() => void",
+      "description": "Callback to close the panel",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "Chart.js",
+      "version": "^4.4.1",
+      "globalVariable": "Chart"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -192,6 +192,18 @@ export class EntityField {
                     }
                     
                     return oldNum !== newNum;
+                }
+
+                // for string types where the comparisons are not both strings
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.String) {
+                    if (typeof oldCompare === 'object') {
+                        // need to convert the object to a string for comparison
+                        oldCompare = JSON.stringify(oldCompare);
+                    }
+                    if (typeof newCompare === 'object') {
+                        // need to convert the object to a string for comparison
+                        newCompare = JSON.stringify(newCompare);
+                    }
                 }
 
                 return oldCompare !== newCompare;
@@ -573,6 +585,27 @@ export abstract class BaseEntity<T = unknown> {
      */
     public get ProviderToUse(): IEntityDataProvider {
         return this._provider || BaseEntity.Provider;
+    }
+
+    /**
+     * Returns the RunViewProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunViewProviderToUse(): IRunViewProvider {
+        return this.ProviderToUse as any as IRunViewProvider;
+    }
+
+    /**
+     * Returns the RunQueryProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunQueryProviderToUse(): IRunQueryProvider {
+        return this.ProviderToUse as any as IRunQueryProvider;
+    }
+
+    /**
+     * Returns the RunReportProvider to be used for a given instance of a BaseEntity derived subclass.
+     */
+    public get RunReportProviderToUse(): IRunReportProvider {
+        return this.ProviderToUse as any as IRunReportProvider;
     }
 
     /**
@@ -1717,5 +1750,138 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         return this.GetAll() as unknown as K;
+    }
+
+
+
+
+    /**
+     * Generates vector embeddings for multiple text fields by their field names.
+     * Processes fields in parallel for better performance.
+     * @param fields - Array of field configurations specifying source text field, target vector field, and model ID field names
+     * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
+     */
+    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string}>): Promise<boolean> {
+        const promises = [];
+        for (const {fieldName, vectorFieldName, modelFieldName} of fields) {
+            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName));
+        }
+        const results = await Promise.all(promises);
+        return results.every(result => result === true);
+    }
+
+    /**
+     * Generates a vector embedding for a single text field identified by field name.
+     * Retrieves the field objects and delegates to GenerateEmbedding method.
+     * @param fieldName - Name of the text field to generate embedding from
+     * @param vectorFieldName - Name of the field to store the vector embedding
+     * @param modelFieldName - Name of the field to store the model ID used for embedding
+     * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
+     */
+    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string): Promise<boolean> {
+        const field = this.GetFieldByName(fieldName);
+        const vectorField = this.GetFieldByName(vectorFieldName);
+        const modelField = this.GetFieldByName(modelFieldName);
+        if (!field)
+            throw new Error(`Field not found: ${fieldName}`);
+        if (!vectorField)
+            throw new Error(`Vector field not found: ${vectorFieldName}`);
+        if (modelFieldName?.trim().length > 0 && !modelField)
+            throw new Error(`Model field not found: ${modelFieldName}`);
+        
+        return await this.GenerateEmbedding(field, vectorField, modelField);
+    }
+
+    /**
+     * Generates vector embeddings for multiple text fields using EntityField objects.
+     * Processes fields in parallel for better performance.
+     * @param fields - Array of field configurations with EntityField objects for source, vector, and model fields
+     * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
+     */
+    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField}>): Promise<boolean> {
+        const promises = [];
+        for (const {field, vectorField, modelField} of fields) {
+            promises.push(this.GenerateEmbedding(field, vectorField, modelField));
+        }
+        const results = await Promise.all(promises);
+        return results.every(result => result === true);
+    }
+
+    /**
+     * Generates a vector embedding for a single text field using AI engine.
+     * Only generates embeddings for new records or when the source field has changed.
+     * Stores both the vector embedding and the model ID used to generate it.
+     * @param field - The EntityField containing the text to embed
+     * @param vectorField - The EntityField to store the generated vector embedding (as JSON string)
+     * @param modelField - The EntityField to store the ID of the AI model used
+     * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
+     */
+    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
+        try {
+            if (!this.IsSaved || field.Dirty) {
+                if (field.Value?.trim().length > 0) {
+                    // recalc vector
+                    const e = await this.EmbedTextLocal(field.Value)
+                    if (e && e.vector) {
+                        vectorField.Value = JSON.stringify(e.vector);
+                        if (modelField)
+                            modelField.Value = e.modelID;
+                    }
+                }
+                else {
+                    vectorField.Value = null;
+                    if (modelField)
+                        modelField.Value = null;
+                }
+            }        
+            return true;
+        }
+        catch (e) {
+            console.error("Error generating embedding:", e);
+            return false;
+        }
+    }    
+
+    /**
+     * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 
+     * **server-side** sub-classes only by calling AIEngine or other methods to generate embeddings for a given
+     * piece of text provided. Subclasses that override this method to implement embedding support should also
+     * override @see SupportsEmbedTextLocal and return true
+     * @param textToEmbed 
+     */
+    protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult>{
+        throw new Error("EmbedTextLocal not implemented in BaseEntity, sub-classes must implement this functionality to use it");
+    }
+
+    /**
+     * Specifies if the current object supports the @see EmbedTextLocal method or not - useful to know before calling it for conditional
+     * code that has fallbacks as needed. BaseEntity does not implement this method but server-side sub-classes often do, but it is not mandatory for 
+     * any sub-class.
+     * @returns 
+     */
+    public SupportsEmbedTextLocal(): boolean {
+        return false;
+    }
+
+    /**
+     * private storage for vectors that might be used for this entity, typically in association with individual fields
+     * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
+     * that embed multiple fields if desired.
+     */
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+
+    /**
+     * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can
+     * use this to track vectors associated with 
+     */
+    public get Vectors(): Map<string, number[]> {
+        return this._vectors;
+    }
+
+    /**
+     * Resets the vector embeddings for this entity to an empty state.
+     */
+    public ResetVectors(): void {
+        this._vectors.clear();
     }
 }

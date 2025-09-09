@@ -133,7 +133,7 @@ export class SkipAPIRequest {
     /**
      * The data context, use this to provide all of the data you have in a data context to Skip. You should provide this from cache or refreshed based on the parameters provided by the user.
      */
-    dataContext: DataContext;
+    dataContext?: DataContext;
     /**
      * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
      */
@@ -147,8 +147,14 @@ export class SkipAPIRequest {
      * The conversation ID
      */
     conversationID: string;
+
     /**
-     * The organization ID - this is part of the Skip API Authentication Request, along with the bearer token in the header (the bearer token is not yet implemented, To-Do!)
+     * The user email of the person making the request - this is part of the Skip API Authentication Request, along with the bearer token in the header
+     */
+    userEmail: string;  
+
+    /**
+     * The organization ID - this is part of the Skip API Authentication Request, along with the bearer token in the header
      */
     organizationID: string;
 

@@ -1,10 +1,10 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
 import { QueryResolver } from '../generated/generated.js';
-import { GetReadWriteProvider } from '../util.js';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { QueryEntityExtended } from '@memberjunction/core-entities-server';
 
@@ -216,9 +216,6 @@ export class QueryEntityType {
 
     @Field(() => String, { nullable: true })
     EntityName?: string;
-
-    @Field(() => Number)
-    Sequence!: number;
 }
 
 @ObjectType()
@@ -314,13 +311,12 @@ export class QueryResolverExtended extends QueryResolver {
         try {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
+            const provider = GetReadWriteProvider(context.providers); 
             if (input.CategoryPath) {
-                const md = new Metadata();
-                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
+                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
             }
             
             // Use QueryEntityExtended which handles AI processing
-            const provider = GetReadWriteProvider(context.providers); 
             const record = await provider.GetEntityObject<QueryEntityExtended>("Queries", context.userPayload.userRecord);
             
             // Set the fields from input, handling CategoryPath resolution
@@ -348,7 +344,7 @@ export class QueryResolverExtended extends QueryResolver {
                 const queryID = record.ID;
                 
                 if (input.Permissions && input.Permissions.length > 0) {
-                    await this.createPermissions(input.Permissions, queryID, context.userPayload.userRecord);
+                    await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
                     await record.RefreshRelatedMetadata(true); // force DB update since we just created new permissions
                 }                
 
@@ -357,7 +353,12 @@ export class QueryResolverExtended extends QueryResolver {
                     QueryData: JSON.stringify(record.GetAll()),
                     Fields: record.QueryFields,
                     Parameters: record.QueryParameters,
-                    Entities: record.QueryEntities,
+                    Entities: record.QueryEntities.map(e => {
+                        return {
+                            ...e,
+                            EntityName: e.Entity // alias this to fix variable name mismatch
+                        }
+                    }),
                     Permissions: record.QueryPermissions
                 };
             } 
@@ -377,13 +378,12 @@ export class QueryResolverExtended extends QueryResolver {
         }
     }
 
-    protected async createPermissions(permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<QueryPermissionType[]> {
+    protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<QueryPermissionType[]> {
         // Create permissions if provided
         const createdPermissions: QueryPermissionType[] = [];
         if (permissions && permissions.length > 0) {
-            const md = new Metadata();
             for (const perm of permissions) {
-                const permissionEntity = await md.GetEntityObject<QueryPermissionEntity>('Query Permissions', contextUser);
+                const permissionEntity = await p.GetEntityObject<QueryPermissionEntity>('Query Permissions', contextUser);
                 if (permissionEntity) {
                     permissionEntity.QueryID = queryID;
                     permissionEntity.RoleID = perm.RoleID;
@@ -430,8 +430,20 @@ export class QueryResolverExtended extends QueryResolver {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
             if (input.CategoryPath) {
-                const md = new Metadata();
-                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, md, context.userPayload.userRecord);
+                finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
+            }
+
+            // now make sure there is NO existing query by the same name in the specified category
+            const existingQueryResult = await provider.RunView({
+                EntityName: 'Queries',
+                ExtraFilter: `Name='${input.Name}' AND CategoryID='${finalCategoryID}'` 
+            }, context.userPayload.userRecord);
+            if (existingQueryResult.Success && existingQueryResult.Results?.length > 0) {
+                // we have a match! Let's return an error
+                return {
+                    Success: false,
+                    ErrorMessage: `Query with name '${input.Name}' already exists in the specified ${input.CategoryID ? 'category' : 'categoryPath'}`
+                };
             }
 
             // Update fields that were provided
@@ -484,7 +496,7 @@ export class QueryResolverExtended extends QueryResolver {
                 }
 
                 // Create new permissions
-                await this.createPermissions(input.Permissions, queryID, context.userPayload.userRecord);
+                await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
                 
                 // Refresh the metadata to get updated permissions
                 await queryEntity.RefreshRelatedMetadata(true);
@@ -518,8 +530,7 @@ export class QueryResolverExtended extends QueryResolver {
                 ID: e.ID,
                 QueryID: e.QueryID,
                 EntityID: e.EntityID,
-                EntityName: e.Entity || undefined, // Property is called Entity, not EntityName
-                Sequence: e.Sequence || 0
+                EntityName: e.Entity || undefined // Property is called Entity, not EntityName
             }));
             
             const permissions: QueryPermissionType[] = queryEntity.QueryPermissions.map(p => ({
@@ -612,7 +623,7 @@ export class QueryResolverExtended extends QueryResolver {
      * @param contextUser - User context for operations
      * @returns The ID of the final category in the path
      */
-    private async findOrCreateCategoryPath(categoryPath: string, md: Metadata, contextUser: UserInfo): Promise<string> {
+    private async findOrCreateCategoryPath(categoryPath: string, p: DatabaseProviderBase, contextUser: UserInfo): Promise<string> {
         if (!categoryPath || categoryPath.trim() === '') {
             throw new Error('CategoryPath cannot be empty');
         }
@@ -629,7 +640,7 @@ export class QueryResolverExtended extends QueryResolver {
             const categoryName = pathParts[i];
             
             // Look for existing category at this level
-            const existingCategory = await this.findCategoryByNameAndParent(categoryName, currentParentID, contextUser);
+            const existingCategory = await this.findCategoryByNameAndParent(p, categoryName, currentParentID, contextUser);
             
             if (existingCategory) {
                 currentCategoryID = existingCategory.ID;
@@ -637,7 +648,7 @@ export class QueryResolverExtended extends QueryResolver {
             } else {
                 try {
                     // Create new category
-                    const newCategory = await md.GetEntityObject<QueryCategoryEntity>("Query Categories", contextUser);
+                    const newCategory = await p.GetEntityObject<QueryCategoryEntity>("Query Categories", contextUser);
                     if (!newCategory) {
                         throw new Error(`Failed to create entity object for Query Categories`);
                     }
@@ -656,7 +667,7 @@ export class QueryResolverExtended extends QueryResolver {
                     currentParentID = newCategory.ID;
 
                     // Refresh metadata after each category creation to ensure it's available for subsequent lookups
-                    await md.Refresh();
+                    await p.Refresh();
                 } catch (error) {
                     throw new Error(`Failed to create category '${categoryName}': ${error instanceof Error ? error.message : String(error)}`);
                 }
@@ -677,9 +688,9 @@ export class QueryResolverExtended extends QueryResolver {
      * @param contextUser - User context for database operations
      * @returns The matching category entity or null if not found
      */
-    private async findCategoryByNameAndParent(categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<QueryCategoryEntity | null> {
+    private async findCategoryByNameAndParent(provider: DatabaseProviderBase, categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<QueryCategoryEntity | null> {
         try {
-            const rv = new RunView();
+            const rv = provider;
             const parentFilter = parentID ? `ParentID='${parentID}'` : 'ParentID IS NULL';
             const nameFilter = `LOWER(Name) = LOWER('${categoryName.replace(/'/g, "''")}')`; // Escape single quotes
             

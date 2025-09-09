@@ -1,0 +1,59 @@
+{
+  "name": "ProductDetailsPanel",
+  "namespace": "CRM/Analytics",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/product-details-panel.js",
+  "functionalRequirements": "## Product Details Panel\n\n### Purpose\nSlide-out panel with detailed product performance metrics.\n\n### Features\n- Product info header\n- Revenue metrics\n- Customer breakdown\n- Trend chart\n- Top customers list",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays detailed product performance metrics",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product information",
+        "displayFields": ["ID", "ProductName", "Category", "UnitPrice"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Product details display"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Product revenue data",
+        "displayFields": ["ProductID", "Quantity", "TotalPrice", "InvoiceID"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Product performance metrics"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- product: Selected product data\n- isOpen: Panel visibility\n- onClose: Close callback",
+  "properties": [
+    {
+      "name": "product",
+      "type": "{id: string, name: string, revenue: number, customers: Array<{name: string, revenue: number}>, trend: Array<number>}",
+      "required": false,
+      "description": "Selected product data"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Panel visibility"
+    },
+    {
+      "name": "onClose",
+      "type": "() => void",
+      "required": true,
+      "description": "Close callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,5 +1,5 @@
 import { BrowserManager, BrowserContextOptions } from './browser-context';
-import { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './component-runner';
+import { ComponentExecutionOptions, ComponentExecutionResult, ComponentRunner } from './component-runner';
 import { AssertionHelpers } from './assertion-helpers';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -7,8 +7,35 @@ export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
   screenshotOnError?: boolean;
   screenshotPath?: string;
+  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (can be serialized JSON)
 }
 
+/**
+ * React Test Harness for testing React components in an isolated browser environment
+ * 
+ * IMPORTANT: Parallel Testing Limitation
+ * ----------------------------------------
+ * This test harness uses a single browser page instance and is NOT safe for parallel test execution
+ * on the same instance. For parallel testing, create separate ReactTestHarness instances:
+ * 
+ * @example
+ * // ✅ CORRECT - Parallel testing with separate instances
+ * const results = await Promise.all(tests.map(async (test) => {
+ *   const harness = new ReactTestHarness(options);
+ *   await harness.initialize();
+ *   try {
+ *     return await harness.testComponent(test);
+ *   } finally {
+ *     await harness.close();
+ *   }
+ * }));
+ * 
+ * @example  
+ * // ❌ WRONG - Parallel testing on same instance (will cause conflicts)
+ * const harness = new ReactTestHarness(options);
+ * await harness.initialize();
+ * const results = await Promise.all(tests.map(test => harness.testComponent(test)));
+ */
 export class ReactTestHarness {
   private browserManager: BrowserManager;
   private componentRunner: ComponentRunner;
@@ -36,14 +63,21 @@ export class ReactTestHarness {
   async testComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
-    // First, lint the component code
+    // Check if contextUser is required for library lint rules
     const spec = options.componentSpec;
+    if (spec.libraries && spec.libraries.length > 0 && !options.contextUser) {
+      throw new Error('contextUser is required in ComponentExecutionOptions when testing components with library dependencies. This is needed to load library-specific lint rules from the database.');
+    }
+    
+    // First, lint the component code
     if (spec.code) {
       const lintResult = await this.componentRunner.lintComponent(
         spec.code,
         spec.name,
         spec,
-        options.isRootComponent
+        options.isRootComponent,
+        options.contextUser,
+        options
       );
 
       if (lintResult.hasErrors) {
@@ -53,11 +87,9 @@ export class ReactTestHarness {
           html: '',
           errors: lintResult.violations,
           warnings: [],
-          criticalWarnings: [],
           console: [],
           executionTime: 0,
-          lintViolations: lintResult.violations,
-          fixSuggestions: lintResult.suggestions
+          lintViolations: lintResult.violations
         };
       }
     }
@@ -87,6 +119,39 @@ export class ReactTestHarness {
 
 
   /**
+   * Test a simple component from code string
+   * This is a convenience method for testing component code directly
+   */
+  async testComponentCode(
+    componentCode: string,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    const componentName = 'Component';
+    const spec = {
+      name: componentName,
+      code: componentCode,
+      dependencies: [],
+      description: 'Test component',
+      title: componentName,
+      type: 'React',
+      functionalRequirements: {},
+      technicalDesign: {},
+      dataRequirements: {},
+      exampleUsage: ''
+    } as any as ComponentSpec;
+    
+    const fullOptions: ComponentExecutionOptions = {
+      componentSpec: spec,
+      props: props || {},
+      contextUser: options?.contextUser || { Name: 'Test User', Email: 'test@test.com' } as any,
+      ...options
+    };
+    
+    return this.testComponent(fullOptions);
+  }
+
+  /**
    * Test a component from a file path
    * This is a convenience method for the CLI
    */
@@ -109,6 +174,7 @@ export class ReactTestHarness {
     // Create a minimal ComponentSpec for the file
     const spec: ComponentSpec = {
       name: componentName,
+      location: 'embedded',
       code: componentCode,
       description: `Component loaded from ${filePath}`,
       title: componentName,

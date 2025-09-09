@@ -1,10 +1,11 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, Injector } from '@angular/core';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { AIAgentEntity, AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { SharedService } from '@memberjunction/ng-shared';
+import { MJIntegratedFlowEditorComponent } from './mj-integrated-flow-editor.component';
 
 @Component({
     selector: 'mj-flow-agent-form-section',
@@ -25,7 +26,7 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent impl
     selectedStepId: string | null = null;
     
     get agentId(): string | null {
-        return this.record && 'ID' in this.record ? (this.record as AIAgentEntity).ID : null;
+        return this.record && 'ID' in this.record ? (this.record as AIAgentEntityExtended).ID : null;
     }
 
     private sharedService: SharedService;
@@ -59,7 +60,7 @@ export class FlowAgentFormSectionComponent extends BaseFormSectionComponent impl
             // First load steps
             const stepsResult = await rv.RunView<AIAgentStepEntity>({
                 EntityName: 'MJ: AI Agent Steps',
-                ExtraFilter: `AgentID='${(this.record as AIAgentEntity).ID}'`,
+                ExtraFilter: `AgentID='${(this.record as AIAgentEntityExtended).ID}'`,
                 OrderBy: 'StartingStep DESC, Name',
                 ResultType: 'entity_object'
             });

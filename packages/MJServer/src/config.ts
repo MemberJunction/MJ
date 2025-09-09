@@ -102,6 +102,18 @@ const sqlLoggingSchema = z.object({
   sessionTimeout: z.number().optional().default(3600000), // 1 hour
 });
 
+const authProviderSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  issuer: z.string(),
+  audience: z.string(),
+  jwksUri: z.string(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  tenantId: z.string().optional(),
+  domain: z.string().optional(),
+}).passthrough(); // Allow additional provider-specific fields
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -109,9 +121,11 @@ const configInfoSchema = z.object({
   restApiOptions: restApiOptionsSchema.optional().default({}),
   askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
+  authProviders: z.array(authProviderSchema).optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
+  publicUrl: z.string().optional().default(process.env.MJAPI_PUBLIC_URL || ''), // Public URL for callbacks (e.g., ngrok URL when developing)
 
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),
@@ -131,17 +145,12 @@ const configInfoSchema = z.object({
   ___codeGenAPIPort: z.coerce.number().optional().default(3999),
   ___codeGenAPISubmissionDelay: z.coerce.number().optional().default(5000),
   graphqlRootPath: z.string().optional().default('/'),
-  webClientID: z.string().optional(),
-  tenantID: z.string().optional(),
   enableIntrospection: z.coerce.boolean().optional().default(false),
   websiteRunFromPackage: z.coerce.number().optional(),
   userEmailMap: z
     .string()
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
-  auth0Domain: z.string().optional(),
-  auth0WebClientID: z.string().optional(),
-  auth0ClientSecret: z.string().optional(),
   mjCoreSchema: z.string(),
 });
 
@@ -152,6 +161,7 @@ export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
 export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
+export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
@@ -169,16 +179,12 @@ export const {
   ___codeGenAPIPort,
   ___codeGenAPISubmissionDelay,
   graphqlRootPath,
-  webClientID,
-  tenantID,
   enableIntrospection,
   websiteRunFromPackage,
   userEmailMap,
-  auth0Domain,
-  auth0WebClientID,
-  auth0ClientSecret,
   apiKey,
   baseUrl,
+  publicUrl,
   mjCoreSchema: mj_core_schema,
   dbReadOnlyUsername,
   dbReadOnlyPassword,

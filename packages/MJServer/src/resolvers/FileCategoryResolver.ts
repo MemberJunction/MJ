@@ -16,16 +16,15 @@ export class FileResolver extends FileCategoryResolverBase {
   ) {
     const key = new CompositeKey();
     key.LoadFromSingleKeyValuePair('ID', ID);
-    const provider = GetReadWriteProvider(providers);    
+    const p = GetReadWriteProvider(providers);    
 
-    if (!(await this.BeforeDelete(provider, key))) {
+    if (!(await this.BeforeDelete(p, key))) {
       return null;
     }
 
-    const md = new Metadata();
     const user = this.GetUserFromPayload(userPayload);
-    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
-    const fileCategoryEntity = await md.GetEntityObject<FileCategoryEntity>('File Categories', user);
+    const fileEntity = await p.GetEntityObject<FileEntity>('Files', user);
+    const fileCategoryEntity = await p.GetEntityObject<FileCategoryEntity>('File Categories', user);
 
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
     fileCategoryEntity.CheckPermissions(EntityPermissionType.Delete, true);
@@ -34,7 +33,7 @@ export class FileResolver extends FileCategoryResolverBase {
     const returnValue = fileCategoryEntity.GetAll();
 
     // Any files using the deleted category fall back to its parent
-    await provider.BeginTransaction();
+    await p.BeginTransaction();
     try {
       // SHOULD USE BaseEntity for each of these records to ensure object model
       // is used everywhere - new code below. The below is SLOWER than a single
@@ -60,20 +59,20 @@ export class FileResolver extends FileCategoryResolverBase {
         // iterate through each of the files in filesResult.Results
         // and update the CategoryID to fileCategoryEntity.ParentID
         for (const file of filesResult.Results) {
-          const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+          const fileEntity = await p.GetEntityObject<FileEntity>('Files', user);
           await fileEntity.Load(file.ID);
           fileEntity.CategoryID = fileCategoryEntity.ParentID;
           await fileEntity.Save();
         }
       }
       await fileCategoryEntity.Delete(options);
-      await provider.CommitTransaction();
+      await p.CommitTransaction();
     } catch (error) {
-      await provider.RollbackTransaction();
+      await p.RollbackTransaction();
       throw error;
     }
 
-    await this.AfterDelete(provider, key); // fire event
+    await this.AfterDelete(p, key); // fire event
     return returnValue;
   }
 }

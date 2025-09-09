@@ -23,6 +23,7 @@ import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
+import { GraphQLAIClient } from "./graphQLAIClient";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -119,9 +120,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _client: GraphQLClient;
     private _configData: GraphQLProviderConfigData;
     private _sessionId: string;
+    private _aiClient: GraphQLAIClient;
 
     public get ConfigData(): GraphQLProviderConfigData { 
         return this._configData; 
+    }
+
+    /**
+     * Gets the AI client for executing AI operations through GraphQL.
+     * The client is lazily initialized on first access.
+     * @returns The GraphQLAIClient instance
+     */
+    public get AI(): GraphQLAIClient {
+        if (!this._aiClient) {
+            this._aiClient = new GraphQLAIClient(this);
+        }
+        return this._aiClient;
     }
 
     /**
@@ -425,6 +439,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // START ---- IRunViewProvider
     /**************************************************************************/
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // pre-process via the base-class 
+        await this.PreProcessRunView(params, contextUser);
+
         try {
             let qName: string = ''
             let paramType: string = ''
@@ -469,7 +486,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
                 innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
-                innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
+                if (params.MaxRows !== undefined)
+                    innerParams.MaxRows = params.MaxRows;
+                if (params.StartRow !== undefined)
+                    innerParams.StartRow = params.StartRow; // Add StartRow parameter
                 innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
@@ -514,7 +534,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             })
                         })
                     }
-                    return viewData[qName];
+                    const result = viewData[qName];
+
+                    // post-process via the base class
+                    await this.PostProcessRunView(result, params, contextUser);
+
+                    return result;
                 }
             }
             else
@@ -529,6 +554,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // pre-process via the base class
+        await this.PreProcessRunViews(params, contextUser);
+
         try {
             let innerParams: any[] = [];
             let entityInfos: EntityInfo[] = [];
@@ -582,7 +610,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // pass it straight through, either null or array of strings
                     innerParam.Fields = param.Fields;
                     innerParam.IgnoreMaxRows = param.IgnoreMaxRows || false;
-                    innerParam.MaxRows = param.MaxRows || 0;
+                    if (param.MaxRows !== undefined)
+                        innerParam.MaxRows = param.MaxRows;
+                    if (param.StartRow !== undefined)
+                        innerParam.StartRow = param.StartRow; // Add StartRow parameter
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
@@ -604,7 +635,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 query RunViewsQuery ($input: [RunViewGenericInput!]!) {
                 RunViews(input: $input) {
                     Results {
-                        ID
+                        PrimaryKey {
+                            FieldName
+                            Value
+                        }
                         EntityID
                         Data
                     }
@@ -638,6 +672,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     });
                 }
 
+                // post-process via the base class
+                await this.PostProcessRunViews(results, params, contextUser);
+                
                 return results;
             }
 

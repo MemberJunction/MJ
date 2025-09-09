@@ -1,0 +1,85 @@
+{
+  "name": "EntityFilter",
+  "title": "Entity Filter Panel",
+  "description": "Collapsible filter panel for filtering entities by various criteria",
+  "type": "form",
+  "functionalRequirements": "## Entity Filter Requirements\n\n- Collapsible panel on the left side\n- Filter by schema name (dropdown)\n- Filter by base table (dropdown)\n- Search box for text search\n- Clear all filters button\n- Show active filter count\n- Smooth collapse/expand animation\n- Remember collapsed state",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives filter options derived from Entities metadata",
+    "entities": [
+      {
+        "name": "Entities",
+        "description": "Source of schema and table filter options",
+        "displayFields": ["SchemaName", "BaseTable"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Extracts unique schema names and base tables for filter dropdowns"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- filters: Current filter values\n- onFilterChange: Callback when filters change\n- schemas: Available schema options\n- tables: Available table options\n- isCollapsed: Whether panel is collapsed\n- onToggleCollapse: Callback to toggle collapse\n\n### Components\n- Collapse toggle button\n- Schema dropdown\n- Table dropdown\n- Search input\n- Clear filters button\n- Active filter badges",
+  "properties": [
+    {
+      "name": "filters",
+      "description": "Current filter values",
+      "type": "{schema?: string, table?: string, search?: string}",
+      "required": true
+    },
+    {
+      "name": "onFilterChange",
+      "description": "Callback when filters change",
+      "type": "(filters: {schema?: string, table?: string, search?: string}) => void",
+      "required": true
+    },
+    {
+      "name": "schemas",
+      "description": "Available schema options",
+      "type": "Array<string>",
+      "required": true
+    },
+    {
+      "name": "tables",
+      "description": "Available table options",
+      "type": "Array<string>",
+      "required": true
+    },
+    {
+      "name": "isCollapsed",
+      "description": "Whether the panel is collapsed",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "name": "onToggleCollapse",
+      "description": "Callback to toggle collapse state",
+      "type": "() => void",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "name": "onFilterChange",
+      "description": "Fired when filter values change",
+      "parameters": [
+        {
+          "name": "filters",
+          "description": "Updated filter object",
+          "type": "object"
+        }
+      ]
+    },
+    {
+      "name": "onToggleCollapse",
+      "description": "Fired when collapse state should toggle",
+      "parameters": []
+    }
+  ],
+  "exampleUsage": "<EntityFilter\n  filters={filters}\n  onFilterChange={handleFilterChange}\n  schemas={uniqueSchemas}\n  tables={uniqueTables}\n  isCollapsed={filterPanelCollapsed}\n  onToggleCollapse={handleToggleFilter}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
+  "code": "@file:../code/entity-filter.js",
+  "dependencies": [],
+  "libraries": []
+}

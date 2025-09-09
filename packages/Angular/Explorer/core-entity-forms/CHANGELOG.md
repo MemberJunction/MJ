@@ -1,5 +1,425 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.99.0
+
+### Minor Changes
+
+- eb7677d: feat(ai-agents): Add ChatHandlingOption for flexible Chat step
+  handling
+
+  - Add ChatHandlingOption field to AIAgent table with values:
+    Success, Failed, Retry
+  - Implement Chat step remapping in
+    BaseAgent.validateChatNextStep() based on agent configuration
+  - Fix executeChatStep to mark Chat steps as successful
+    (they're valid terminal states for user interaction)
+  - Remove complex sub-agent Chat handling from FlowAgentType in
+    favor of agent-level configuration
+  - Enables agents like Requirements Expert to request user
+    clarification without breaking parent flows
+  - Parent agents can control whether Chat steps should continue
+    (Success), fail (Failed), or retry (Retry)
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ai-engine-base@2.99.0
+  - @memberjunction/ai-core-plus@2.99.0
+  - @memberjunction/actions-base@2.99.0
+  - @memberjunction/ng-action-gallery@2.99.0
+  - @memberjunction/ng-ai-test-harness@2.99.0
+  - @memberjunction/ng-code-editor@2.99.0
+  - @memberjunction/ng-join-grid@2.99.0
+  - @memberjunction/ng-timeline@2.99.0
+  - @memberjunction/ng-base-forms@2.99.0
+  - @memberjunction/ng-form-toolbar@2.99.0
+  - @memberjunction/ng-container-directives@2.99.0
+  - @memberjunction/ng-deep-diff@2.99.0
+  - @memberjunction/ng-tabstrip@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ng-form-toolbar@2.98.0
+- @memberjunction/ai-engine-base@2.98.0
+- @memberjunction/ai-core-plus@2.98.0
+- @memberjunction/actions-base@2.98.0
+- @memberjunction/ng-base-forms@2.98.0
+- @memberjunction/ng-action-gallery@2.98.0
+- @memberjunction/ng-ai-test-harness@2.98.0
+- @memberjunction/ng-code-editor@2.98.0
+- @memberjunction/ng-container-directives@2.98.0
+- @memberjunction/ng-deep-diff@2.98.0
+- @memberjunction/ng-join-grid@2.98.0
+- @memberjunction/ng-tabstrip@2.98.0
+- @memberjunction/ng-timeline@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/global@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/ai-engine-base@2.97.0
+- @memberjunction/ai-core-plus@2.97.0
+- @memberjunction/actions-base@2.97.0
+- @memberjunction/ng-action-gallery@2.97.0
+- @memberjunction/ng-ai-test-harness@2.97.0
+- @memberjunction/ng-code-editor@2.97.0
+- @memberjunction/ng-join-grid@2.97.0
+- @memberjunction/ng-timeline@2.97.0
+- @memberjunction/ng-form-toolbar@2.97.0
+- @memberjunction/ng-base-forms@2.97.0
+- @memberjunction/ng-container-directives@2.97.0
+- @memberjunction/ng-deep-diff@2.97.0
+- @memberjunction/ng-tabstrip@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- ae3c0e2: optimize agent form
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ai-engine-base@2.96.0
+  - @memberjunction/ai-core-plus@2.96.0
+  - @memberjunction/actions-base@2.96.0
+  - @memberjunction/ng-base-forms@2.96.0
+  - @memberjunction/ng-form-toolbar@2.96.0
+  - @memberjunction/ng-action-gallery@2.96.0
+  - @memberjunction/ng-ai-test-harness@2.96.0
+  - @memberjunction/ng-code-editor@2.96.0
+  - @memberjunction/ng-container-directives@2.96.0
+  - @memberjunction/ng-deep-diff@2.96.0
+  - @memberjunction/ng-join-grid@2.96.0
+  - @memberjunction/ng-timeline@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/ng-tabstrip@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/ai-engine-base@2.95.0
+  - @memberjunction/ai-core-plus@2.95.0
+  - @memberjunction/ng-base-forms@2.95.0
+  - @memberjunction/ng-form-toolbar@2.95.0
+  - @memberjunction/ng-action-gallery@2.95.0
+  - @memberjunction/ng-ai-test-harness@2.95.0
+  - @memberjunction/ng-code-editor@2.95.0
+  - @memberjunction/ng-container-directives@2.95.0
+  - @memberjunction/ng-deep-diff@2.95.0
+  - @memberjunction/ng-join-grid@2.95.0
+  - @memberjunction/ng-timeline@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/ng-tabstrip@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/ai-engine-base@2.94.0
+- @memberjunction/ai-core-plus@2.94.0
+- @memberjunction/ng-action-gallery@2.94.0
+- @memberjunction/ng-ai-test-harness@2.94.0
+- @memberjunction/ng-code-editor@2.94.0
+- @memberjunction/ng-join-grid@2.94.0
+- @memberjunction/ng-timeline@2.94.0
+- @memberjunction/ng-form-toolbar@2.94.0
+- @memberjunction/ng-base-forms@2.94.0
+- @memberjunction/ng-container-directives@2.94.0
+- @memberjunction/ng-deep-diff@2.94.0
+- @memberjunction/ng-tabstrip@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [bfcd737]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/ng-ai-test-harness@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ai-engine-base@2.93.0
+  - @memberjunction/ai-core-plus@2.93.0
+  - @memberjunction/ng-base-forms@2.93.0
+  - @memberjunction/ng-form-toolbar@2.93.0
+  - @memberjunction/ng-action-gallery@2.93.0
+  - @memberjunction/ng-code-editor@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+  - @memberjunction/ng-deep-diff@2.93.0
+  - @memberjunction/ng-join-grid@2.93.0
+  - @memberjunction/ng-timeline@2.93.0
+  - @memberjunction/ng-tabstrip@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Minor Changes
+
+- b303b84: migrations
+
+### Patch Changes
+
+- Updated dependencies [b303b84]
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/ng-ai-test-harness@2.92.0
+  - @memberjunction/ng-code-editor@2.92.0
+  - @memberjunction/core@2.92.0
+  - @memberjunction/ng-action-gallery@2.92.0
+  - @memberjunction/ng-base-forms@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/ai-engine-base@2.92.0
+  - @memberjunction/ai-core-plus@2.92.0
+  - @memberjunction/ng-form-toolbar@2.92.0
+  - @memberjunction/ng-container-directives@2.92.0
+  - @memberjunction/ng-deep-diff@2.92.0
+  - @memberjunction/ng-join-grid@2.92.0
+  - @memberjunction/ng-timeline@2.92.0
+  - @memberjunction/ng-tabstrip@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Minor Changes
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- 6b77f80: Summary:
+  feat: Add Action Result Codes management to Action form
+
+  Detailed Description:
+  Added complete CRUD functionality for managing Action Result Codes directly within the Action form component. Users can now add, edit, and
+  delete result codes that define possible execution outcomes for Actions.
+
+  Key Changes:
+
+  - Created ActionResultCodeDialogComponent for adding/editing result codes with fields for code, description, and success status
+  - Added interactive UI with hover effects, edit/delete buttons, and visual indicators for success/failure codes
+  - Implemented proper transaction support using InternalSaveRecord pattern to save Action, Params, and Result Codes atomically
+  - Fixed critical issue where loadResultCodes() was missing ResultType: 'entity_object', causing entity operations to fail
+  - Updated PopulatePendingRecords to track Result Codes alongside Action Params for proper save/delete operations
+  - Added Result Code management methods (addResultCode, editResultCode, deleteResultCode) following the same pattern as Action Params
+
+  Impact:
+  This enhancement allows developers to define and manage all possible result codes for their Actions directly in the UI, improving the Action
+  development workflow and ensuring proper error handling patterns are documented.
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ng-code-editor@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/ai-engine-base@2.91.0
+  - @memberjunction/ai-core-plus@2.91.0
+  - @memberjunction/ng-base-forms@2.91.0
+  - @memberjunction/ng-form-toolbar@2.91.0
+  - @memberjunction/ng-action-gallery@2.91.0
+  - @memberjunction/ng-ai-test-harness@2.91.0
+  - @memberjunction/ng-container-directives@2.91.0
+  - @memberjunction/ng-deep-diff@2.91.0
+  - @memberjunction/ng-join-grid@2.91.0
+  - @memberjunction/ng-timeline@2.91.0
+  - @memberjunction/ng-tabstrip@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Minor Changes
+
+- d5d26d7: migration
+
+### Patch Changes
+
+- 2cb05a1: various tweaks
+- Updated dependencies [146ebcc]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/ai-engine-base@2.90.0
+  - @memberjunction/ai-core-plus@2.90.0
+  - @memberjunction/ng-base-forms@2.90.0
+  - @memberjunction/ng-form-toolbar@2.90.0
+  - @memberjunction/ng-action-gallery@2.90.0
+  - @memberjunction/ng-ai-test-harness@2.90.0
+  - @memberjunction/ng-code-editor@2.90.0
+  - @memberjunction/ng-container-directives@2.90.0
+  - @memberjunction/ng-deep-diff@2.90.0
+  - @memberjunction/ng-join-grid@2.90.0
+  - @memberjunction/ng-timeline@2.90.0
+  - @memberjunction/ng-tabstrip@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+  - @memberjunction/ai-core-plus@2.89.0
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/ai-engine-base@2.89.0
+  - @memberjunction/ng-action-gallery@2.89.0
+  - @memberjunction/ng-ai-test-harness@2.89.0
+  - @memberjunction/ng-code-editor@2.89.0
+  - @memberjunction/ng-join-grid@2.89.0
+  - @memberjunction/ng-timeline@2.89.0
+  - @memberjunction/ng-form-toolbar@2.89.0
+  - @memberjunction/ng-base-forms@2.89.0
+  - @memberjunction/ng-container-directives@2.89.0
+  - @memberjunction/ng-deep-diff@2.89.0
+  - @memberjunction/ng-tabstrip@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [df4031f]
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ng-ai-test-harness@2.88.0
+  - @memberjunction/ai-engine-base@2.88.0
+  - @memberjunction/ai-core-plus@2.88.0
+  - @memberjunction/ng-action-gallery@2.88.0
+  - @memberjunction/ng-code-editor@2.88.0
+  - @memberjunction/ng-join-grid@2.88.0
+  - @memberjunction/ng-timeline@2.88.0
+  - @memberjunction/ng-form-toolbar@2.88.0
+  - @memberjunction/ng-base-forms@2.88.0
+  - @memberjunction/ng-container-directives@2.88.0
+  - @memberjunction/ng-deep-diff@2.88.0
+  - @memberjunction/ng-tabstrip@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ai-engine-base@2.87.0
+  - @memberjunction/ai-core-plus@2.87.0
+  - @memberjunction/ng-base-forms@2.87.0
+  - @memberjunction/ng-form-toolbar@2.87.0
+  - @memberjunction/ng-action-gallery@2.87.0
+  - @memberjunction/ng-ai-test-harness@2.87.0
+  - @memberjunction/ng-code-editor@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-deep-diff@2.87.0
+  - @memberjunction/ng-join-grid@2.87.0
+  - @memberjunction/ng-timeline@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/ng-tabstrip@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/ai-engine-base@2.86.0
+  - @memberjunction/ai-core-plus@2.86.0
+  - @memberjunction/ng-action-gallery@2.86.0
+  - @memberjunction/ng-ai-test-harness@2.86.0
+  - @memberjunction/ng-code-editor@2.86.0
+  - @memberjunction/ng-join-grid@2.86.0
+  - @memberjunction/ng-timeline@2.86.0
+  - @memberjunction/ng-form-toolbar@2.86.0
+  - @memberjunction/ng-base-forms@2.86.0
+  - @memberjunction/ng-container-directives@2.86.0
+  - @memberjunction/ng-deep-diff@2.86.0
+  - @memberjunction/ng-tabstrip@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/ai-engine-base@2.85.0
+  - @memberjunction/ai-core-plus@2.85.0
+  - @memberjunction/ng-action-gallery@2.85.0
+  - @memberjunction/ng-ai-test-harness@2.85.0
+  - @memberjunction/ng-code-editor@2.85.0
+  - @memberjunction/ng-join-grid@2.85.0
+  - @memberjunction/ng-timeline@2.85.0
+  - @memberjunction/ng-form-toolbar@2.85.0
+  - @memberjunction/ng-base-forms@2.85.0
+  - @memberjunction/ng-container-directives@2.85.0
+  - @memberjunction/ng-deep-diff@2.85.0
+  - @memberjunction/ng-tabstrip@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ng-ai-test-harness@2.84.0
+  - @memberjunction/ai-engine-base@2.84.0
+  - @memberjunction/ai-core-plus@2.84.0
+  - @memberjunction/ng-base-forms@2.84.0
+  - @memberjunction/ng-form-toolbar@2.84.0
+  - @memberjunction/ng-action-gallery@2.84.0
+  - @memberjunction/ng-code-editor@2.84.0
+  - @memberjunction/ng-container-directives@2.84.0
+  - @memberjunction/ng-deep-diff@2.84.0
+  - @memberjunction/ng-join-grid@2.84.0
+  - @memberjunction/ng-timeline@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/ng-tabstrip@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+- Updated dependencies [1dc69bf]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/ai-engine-base@2.83.0
+  - @memberjunction/ai-core-plus@2.83.0
+  - @memberjunction/ng-base-forms@2.83.0
+  - @memberjunction/ng-form-toolbar@2.83.0
+  - @memberjunction/ng-action-gallery@2.83.0
+  - @memberjunction/ng-ai-test-harness@2.83.0
+  - @memberjunction/ng-code-editor@2.83.0
+  - @memberjunction/ng-container-directives@2.83.0
+  - @memberjunction/ng-deep-diff@2.83.0
+  - @memberjunction/ng-join-grid@2.83.0
+  - @memberjunction/ng-timeline@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/ng-tabstrip@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Minor Changes

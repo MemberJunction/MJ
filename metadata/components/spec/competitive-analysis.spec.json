@@ -1,0 +1,53 @@
+{
+  "name": "CompetitiveAnalysis",
+  "namespace": "CRM/Analytics",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/competitive-analysis.js",
+  "functionalRequirements": "## Competitive Analysis\n\n### Purpose\nAnalyze competitive win/loss performance.\n\n### Features\n- Competitor comparison\n- Win rates by competitor\n- Strengths/weaknesses\n- Market positioning",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Analyzes competitive win/loss performance",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal data for competitive analysis",
+        "displayFields": ["ID", "Name", "Amount", "Stage", "CompetitorID", "WonLostReason"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Win/loss analysis against competitors"
+      },
+      {
+        "name": "Competitors",
+        "description": "Competitor information",
+        "displayFields": ["ID", "Name", "MarketPosition", "Strengths", "Weaknesses"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Competitor profiles and attributes"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- competitorData: Array of competitor metrics\n- selectedCompetitor: Currently selected",
+  "properties": [
+    {
+      "name": "competitorData",
+      "type": "Array<{id: string, name: string, winRate: number, deals: number, revenue: number, strengths: Array<string>, weaknesses: Array<string>}>",
+      "required": true,
+      "description": "Competitor performance data"
+    },
+    {
+      "name": "selectedCompetitor",
+      "type": "string",
+      "required": false,
+      "description": "Selected competitor ID"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,8 +1,8 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
-import { ValidationAttempt, AIPromptRunResult } from '@memberjunction/ai-core-plus';
+import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -169,7 +169,7 @@ export class AIPromptRunner {
   protected logError(error: Error | string, options?: {
     category?: string;
     metadata?: Record<string, any>;
-    prompt?: AIPromptEntity;
+    prompt?: AIPromptEntityExtended;
     model?: AIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
   }): void {
@@ -251,7 +251,7 @@ export class AIPromptRunner {
    */
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
-    const promptRun: AIPromptRunEntity | null = null;
+    const promptRun: AIPromptRunEntityExtended | null = null;
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {
@@ -283,10 +283,10 @@ export class AIPromptRunner {
       let renderedPromptText: string = '';
 
       // For hierarchical prompts, we need to create the parent prompt run first to get its ID
-      let parentPromptRun: AIPromptRunEntity | undefined;
+      let parentPromptRun: AIPromptRunEntityExtended | undefined;
       let selectedModel: AIModelEntityExtended | undefined;
       let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
-      let modelSelectionInfo: any | undefined;
+      let modelSelectionInfo: AIModelSelectionInfo | undefined;
 
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -377,20 +377,16 @@ export class AIPromptRunner {
       let result: AIPromptRunResult<T>;
       if (shouldUseParallelExecution) {
         // Use parallel execution path
-        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun);
+        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel, modelSelectionInfo);
       } else {
         // Use traditional single execution path
-        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel);
+        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel, modelSelectionInfo);
       }
 
       // Note: With template composition, we only execute once so no rollup calculations needed
       // The final composed prompt is executed as a single operation
 
-      // Add model selection info to the result
-      if (modelSelectionInfo) {
-        result.modelSelectionInfo = modelSelectionInfo;
-      }
-
+      // Model selection info is now included in the result from both execution methods
       return result;
     } catch (error) {
       this.logError(error, {
@@ -455,12 +451,13 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The execution result
    */
   private async executeSinglePrompt<T = unknown>(
-    prompt: AIPromptEntity, 
+    prompt: AIPromptEntityExtended, 
     renderedPromptText: string, 
     params: AIPromptParams, 
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntity,
-    existingModel?: AIModelEntityExtended
+    existingPromptRun?: AIPromptRunEntityExtended,
+    existingModel?: AIModelEntityExtended,
+    existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before model selection
     if (params.cancellationToken?.aborted) {
@@ -469,9 +466,20 @@ export class AIPromptRunner {
 
     // Use existing model if provided (hierarchical case) or select one
     let selectedModel = existingModel;
-    let modelSelectionInfo: any | undefined;
+    let modelSelectionInfo = existingModelSelectionInfo;
     let vendorDriverClass: string | undefined;
     let vendorApiName: string | undefined;
+    if (modelSelectionInfo) {
+      // we receivd model selection info, need to lookup vendor driver class and api name from there
+      const vendorID = modelSelectionInfo.vendorSelected.ID;
+      const modelID = modelSelectionInfo.modelSelected.ID;
+      const modelVendor = AIEngine.Instance.ModelVendors.find(mv => mv.VendorID === vendorID &&
+                                                                    mv.ModelID === modelID);
+      if (modelVendor) {
+        vendorDriverClass = modelVendor.DriverClass;
+        vendorApiName = modelVendor.APIName;
+      }
+    }
     
     if (!selectedModel) {
       // Determine which prompt to use for model selection
@@ -540,7 +548,8 @@ export class AIPromptRunner {
       costCurrency: usage?.costCurrency,
       validationResult: parsedResult.validationResult,
       validationAttempts,
-      combinedTokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0))
+      combinedTokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0)),
+      modelSelectionInfo // Include model selection info if available
     };
   }
 
@@ -554,11 +563,13 @@ export class AIPromptRunner {
    * @returns Promise<AIPromptRunResult<T>> - The aggregated execution result
    */
   private async executePromptInParallel<T = unknown>(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-    existingPromptRun?: AIPromptRunEntity,
+    existingPromptRun?: AIPromptRunEntityExtended,
+    existingModel?: AIModelEntityExtended,
+    existingModelSelectionInfo?: AIModelSelectionInfo
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before starting parallel execution
     if (params.cancellationToken?.aborted) {
@@ -568,32 +579,52 @@ export class AIPromptRunner {
     // Load AI Engine to get models and prompt models
     await AIEngine.Instance.Config(false, params.contextUser);
 
-    // Determine which prompt to use for model selection
-    let modelSelectionPrompt = prompt;
-    if (params.modelSelectionPrompt) {
-      modelSelectionPrompt = params.modelSelectionPrompt;
-      this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
+    let executionTasks: any[];
+    
+    // If a model is already selected (from hierarchical template composition), 
+    // create a single task with that model instead of using the planner
+    if (existingModel) {
+      // Create a single execution task with the pre-selected model
+      executionTasks = [{
+        taskId: 'pre-selected',
+        model: existingModel,
+        vendorDriverClass: undefined, // Would need to look up vendor entity for this
+        vendorApiName: existingModel.Vendor, // Vendor is already the name string
+        messages: params.conversationMessages || [],
+        promptText: renderedPromptText,
+        templateMessageRole: params.templateMessageRole || 'system',
+        contextUser: params.contextUser
+      }];
+      this.logStatus(`   Using pre-selected model "${existingModel.Name}" for parallel execution`, true, params);
+    } else {
+      // Normal parallel execution path - let the planner decide
+      // Determine which prompt to use for model selection
+      let modelSelectionPrompt = prompt;
+      if (params.modelSelectionPrompt) {
+        modelSelectionPrompt = params.modelSelectionPrompt;
+        this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
+      }
+
+      // Get prompt-specific model associations using the model selection prompt
+      const promptModels = AIEngine.Instance.PromptModels.filter(
+        (pm) =>
+          pm.PromptID === modelSelectionPrompt.ID &&
+          (pm.Status === 'Active' || pm.Status === 'Preview') &&
+          (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId),
+      );
+
+      // Create execution plan using the modelSelectionPrompt for model configurations
+      executionTasks = this._executionPlanner.createExecutionPlan(
+        modelSelectionPrompt,
+        promptModels,
+        AIEngine.Instance.Models,
+        renderedPromptText,
+        params.contextUser,
+        params.configurationId,
+        params.conversationMessages,
+        params.templateMessageRole || 'system',
+      );
     }
-
-    // Get prompt-specific model associations using the model selection prompt
-    const promptModels = AIEngine.Instance.PromptModels.filter(
-      (pm) =>
-        pm.PromptID === modelSelectionPrompt.ID &&
-        (pm.Status === 'Active' || pm.Status === 'Preview') &&
-        (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId),
-    );
-
-    // Create execution plan using the modelSelectionPrompt for model configurations
-    const executionTasks = this._executionPlanner.createExecutionPlan(
-      modelSelectionPrompt,
-      promptModels,
-      AIEngine.Instance.Models,
-      renderedPromptText,
-      params.contextUser,
-      params.configurationId,
-      params.conversationMessages,
-      params.templateMessageRole || 'system',
-    );
 
     if (executionTasks.length === 0) {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
@@ -651,8 +682,8 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    // TODO: For parallel execution, we may want to track model selection info differently
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, undefined);
+    // Use the model selection info if provided (from hierarchical execution)
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingModelSelectionInfo);
 
     // Update with parallel execution metadata
     const endTime = new Date();
@@ -789,10 +820,11 @@ export class AIPromptRunner {
       modelInfo: {
         modelId: selectedResult.task.model.ID,
         modelName: selectedResult.task.model.Name,
-        vendorId: undefined, // VendorID not directly available on AIModel
+        vendorId: existingModelSelectionInfo?.vendorSelected?.ID, // VendorID not directly available on AIModel
         vendorName: selectedResult.task.model.Vendor,
       },
       judgeMetadata: selectedResult.judgeMetadata,
+      modelSelectionInfo: existingModelSelectionInfo, // Include model selection info if provided
     };
   }
 
@@ -974,7 +1006,7 @@ export class AIPromptRunner {
    * @returns Promise<string> - The rendered prompt text with child templates embedded
    */
   private async renderPromptWithChildTemplates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     childTemplates: Record<string, string>
   ): Promise<string> {
@@ -1045,7 +1077,7 @@ export class AIPromptRunner {
    * then selects the first one with an available API key.
    */
   private async selectModel(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
     configurationId?: string,
@@ -1055,7 +1087,7 @@ export class AIPromptRunner {
     model: AIModelEntityExtended | null;
     vendorDriverClass?: string;
     vendorApiName?: string;
-    selectionInfo?: AIPromptRunResult<any>['modelSelectionInfo'];
+    selectionInfo?: AIModelSelectionInfo;
   }> {
     // Declare variables outside try block for catch block access
     let configurationName: string | undefined;
@@ -1086,7 +1118,8 @@ export class AIPromptRunner {
         prompt,
         explicitModelId,
         configurationId,
-        vendorId
+        vendorId,
+        params.verbose
       );
 
       // Track all models considered for selection info
@@ -1224,10 +1257,11 @@ export class AIPromptRunner {
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
   private buildModelVendorCandidates(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
-    preferredVendorId?: string
+    preferredVendorId?: string,
+    verbose?: boolean
   ): ModelVendorCandidate[] {
     const preferredVendorName = preferredVendorId ? 
       AIEngine.Instance.Vendors.find(v => v.ID === preferredVendorId)?.Name : undefined;
@@ -1425,11 +1459,15 @@ export class AIPromptRunner {
       if (candidates.length > 0) {
         // Sort all candidates by priority (highest first)
         candidates.sort((a, b) => b.priority - a.priority);
-        LogStatus(`Using SelectionStrategy='Specific' with ${promptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
+        if (verbose) {
+          LogStatus(`Using SelectionStrategy='Specific' with ${promptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
+        }
         return candidates;
       }
-      // If no candidates generated from AIPromptModel entries, fall through to Phase 3
-      LogStatus(`SelectionStrategy='Specific' specified but no usable candidates from AIPromptModel entries, falling back to general selection`);
+      if (verbose) {
+        // If no candidates generated from AIPromptModel entries, fall through to Phase 3
+        LogStatus(`SelectionStrategy='Specific' specified but no usable candidates from AIPromptModel entries, falling back to general selection`);
+      }
     }
 
     // PHASE 3: Use general selection strategy (fallback)
@@ -1570,7 +1608,7 @@ export class AIPromptRunner {
       });
       
       if (hasKey) {
-        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
+        this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`, true);
         if (candidate.isPreferredVendor) {
           this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
         }
@@ -1595,88 +1633,20 @@ export class AIPromptRunner {
     
     return { selected: null, consideredModels };
   }
-
-  /**
-   * Finds the first model-vendor candidate that has an available API key
-   * 
-   * @param candidates - Ordered list of model-vendor candidates
-   * @param params - Optional prompt parameters for verbose flag
-   * @returns The first candidate with an available API key, or null if none found
-   */
-  private async selectModelWithAPIKey(
-    candidates: ModelVendorCandidate[],
-    params?: AIPromptParams
-  ): Promise<ModelVendorCandidate | null> {
-    const checkedDrivers = new Map<string, boolean>(); // Cache to avoid repeated lookups
-    let attemptCount = 0;
-    
-    //this.logStatus(`🔑 Checking API keys for ${candidates.length} model-vendor candidates...`, true, params);
-    
-    for (const candidate of candidates) {
-      attemptCount++;
-      
-      // Check cache first
-      if (checkedDrivers.has(candidate.driverClass)) {
-        const hasKey = checkedDrivers.get(candidate.driverClass)!;
-        if (hasKey) {
-          this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (cached API key exists)`, true, params);
-          return candidate;
-        }
-        // Skip logging for cached negative results to reduce noise
-        continue;
-      }
-
-      // Check for API key with robust validation
-      const apiKey = GetAIAPIKey(candidate.driverClass);
-      const hasKey = this.isValidAPIKey(apiKey);
-      checkedDrivers.set(candidate.driverClass, hasKey);
-      
-      if (hasKey) {
-        LogStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`);
-        if (candidate.isPreferredVendor) {
-          this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
-        }
-        this.logStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`, true, params);
-        return candidate;
-      } else {
-        // Log first few failed attempts for debugging
-        if (attemptCount <= 3) {
-          this.logStatus(`   ❌ No API key for ${candidate.model.Name}/${candidate.vendorName || 'default'} (${candidate.driverClass})`, true, params);
-        }
-      }
-    }
-
-    // Log what we tried
-    const triedSummary = candidates.slice(0, 5).map(c => 
-      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
-    ).join(', ');
-    
-    this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
-      category: 'APIKeyValidation',
-      severity: 'critical',
-      metadata: {
-        candidatesChecked: candidates.length,
-        modelNames: candidates.map(c => c.model.Name),
-        vendorNames: candidates.map(c => c.vendorName || 'default')
-      }
-    });
-    
-    return null;
-  }
-
+ 
   /**
    * Creates an AIPromptRun entity for execution tracking
    */
   private async createPromptRun(
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     model: AIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string, 
     startTime: Date,
     vendorId?: string,
     modelSelectionInfo?: any
-  ): Promise<AIPromptRunEntity> {
-    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
+  ): Promise<AIPromptRunEntityExtended> {
+    const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();
 
@@ -1723,7 +1693,7 @@ export class AIPromptRunner {
       
       // Set original model tracking for failover
       // TODO: Remove type assertions after CodeGen updates entities with new fields
-      const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+      const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
         OriginalModelID?: string;
         OriginalRequestStartTime?: Date;
         FailoverAttempts?: number;
@@ -1746,7 +1716,10 @@ export class AIPromptRunner {
         _selectedVendorId?: string;
       };
       
-      if (vendorId) {
+      if (modelSelectionInfo) {
+        promptRun.VendorID = modelSelectionInfo.vendorSelected?.ID || vendorId || modelWithVendor._selectedVendorId;
+      } 
+      else if (vendorId) {
         // Explicit vendor ID provided
         promptRun.VendorID = vendorId;
       } else if (modelWithVendor._selectedVendorId) {
@@ -1963,14 +1936,14 @@ export class AIPromptRunner {
   protected async executeModelWithFailover(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
     templateMessageRole: TemplateMessageRole = 'system',
     cancellationToken?: AbortSignal,
     allCandidates?: ModelVendorCandidate[],
-    promptRun?: AIPromptRunEntity,
+    promptRun?: AIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string
   ): Promise<ChatResult> {
@@ -2109,7 +2082,7 @@ export class AIPromptRunner {
   /**
    * Builds failover candidates for a prompt based on available models and type restrictions
    */
-  protected async buildFailoverCandidates(prompt: AIPromptEntity): Promise<ModelVendorCandidate[]> {
+  protected async buildFailoverCandidates(prompt: AIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
     const aiEngine = AIEngine.Instance;
     
     // Get all models, filtered by type if specified
@@ -2177,13 +2150,13 @@ export class AIPromptRunner {
    * Updates prompt run with successful failover tracking data
    */
   protected updatePromptRunWithFailoverSuccess(
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[],
     currentModel: AIModelEntityExtended,
     currentVendorId: string | null
   ): void {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
       OriginalModelID?: string;
       OriginalRequestStartTime?: Date;
       FailoverAttempts?: number;
@@ -2215,11 +2188,11 @@ export class AIPromptRunner {
    * Updates prompt run with failover failure tracking data
    */
   private updatePromptRunWithFailoverFailure(
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntity & {
+    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
       OriginalModelID?: string;
       OriginalRequestStartTime?: Date;
       FailoverAttempts?: number;
@@ -2264,7 +2237,7 @@ export class AIPromptRunner {
   private async executeModel(
     model: AIModelEntityExtended,
     renderedPrompt: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     vendorId: string | null,
     conversationMessages?: ChatMessage[],
@@ -2491,9 +2464,9 @@ export class AIPromptRunner {
   private async executeWithValidationRetries(
     selectedModel: AIModelEntityExtended,
     renderedPromptText: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     params: AIPromptParams,
-    promptRun: AIPromptRunEntity,
+    promptRun: AIPromptRunEntityExtended,
     vendorDriverClass?: string,
     vendorApiName?: string,
   ): Promise<{
@@ -2644,7 +2617,7 @@ export class AIPromptRunner {
   /**
    * Applies retry delay based on the prompt's retry strategy
    */
-  private async applyRetryDelay(prompt: AIPromptEntity, attemptNumber: number): Promise<void> {
+  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number): Promise<void> {
     const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
     let delay = baseDelay;
 
@@ -2829,10 +2802,10 @@ export class AIPromptRunner {
    */
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean = false,
     cleanValidationSyntax: boolean = false,
-    currentPromptRun: AIPromptRunEntity,
+    currentPromptRun: AIPromptRunEntityExtended,
     params?: AIPromptParams,
   ): Promise<{
     result: unknown;
@@ -3056,11 +3029,11 @@ export class AIPromptRunner {
    */
   private async parseObjectOutput(
     rawOutput: string,
-    prompt: AIPromptEntity,
+    prompt: AIPromptEntityExtended,
     skipValidation: boolean,
     cleanValidationSyntax: boolean,
     validationErrors: ValidationErrorInfo[],
-    currentPromptRun: AIPromptRunEntity,
+    currentPromptRun: AIPromptRunEntityExtended,
     params?: AIPromptParams
   ): Promise<unknown> {
     let parsedResult: unknown;
@@ -3105,7 +3078,7 @@ export class AIPromptRunner {
     rawOutput: string,
     originalError: Error,
     params: AIPromptParams,
-    currentPromptRun: AIPromptRunEntity
+    currentPromptRun: AIPromptRunEntityExtended
   ): Promise<unknown> {
     // Step 0: First, see if the raw output has any { } [ ] characters at all
     // if not, we KNOW it is not JSON and we should not attempt to repair it
@@ -3302,8 +3275,8 @@ export class AIPromptRunner {
    * Updates the AIPromptRun entity with execution results
    */
   private async updatePromptRun(
-    promptRun: AIPromptRunEntity,
-    prompt: AIPromptEntity,
+    promptRun: AIPromptRunEntityExtended,
+    prompt: AIPromptEntityExtended,
     modelResult: ChatResult,
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
@@ -3543,9 +3516,9 @@ export class AIPromptRunner {
    * default values when configuration is not specified. Override this method to
    * implement custom failover configuration logic.
    */
-  protected getFailoverConfiguration(prompt: AIPromptEntity): FailoverConfiguration {
+  protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptWithFailover = prompt as AIPromptEntity & {
+    const promptWithFailover = prompt as AIPromptEntityExtended & {
       FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
       FailoverMaxAttempts?: number;
       FailoverDelaySeconds?: number;

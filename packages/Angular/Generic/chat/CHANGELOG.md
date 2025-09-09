@@ -1,5 +1,135 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ng-container-directives@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.98.0
+- @memberjunction/core@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.97.0
+- @memberjunction/core@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ng-container-directives@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/ng-container-directives@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.94.0
+- @memberjunction/core@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+  - @memberjunction/ng-container-directives@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ng-container-directives@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+  - @memberjunction/core@2.90.0
+  - @memberjunction/ng-container-directives@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.89.0
+- @memberjunction/core@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.88.0
+- @memberjunction/core@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.86.0
+- @memberjunction/core@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.85.0
+- @memberjunction/core@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ng-container-directives@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/ng-container-directives@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

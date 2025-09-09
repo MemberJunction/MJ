@@ -49,6 +49,10 @@ import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
 import { LoadGroqLLM } from '@memberjunction/ai-groq';
 import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
 import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
+import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
+import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
+import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
 // Load AI LLMs and Base AI Engine
 // These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
 // system. They are not tree-shaken because they are dynamically loaded at runtime.
@@ -58,6 +62,10 @@ LoadAnthropicLLM();
 LoadGroqLLM();
 LoadCerebrasLLM();
 LoadMistralLLM();
+LoadLMStudioLLM();
+LoadOpenRouterLLM();
+LoadOllamaLLM();
+LoadLocalEmbedding();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
@@ -84,6 +92,7 @@ export * from './generic/DeleteOptionsInput.js';
 
 export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
+export { ComponentRegistryExtendedResolver } from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';

@@ -1,0 +1,45 @@
+{
+  "initialization": {
+    "constructorName": "ApexCharts",
+    "requiresNew": true,
+    "elementType": "div",
+    "requiredConfig": ["chart", "series"]
+  }, 
+  "lifecycle": {
+    "requiredMethods": [],
+    "cleanupMethods": ["destroy"],
+    "updateMethods": ["updateOptions", "updateSeries", "appendSeries"]
+  },
+  "validators": {
+    "checkRenderCall": {
+      "description": "Ensure ApexCharts instances call render() after creation",
+      "severity": "critical",
+      "validate": "@file:check-render-call.js"
+    },
+    "checkDestroyInCleanup": {
+      "description": "Ensure ApexCharts instances are destroyed in cleanup",
+      "severity": "high",
+      "validate": "@file:check-destroy-cleanup.js"
+    },
+    "checkOptionsStructure": {
+      "description": "Validate ApexCharts options structure",
+      "severity": "high",
+      "validate": "@file:check-options-structure.js"
+    },
+    "checkSeriesDataFormat": {
+      "description": "Validate data is in correct ApexCharts series format",
+      "severity": "critical",
+      "validate": "@file:check-series-data-format.js"
+    },
+    "checkChartRefManagement": {
+      "description": "Ensure chart instances are properly stored in refs for exports",
+      "severity": "low",
+      "validate": "@file:check-chart-ref-management.js"
+    },
+    "checkAnomalyFormat": {
+      "description": "Validate anomaly data format for annotations",
+      "severity": "medium",
+      "validate": "@file:check-anomaly-format.js"
+    }
+  }
+}

@@ -275,6 +275,7 @@ This core package serves as the foundation for a suite of vector-related package
 
 - `@memberjunction/ai-vectors` - Core abstractions (this package)
 - `@memberjunction/ai-vectordb` - Vector database interface
+- `@memberjunction/ai-vectors-memory` - In-memory vector similarity search
 - `@memberjunction/ai-vectors-sync` - Entity synchronization with vector databases
 - `@memberjunction/ai-vectors-pinecone` - Pinecone vector database implementation
 - `@memberjunction/ai-vectors-dupe` - Duplicate detection using vector similarity

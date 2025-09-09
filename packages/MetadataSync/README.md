@@ -64,7 +64,7 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 - **External files**: Store large text fields (prompts, templates, etc.) in appropriate formats (.md, .html, .sql)
 - **File references**: Use `@file:filename.ext` to link external files from JSON
 
-### Embedded Collections (NEW)
+### Embedded Collections
 - **Related Entities**: Store related records as arrays within parent JSON files
 - **Hierarchical References**: Use `@parent:` and `@root:` to reference parent/root entity fields
 - **Automatic Metadata**: Related entities maintain their own primaryKey and sync metadata
@@ -526,7 +526,7 @@ Each JSON file contains one record:
 }
 ```
 
-#### Multiple Records per File (NEW)
+#### Multiple Records per File
 JSON files can contain arrays of records:
 ```json
 [
@@ -604,7 +604,7 @@ metadata/
 }
 ```
 
-### Record with Embedded Collections (NEW)
+### Record with Embedded Collections
 ```json
 {
   "fields": {
@@ -706,16 +706,75 @@ The tool automatically detects primary key fields from entity metadata:
 - **Auto-detection**: Tool reads entity metadata to determine primary key structure
 - **No hardcoding**: Works with any primary key field name(s)
 
+### deleteRecord Directive
+The tool now supports deleting records from the database using a special `deleteRecord` directive in JSON files. This allows you to remove obsolete records as part of your metadata sync workflow:
+
+#### How to Delete a Record
+1. Add a `deleteRecord` section to any record JSON file
+2. Set `delete: true` to mark the record for deletion
+3. Run `mj sync push` to execute the deletion
+4. The tool will update the JSON with a deletion timestamp
+
+#### Syntax
+```json
+{
+  "fields": {
+    "Name": "Obsolete Prompt",
+    "Description": "This prompt is no longer needed"
+  },
+  "primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "deleteRecord": {
+    "delete": true
+  }
+}
+```
+
+#### After Deletion
+After successfully deleting the record, the tool updates the JSON file:
+```json
+{
+  "fields": {
+    "Name": "Obsolete Prompt",
+    "Description": "This prompt is no longer needed"
+  },
+  "primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "deleteRecord": {
+    "delete": true,
+    "deletedAt": "2024-01-15T14:30:00.000Z"
+  }
+}
+```
+
+#### Important Notes
+- **Primary key required**: You must specify the `primaryKey` to identify which record to delete
+- **One-time operation**: Once `deletedAt` is set, the deletion won't be attempted again
+- **SQL logging**: Delete operations are included in SQL logs when enabled
+- **Foreign key constraints**: Deletions may fail if other records reference this record
+- **Dry-run support**: Use `--dry-run` to preview what would be deleted
+- **Takes precedence**: If `deleteRecord` is present, normal create/update operations are skipped
+
+#### Use Cases
+- Removing deprecated prompts, templates, or configurations
+- Cleaning up test data
+- Synchronizing deletions across environments
+- Maintaining clean metadata through version control
+
 ### @file: References
 When a field value starts with `@file:`, the tool will:
 1. Read content from the specified file for push operations
 2. Write content to the specified file for pull operations
 3. Track both files for change detection
+4. **For JSON files**: Automatically process any `@include` directives within them
 
 Examples:
 - `@file:greeting.prompt.md` - File in same directory as JSON
 - `@file:./shared/common-prompt.md` - Relative path
 - `@file:../templates/standard-header.md` - Parent directory reference
+- `@file:spec.json` - JSON file with `@include` directives (processed automatically)
 
 ### @url: References
 When a field value starts with `@url:`, the tool will:
@@ -741,7 +800,7 @@ Examples:
 - `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
 - `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
 
-#### Multi-Field Lookups (NEW)
+#### Multi-Field Lookups
 When you need to match records based on multiple criteria, use the multi-field syntax:
 ```json
 {
@@ -752,13 +811,13 @@ When you need to match records based on multiple criteria, use the multi-field s
 
 This ensures you get the exact record you want when multiple records might have the same value in a single field.
 
-### @parent: References (NEW)
+### @parent: References 
 Reference fields from the immediate parent entity in embedded collections:
 - `@parent:ID` - Get the parent's ID field
 - `@parent:Name` - Get the parent's Name field
 - Works with any field from the parent entity
 
-### @root: References (NEW)
+### @root: References
 Reference fields from the root entity in nested structures:
 - `@root:ID` - Get the root entity's ID
 - `@root:CategoryID` - Get the root's CategoryID
@@ -798,7 +857,7 @@ Examples:
 
 The `Configuration`, `Tags`, and `Metadata` fields will automatically be converted to JSON strings when pushed to the database, while maintaining their structured format in your source files.
 
-### {@include} References in Files (NEW)
+### {@include} References in Files
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
 - Pattern: `{@include path/to/file.ext}`
 - Supports relative paths from the containing file
@@ -876,7 +935,251 @@ Benefits:
 - **Flexibility**: Build complex documents from modular parts
 - **Validation**: Automatic checking of included file existence and circular references
 
-### @template: References (NEW)
+### @include References in JSON Files
+
+Enable modular JSON composition by including external JSON files directly into your metadata files. This feature allows you to break large JSON configurations into smaller, reusable components.
+
+#### Syntax Options
+
+**Object Context - Property Spreading (Default)**
+```json
+{
+  "name": "Parent Record",
+  "@include": "child.json",
+  "description": "Additional fields"
+}
+```
+The included file's properties are spread into the parent object.
+
+**Multiple Includes with Dot Notation (Eliminates VS Code Warnings)**
+```json
+{
+  "name": "Parent Record",
+  "@include.data": "shared/data-fields.json",
+  "description": "Middle field",
+  "@include.config": "shared/config-fields.json",
+  "status": "Active"
+}
+```
+Use dot notation (`@include.anything`) to include multiple files at different positions in your object. The part after the dot is ignored by the processor but makes each key unique, eliminating VS Code's duplicate key warnings. The includes are processed in the order they appear, allowing precise control over property ordering.
+
+**Array Context - Element Insertion**
+```json
+[
+  {"name": "First item"},
+  "@include:child.json",
+  {"name": "Last item"}
+]
+```
+The included file's content is inserted as array element(s).
+
+**Explicit Mode Control**
+```json
+{
+  "@include": {
+    "file": "child.json",
+    "mode": "spread"  // or "element"
+  }
+}
+```
+
+#### Modes Explained
+
+**"spread" mode**: 
+- Merges all properties from the included file into the parent object
+- Only works when including an object into an object
+- Parent properties override child properties if there are conflicts
+- Default mode for objects
+
+**"element" mode**:
+- Directly inserts the JSON content at that position
+- Works with any JSON type (object, array, string, number, etc.)
+- Replaces the @include directive with the actual content
+- Default mode for arrays when using string syntax
+
+#### Path Resolution
+- All paths are relative to the file containing the @include
+- Supports: `"child.json"`, `"./child.json"`, `"../shared/base.json"`, `"subfolder/config.json"`
+- Circular references are detected and prevented
+
+#### Complex Example
+
+Directory structure:
+```
+metadata/
+├── components/
+│   ├── dashboard.json
+│   ├── base-props.json
+│   └── items/
+│       └── dashboard-items.json
+└── shared/
+    └── common-settings.json
+```
+
+dashboard.json:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "@include.common": "../shared/common-settings.json",
+    "Type": "Dashboard",
+    "@include.defaults": "../shared/default-values.json",
+    "Configuration": {
+      "@include": {"file": "./base-props.json", "mode": "element"}
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      "@include:./items/dashboard-items.json"
+    ]
+  }
+}
+```
+
+common-settings.json:
+```json
+{
+  "CategoryID": "@lookup:Categories.Name=Analytics",
+  "Status": "Active",
+  "Priority": 1
+}
+```
+
+base-props.json:
+```json
+{
+  "refreshInterval": 60,
+  "theme": "dark",
+  "layout": "grid"
+}
+```
+
+dashboard-items.json:
+```json
+[
+  {"name": "Revenue Chart", "type": "chart"},
+  {"name": "User Stats", "type": "stats"},
+  {"name": "Activity Feed", "type": "feed"}
+]
+```
+
+Result after processing:
+```json
+{
+  "fields": {
+    "Name": "Analytics Dashboard",
+    "CategoryID": "@lookup:Categories.Name=Analytics",
+    "Status": "Active", 
+    "Priority": 1,
+    "Type": "Dashboard",
+    "Configuration": {
+      "refreshInterval": 60,
+      "theme": "dark",
+      "layout": "grid"
+    }
+  },
+  "relatedEntities": {
+    "Dashboard Items": [
+      {"name": "Revenue Chart", "type": "chart"},
+      {"name": "User Stats", "type": "stats"},
+      {"name": "Activity Feed", "type": "feed"}
+    ]
+  }
+}
+```
+
+#### Use Cases
+- **Shared Configurations**: Reuse common settings across multiple entities
+- **Modular Records**: Build complex records from smaller components
+- **Template Libraries**: Create libraries of reusable JSON fragments
+- **Environment Configs**: Include environment-specific settings
+- **Large Data Sets**: Break up large JSON files for better maintainability
+- **VS Code Compatibility**: Use dot notation to avoid duplicate key warnings when including multiple files
+
+#### Practical Example: Component with Multiple Includes
+```json
+{
+  "name": "DashboardComponent",
+  "type": "dashboard",
+  "@include.dataRequirements": "../shared/data-requirements.json",
+  "functionalRequirements": "Dashboard displays real-time metrics...",
+  "@include.libraries": "../shared/chart-libraries.json",
+  "technicalDesign": "Component uses React hooks for state...",
+  "@include.eventHandlers": "../shared/event-handlers.json",
+  "code": "const Dashboard = () => { ... }"
+}
+```
+In this example, data requirements, libraries, and event handlers are spread into the component definition at their specific positions, maintaining a logical property order while avoiding VS Code warnings about duplicate `@include` keys.
+
+#### @include in Referenced JSON Files
+When using `@file:` to reference a JSON file, any `@include` directives within that JSON file are automatically processed:
+
+#### @file References in Included JSON Files
+The system now automatically resolves `@file` references found within JSON files that are pulled in via `@include`. This allows for complete nesting of references:
+
+```json
+// main-entity.json
+{
+  "fields": {
+    "Name": "MyComponent",
+    "Specification": "@file:files/component-spec.json"
+  }
+}
+
+// files/component-spec.json
+{
+  "name": "ComponentSpec",
+  "@include.base": "../shared/base-spec.json",
+  "customFields": {
+    "feature": "advanced"
+  },
+  "@include.libs": "../shared/libraries.json"
+}
+```
+
+The `component-spec.json` file's `@include` directives are processed before the content is returned to the `Specification` field, ensuring all includes are resolved.
+
+#### Nested @file References in JSON Files
+The system now recursively processes `@file` references within JSON files loaded via `@file`. This enables powerful composition patterns:
+
+```json
+// components.json
+{
+  "fields": {
+    "Name": "RecentDealsList",
+    "Specification": "@file:spec/recent-deals-list.spec.json"
+  }
+}
+
+// spec/recent-deals-list.spec.json
+{
+  "name": "RecentDealsList",
+  "description": "List of recent deals",
+  "code": "@file:../code/recent-deals-list.js",  // This nested @file is now resolved!
+  "style": "@file:../styles/deals.css",
+  "config": {
+    "template": "@file:../templates/deal-row.html"  // Even deeply nested @file references work
+  }
+}
+```
+
+All `@file` references are recursively resolved, regardless of nesting depth. The final result will have all file contents properly loaded and embedded.
+
+#### Processing Order
+1. @include directives are processed first (recursively)
+2. @file references are recursively resolved (including nested ones in JSON)
+3. Then @template references
+4. Finally, other @ references (@lookup, etc.)
+
+This ensures that included content can contain other special references that will be properly resolved.
+
+**New Feature**: @file references within @included JSON files are now automatically resolved. This means you can have:
+- A main JSON file with `@include` directives
+- The included JSON files can have `@file` references to load code, templates, etc.
+- Those @file references are resolved to their actual content
+- If the @file points to a JSON file with @include directives, those are also processed
+
+### @template: References
 Enable JSON template composition for reusable configurations:
 
 #### String Template Reference
@@ -965,7 +1268,7 @@ mj sync pull --entity="AI Prompts"
 # Pull specific records by filter
 mj sync pull --entity="AI Prompts" --filter="CategoryID='customer-service-id'"
 
-# Pull multiple records into a single file (NEW)
+# Pull multiple records into a single file
 mj sync pull --entity="AI Prompts" --multi-file="all-prompts"
 mj sync pull --entity="AI Prompts" --filter="Status='Active'" --multi-file="active-prompts.json"
 
@@ -975,12 +1278,15 @@ mj sync push
 # Push only specific entity directory
 mj sync push --dir="ai-prompts"
 
-# Push with verbose output (NEW)
+# Push with verbose output
 mj sync push -v
 mj sync push --verbose
 
 # Dry run to see what would change
 mj sync push --dry-run
+
+# Push with parallel processing
+mj sync push --parallel-batch-size=20  # Process 20 records in parallel (default: 10, max: 50)
 
 # Show status of local vs database
 mj sync status
@@ -1008,7 +1314,57 @@ Configuration follows a hierarchical structure:
 - **Entity configs**: Each entity directory has its own config defining the entity type
 - **Inheritance**: All files within an entity directory are treated as records of that entity type
 
-### Directory Processing Order (NEW)
+### Parallel Processing
+
+MetadataSync now supports parallel processing of records during push operations, significantly improving performance for large datasets.
+
+#### How It Works
+
+Records are automatically grouped into dependency levels:
+- **Level 0**: Records with no dependencies
+- **Level 1**: Records that depend only on Level 0 records
+- **Level 2**: Records that depend on Level 0 or Level 1 records
+- And so on...
+
+Records within the same dependency level can be safely processed in parallel since they have no dependencies on each other.
+
+#### Configuration
+
+Use the `--parallel-batch-size` flag to control parallelism:
+
+```bash
+# Default: 10 records in parallel
+mj sync push
+
+# Process 20 records in parallel
+mj sync push --parallel-batch-size=20
+
+# Maximum parallelism (50 records)
+mj sync push --parallel-batch-size=50
+
+# Conservative approach for debugging
+mj sync push --parallel-batch-size=1
+```
+
+#### Performance Benefits
+
+- **2-3x faster** for typical metadata pushes
+- **5-10x faster** for records with many file references (@file) or lookups (@lookup)
+- Most beneficial when processing large numbers of independent records
+
+#### When to Use
+
+**Recommended for:**
+- Large initial data imports
+- Bulk metadata updates
+- CI/CD pipelines with time constraints
+
+**Use conservative settings for:**
+- Debugging sync issues
+- Working with complex dependencies
+- Limited database connection pools
+
+### Directory Processing Order
 
 The MetadataSync tool now supports custom directory processing order to handle dependencies between entity types. This feature ensures that dependent entities are processed in the correct order.
 
@@ -1086,7 +1442,7 @@ In this example:
 - Production subdirectory further adds "drafts"
 - All patterns are cumulative, so production inherits all parent ignores
 
-### SQL Logging (NEW)
+### SQL Logging 
 
 The MetadataSync tool now supports SQL logging for capturing all database operations during push commands. This feature is useful for:
 - Creating migration files from MetadataSync operations
@@ -1209,7 +1565,7 @@ The `filterPatterns` option allows you to include or exclude specific SQL statem
 - `*pattern` - Ends with pattern
 - `pattern` - Exact match
 
-### User Role Validation (NEW)
+### User Role Validation 
 
 MetadataSync now supports validating UserID fields against specific roles in the MemberJunction system. This ensures that only users with appropriate roles can be referenced in metadata files.
 
@@ -1363,7 +1719,7 @@ The validation will:
 }
 ```
 
-## Embedded Collections (NEW)
+## Embedded Collections 
 
 The tool now supports managing related entities as embedded collections within parent JSON files. This is ideal for entities that have a strong parent-child relationship.
 
@@ -1373,7 +1729,7 @@ The tool now supports managing related entities as embedded collections within p
 - **Cleaner Organization**: Fewer files to manage
 - **Relationship Clarity**: Visual representation of data relationships
 
-## Recursive Patterns (NEW)
+## Recursive Patterns 
 
 The tool now supports automatic recursive patterns for self-referencing entities, eliminating the need to manually define each nesting level for hierarchical data structures.
 

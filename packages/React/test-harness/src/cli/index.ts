@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
 import { ReactTestHarness } from '../lib/test-harness';
+import { Violation } from '../lib/component-linter';
 
 const program = new Command();
 
@@ -56,7 +57,7 @@ program
         {
           waitForSelector: options.selector,
           timeout: parseInt(options.timeout),
-          contextUser: undefined!
+          contextUser: undefined! 
         }
       );
 
@@ -82,8 +83,21 @@ program
       } else {
         console.log(chalk.red('✗ Component rendering failed'));
         console.log(chalk.red('\nErrors:'));
-        result.errors.forEach((error: string) => {
-          console.log(chalk.red(`  - ${error}`));
+        result.errors.forEach((error: Violation) => {
+          switch (error.severity) {
+            case 'critical':
+              console.log(chalk.red(`  - ${error.message} [${error.severity}]`));
+              break;
+            case 'high':
+              console.log(chalk.yellow(`  - ${error.message} [${error.severity}]`));
+              break;
+            case 'medium':
+              console.log(chalk.blue(`  - ${error.message} [${error.severity}]`));
+              break;
+            case 'low':
+              console.log(chalk.gray(`  - ${error.message} [${error.severity}]`));
+              break;
+          }
         });
         process.exit(1);
       }

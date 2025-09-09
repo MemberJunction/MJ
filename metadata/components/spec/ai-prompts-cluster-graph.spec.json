@@ -1,0 +1,98 @@
+{
+  "name": "AIPromptsClusterGraph",
+  "title": "AI Prompts Cluster Graph",
+  "description": "D3.js force-directed graph visualization showing prompt clusters based on semantic similarity",
+  "type": "chart",
+  "location": "embedded",
+  "code": "@file:../code/ai-prompts-cluster-graph.js",
+  "functionalRequirements": "Render interactive force-directed graph with prompts as nodes, display clusters with different colors, show similarity connections between prompts, support zoom/pan navigation, highlight on hover, animate transitions",
+  "technicalDesign": "Uses D3.js force simulation for node positioning, implements clustering visualization with color coding, draws edges based on similarity threshold, handles mouse interactions for selection and tooltips",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "prompts",
+      "type": "array",
+      "required": true,
+      "description": "Array of AI prompt entities with embeddings"
+    },
+    {
+      "name": "clusters",
+      "type": "array",
+      "required": true,
+      "description": "Array of cluster assignments from clustering algorithm"
+    },
+    {
+      "name": "selectedPromptId",
+      "type": "string",
+      "required": false,
+      "description": "ID of currently selected prompt"
+    },
+    {
+      "name": "similarityThreshold",
+      "type": "number",
+      "required": false,
+      "description": "Threshold for showing similarity connections (0-1)"
+    },
+    {
+      "name": "highlightCluster",
+      "type": "number",
+      "required": false,
+      "description": "Cluster index to highlight"
+    }
+  ],
+  "events": [
+    {
+      "name": "onNodeClick",
+      "description": "Fired when a node is clicked",
+      "parameters": [
+        {
+          "name": "prompt",
+          "type": "object",
+          "description": "The clicked prompt entity"
+        }
+      ]
+    },
+    {
+      "name": "onNodeHover",
+      "description": "Fired when hovering over a node",
+      "parameters": [
+        {
+          "name": "prompt",
+          "type": "object",
+          "description": "The hovered prompt entity"
+        }
+      ]
+    },
+    {
+      "name": "onClusterSelect",
+      "description": "Fired when a cluster is selected",
+      "parameters": [
+        {
+          "name": "clusterIndex",
+          "type": "number",
+          "description": "Index of the selected cluster"
+        }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "d3",
+      "version": "7.8.5",
+      "globalVariable": "d3"
+    }
+  ],
+  "usageExample": "<AIPromptsClusterGraph prompts={prompts} clusters={clusters} />",
+  "version": "1.0.0"
+}

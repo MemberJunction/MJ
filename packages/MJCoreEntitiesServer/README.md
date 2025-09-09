@@ -68,6 +68,23 @@ Extends the base AI Prompt entity with automatic Template management:
 - **Automatic Template Updates**: Updates existing templates when content changes
 - **Proper Relationship Management**: Maintains proper foreign key relationships
 
+### ComponentEntityExtended_Server (v2.90.0+)
+
+Extends the Component entity with automatic vector embedding generation:
+
+- **Automatic Embeddings**: Generates vector embeddings for FunctionalRequirements and TechnicalDesign fields
+- **Model Tracking**: Stores the AI model ID used for each embedding
+- **Smart Updates**: Only regenerates embeddings when source text changes
+- **Parallel Processing**: Generates multiple embeddings concurrently for performance
+
+### QueryEntityExtendedServer
+
+Extends the Query entity with automatic Template management similar to AIPromptEntity:
+
+- **Virtual Property**: `TemplateText` - Manages the SQL query template content
+- **Automatic Template Management**: Creates and updates Template records when saving
+- **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
+
 ## Architecture
 
 ### Entity Registration
@@ -150,6 +167,51 @@ This package works seamlessly with:
 - `@memberjunction/server`: Can be used in MJ server applications
 - `@memberjunction/cli`: Used by CLI tools like MetadataSync
 
+## Vector Embeddings Support (v2.90.0+)
+
+This package provides a utility helper for server-side entities to easily implement vector embedding generation using the MemberJunction AI Engine.
+
+### EmbedTextLocalHelper
+
+A shared utility function that simplifies embedding generation for any server-side entity:
+
+```typescript
+import { EmbedTextLocalHelper } from '@memberjunction/core-entities-server';
+import { BaseEntity, SimpleEmbeddingResult } from '@memberjunction/core';
+
+@RegisterClass(BaseEntity, 'MyEntity')
+export class MyEntityServer extends MyEntity {
+    protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
+        return EmbedTextLocalHelper(this, textToEmbed);
+    }
+}
+```
+
+The helper:
+- Configures the AI Engine with the current user context
+- Calls the embedding generation
+- Validates the response
+- Returns a properly typed `SimpleEmbeddingResult`
+
+### Using Vector Embeddings in Your Entity
+
+1. **Add database fields** for storing vectors and model IDs
+2. **Override EmbedTextLocal** using the helper function
+3. **Call GenerateEmbeddings** in your Save method:
+
+```typescript
+public async Save(): Promise<boolean> {
+    await this.GenerateEmbeddingsByFieldName([
+        {
+            fieldName: "Content",
+            vectorFieldName: "ContentVector",
+            modelFieldName: "ContentVectorModelID"
+        }
+    ]);
+    return await super.Save();
+}
+```
+
 ## Common Use Cases
 
 ### 1. Automatic Related Entity Management
@@ -160,7 +222,16 @@ prompt.TemplateText = "New prompt content";
 await prompt.Save(); // Template and Template Contents created/updated automatically
 ```
 
-### 2. Server-Side Validation
+### 2. Vector Embedding Generation
+```typescript
+// Components automatically generate embeddings for text fields
+const component = await md.GetEntityObject<ComponentEntity>('MJ: Components');
+component.FunctionalRequirements = "The system shall...";
+component.TechnicalDesign = "Architecture overview...";
+await component.Save(); // Embeddings generated automatically
+```
+
+### 3. Server-Side Validation
 ```typescript
 @RegisterClass(BaseEntity, 'Documents')
 export class DocumentEntityServer extends DocumentEntity {

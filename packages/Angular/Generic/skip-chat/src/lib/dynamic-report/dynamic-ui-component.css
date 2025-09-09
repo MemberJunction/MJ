@@ -159,27 +159,30 @@
   color: #666; 
 }
 
-/* Tab styling */
+/* Tab styling - improved for better formatting */
 ::ng-deep .k-tabstrip {
   border: none;
   height: 100%;
   display: flex;
   flex-direction: column;
-  margin: 10px 5px 5px 5px;
+  margin: 0;
 }
 
 ::ng-deep .k-tabstrip-items {
   background: #f8f9fa;
   border: none;
-  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid #e0e0e0;
   flex: 0 0 auto;
-  padding: 8px 12px 0 12px;
-  gap: 4px;
+  padding: 4px 8px 0 8px;
+  gap: 2px;
   display: flex;
+  min-height: auto;
+  height: auto;
 }
 
 ::ng-deep .k-tabstrip-items-wrapper {
-  height: 100%;
+  height: auto;
+  min-height: auto;
 }
 
 ::ng-deep .k-content {
@@ -187,18 +190,19 @@
   overflow: hidden;
   padding: 0;
   background: white;
-  border: 1px solid #e0e0e0;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
+  border: none;
+  min-height: 0;
 }
 
 ::ng-deep .k-tabstrip .k-item {
   margin-right: 2px;
   border: none;
   background: transparent;
-  border-radius: 6px 6px 0 0;
-  padding: 2px;
+  border-radius: 4px 4px 0 0;
+  padding: 0;
   transition: all 0.2s ease;
+  height: auto;
+  min-height: auto;
 }
 
 ::ng-deep .k-tabstrip .k-item.k-selected {
@@ -210,7 +214,7 @@
 }
 
 ::ng-deep .k-tabstrip .k-link {
-  padding: 8px 16px;
+  padding: 6px 12px;
   font-weight: 500;
   font-size: 13px;
   color: #666;
@@ -218,11 +222,16 @@
   border-radius: 4px 4px 0 0;
   background: transparent;
   border: none;
-  text-transform: lowercase;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1.2;
+  min-height: auto;
+  height: auto;
 }
 
-::ng-deep .k-tabstrip .k-link:first-letter {
-  text-transform: uppercase;
+::ng-deep .k-tabstrip .k-link i {
+  font-size: 12px;
 }
 
 ::ng-deep .k-tabstrip .k-item:hover:not(.k-selected) .k-link {
@@ -274,3 +283,80 @@
   width: 100%;
   height: 100%;
 }
+
+/* Inner tabs specific styling with horizontal scroll */
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  max-width: 100%;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+  padding: 4px 8px 0 8px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-item {
+  flex: 0 0 auto !important;
+  display: inline-block !important;
+  float: none !important;
+}
+
+::ng-deep .inner-tabs .k-link {
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Force single row for inner tabs */
+::ng-deep .inner-tabstrip-container .k-tabstrip-items {
+  min-width: max-content !important;
+}
+
+/* Custom scrollbar for inner tabs */
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+::ng-deep .inner-tabs .k-tabstrip-items-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Nested tab styling - for tabs within tabs (fallback) */
+::ng-deep .k-tabstrip .k-tabstrip {
+  margin: 0;
+}
+
+::ng-deep .k-tabstrip .k-tabstrip .k-tabstrip-items {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+}
+
+::ng-deep .k-tabstrip .k-tabstrip .k-tabstrip-items-wrapper {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+/* Ensure proper content area in nested tabs */
+::ng-deep .k-tabstrip .k-tabstrip .k-content {
+  border: none;
+  background: transparent;
+}
+

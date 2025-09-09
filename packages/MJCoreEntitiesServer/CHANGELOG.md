@@ -1,5 +1,294 @@
 # @memberjunction/core-entities-server
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ai-core-plus@2.99.0
+  - @memberjunction/aiengine@2.99.0
+  - @memberjunction/ai-prompts@2.99.0
+  - @memberjunction/ai-vector-dupe@2.99.0
+  - @memberjunction/sqlserver-dataprovider@2.99.0
+  - @memberjunction/skip-types@2.99.0
+  - @memberjunction/ai-local-embeddings@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.98.0
+- @memberjunction/aiengine@2.98.0
+- @memberjunction/ai-prompts@2.98.0
+- @memberjunction/ai-local-embeddings@2.98.0
+- @memberjunction/ai-vector-dupe@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/global@2.98.0
+- @memberjunction/sqlserver-dataprovider@2.98.0
+- @memberjunction/skip-types@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/skip-types@2.97.0
+- @memberjunction/ai-core-plus@2.97.0
+- @memberjunction/aiengine@2.97.0
+- @memberjunction/ai-prompts@2.97.0
+- @memberjunction/ai-vector-dupe@2.97.0
+- @memberjunction/sqlserver-dataprovider@2.97.0
+- @memberjunction/ai-local-embeddings@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+- Updated dependencies [8f34e55]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ai-prompts@2.96.0
+  - @memberjunction/ai-core-plus@2.96.0
+  - @memberjunction/aiengine@2.96.0
+  - @memberjunction/ai-vector-dupe@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/sqlserver-dataprovider@2.96.0
+  - @memberjunction/skip-types@2.96.0
+  - @memberjunction/ai-local-embeddings@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/ai-core-plus@2.95.0
+  - @memberjunction/aiengine@2.95.0
+  - @memberjunction/ai-prompts@2.95.0
+  - @memberjunction/ai-vector-dupe@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/sqlserver-dataprovider@2.95.0
+  - @memberjunction/skip-types@2.95.0
+  - @memberjunction/ai-local-embeddings@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/skip-types@2.94.0
+- @memberjunction/ai-core-plus@2.94.0
+- @memberjunction/aiengine@2.94.0
+- @memberjunction/ai-prompts@2.94.0
+- @memberjunction/ai-vector-dupe@2.94.0
+- @memberjunction/sqlserver-dataprovider@2.94.0
+- @memberjunction/ai-local-embeddings@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/sqlserver-dataprovider@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ai-core-plus@2.93.0
+  - @memberjunction/aiengine@2.93.0
+  - @memberjunction/ai-prompts@2.93.0
+  - @memberjunction/ai-vector-dupe@2.93.0
+  - @memberjunction/skip-types@2.93.0
+  - @memberjunction/ai-local-embeddings@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [5161d9f]
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/ai-local-embeddings@2.92.0
+  - @memberjunction/core@2.92.0
+  - @memberjunction/sqlserver-dataprovider@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/skip-types@2.92.0
+  - @memberjunction/ai-core-plus@2.92.0
+  - @memberjunction/aiengine@2.92.0
+  - @memberjunction/ai-prompts@2.92.0
+  - @memberjunction/ai-vector-dupe@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Minor Changes
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/ai-local-embeddings@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/ai-core-plus@2.91.0
+  - @memberjunction/aiengine@2.91.0
+  - @memberjunction/ai-prompts@2.91.0
+  - @memberjunction/ai-vector-dupe@2.91.0
+  - @memberjunction/sqlserver-dataprovider@2.91.0
+  - @memberjunction/skip-types@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Minor Changes
+
+- 146ebcc: migration
+- d5d26d7: migration
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/aiengine@2.90.0
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/skip-types@2.90.0
+  - @memberjunction/ai-prompts@2.90.0
+  - @memberjunction/ai-vector-dupe@2.90.0
+  - @memberjunction/sqlserver-dataprovider@2.90.0
+  - @memberjunction/ai-core-plus@2.90.0
+  - @memberjunction/ai-local-embeddings@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+- Updated dependencies [34d456e]
+  - @memberjunction/ai-core-plus@2.89.0
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/sqlserver-dataprovider@2.89.0
+  - @memberjunction/aiengine@2.89.0
+  - @memberjunction/ai-prompts@2.89.0
+  - @memberjunction/ai-vector-dupe@2.89.0
+  - @memberjunction/skip-types@2.89.0
+  - @memberjunction/ai-local-embeddings@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [56257ed]
+- Updated dependencies [df4031f]
+  - @memberjunction/sqlserver-dataprovider@2.88.0
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ai-core-plus@2.88.0
+  - @memberjunction/aiengine@2.88.0
+  - @memberjunction/ai-prompts@2.88.0
+  - @memberjunction/ai-vector-dupe@2.88.0
+  - @memberjunction/skip-types@2.88.0
+  - @memberjunction/ai-local-embeddings@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ai-core-plus@2.87.0
+  - @memberjunction/aiengine@2.87.0
+  - @memberjunction/ai-prompts@2.87.0
+  - @memberjunction/ai-vector-dupe@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/sqlserver-dataprovider@2.87.0
+  - @memberjunction/skip-types@2.87.0
+  - @memberjunction/ai-local-embeddings@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [8846ccc]
+- Updated dependencies [7dd2409]
+  - @memberjunction/skip-types@2.86.0
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/ai-core-plus@2.86.0
+  - @memberjunction/aiengine@2.86.0
+  - @memberjunction/ai-prompts@2.86.0
+  - @memberjunction/ai-vector-dupe@2.86.0
+  - @memberjunction/sqlserver-dataprovider@2.86.0
+  - @memberjunction/ai-local-embeddings@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/skip-types@2.85.0
+  - @memberjunction/ai-core-plus@2.85.0
+  - @memberjunction/aiengine@2.85.0
+  - @memberjunction/ai-prompts@2.85.0
+  - @memberjunction/ai-local-embeddings@2.85.0
+  - @memberjunction/ai-vector-dupe@2.85.0
+  - @memberjunction/sqlserver-dataprovider@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/sqlserver-dataprovider@2.84.0
+  - @memberjunction/ai-core-plus@2.84.0
+  - @memberjunction/aiengine@2.84.0
+  - @memberjunction/ai-prompts@2.84.0
+  - @memberjunction/ai-vector-dupe@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/skip-types@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+- Updated dependencies [1dc69bf]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/aiengine@2.83.0
+  - @memberjunction/ai-core-plus@2.83.0
+  - @memberjunction/ai-prompts@2.83.0
+  - @memberjunction/ai-vector-dupe@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/sqlserver-dataprovider@2.83.0
+  - @memberjunction/skip-types@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Minor Changes

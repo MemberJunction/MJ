@@ -1,0 +1,108 @@
+{
+  "name": "AIDistributionChart",
+  "location": "embedded",
+  "title": "AI Distribution Chart",
+  "description": "Pie and bar charts showing distribution of runs, tokens, and costs by agent or prompt for drill-down analysis",
+  "type": "chart",
+  "functionalRequirements": "## Distribution Chart Requirements\n\n### Core Functionality\n- Display distribution breakdown for selected time period\n- Toggle between pie chart and bar chart views\n- Show top 10 items with 'Others' grouping\n- Display runs, tokens, and cost metrics\n- Interactive tooltips with detailed values\n- Click on segments to filter detail table\n- Color-coded segments with legend\n\n### Visual Features\n- Smooth transitions between chart types\n- Percentage labels on pie segments\n- Value labels on bar chart\n- Responsive sizing\n- Hover effects for interactivity",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives drill-down data from parent component",
+    "entities": [ 
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Historical prompt execution data for performance analysis",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "Prompt",
+          "ModelID",
+          "Model",
+          "RunAt",
+          "CompletedAt",
+          "Success",
+          "TokensUsed",
+          "TotalCost"
+        ],
+        "filterFields": [
+          "RunAt",
+          "Success",
+          "PromptID",
+          "ModelID"
+        ],
+        "sortFields": [
+          "RunAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier",
+            "isPrimaryKey": true,
+            "allowsNull": false,
+            "description": "Unique run identifier"
+          },
+          {
+            "name": "PromptID",
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "description": "Reference to AI Prompt"
+          },
+          {
+            "name": "Prompt",
+            "type": "nvarchar",
+            "allowsNull": true,
+            "description": "Prompt name (denormalized)"
+          },
+          {
+            "name": "RunAt",
+            "type": "datetime",
+            "allowsNull": false,
+            "description": "Execution timestamp"
+          },
+          {
+            "name": "TokensUsed",
+            "type": "int",
+            "allowsNull": true,
+            "description": "Total tokens consumed"
+          },
+          {
+            "name": "TotalCost",
+            "type": "decimal",
+            "allowsNull": true,
+            "description": "Total cost in USD"
+          }
+        ],
+        "permissionLevelNeeded": [
+          "read"
+        ]
+      }      
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Technical Design\n\n### Props\n- data: Array of items for selected period\n- activeTab: Current view (agents/prompts)\n- groupBy: Time grouping context\n\n### Chart Features\n- Aggregates data by agent/prompt\n- Calculates percentages\n- Sorts by total value\n- Groups small items into 'Others'",
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "required": true,
+      "description": "Array of run items for distribution analysis"
+    },
+    {
+      "name": "activeTab",
+      "type": "string",
+      "required": true,
+      "description": "Current tab: agents or prompts"
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "required": true,
+      "description": "Time grouping context"
+    }
+  ],
+  "events": [],
+  "exampleUsage": "<AIDistributionChart data={selectedPoint.items} activeTab=\"agents\" />",
+  "code": "@file:../code/ai-distribution-chart.js",
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,55 @@
+{
+  "name": "FunnelChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/funnel-chart.js",
+  "functionalRequirements": "## Funnel Chart Component\n\n### Purpose\nRenders the interactive funnel visualization showing deal progression through pipeline stages.\n\n### Features\n- Display funnel segments for each stage\n- Show counts or values based on view mode\n- Calculate and display conversion rates\n- Animate segments on render\n- Handle click events for stage selection\n- Color-coded stages with gradients\n- Lost deals indicator\n\n### Visual Design\n- Decreasing width for funnel effect\n- Stage name and value labels\n- Conversion rate percentages\n- Hover effects with scale transform\n- CSS animations for smooth entry",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Visualizes deal funnel data derived from Deals entity",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Source data for funnel visualization",
+        "displayFields": ["Stage", "Amount", "CloseDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Data is pre-aggregated by stage and passed via props for funnel visualization"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- funnelData: Array of stage data with counts, values, and conversion rates\n- closedLost: Data for lost deals\n- viewMode: 'count' or 'value' display mode\n- onStageClick: Callback for stage selection\n\n### Rendering\n- CSS-based funnel visualization\n- Inline styles for dynamic widths\n- Animation delays for staggered effect",
+  "properties": [
+    {
+      "name": "funnelData",
+      "type": "Array<{name: string, count: number, value: number, conversionRate?: number, color: string}>",
+      "required": true,
+      "description": "Array of stage data with counts, values, and conversion rates"
+    },
+    {
+      "name": "closedLost",
+      "type": "{count: number, value: number}",
+      "required": true,
+      "description": "Lost deals summary data"
+    },
+    {
+      "name": "viewMode",
+      "type": "'count' | 'value'",
+      "required": true,
+      "description": "Display mode for funnel segments"
+    },
+    {
+      "name": "onStageClick",
+      "type": "(stageName: string) => void",
+      "required": true,
+      "description": "Callback when stage is clicked"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

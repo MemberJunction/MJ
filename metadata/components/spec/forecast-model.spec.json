@@ -1,0 +1,59 @@
+{
+  "name": "ForecastModel",
+  "namespace": "CRM/Finance",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/forecast-model.js",
+  "functionalRequirements": "## Forecast Model\n\n### Purpose\nDisplay financial forecasting and projections.\n\n### Features\n- Predictive models\n- Scenario analysis\n- Confidence intervals\n- Adjustment controls",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays financial forecasting and projections",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal pipeline for forecasting",
+        "displayFields": ["Amount", "Probability", "CloseDate", "Stage"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Pipeline-based revenue forecasting"
+      },
+      {
+        "name": "Invoices",
+        "description": "Historical revenue data",
+        "displayFields": ["TotalAmount", "IssueDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Historical trend analysis"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- forecastData: Forecast projections\n- scenarios: Different scenarios\n- onScenarioChange: Scenario selection",
+  "properties": [
+    {
+      "name": "forecastData",
+      "type": "Array<{period: string, value: number, confidence: {low: number, high: number}}>",
+      "required": true,
+      "description": "Forecast projection data"
+    },
+    {
+      "name": "scenarios",
+      "type": "Array<{id: string, name: string, parameters: {growth: number, seasonality: boolean}}>",
+      "required": true,
+      "description": "Available scenarios"
+    },
+    {
+      "name": "onScenarioChange",
+      "type": "(scenarioId: string) => void",
+      "required": false,
+      "description": "Scenario change callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

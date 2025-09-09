@@ -1,0 +1,119 @@
+{
+  "name": "AIPromptsClusterControls",
+  "title": "AI Prompts Cluster Controls",
+  "description": "Control panel for filtering, searching, and adjusting clustering parameters",
+  "type": "panel",
+  "location": "embedded",
+  "code": "@file:../code/ai-prompts-cluster-controls.js",
+  "functionalRequirements": "Provide search input for finding prompts, filter by category/type/status, adjust clustering parameters, control similarity threshold, toggle view options, export cluster assignments",
+  "technicalDesign": "React component with controlled inputs for various filters and parameters, emits change events to parent component for re-clustering or re-filtering",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Prompts",
+        "displayFields": ["Name", "Description", "TemplateText", "CategoryID", "Category", "TypeID", "Type", "Status", "PromptRole", "ResponseFormat", "Template"],
+        "filterFields": ["Status", "CategoryID", "TypeID", "PromptRole"],
+        "sortFields": ["Name", "CreatedAt", "UpdatedAt"],
+        "permissions": ["read"]
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "categories",
+      "type": "array",
+      "required": true,
+      "description": "Available prompt categories for filtering"
+    },
+    {
+      "name": "types",
+      "type": "array",
+      "required": true,
+      "description": "Available prompt types for filtering"
+    },
+    {
+      "name": "currentFilters",
+      "type": "object",
+      "required": true,
+      "description": "Current filter state"
+    },
+    {
+      "name": "clusterCount",
+      "type": "number",
+      "required": true,
+      "description": "Number of clusters to generate"
+    },
+    {
+      "name": "similarityThreshold",
+      "type": "number",
+      "required": true,
+      "description": "Current similarity threshold"
+    },
+    {
+      "name": "isProcessing",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether embeddings are being generated"
+    }
+  ],
+  "events": [
+    {
+      "name": "onSearchChange",
+      "description": "Fired when search text changes",
+      "parameters": [
+        {
+          "name": "searchText",
+          "type": "string",
+          "description": "The search query"
+        }
+      ]
+    },
+    {
+      "name": "onFilterChange",
+      "description": "Fired when filters are updated",
+      "parameters": [
+        {
+          "name": "filters",
+          "type": "object",
+          "description": "Updated filter object"
+        }
+      ]
+    },
+    {
+      "name": "onClusterCountChange",
+      "description": "Fired when cluster count is adjusted",
+      "parameters": [
+        {
+          "name": "count",
+          "type": "number",
+          "description": "New cluster count"
+        }
+      ]
+    },
+    {
+      "name": "onSimilarityThresholdChange",
+      "description": "Fired when similarity threshold changes",
+      "parameters": [
+        {
+          "name": "threshold",
+          "type": "number",
+          "description": "New threshold value"
+        }
+      ]
+    },
+    {
+      "name": "onRecalculate",
+      "description": "Fired when user requests recalculation",
+      "parameters": []
+    },
+    {
+      "name": "onExport",
+      "description": "Fired when user wants to export clusters",
+      "parameters": []
+    }
+  ],
+  "libraries": [],
+  "usageExample": "<AIPromptsClusterControls categories={categories} onFilterChange={handleFilterChange} />",
+  "version": "1.0.0"
+}

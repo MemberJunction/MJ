@@ -7,13 +7,15 @@
 import { 
   CompilationResult,
   CompileOptions,
-  ComponentStyles,
-  RuntimeContext
+  RuntimeContext,
+  CompiledComponent
 } from '../types';
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
+import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Result of a hierarchy registration operation
@@ -48,6 +50,11 @@ export interface HierarchyRegistrationOptions {
   continueOnError?: boolean;
   /** Whether to override existing components */
   allowOverride?: boolean;
+  /**
+   * Required, metadata for all possible libraries allowed by the system
+   */
+  allLibraries: ComponentLibraryEntity[];
+  debug?: boolean;
 }
 
 /**
@@ -68,7 +75,7 @@ export class ComponentHierarchyRegistrar {
    */
   async registerHierarchy(
     rootSpec: ComponentSpec,
-    options: HierarchyRegistrationOptions = {}
+    options: HierarchyRegistrationOptions
   ): Promise<HierarchyRegistrationResult> {
     const {
       styles,
@@ -78,35 +85,108 @@ export class ComponentHierarchyRegistrar {
       allowOverride = true
     } = options;
 
+    console.log('🌳 ComponentHierarchyRegistrar.registerHierarchy:', {
+      rootComponent: rootSpec.name,
+      hasLibraries: !!(rootSpec.libraries && rootSpec.libraries.length > 0),
+      libraryCount: rootSpec.libraries?.length || 0,
+      libraries: rootSpec.libraries?.map(l => l.name)
+    });
+
     const registeredComponents: string[] = [];
     const errors: ComponentRegistrationError[] = [];
     const warnings: string[] = [];
 
-    // Register the root component
-    const rootResult = await this.registerSingleComponent(
-      rootSpec,
-      { styles, namespace, version, allowOverride }
-    );
-
-    if (rootResult.success) {
-      registeredComponents.push(rootSpec.name);
-    } else {
-      errors.push(rootResult.error!);
-      if (!continueOnError) {
-        return { success: false, registeredComponents, errors, warnings };
+    // PHASE 1: Compile all components first (but defer factory execution)
+    const compiledMap = new Map<string, CompiledComponent>();
+    const specMap = new Map<string, ComponentSpec>();
+    
+    // Helper to compile a component without calling its factory
+    const compileOnly = async (spec: ComponentSpec): Promise<{ success: boolean; error?: ComponentRegistrationError }> => {
+      if (!spec.code) return { success: true };
+      
+      try {
+        const compileOptions: CompileOptions = {
+          componentName: spec.name,
+          componentCode: spec.code,
+          styles,
+          libraries: spec.libraries,
+          dependencies: spec.dependencies,
+          allLibraries: options.allLibraries
+        };
+        
+        const result = await this.compiler.compile(compileOptions);
+        if (result.success && result.component) {
+          compiledMap.set(spec.name, result.component);
+          specMap.set(spec.name, spec);
+          return { success: true };
+        } else {
+          return {
+            success: false,
+            error: {
+              componentName: spec.name,
+              error: result.error?.message || 'Unknown compilation error',
+              phase: 'compilation'
+            }
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            componentName: spec.name,
+            error: error instanceof Error ? error.message : String(error),
+            phase: 'compilation'
+          }
+        };
+      }
+    };
+    
+    // Compile all components in hierarchy
+    const compileQueue = [rootSpec];
+    const visited = new Set<string>();
+    
+    while (compileQueue.length > 0) {
+      const spec = compileQueue.shift()!;
+      if (visited.has(spec.name)) continue;
+      visited.add(spec.name);
+      
+      const result = await compileOnly(spec);
+      if (!result.success) {
+        errors.push(result.error!);
+        if (!continueOnError) {
+          return { success: false, registeredComponents, errors, warnings };
+        }
+      }
+      
+      if (spec.dependencies) {
+        compileQueue.push(...spec.dependencies);
       }
     }
-
-    // Register child components recursively
-    const childComponents = rootSpec.dependencies || [];
-    if (childComponents.length > 0) {
-      const childResult = await this.registerChildComponents(
-        childComponents,
-        { styles, namespace, version, continueOnError, allowOverride },
-        registeredComponents,
-        errors,
-        warnings
+    
+    // PHASE 2: Execute all factories with components available
+    for (const [name, compiled] of compiledMap) {
+      const spec = specMap.get(name)!;
+      
+      // Build components object from all registered components
+      const components: Record<string, any> = {};
+      for (const [depName, depCompiled] of compiledMap) {
+        // Call factory to get ComponentObject, then extract React component
+        const depObject = depCompiled.factory(this.runtimeContext, styles);
+        components[depName] = depObject.component;
+      }
+      
+      // Now call factory with components available
+      const componentObject = compiled.factory(this.runtimeContext, styles, components);
+      
+      // Register in registry
+      this.registry.register(
+        spec.name,
+        componentObject,
+        spec.namespace || namespace,
+        version
       );
+      
+      registeredComponents.push(spec.name);
     }
 
     return {
@@ -130,6 +210,7 @@ export class ComponentHierarchyRegistrar {
       namespace?: string;
       version?: string;
       allowOverride?: boolean;
+      allLibraries: ComponentLibraryEntity[];
     }
   ): Promise<{ success: boolean; error?: ComponentRegistrationError }> {
     const { styles, namespace = 'Global', version = 'v1', allowOverride = true } = options;
@@ -160,8 +241,16 @@ export class ComponentHierarchyRegistrar {
       const compileOptions: CompileOptions = {
         componentName: spec.name,
         componentCode: spec.code,
-        styles
+        styles,
+        libraries: spec.libraries, // Pass along library dependencies from the spec
+        dependencies: spec.dependencies, // Pass along child component dependencies
+        allLibraries: options.allLibraries
       };
+
+      console.log(`🔧 Compiling component ${spec.name} with libraries:`, {
+        libraryCount: spec.libraries?.length || 0,
+        libraries: spec.libraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable }))
+      });
 
       const compilationResult = await this.compiler.compile(compileOptions);
 
@@ -176,14 +265,21 @@ export class ComponentHierarchyRegistrar {
         };
       }
 
-      // Create component factory
-      const componentFactory = compilationResult.component!.component(this.runtimeContext, styles);
+      // Call the factory to create the ComponentObject
+      // IMPORTANT: We don't pass components here because child components may not be registered yet
+      // Components are resolved later when the component is actually rendered
+      console.log(`🏭 Calling factory for ${spec.name} with runtime context:`, {
+        hasReact: !!this.runtimeContext.React,
+        hasReactDOM: !!this.runtimeContext.ReactDOM,
+        libraryKeys: Object.keys(this.runtimeContext.libraries || {})
+      });
+      const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
-      // Register the component
+      // Register the full ComponentObject (not just the React component)
       this.registry.register(
         spec.name,
-        componentFactory.component,
-        namespace,
+        componentObject,
+        spec.namespace || namespace,
         version
       );
 
@@ -222,7 +318,8 @@ export class ComponentHierarchyRegistrar {
         styles: options.styles,
         namespace: options.namespace,
         version: options.version,
-        allowOverride: options.allowOverride
+        allowOverride: options.allowOverride,
+        allLibraries: options.allLibraries
       });
 
       if (childResult.success) {
@@ -265,7 +362,7 @@ export async function registerComponentHierarchy(
   compiler: ComponentCompiler,
   registry: ComponentRegistry,
   runtimeContext: RuntimeContext,
-  options: HierarchyRegistrationOptions = {}
+  options: HierarchyRegistrationOptions
 ): Promise<HierarchyRegistrationResult> {
   const registrar = new ComponentHierarchyRegistrar(compiler, registry, runtimeContext);
   return registrar.registerHierarchy(rootSpec, options);

@@ -72,7 +72,10 @@ export class GeminiLLM extends BaseLLM {
             const modelName = params.model || "gemini-pro";
             
             const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
-            const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+            const noSystemMessages = allMessagesButLast.filter(m => m.role !== 'system');
+            // we filter out system messages becuase those are sent seprately to Google via
+            // the the systemInstruction property of the config object below
+            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
             
             // Create the model and then chat
@@ -117,7 +120,20 @@ export class GeminiLLM extends BaseLLM {
             }
             
             // Use the new API structure
+            const systemInstructions: string[] = [];
+            const sysPrompts = params.messages.filter(m => m.role === 'system');
+            if (sysPrompts.length > 0) {
+                systemInstructions.push(...sysPrompts.map(m => 
+                    typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')));
+            }
             const chat = this.GeminiClient.chats.create({
+                config: {
+                    systemInstruction: systemInstructions,
+                    thinkingConfig: {
+                        includeThoughts: true,
+                        thinkingBudget: -1
+                    }
+                },
                 model: modelName,
                 history: tempMessages 
             });
@@ -129,7 +145,8 @@ export class GeminiLLM extends BaseLLM {
                 ...modelOptions
             });
             
-            const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text)?.text || '';
+            const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text && !part.thought)?.text || '';
+            const thinking = result.candidates?.[0]?.content?.parts?.find(part => part.thought)?.text || '';
             
             // Extract thinking content if present
             let content: string = rawContent.trim();
@@ -141,6 +158,9 @@ export class GeminiLLM extends BaseLLM {
                 thinkingContent = content.substring(thinkStart, thinkEnd).trim();
                 // remove thinking content from main content
                 content = content.substring(thinkEnd + '</think>'.length).trim();
+            }
+            else {
+                thinkingContent = thinking;
             }
             
             const endTime = new Date();

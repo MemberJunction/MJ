@@ -1,0 +1,138 @@
+{
+  "name": "AIModelDetails",
+  "title": "AI Model Details",
+  "description": "Sliding details panel showing comprehensive model information, vendors, and usage statistics",
+  "type": "detail",
+  "functionalRequirements": "Show model specs, vendor associations grouped by type, usage statistics, and open record button",
+  "technicalDesign": "",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Models",
+        "description": "Core AI model definitions and specifications",
+        "displayFields": [
+          "ID",
+          "Name",
+          "APIName",
+          "Description",
+          "AIModelTypeID",
+          "InputTokenLimit",
+          "PowerRank",
+          "SpeedRank",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "AIModelTypeID",
+          "IsActive"
+        ],
+        "sortFields": [
+          "Name",
+          "InputTokenLimit",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the AI model"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the AI model"
+          },
+          {
+            "name": "APIName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "API identifier for the model"
+          },
+          {
+            "name": "InputTokenLimit",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum input token limit"
+          },
+          {
+            "name": "CostRank",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Relative cost ranking (1-5)"
+          }
+        ], 
+        "usageContext": "Main list of AI models"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "model",
+      "type": "object",
+      "required": true,
+      "description": "The selected AI model object"
+    },
+    {
+      "name": "vendors",
+      "type": "array",
+      "required": true,
+      "description": "Array of vendors associated with the model"
+    },
+    {
+      "name": "promptRuns",
+      "type": "array",
+      "required": true,
+      "description": "Array of prompt runs for this model"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the details panel is open"
+    }
+  ],
+  "events": [
+    {
+      "name": "onClose",
+      "description": "Fired when the details panel should close",
+      "parameters": []
+    },
+    {
+      "name": "onOpenRecord",
+      "description": "Fired when the open record button is clicked",
+      "parameters": [
+        {
+          "name": "modelName",
+          "type": "string",
+          "description": "Name of the model to open"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<AIModelDetails ... />",
+  "code": "@file:../code/ai-model-details.js",
+  "dependencies": [],
+  "libraries": []
+}

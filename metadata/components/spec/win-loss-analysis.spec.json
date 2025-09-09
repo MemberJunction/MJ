@@ -1,0 +1,47 @@
+{
+  "name": "WinLossAnalysis",
+  "namespace": "CRM/Analytics",
+  "type": "Analysis",
+  "location": "embedded",
+  "code": "@file:../code/win-loss-analysis.js",
+  "functionalRequirements": "## Win/Loss Analysis\n\n### Purpose\nAnalyze patterns in won and lost deals to identify success factors and improvement areas.\n\n### Core Features\n- **Win/Loss Ratios**: By rep, product, industry\n- **Reason Analysis**: Common win/loss reasons\n- **Competitive Analysis**: Win rates vs competitors\n- **Time-based Trends**: Historical win rate changes\n- **Factor Correlation**: Key success indicators\n- **Interactive Sankey**: Using AG Grid for flow visualization\n- **Slide-out Insights**: AI-generated recommendations\n- **Comparative Views**: Side-by-side analysis\n\n### Visualizations\n- Sankey diagram for deal flow\n- Heatmap for factor correlation\n- Grouped bar charts for comparisons\n- Word cloud for reasons",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Deals",
+        "displayFields": ["DealName", "Stage", "Amount", "CloseDate", "Owner", "LossReason", "Competitor"],
+        "filterFields": ["Stage", "CloseDate", "Owner"],
+        "sortFields": ["CloseDate", "Amount"] 
+      }
+    ]
+  },
+  "technicalDesign": "## Implementation\n\n### Components\n- Main: WinLossAnalysis\n- Sub-components:\n  - WinRateMatrix: Multi-dimensional analysis\n  - ReasonCloud: Visual reason distribution\n  - CompetitiveChart: Competitor comparison\n  - FactorAnalysis: Success correlation\n  - InsightsPanel: AI recommendations\n\n### Analysis Methods\n- Statistical correlation\n- Pattern recognition\n- Trend analysis\n- Comparative metrics",
+  "properties": [],
+  "events": [
+    {
+      "name": "OpenEntityRecord",
+      "description": "View deal details"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "ag-grid",
+      "version": "^31.0.1",
+      "globalVariable": "agGrid"
+    },
+    {
+      "name": "mathjs",
+      "version": "^12.2.1",
+      "globalVariable": "math"
+    }
+  ]
+}

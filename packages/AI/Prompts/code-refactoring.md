@@ -168,7 +168,7 @@ private getParserForOutputType(outputType: string): OutputParser {
 ```typescript
 // Main orchestrator
 private async renderChildPromptTemplates(
-    childPrompts: AIPromptEntity[], 
+    childPrompts: AIPromptEntityExtended[], 
     parentData: any
 ): Promise<RenderedPrompt[]> {
     const renderTasks = childPrompts.map(child => 
@@ -180,7 +180,7 @@ private async renderChildPromptTemplates(
 
 // Separate concerns:
 private async createChildRenderTask(
-    childPrompt: AIPromptEntity, 
+    childPrompt: AIPromptEntityExtended, 
     parentData: any
 ): Promise<RenderedPrompt> {
     const childData = await this.prepareChildData(childPrompt, parentData);
@@ -189,7 +189,7 @@ private async createChildRenderTask(
 }
 
 private async prepareChildData(
-    childPrompt: AIPromptEntity, 
+    childPrompt: AIPromptEntityExtended, 
     parentData: any
 ): Promise<any> {
     const staticData = await this.loadStaticData(childPrompt);

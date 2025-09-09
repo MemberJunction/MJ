@@ -1,5 +1,199 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.99.0
+
+### Patch Changes
+
+- 2eaf6c9: Fix Okta token refresh to prevent GraphQL re-initialization errors
+
+  - Prevents authStateManager from updating userClaims$ during token
+    refresh operations
+  - Uses proper token.renewTokens() method for PKCE flow instead of
+    individual renew calls
+  - Handles expired sessions gracefully without throwing errors
+  - Adds synchronization delay to ensure authStateManager events are
+    processed correctly
+  - Returns refreshed claims directly without triggering app-wide
+    subscription updates
+
+  This resolves the "OAuthError: The client specified not to prompt, but
+  the user is not logged in" error and prevents unnecessary GraphQL client
+  re-initialization during Okta token refresh operations.
+
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/core@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- 4b52f29: Skip Chat UI improvements and auth provider fixes
+
+  - **Skip Chat UI Enhancements**:
+
+    - Fixed timer display persistence when switching between conversations
+    - Prevented clock icon from disappearing when other conversations complete
+    - Eliminated delay when displaying status messages on conversation switch
+    - Fixed status message and timer persistence across page refreshes
+    - Preserved whitespace formatting in chat messages
+    - Updated chat input style to match MS Teams design
+    - Fixed text overflow issues under buttons in chat input area
+
+  - **Auth Provider Improvements**:
+
+    - Simplified Load function implementation across auth providers (Auth0, MSAL,
+      Okta)
+
+  - **MJAPI Configuration**:
+    - Added configurable public URL support for MJAPI callbacks to enable hybrid
+      development scenarios
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- 2a87d36: Fix auth provider initialization latency causing multi-second
+  delays on app startup
+
+  - Implemented lazy initialization for MSAL, Auth0, and Okta
+    providers to defer expensive operations until authentication is
+    actually needed
+  - MSAL: Deferred handleRedirectPromise() which was blocking for
+    several seconds even when no redirect was happening
+  - Auth0: Removed synchronous auth state subscription from
+    constructor
+  - Okta: Added full lazy initialization pattern with proper null
+    safety
+  - App component: Changed to async auth setup pattern without
+    blocking Angular bootstrap
+  - Added performance logging for GraphQL setup and metadata
+    retrieval operations
+
+  This reduces MJExplorer startup time from several seconds to under
+  50ms while maintaining full auth functionality.
+
+  - @memberjunction/core@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+  - @memberjunction/core@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+
+## 2.91.0
+
+### Minor Changes
+
+- f703033: Implement extensible N-provider authentication architecture
+
+  - Created shared authentication types in @memberjunction/core for use
+    across frontend and backend
+  - Refactored authentication to support multiple providers using MJGlobal
+    ClassFactory pattern
+  - Implemented dynamic provider discovery and registration without
+    modifying core code
+  - Added support for multiple concurrent auth providers via authProviders
+    array configuration
+  - Replaced static method with cleaner property pattern for Angular
+    provider dependencies
+  - Eliminated code duplication and removed unused configuration methods
+  - Maintained full backward compatibility with existing auth
+    implementations
+
+  This enables teams to add custom authentication providers (SAML,
+  proprietary SSO, etc.)
+  without forking or modifying the core authentication modules.
+
+- 6476d74: migrations
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+  - @memberjunction/core@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+  - @memberjunction/core@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/core@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/core@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/core@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/core@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { RunView, LogError } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity, EntityActionEntity } from '@memberjunction/core-entities';
+import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 
@@ -97,7 +97,6 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       
       // Load all data in a single batch using RunViews
       const rv = new RunView();
-      console.log('Loading Actions dashboard data...');
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
@@ -125,14 +124,6 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       const actions = (actionsResult.Results || []) as ActionEntity[];
       const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
       const executions = (executionsResult.Results || []) as ActionExecutionLogEntity[];
-      
-      console.log(`Loaded ${actions.length} actions, ${categories.length} categories, ${executions.length} executions`);
-      if (actions.length === 0) {
-        console.warn('No actions loaded. Check if the Actions entity has data and user has permissions.');
-      }
-      if (categories.length === 0) {
-        console.warn('No categories loaded. Check if Action Categories entity has data and user has permissions.');
-      }
 
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
@@ -149,31 +140,12 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   }
 
 
-  private async loadEntityActions(): Promise<EntityActionEntity[]> {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Entity Actions',
-      ExtraFilter: '',
-      OrderBy: '__mj_UpdatedAt DESC',
-      UserSearchString: '',
-      IgnoreMaxRows: false,
-      MaxRows: 1000
-    });
-    
-    if (result && result.Success && result.Results) {
-      return result.Results as EntityActionEntity[];
-    } else {
-      throw new Error('Failed to load entity actions');
-    }
-  }
 
   private calculateMetrics(
     actions: ActionEntity[], 
     categories: ActionCategoryEntity[], 
     executions: ActionExecutionLogEntity[]
   ): void {
-    console.log('Calculating metrics for:', { actions, categories, executions });
-    
     this.metrics = {
       totalActions: actions.length,
       activeActions: actions.filter(a => a.Status === 'Active').length,
@@ -190,8 +162,6 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       aiGeneratedActions: actions.filter(a => a.Type === 'Generated').length,
       customActions: actions.filter(a => a.Type === 'Custom').length
     };
-    
-    console.log('Calculated metrics:', this.metrics);
   }
 
   private calculateSuccessRate(executions: ActionExecutionLogEntity[]): number {

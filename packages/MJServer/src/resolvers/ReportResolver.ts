@@ -1,4 +1,4 @@
-import { EntitySaveOptions, Metadata, RunReport } from '@memberjunction/core';
+import { EntitySaveOptions, IRunReportProvider, Metadata, RunReport } from '@memberjunction/core';
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-entities';
@@ -7,6 +7,7 @@ import { DataContext } from '@memberjunction/data-context';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { z } from 'zod';
 import mssql from 'mssql';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class RunReportResultType {
@@ -47,9 +48,11 @@ export class CreateReportResultType {
 @Resolver(RunReportResultType)
 export class ReportResolverExtended {
   @Query(() => RunReportResultType)
-  async GetReportData(@Arg('ReportID', () => String) ReportID: string, @Ctx() {}: AppContext): Promise<RunReportResultType> {
-    const runReport = new RunReport();
-    const result = await runReport.RunReport({ ReportID: ReportID });
+  async GetReportData(@Arg('ReportID', () => String) ReportID: string, @Ctx() context: AppContext): Promise<RunReportResultType> {
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const rp = new RunReport(provider as unknown as IRunReportProvider);
+
+    const result = await rp.RunReport({ ReportID: ReportID });
     return {
       ReportID: ReportID,
       Success: result.Success,
@@ -66,10 +69,10 @@ export class ReportResolverExtended {
   @Mutation(() => CreateReportResultType)
   async CreateReportFromConversationDetailID(
     @Arg('ConversationDetailID', () => String) ConversationDetailID: string,
-    @Ctx() { dataSource, userPayload }: AppContext
+    @Ctx() { dataSource, userPayload, providers }: AppContext
   ): Promise<CreateReportResultType> {
     try {
-      const md = new Metadata();
+      const md = GetReadWriteProvider(providers);
 
       const u = UserCache.Users.find((u) => u.Email?.trim().toLowerCase() === userPayload?.email?.trim().toLowerCase());
       if (!u) throw new Error('Unable to find user');
@@ -103,20 +106,19 @@ export class ReportResolverExtended {
       const title = skipData.title ? skipData.title : skipData.reportTitle ? skipData.reportTitle : 'Untitled Report';
       report.Name = title;
       report.Description = skipData.userExplanation ? skipData.userExplanation : '';
-      report.ConversationID = result[0].ConversationID;
+      report.ConversationID = result.recordset[0].ConversationID;
       report.ConversationDetailID = ConversationDetailID;
 
       const dc: DataContext = new DataContext();
-      await dc.LoadMetadata(result[0].DataContextID, u);
+      await dc.LoadMetadata(result.recordset[0].DataContextID, u);
       const newDataContext = await DataContext.Clone(dc, false, u);
       if (!newDataContext) throw new Error('Error cloning data context');
       report.DataContextID = newDataContext.ID;
 
       // next, strip out the messags from the SkipData object to put them into our Report Configuration as we dont need to store that information as we have a
-      // link back to the conversation and conversation detail
-      const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(JSON.stringify(skipData));
-      newSkipData.messages = [];
-      report.Configuration = JSON.stringify(newSkipData);
+      // link back to the conversation and conversation detail, skipData can be modified as it is a copy of the data doesn't affect the original source
+      skipData.messages = [];
+      report.Configuration = JSON.stringify(skipData);
 
       report.SharingScope = 'None';
       report.UserID = u.ID;

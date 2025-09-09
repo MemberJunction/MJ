@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
-import { AIAgentEntity, AIPromptEntity, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIPromptEntityExtended, TemplateParamEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIConfigurationEntity, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -141,7 +141,7 @@ export interface SavedConversation {
  * @example
  * ```typescript
  * // Using with agent entity
- * const agent = await metadata.GetEntityObject<AIAgentEntity>('AI Agents');
+ * const agent = await metadata.GetEntityObject<AIAgentEntityExtended>('AI Agents');
  * await agent.Load('agent-id');
  * this.testHarness.aiAgent = agent;
  * this.testHarness.isVisible = true;
@@ -172,7 +172,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @Input() mode: TestHarnessMode = 'agent';
     
     /** The entity to test - either an AI Agent or AI Prompt */
-    @Input() entity: AIAgentEntity | AIPromptEntity | null = null;
+    @Input() entity: AIAgentEntityExtended | AIPromptEntityExtended | null = null;
     
     /** The original prompt run ID when re-running a previous prompt execution */
     @Input() originalPromptRunId: string | null = null;
@@ -188,10 +188,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
-    get aiAgent(): AIAgentEntity | null {
+    get aiAgent(): AIAgentEntityExtended | null {
         return this.isAgentEntity(this.entity) ? this.entity : null;
     }
-    set aiAgent(value: AIAgentEntity | null) {
+    set aiAgent(value: AIAgentEntityExtended | null) {
         this.entity = value;
         if (value) {
             this.mode = 'agent';
@@ -610,7 +610,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         // Filter models by the prompt's AIModelTypeID if it exists
         let filteredModels: any[] = [];
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             if (prompt.AIModelTypeID) {
                 filteredModels = AIEngineBase.Instance.Models.filter(
                     model => model.AIModelTypeID === prompt.AIModelTypeID && model.IsActive
@@ -640,7 +640,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         
         // Determine the default model for this prompt
         if (this.entity && 'AIModelTypeID' in this.entity) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             this.defaultModelName = await this.getDefaultModelName(prompt);
         }
         
@@ -668,7 +668,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Gets the default model name for a prompt based on its configuration
      */
-    private async getDefaultModelName(prompt: AIPromptEntity): Promise<string> {
+    private async getDefaultModelName(prompt: AIPromptEntityExtended): Promise<string> {
         try {
             // Get prompt-specific model associations
             const promptModels = AIEngineBase.Instance.PromptModels.filter(
@@ -877,7 +877,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private loadPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             // Load default values from prompt entity
             if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
@@ -902,7 +902,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadTemplateParameters() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             if (!prompt.TemplateID) {
                 return; // No template to load parameters from
@@ -971,7 +971,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public resetToPromptDefaults() {
         if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
-            const prompt = this.entity as AIPromptEntity;
+            const prompt = this.entity as AIPromptEntityExtended;
             
             // Reset model selection to default
             this.selectedModelId = '';
@@ -1365,8 +1365,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const messages = this.conversationMessages
                 .filter(m => !m.isStreaming)
                 .map(m => ({
-                    role: m.role,
-                    content: m.content
+                    role: m.role as string,
+                    content: m.content as string
                 }));
 
             // Build data context - include conversation state if available
@@ -1387,49 +1387,20 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Generate a session ID for this execution
             const sessionId = dataProvider.sessionId;
             
-            // Execute the agent
-            const query = `
-                mutation RunAIAgent($agentId: String!, $messages: String!, $sessionId: String!, $data: String, $templateData: String, $lastRunId: String, $autoPopulateLastRunPayload: Boolean, $configurationId: String) {
-                    RunAIAgent(agentId: $agentId, messages: $messages, sessionId: $sessionId, data: $data, templateData: $templateData, lastRunId: $lastRunId, autoPopulateLastRunPayload: $autoPopulateLastRunPayload, configurationId: $configurationId) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        payload
-                    }
-                }
-            `;
-
-            const variables = {
-                agentId: (this.entity as AIAgentEntity).ID,
-                messages: JSON.stringify(messages),
-                sessionId: sessionId,
-                data: Object.keys(dataContext).length > 0 ? JSON.stringify(dataContext) : null,
-                templateData: Object.keys(templateData).length > 0 ? JSON.stringify(templateData) : null,
-                lastRunId: this.lastAgentRunId,
-                autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
-                configurationId: this.agentConfigurationId || undefined
-            };
-
-            
+            // Execute the agent using the new AI client
             // Start typing animation while we wait for the first real stream
             this.startTypingAnimation(assistantMessage);
 
-            
-            let result;
-            try {
-                result = await dataProvider.ExecuteGQL(query, variables);
-            } catch (gqlError: any) {
-                console.error('❌ AI Test Harness: GraphQL execution failed', {
-                    error: gqlError,
-                    message: gqlError?.message,
-                    networkError: gqlError?.networkError,
-                    graphQLErrors: gqlError?.graphQLErrors,
-                    statusCode: gqlError?.networkError?.statusCode
-                });
-                throw gqlError;
-            }
-            
-            const executionResult = result?.RunAIAgent;
+            const executionResult = await dataProvider.AI.RunAIAgent({
+                agentId: (this.entity as AIAgentEntityExtended).ID,
+                messages: messages,
+                sessionId: sessionId,
+                data: Object.keys(dataContext).length > 0 ? dataContext : undefined,
+                templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
+                lastRunId: this.lastAgentRunId || undefined,
+                autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
+                configurationId: this.agentConfigurationId || undefined
+            });
 
             // Stop elapsed time counter
             if (this.elapsedTimeInterval) {
@@ -1629,36 +1600,19 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             const messages = this.conversationMessages
                 .filter(m => !m.isStreaming && m.content) // Only include non-streaming messages with content
                 .map(m => ({
-                    role: m.role,
-                    content: m.content
+                    role: m.role as string,
+                    content: m.content as string
                 }));
             
-            // Execute the prompt using RunAIPrompt
-            const query = `
-                mutation RunAIPrompt($promptId: String!, $data: String, $overrideModelId: String, $overrideVendorId: String, $configurationId: String, $skipValidation: Boolean, $templateData: String, $responseFormat: String, $temperature: Float, $topP: Float, $topK: Int, $minP: Float, $frequencyPenalty: Float, $presencePenalty: Float, $seed: Int, $stopSequences: [String!], $includeLogProbs: Boolean, $topLogProbs: Int, $messages: String, $rerunFromPromptRunID: String, $systemPromptOverride: String) {
-                    RunAIPrompt(promptId: $promptId, data: $data, overrideModelId: $overrideModelId, overrideVendorId: $overrideVendorId, configurationId: $configurationId, skipValidation: $skipValidation, templateData: $templateData, responseFormat: $responseFormat, temperature: $temperature, topP: $topP, topK: $topK, minP: $minP, frequencyPenalty: $frequencyPenalty, presencePenalty: $presencePenalty, seed: $seed, stopSequences: $stopSequences, includeLogProbs: $includeLogProbs, topLogProbs: $topLogProbs, messages: $messages, rerunFromPromptRunID: $rerunFromPromptRunID, systemPromptOverride: $systemPromptOverride) {
-                        success
-                        output
-                        parsedResult
-                        error
-                        executionTimeMs
-                        tokensUsed
-                        promptRunId
-                        rawResult
-                        validationResult
-                        chatResult
-                    }
-                }
-            `;
-
-            const variables = {
-                promptId: (this.entity as AIPromptEntity).ID,
-                data: JSON.stringify(dataContext),
+            // Execute the prompt using the new AI client
+            const executionResult = await dataProvider.AI.RunAIPrompt({
+                promptId: (this.entity as AIPromptEntityExtended).ID,
+                data: dataContext,
                 overrideModelId: this.selectedModelId || undefined,
                 overrideVendorId: this.selectedVendorId || undefined,
                 configurationId: this.selectedConfigurationId || undefined,
                 skipValidation: this.skipValidation,
-                templateData: null, // Additional template context if needed
+                templateData: undefined, // Additional template context if needed
                 responseFormat: this.selectedResponseFormat?.value,
                 temperature: this.advancedParams.temperature ?? undefined,
                 topP: this.advancedParams.topP ?? undefined,
@@ -1670,13 +1624,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 stopSequences: this.advancedParams.stopSequences.length > 0 ? this.advancedParams.stopSequences : undefined,
                 includeLogProbs: this.advancedParams.includeLogProbs,
                 topLogProbs: this.advancedParams.includeLogProbs ? this.advancedParams.topLogProbs : undefined,
-                messages: messages.length > 0 ? JSON.stringify(messages) : undefined,
+                messages: messages.length > 0 ? messages : undefined,
                 rerunFromPromptRunID: this.originalPromptRunId || undefined,
                 systemPromptOverride: this.systemPromptOverride || undefined
-            };
-
-            const result = await dataProvider.ExecuteGQL(query, variables);
-            const executionResult = result?.RunAIPrompt;
+            });
 
             // Stop elapsed time counter
             if (this.elapsedTimeInterval) {
@@ -3114,7 +3065,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Type guard to check if entity is an AI Agent
      */
-    private isAgentEntity(entity: any): entity is AIAgentEntity {
+    private isAgentEntity(entity: any): entity is AIAgentEntityExtended {
         // Check using the EntityInfo property from BaseEntity
         return entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Agents';
     }
@@ -3122,7 +3073,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Type guard to check if entity is an AI Prompt
      */
-    private isPromptEntity(entity: any): entity is AIPromptEntity {
+    private isPromptEntity(entity: any): entity is AIPromptEntityExtended {
         // Check using the EntityInfo property from BaseEntity
         const result = entity && entity.EntityInfo && entity.EntityInfo.Name === 'AI Prompts';
         

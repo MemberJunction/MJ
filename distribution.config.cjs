@@ -256,16 +256,54 @@ const config = {
   ___codeGenAPIPort: process.env.CODEGEN_API_PORT,
   ___codeGenAPISubmissionDelay: process.env.CODEGEN_API_SUBMISSION_DELAY,
   graphqlRootPath: process.env.GRAPHQL_ROOT_PATH ?? '/',
-  webClientID: process.env.WEB_CLIENT_ID,
-  tenantID: process.env.TENANT_ID,
   enableIntrospection: process.env.ENABLE_INTROSPECTION,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
   userEmailMap: process.env.USER_EMAIL_MAP,
-  auth0Domain: process.env.AUTH0_DOMAIN,
-  auth0WebClientID: process.env.AUTH0_CLIENT_ID,
-  auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
   apiKey: process.env.MJ_API_KEY,
   baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
+  publicUrl: process.env.MJAPI_PUBLIC_URL, // Public URL for callbacks (e.g., ngrok URL when developing)
+  
+  /**
+   * Authentication Provider Configuration
+   * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
+   * Each provider encapsulates its issuer URL, audience, JWKS URI, and provider-specific config
+   */
+  authProviders: [
+    // Microsoft Azure AD / Entra ID
+    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
+      name: 'azure',
+      type: 'msal',
+      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
+      audience: process.env.WEB_CLIENT_ID,
+      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
+      clientId: process.env.WEB_CLIENT_ID,
+      tenantId: process.env.TENANT_ID
+    } : null,
+    
+    // Auth0
+    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
+      name: 'auth0',
+      type: 'auth0',
+      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
+      audience: process.env.AUTH0_CLIENT_ID,
+      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
+      clientId: process.env.AUTH0_CLIENT_ID,
+      clientSecret: process.env.AUTH0_CLIENT_SECRET,
+      domain: process.env.AUTH0_DOMAIN
+    } : null,
+    
+    // Okta
+    process.env.OKTA_DOMAIN && process.env.OKTA_CLIENT_ID ? {
+      name: 'okta',
+      type: 'okta',
+      issuer: `https://${process.env.OKTA_DOMAIN}/oauth2/default`,
+      audience: process.env.OKTA_CLIENT_ID,
+      jwksUri: `https://${process.env.OKTA_DOMAIN}/oauth2/default/v1/keys`,
+      clientId: process.env.OKTA_CLIENT_ID,
+      clientSecret: process.env.OKTA_CLIENT_SECRET,
+      domain: process.env.OKTA_DOMAIN
+    } : null,
+  ].filter(Boolean), // Remove any null entries from providers that aren't configured
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',

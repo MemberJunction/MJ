@@ -17,43 +17,21 @@
             <!-- Tab Action Bar -->
             <div class="tab-action-bar">
               <div class="tab-actions-left">
-                <!-- Toggle buttons for showing/hiding component details -->
-                <button class="tab-action-button toggle-button" 
-                        (click)="toggleShowFunctionalRequirements()"
-                        [class.active]="showFunctionalRequirements"
-                        title="Toggle Functional Requirements">
-                  <i class="fa-solid fa-list-check"></i>
-                  <span>Functional</span>
-                </button>
-                <button class="tab-action-button toggle-button" 
-                        (click)="toggleShowDataRequirements()"
-                        [class.active]="showDataRequirements"
-                        title="Toggle Data Requirements">
-                  <i class="fa-solid fa-database"></i>
-                  <span>Data</span>
-                </button>
-                <button class="tab-action-button toggle-button" 
-                        (click)="toggleShowTechnicalDesign()"
-                        [class.active]="showTechnicalDesign"
-                        title="Toggle Technical Design">
-                  <i class="fa-solid fa-cogs"></i>
-                  <span>Technical</span>
-                </button>
-                <button class="tab-action-button toggle-button" 
-                        (click)="toggleShowCode()"
-                        [class.active]="showCode"
-                        title="Toggle Code View">
-                  <i class="fa-solid fa-code"></i>
-                  <span>Code</span>
-                </button>
+                <!-- Empty for now - actions moved to individual tabs -->
               </div>
               <div class="tab-actions-right">
                 <button class="tab-action-button create-button" 
                         *ngIf="ShowCreateReportButton && !matchingReportID"
                         (click)="createReportForOption(i)"
                         [disabled]="isCreatingReport">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>Create {{ getComponentTypeName(option) }}</span>
+                  <i class="fa-solid fa-save"></i>
+                  <span>Save Report</span>
+                </button>
+                <button class="tab-action-button create-button" 
+                        *ngIf="ShowOpenSavedReportButton && matchingReportID"
+                        (click)="openReportForOption(i)">
+                  <i class="fa-solid fa-folder-open"></i>
+                  <span>Open Saved Report</span>
                 </button>
                 <button class="tab-action-button print-button" 
                         *ngIf="ShowPrintReport" 
@@ -65,94 +43,29 @@
               </div>
             </div>
             
-            <!-- Main content area with optional details panels -->
-            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-              @if (showFunctionalRequirements || showDataRequirements || showTechnicalDesign || showCode) {
-                <!-- Details panel -->
-                <div class="details-panel" [style.height]="detailsPanelHeight">
-                  <kendo-tabstrip style="height: 100%;">
-                    @if (showFunctionalRequirements) {
-                      <kendo-tabstrip-tab [selected]="true">
-                        <ng-template kendoTabTitle>
-                          <i class="fa-solid fa-list-check"></i> Functional Requirements
-                        </ng-template>
-                        <ng-template kendoTabContent>
-                          <div class="details-content">
-                            <div [innerHTML]="getFormattedFunctionalRequirements(option)"></div>
-                          </div>
-                        </ng-template>
-                      </kendo-tabstrip-tab>
-                    }
-                    @if (showDataRequirements) {
-                      <kendo-tabstrip-tab [selected]="!showFunctionalRequirements">
-                        <ng-template kendoTabTitle>
-                          <i class="fa-solid fa-database"></i> Data Requirements
-                        </ng-template>
-                        <ng-template kendoTabContent>
-                          <div class="details-content">
-                            <div [innerHTML]="getFormattedDataRequirements(option)"></div>
-                          </div>
-                        </ng-template>
-                      </kendo-tabstrip-tab>
-                    }
-                    @if (showTechnicalDesign) {
-                      <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements">
-                        <ng-template kendoTabTitle>
-                          <i class="fa-solid fa-cogs"></i> Technical Design
-                        </ng-template>
-                        <ng-template kendoTabContent>
-                          <div class="details-content">
-                            <div [innerHTML]="getFormattedTechnicalDesign(option)"></div>
-                          </div>
-                        </ng-template>
-                      </kendo-tabstrip-tab>
-                    }
-                    @if (showCode) {
-                      <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements && !showTechnicalDesign">
-                        <ng-template kendoTabTitle>
-                          <i class="fa-solid fa-code"></i> Code
-                        </ng-template>
-                        <ng-template kendoTabContent>
-                          <div class="details-content code-content">
-                            <mj-code-editor
-                              [value]="getComponentCode(option)"
-                              [language]="'javascript'"
-                              [autoFocus]="false"
-                              [indentWithTab]="true"
-                              [readonly]="true"
-                              style="height: 100%;">
-                            </mj-code-editor>
-                          </div>
-                        </ng-template>
-                      </kendo-tabstrip-tab>
-                    }
-                  </kendo-tabstrip>
-                </div>
-                <!-- Resizer -->
-                <div class="panel-resizer" 
-                     (mousedown)="startResize($event)"
-                     (touchstart)="startResize($event)">
-                  <div class="resizer-handle"></div>
-                </div>
-              }
-              
-              <!-- React component container -->
-              <div [attr.data-tab-index]="i" 
-                   style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-                <mj-react-component
-                  *ngIf="!currentError && componentOptions[i] && i === selectedReportOptionIndex"
-                  [component]="componentOptions[i].option"
-                  [utilities]="utilities"
-                  [styles]="componentStyles || undefined"
-                  (stateChange)="onStateChange(i, $event)"
-                  (componentEvent)="onComponentEvent(i, $event)"
-                  (refreshData)="handleRefreshData()"
-                  (openEntityRecord)="onOpenEntityRecord($event)"
-                  style="width: 100%; height: 100%;">
-                </mj-react-component>
-                
-                <!-- Error overlay for this tab (shown on top of content when needed) -->
-              @if (currentError && selectedReportOptionIndex === i) {
+            <!-- Inner tab strip for Component, Functional, Technical, Data, Code tabs -->
+            <div class="inner-tabstrip-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+              <kendo-tabstrip class="inner-tabs" style="height: 100%; display: flex; flex-direction: column;">
+                <!-- Component Tab (always first) -->
+                <kendo-tabstrip-tab [selected]="true">
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-chart-line"></i> Component
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div style="height: 100%; position: relative; overflow: auto;">
+                      <mj-react-component
+                        *ngIf="!currentError && componentOptions[i] && i === selectedReportOptionIndex"
+                        [component]="componentOptions[i].option"
+                        [styles]="componentStyles || undefined"
+                        (stateChange)="onStateChange(i, $event)"
+                        (componentEvent)="onComponentEvent(i, $event)"
+                        (refreshData)="handleRefreshData()"
+                        (openEntityRecord)="onOpenEntityRecord($event)"
+                        style="width: 100%; height: 100%;">
+                      </mj-react-component>
+                      
+                      <!-- Error overlay for this tab (shown on top of content when needed) -->
+                      @if (currentError && selectedReportOptionIndex === i) {
                 <div style="top: 0; 
                             left: 0; 
                             right: 0; 
@@ -213,8 +126,89 @@
                     </button>
                   </div>
                 </div>
-              }
-              </div>
+                      }
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+                
+                <!-- Functional Requirements Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-list-check"></i> Functional
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                      <div [innerHTML]="getFormattedFunctionalRequirements(option)"></div>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+                
+                <!-- Technical Design Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-cogs"></i> Technical
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                      <div [innerHTML]="getFormattedTechnicalDesign(option)"></div>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+                
+                <!-- Data Requirements Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-database"></i> Data Spec
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                      <div [innerHTML]="getFormattedDataRequirements(option)"></div>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+                
+                <!-- Code Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-code"></i> Code
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                      <mj-code-editor
+                        [value]="getComponentCode(option)"
+                        [language]="'javascript'"
+                        [autoFocus]="false"
+                        [indentWithTab]="true"
+                        [readonly]="true"
+                        [toolbar]="codeToolbarConfig"
+                        (toolbarAction)="handleCodeToolbarAction($event)"
+                        style="height: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+                
+                <!-- Spec Tab -->
+                <kendo-tabstrip-tab>
+                  <ng-template kendoTabTitle>
+                    <i class="fa-solid fa-file-code"></i> Spec
+                  </ng-template>
+                  <ng-template kendoTabContent>
+                    <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                      <mj-code-editor
+                        [value]="getComponentSpec(option)"
+                        [language]="'json'"
+                        [autoFocus]="false"
+                        [indentWithTab]="true"
+                        [readonly]="true"
+                        [toolbar]="codeToolbarConfig"
+                        (toolbarAction)="handleCodeToolbarAction($event)"
+                        style="height: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  </ng-template>
+                </kendo-tabstrip-tab>
+              </kendo-tabstrip>
             </div>
           </div>
         </ng-template>
@@ -222,48 +216,26 @@
     }
   </kendo-tabstrip>
 } @else {
-  <!-- Single option: no tabs needed -->
+  <!-- Single option: simplified tab structure -->
   <div style="height: 100%; display: flex; flex-direction: column;">
     <!-- Tab Action Bar -->
     <div class="tab-action-bar">
       <div class="tab-actions-left">
-        <!-- Toggle buttons for showing/hiding component details -->
-        <button class="tab-action-button toggle-button" 
-                (click)="toggleShowFunctionalRequirements()"
-                [class.active]="showFunctionalRequirements"
-                title="Toggle Functional Requirements">
-          <i class="fa-solid fa-list-check"></i>
-          <span>Functional</span>
-        </button>
-        <button class="tab-action-button toggle-button" 
-                (click)="toggleShowDataRequirements()"
-                [class.active]="showDataRequirements"
-                title="Toggle Data Requirements">
-          <i class="fa-solid fa-database"></i>
-          <span>Data</span>
-        </button>
-        <button class="tab-action-button toggle-button" 
-                (click)="toggleShowTechnicalDesign()"
-                [class.active]="showTechnicalDesign"
-                title="Toggle Technical Design">
-          <i class="fa-solid fa-cogs"></i>
-          <span>Technical</span>
-        </button>
-        <button class="tab-action-button toggle-button" 
-                (click)="toggleShowCode()"
-                [class.active]="showCode"
-                title="Toggle Code View">
-          <i class="fa-solid fa-code"></i>
-          <span>Code</span>
-        </button>
+        <!-- Empty for now - actions moved to tabs -->
       </div>
       <div class="tab-actions-right">
         <button class="tab-action-button create-button" 
                 *ngIf="ShowCreateReportButton && !matchingReportID"
                 (click)="createReportForOption(0)"
                 [disabled]="isCreatingReport">
-          <i class="fa-solid fa-plus"></i>
-          <span>Create {{ firstOptionComponentTypeName }}</span>
+          <i class="fa-solid fa-save"></i>
+          <span>Save Report</span>
+        </button>
+        <button class="tab-action-button create-button" 
+                *ngIf="ShowOpenSavedReportButton && matchingReportID"
+                (click)="openReportForOption(0)">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>Open Saved Report</span>
         </button>
         <button class="tab-action-button print-button" 
                 *ngIf="ShowPrintReport" 
@@ -275,147 +247,182 @@
       </div>
     </div>
     
-    <!-- Main content area with optional details panels -->
-    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-      @if (showFunctionalRequirements || showDataRequirements || showTechnicalDesign || showCode) {
-        <!-- Details panel -->
-        <div class="details-panel" [style.height]="detailsPanelHeight">
-          <kendo-tabstrip style="height: 100%;">
-            @if (showFunctionalRequirements && componentOptions[0]) {
-              <kendo-tabstrip-tab [selected]="true">
-                <ng-template kendoTabTitle>
-                  <i class="fa-solid fa-list-check"></i> Functional Requirements
-                </ng-template>
-                <ng-template kendoTabContent>
-                  <div class="details-content">
-                    <div [innerHTML]="getFormattedFunctionalRequirements(componentOptions[0])"></div>
+    <!-- Tab strip for Component, Functional, Technical, Data, Code tabs -->
+    <div class="inner-tabstrip-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+      <kendo-tabstrip class="inner-tabs" style="height: 100%; display: flex; flex-direction: column;">
+        <!-- Component Tab (always first) -->
+        <kendo-tabstrip-tab [selected]="true">
+          <ng-template kendoTabTitle>
+            <i class="fa-solid fa-chart-line"></i> Component
+          </ng-template>
+          <ng-template kendoTabContent>
+            <div style="height: 100%; position: relative; overflow: auto;">
+              @if (!currentError && componentOptions[0]) {
+                <mj-react-component
+                  [component]="componentOptions[0].option"
+                  [styles]="componentStyles || undefined"
+                  (stateChange)="onStateChange(0, $event)"
+                  (componentEvent)="onComponentEvent(0, $event)"
+                  (refreshData)="handleRefreshData()"
+                  (openEntityRecord)="onOpenEntityRecord($event)"
+                  style="width: 100%; height: 100%;">
+                </mj-react-component>
+              }
+              
+              <!-- Error overlay for this tab (shown on top of content when needed) -->
+              @if (currentError) {
+                <div style="top: 0; 
+                            left: 0; 
+                            right: 0; 
+                            bottom: 0; 
+                            display: flex;
+                            align-items: flex-start;
+                            justify-content: center;
+                            padding-top: 20px;
+                            background: rgba(255, 255, 255, 0.95);
+                            z-index: 10;">
+                  <div style="width: 90%; 
+                              max-width: 600px; 
+                              height: 500px;
+                              background-color: #f8f9fa; 
+                              border: 2px solid #dc3545; 
+                              border-radius: 8px; 
+                              padding: 20px;
+                              overflow-y: auto;
+                              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <div style="position: relative;">
+                      <button kendoButton (click)="copyErrorToClipboard()" 
+                              style="position: absolute; top: 0; right: 0; font-size: 12px;">
+                        <span class="fa-solid fa-copy"></span>
+                        Copy Error Details
+                      </button>
+                      <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
+                        <span class="fa-solid fa-exclamation-triangle"></span>
+                        Component Rendering Error
+                      </h3>
+                    </div>
+                    <p style="margin-bottom: 10px; font-size: 14px;">
+                      The selected component option could not be rendered due to the following error:
+                    </p>
+                    <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                                border-radius: 4px; padding: 12px; margin-bottom: 12px;
+                                font-family: 'Courier New', monospace; font-size: 12px;">
+                      <strong>Error Type:</strong> {{ currentError.type }}<br>
+                      <strong>Details:</strong> {{ currentError.message }}
+                      @if (currentError.technicalDetails) {
+                        <details style="margin-top: 8px;">
+                          <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                          <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
+                        </details>
+                      }
+                    </div>
+                    <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                                border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                      <strong style="font-size: 14px;">What to do:</strong>
+                      <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                        <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+                        <li>Contact your IT department if the issue persists</li>
+                      </ol>
+                    </div>
+                    <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
+                      <span class="fa-solid fa-rotate"></span>
+                      Retry
+                    </button>
                   </div>
-                </ng-template>
-              </kendo-tabstrip-tab>
-            }
-            @if (showDataRequirements && componentOptions[0]) {
-              <kendo-tabstrip-tab [selected]="!showFunctionalRequirements">
-                <ng-template kendoTabTitle>
-                  <i class="fa-solid fa-database"></i> Data Requirements
-                </ng-template>
-                <ng-template kendoTabContent>
-                  <div class="details-content">
-                    <div [innerHTML]="getFormattedDataRequirements(componentOptions[0])"></div>
-                  </div>
-                </ng-template>
-              </kendo-tabstrip-tab>
-            }
-            @if (showTechnicalDesign && componentOptions[0]) {
-              <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements">
-                <ng-template kendoTabTitle>
-                  <i class="fa-solid fa-cogs"></i> Technical Design
-                </ng-template>
-                <ng-template kendoTabContent>
-                  <div class="details-content">
-                    <div [innerHTML]="getFormattedTechnicalDesign(componentOptions[0])"></div>
-                  </div>
-                </ng-template>
-              </kendo-tabstrip-tab>
-            }
-            @if (showCode && componentOptions[0]) {
-              <kendo-tabstrip-tab [selected]="!showFunctionalRequirements && !showDataRequirements && !showTechnicalDesign">
-                <ng-template kendoTabTitle>
-                  <i class="fa-solid fa-code"></i> Code
-                </ng-template>
-                <ng-template kendoTabContent>
-                  <div class="details-content code-content">
-                    <mj-code-editor
-                      [language]="'javascript'"
-                      [value]="getComponentCode(componentOptions[0])"
-                      [autoFocus]="false"
-                      [indentWithTab]="true"
-                      [readonly]="true"
-                      style="height: 100%;">
-                    </mj-code-editor>
-                  </div>
-                </ng-template>
-              </kendo-tabstrip-tab>
-            }
-          </kendo-tabstrip>
-        </div>
-        <!-- Resizer -->
-        <div class="panel-resizer" 
-             (mousedown)="startResize($event)"
-             (touchstart)="startResize($event)">
-          <div class="resizer-handle"></div>
-        </div>
-      }
-      
-      <!-- React component container or error display -->
-      @if (currentError) {
-        <!-- Error display container with proper height -->
-        <div style="flex: 1; display: flex; align-items: center; justify-content: center; 
-                    min-height: 400px; padding: 20px; background: rgba(255, 255, 255, 0.95);">
-          <div style="width: 90%; 
-                      max-width: 600px; 
-                      max-height: 80vh;
-                      background-color: #f8f9fa; 
-                      border: 2px solid #dc3545; 
-                      border-radius: 8px; 
-                      padding: 20px;
-                      overflow-y: auto;
-                      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-            <div style="position: relative;">
-              <button kendoButton (click)="copyErrorToClipboard()" 
-                      style="position: absolute; top: 0; right: 0; font-size: 12px;">
-                <span class="fa-solid fa-copy"></span>
-                Copy Error Details
-              </button>
-              <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
-                <span class="fa-solid fa-exclamation-triangle"></span>
-                Component Rendering Error
-              </h3>
-            </div>
-            <p style="margin-bottom: 10px; font-size: 14px;">
-              The selected component option could not be rendered due to the following error:
-            </p>
-            <div style="background-color: #fff; border: 1px solid #dee2e6; 
-                        border-radius: 4px; padding: 12px; margin-bottom: 12px;
-                        font-family: 'Courier New', monospace; font-size: 12px;">
-              <strong>Error Type:</strong> {{ currentError.type }}<br>
-              <strong>Details:</strong> {{ currentError.message }}
-              @if (currentError.technicalDetails) {
-                <details style="margin-top: 8px;">
-                  <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
-                  <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ formatTechnicalDetails(currentError.technicalDetails) }}</pre>
-                </details>
+                </div>
               }
             </div>
-            <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
-                        border-radius: 4px; padding: 12px; margin-bottom: 12px;">
-              <strong style="font-size: 14px;">What to do:</strong>
-              <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
-                <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
-                <li>Contact your IT department if the issue persists</li>
-              </ol>
-            </div>
-            <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
-              <span class="fa-solid fa-rotate"></span>
-              Retry
-            </button>
-          </div>
-        </div>
-      } @else {
-        <!-- React component container (only shown when no error) -->
-        <div style="flex: 1; position: relative; min-height: 0; overflow: auto;">
-          <mj-react-component
-            *ngIf="componentOptions[0]"
-            [component]="componentOptions[0].option"
-            [utilities]="utilities"
-            [styles]="componentStyles || undefined"
-            (stateChange)="onStateChange(0, $event)"
-            (componentEvent)="onComponentEvent(0, $event)"
-            (refreshData)="handleRefreshData()"
-            (openEntityRecord)="onOpenEntityRecord($event)"
-            style="width: 100%; height: 100%;">
-          </mj-react-component>
-        </div>
-      }
+          </ng-template>
+        </kendo-tabstrip-tab>
+        
+        <!-- Functional Requirements Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-list-check"></i> Functional
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                <div [innerHTML]="getFormattedFunctionalRequirements(componentOptions[0])"></div>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+        
+        <!-- Technical Design Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-cogs"></i> Technical
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                <div [innerHTML]="getFormattedTechnicalDesign(componentOptions[0])"></div>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+        
+        <!-- Data Requirements Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-database"></i> Data Spec
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content" style="height: 100%; overflow: auto; padding: 20px;">
+                <div [innerHTML]="getFormattedDataRequirements(componentOptions[0])"></div>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+        
+        <!-- Code Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-code"></i> Code
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                <mj-code-editor
+                  [value]="getComponentCode(componentOptions[0])"
+                  [language]="'javascript'"
+                  [autoFocus]="false"
+                  [indentWithTab]="true"
+                  [readonly]="true"
+                  [toolbar]="codeToolbarConfig"
+                  (toolbarAction)="handleCodeToolbarAction($event)"
+                  style="height: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+        
+        <!-- Spec Tab -->
+        @if (componentOptions[0]) {
+          <kendo-tabstrip-tab>
+            <ng-template kendoTabTitle>
+              <i class="fa-solid fa-file-code"></i> Spec
+            </ng-template>
+            <ng-template kendoTabContent>
+              <div class="details-content code-content" style="height: 100%; overflow: hidden;">
+                <mj-code-editor
+                  [value]="getComponentSpec(componentOptions[0])"
+                  [language]="'json'"
+                  [autoFocus]="false"
+                  [indentWithTab]="true"
+                  [readonly]="true"
+                  [toolbar]="codeToolbarConfig"
+                  (toolbarAction)="handleCodeToolbarAction($event)"
+                  style="height: 100%;">
+                </mj-code-editor>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+      </kendo-tabstrip>
     </div>
   </div>
 }

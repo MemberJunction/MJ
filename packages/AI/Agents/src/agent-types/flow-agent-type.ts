@@ -15,7 +15,7 @@ import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -150,10 +150,25 @@ export class FlowAgentType extends BaseAgentType {
                 const promptResponse = this.parseJSONResponse<any>(promptResult);
                 
                 if (promptResponse) {
+                    // Check if the prompt response contains a Chat step request
+                    // This handles the case where a Prompt step wants to return a message to the user
+                    if (promptResponse.nextStep?.type === 'Chat' || 
+                        (promptResponse.taskComplete && promptResponse.message)) {
+                        // Return a Chat step to bubble the message back to the user
+                        return this.createNextStep('Chat', {
+                            message: promptResponse.message || 'Response from flow prompt step',
+                            reasoning: promptResponse.reasoning,
+                            confidence: promptResponse.confidence,
+                            terminate: true, // Always terminate for chat responses
+                            newPayload: payload,
+                            previousPayload: payload
+                        });
+                    }
+                    
                     // Merge the prompt response into the current payload
                     // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
                     // that key in the payload object
-                    for (const key in Object.keys(promptResponse)) {
+                    for (const key of Object.keys(promptResponse)) {
                         payload[key] = promptResponse[key];
                     }
                 }
@@ -309,10 +324,12 @@ export class FlowAgentType extends BaseAgentType {
                 
                 
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
-                
-                
+               
                 if (evalResult.success && evalResult.value) {
                     validPaths.push(path);
+                }
+                else {
+                    LogError(`Path condition failed: ${path.Condition}\n${evalResult.error}`);
                 }
             } catch (error) {
                 LogError(`Failed to evaluate path condition: ${error.message}`);
@@ -915,7 +932,7 @@ export class FlowAgentType extends BaseAgentType {
      * @param {ExecuteAgentParams} params - The execution parameters
      * @param {AgentConfiguration} config - The loaded agent configuration
      * @param {BaseAgentNextStep | null} previousDecision - The previous step decision that may contain flow prompt info
-     * @returns {Promise<AIPromptEntity | null>} Custom prompt for flow steps, or default config.childPrompt
+     * @returns {Promise<AIPromptEntityExtended | null>} Custom prompt for flow steps, or default config.childPrompt
      * 
      * @override
      * @since 2.76.0
@@ -926,7 +943,7 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         agentTypeState: ATS,
         previousDecision?: BaseAgentNextStep<P> | null
-    ): Promise<AIPromptEntity | null> {
+    ): Promise<AIPromptEntityExtended | null> {
         // Check if this is a flow prompt step with a specific prompt ID
         const flowDecision = previousDecision as FlowAgentNextStep<P> | null;
         if (flowDecision?.flowPromptStepId) {

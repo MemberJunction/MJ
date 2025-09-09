@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
+import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { LayoutModule, TabStripModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
@@ -47,6 +48,13 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { TimeSeriesChartComponent } from './AI/components/charts/time-series-chart.component';
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
+// Component Studio Components
+import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
+import { TextImportDialogComponent } from './ComponentStudio/components/text-import-dialog.component';
+import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
+import { GridModule } from '@progress/kendo-angular-grid';
+import { MJReactModule } from '@memberjunction/ng-react';
+import { SplitterModule } from '@progress/kendo-angular-layout';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -80,7 +88,11 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     KPICardComponent,
     LiveExecutionWidgetComponent,
     TimeSeriesChartComponent,
-    PerformanceHeatmapComponent
+    PerformanceHeatmapComponent,
+    // Component Studio Components
+    ComponentStudioDashboardComponent,
+    TextImportDialogComponent,
+    ArtifactSelectionDialogComponent
   ],
   imports: [
     CommonModule,
@@ -88,6 +100,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     IndicatorsModule,
     DropDownsModule,
     InputsModule,
+    DateInputsModule,
     LayoutModule,
     DialogsModule,
     WindowModule,
@@ -98,7 +111,12 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     ButtonsModule,
     ActionGalleryModule,
     AITestHarnessModule,
-    MemberJunctionCoreEntityFormsModule
+    MemberJunctionCoreEntityFormsModule,
+    GridModule,
+    MJReactModule,
+    SplitterModule,
+    TabStripModule,
+    PanelBarModule
   ],
   providers: [
     AIInstrumentationService
@@ -106,7 +124,8 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
   exports: [
     EntityAdminDashboardComponent,
     AIDashboardComponent,
-    ActionsManagementDashboardComponent
+    ActionsManagementDashboardComponent,
+    ComponentStudioDashboardComponent
   ]
 })
 export class DashboardsModule { }

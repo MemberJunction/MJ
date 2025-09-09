@@ -1,0 +1,11 @@
+{
+  "name": "Sample Dashboard Component",
+  "description": "A sample component that can be loaded from file for testing",
+  "type": "Dashboard",
+  "version": "1.0.0",
+  "code": "// Sample React component code\nfunction Component({ data, onEvent }) {\n  return (\n    <div style={{ padding: '20px', backgroundColor: '#f0f8ff', borderRadius: '8px' }}>\n      <h2>Sample Dashboard</h2>\n      <p>This is a sample component loaded from a JSON file.</p>\n      <div style={{ marginTop: '20px' }}>\n        <h3>Features:</h3>\n        <ul>\n          <li>Loaded from external file</li>\n          <li>Temporary/session-only</li>\n          <li>No database storage</li>\n          <li>Visual differentiation in UI</li>\n        </ul>\n      </div>\n      <button \n        onClick={() => onEvent({ type: 'click', payload: { message: 'Button clicked!' } })}\n        style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#0066cc', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}\n      >\n        Click Me\n      </button>\n    </div>\n  );\n}",
+  "dependencies": [],
+  "props": {},
+  "events": ["click"],
+  "styles": {}
+}

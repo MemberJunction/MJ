@@ -1,0 +1,52 @@
+{
+  "name": "DealVelocityTrendChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/deal-velocity-trend-chart.js",
+  "functionalRequirements": "## Trend Chart Sub-component\n\n### Purpose\nDisplays historical trends of deal velocity across stages over time.\n\n### Core Features\n- Line chart showing velocity trends\n- Multiple stage series\n- Smooth line rendering\n- Interactive tooltips with rounded values\n- Clickable data points\n- Customizable time range\n- Focus on series functionality",
+  "dataRequirements": {
+    "description": "Receives calculated trend data from parent component"
+  },
+  "technicalDesign": "## Implementation\n\n### Chart Library\n- Uses ECharts for rendering\n- Line chart with smooth curves\n- Manages chart lifecycle\n- Proper disposal on unmount\n\n### Data Processing\n- Receives pre-calculated trend data\n- Formats tooltips with rounded values\n- Handles click events for drill-down",
+  "properties": [
+    {
+      "name": "deals",
+      "type": "array",
+      "required": true,
+      "description": "Array of deal entities"
+    },
+    {
+      "name": "stages",
+      "type": "array",
+      "required": true,
+      "description": "Array of stage names"
+    },
+    {
+      "name": "onDrillDown",
+      "type": "function",
+      "required": true,
+      "description": "Callback when clicking on chart elements"
+    },
+    {
+      "name": "timeRange",
+      "type": "number",
+      "required": true,
+      "description": "Number of days to show in trend"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": [
+    {
+      "name": "ECharts",
+      "version": "^5.4.3",
+      "globalVariable": "echarts"
+    },
+    {
+      "name": "dayjs",
+      "version": "^1.11.10",
+      "globalVariable": "dayjs"
+    }
+  ]
+}

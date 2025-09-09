@@ -1,0 +1,30 @@
+{
+  "initialization": {
+    "constructorName": "Chart",
+    "requiresNew": true,
+    "elementType": "canvas",
+    "requiredConfig": ["type", "data"]
+  },
+  "lifecycle": {
+    "cleanupMethods": ["destroy"],
+    "updateMethods": ["update"],
+    "requiredMethods": []
+  },
+  "validators": {
+    "checkDestroyBeforeRecreate": {
+      "description": "Ensure Chart instances are destroyed before recreating on same canvas.",
+      "severity": "high",
+      "validate": "@file:check-destroy-before-recreate.js"
+    },
+    "checkCanvasContext": {
+      "description": "Validate canvas context is obtained correctly",
+      "severity": "high",
+      "validate": "@file:check-canvas-context.js"
+    },
+    "checkChartRegistration": {
+      "description": "Check for Chart.register() when using tree-shaking",
+      "severity": "medium",
+      "validate": "@file:check-chart-registration.js"
+    }
+  }
+}

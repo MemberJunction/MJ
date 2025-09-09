@@ -1,12 +1,14 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
-import { UserPayload } from '../types.js';
-import { LogError, LogStatus } from '@memberjunction/core';
-import { AIAgentEntity } from '@memberjunction/core-entities';
+import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID } from 'type-graphql';
+import { AppContext, UserPayload } from '../types.js';
+import { DatabaseProviderBase, LogError, LogStatus } from '@memberjunction/core';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -169,12 +171,12 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Validate the agent entity
      */
-    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntity> {
+    private async validateAgent(agentId: string, currentUser: any): Promise<AIAgentEntityExtended> {
         // Use AIEngine to get cached agent data
         await AIEngine.Instance.Config(false, currentUser);
         
         // Find agent in cached collection
-        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntity) => a.ID === agentId);
+        const agentEntity = AIEngine.Instance.Agents.find((a: AIAgentEntityExtended) => a.ID === agentId);
         
         if (!agentEntity) {
             throw new Error(`AI Agent with ID ${agentId} not found`);
@@ -297,18 +299,23 @@ export class RunAIAgentResolver extends ResolverBase {
         };
     }
 
-    @Mutation(() => AIAgentRunResult)
-    async RunAIAgent(
-        @Arg('agentId') agentId: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload },
-        @Arg('messages') messagesJson: string,
-        @Arg('sessionId') sessionId: string,
-        @PubSub() pubSub: PubSubEngine,
-        @Arg('data', { nullable: true }) data?: string,
-        @Arg('templateData', { nullable: true }) templateData?: string,
-        @Arg('lastRunId', { nullable: true }) lastRunId?: string,
-        @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
-        @Arg('configurationId', { nullable: true }) configurationId?: string
+    /**
+     * Internal method that handles the core AI agent execution logic.
+     * This method is called by both the regular and system user resolvers.
+     * @private
+     */
+    private async executeAIAgent(
+        p: DatabaseProviderBase,
+        agentId: string,
+        userPayload: UserPayload,
+        messagesJson: string,
+        sessionId: string,
+        pubSub: PubSubEngine,
+        data?: string,
+        templateData?: string,
+        lastRunId?: string,
+        autoPopulateLastRunPayload?: boolean,
+        configurationId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -334,6 +341,8 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
+            // @jordanfanapour IMPORTANT TO-DO for various engine classes (via base engine class) and here for AI Agent Runner and for AI Prompt Runner, need to be able to pass in a IMetadataProvider for it to use
+            // for multi-user server environments like this one
             // Create AI agent runner
             const agentRunner = new AgentRunner();
             
@@ -440,6 +449,72 @@ export class RunAIAgentResolver extends ResolverBase {
             timestamp: new Date()
         };
         this.PublishStreamingUpdate(pubSub, completeMsg, userPayload);
+    }
+
+    /**
+     * Public mutation for regular users to run AI agents with authentication.
+     */
+    @Mutation(() => AIAgentRunResult)
+    async RunAIAgent(
+        @Arg('agentId') agentId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('messages') messagesJson: string,
+        @Arg('sessionId') sessionId: string,
+        @PubSub() pubSub: PubSubEngine,
+        @Arg('data', { nullable: true }) data?: string,
+        @Arg('templateData', { nullable: true }) templateData?: string,
+        @Arg('lastRunId', { nullable: true }) lastRunId?: string,
+        @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
+        @Arg('configurationId', { nullable: true }) configurationId?: string
+    ): Promise<AIAgentRunResult> {
+        const p = GetReadWriteProvider(providers);
+        return this.executeAIAgent(
+            p,
+            agentId,
+            userPayload,
+            messagesJson,
+            sessionId,
+            pubSub,
+            data,
+            templateData,
+            lastRunId,
+            autoPopulateLastRunPayload,
+            configurationId
+        );
+    }
+
+    /**
+     * System user query for running AI agents with elevated privileges.
+     * Requires the @RequireSystemUser decorator to ensure only system users can access.
+     */
+    @RequireSystemUser()
+    @Query(() => AIAgentRunResult)
+    async RunAIAgentSystemUser(
+        @Arg('agentId') agentId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('messages') messagesJson: string,
+        @Arg('sessionId') sessionId: string,
+        @PubSub() pubSub: PubSubEngine,
+        @Arg('data', { nullable: true }) data?: string,
+        @Arg('templateData', { nullable: true }) templateData?: string,
+        @Arg('lastRunId', { nullable: true }) lastRunId?: string,
+        @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
+        @Arg('configurationId', { nullable: true }) configurationId?: string
+    ): Promise<AIAgentRunResult> {
+        const p = GetReadWriteProvider(providers);
+        return this.executeAIAgent(
+            p,
+            agentId,
+            userPayload,
+            messagesJson,
+            sessionId,
+            pubSub,
+            data,
+            templateData,
+            lastRunId,
+            autoPopulateLastRunPayload,
+            configurationId
+        );
     }
  
 }

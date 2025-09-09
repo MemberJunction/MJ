@@ -47,6 +47,7 @@ import { ActionTestHarnessComponent } from "./Actions/action-test-harness.compon
 import { ActionTestHarnessDialogComponent } from "./Actions/action-test-harness-dialog.component";
 import { ActionExecutionLogFormComponentExtended, LoadActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionParamDialogComponent } from "./Actions/action-param-dialog.component";
+import { ActionResultCodeDialogComponent } from "./Actions/action-result-code-dialog.component";
 import { AIAgentRunFormComponentExtended, LoadAIAgentRunFormComponent } from "./ai-agent-run/ai-agent-run.component";
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
@@ -59,6 +60,7 @@ import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.co
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { StepInfoControlComponent } from "./AIAgents/FlowAgentType/step-info-control.component";
 import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-diagram.component";
+import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-integrated-flow-editor.component";
 
 @NgModule({
     declarations: [
@@ -87,6 +89,7 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         ActionTestHarnessDialogComponent,
         ActionExecutionLogFormComponentExtended,
         ActionParamDialogComponent,
+        ActionResultCodeDialogComponent,
         AIAgentRunFormComponentExtended,
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
@@ -137,7 +140,8 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         TreeViewModule,
         CheckBoxModule,
         AITestHarnessModule,
-        ActionGalleryModule
+        ActionGalleryModule,
+        MJIntegratedFlowEditorComponent
     ],
     exports: [
         EntityFormExtendedComponent,
@@ -161,6 +165,7 @@ import { FlowAgentDiagramComponent } from "./AIAgents/FlowAgentType/flow-agent-d
         FlowAgentFormSectionComponent,
         StepInfoControlComponent,
         FlowAgentDiagramComponent,
+        MJIntegratedFlowEditorComponent
     ],
     providers: [
         NewAgentDialogService,

@@ -1,5 +1,163 @@
 # Change Log - @memberjunction/core
 
+## 2.99.0
+
+### Patch Changes
+
+- 8bbb0a9: - Updated RunView resolver and GraphQL data provider to work with any
+  primary key configuration
+  - Changed from hardcoded "ID" field to dynamic PrimaryKey array from
+    entity metadata
+  - Added utility functions for handling primary key values in client code
+  - Supports single non-ID primary keys (e.g., ProductID) and composite
+    primary keys
+  - Fixes compatibility with databases like AdventureWorks that use
+    non-standard primary key names
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/global@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Minor Changes
+
+- 01dcfde: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- a54c014: duck typing
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- f8757aa: bug fixes
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Minor Changes
+
+- 8fb03df: migrations
+- 5817bac: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- f703033: Implement extensible N-provider authentication architecture
+
+  - Created shared authentication types in @memberjunction/core for use
+    across frontend and backend
+  - Refactored authentication to support multiple providers using MJGlobal
+    ClassFactory pattern
+  - Implemented dynamic provider discovery and registration without
+    modifying core code
+  - Added support for multiple concurrent auth providers via authProviders
+    array configuration
+  - Replaced static method with cleaner property pattern for Angular
+    provider dependencies
+  - Eliminated code duplication and removed unused configuration methods
+  - Maintained full backward compatibility with existing auth
+    implementations
+
+  This enables teams to add custom authentication providers (SAML,
+  proprietary SSO, etc.)
+  without forking or modifying the core authentication modules.
+
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Minor Changes
+
+- 146ebcc: migration
+
+### Patch Changes
+
+- @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Minor Changes
+
+- 58a00df: Removed broken migration
+
+### Patch Changes
+
+- @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Minor Changes
+
+- 0b9d691: Changes to MJCore/SQLServerDataProvider/GraphQLDataProvider to ensure that calls handle pre/post processing of RunView/RunViews properly regardless of entry point to the provider.
+
+### Patch Changes
+
+- @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Minor Changes
+
+- e2e0415: Bump to version 2.83.0 to align with migration file versioning
+
+### Patch Changes
+
+- @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

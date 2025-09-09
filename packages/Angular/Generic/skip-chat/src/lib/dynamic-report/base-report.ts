@@ -14,6 +14,7 @@ import { CacheManager } from '@memberjunction/react-runtime';
 export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
   @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() ShowCreateReportButton: boolean = false;
+  @Input() ShowOpenReportButton: boolean = true;
   @Input() ConversationID: string | null = null;
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: string | null = null;
@@ -158,7 +159,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
           this.matchingReportID = result.ReportID;
           this.matchingReportName = result.ReportName;
           // let the user know we saved the report
-          this.RaiseUserNotification(`Report "${result.ReportName}"Saved`, 'success', 2500);
+          this.RaiseUserNotification(`Report "${result.ReportName}" Saved`, 'success', 2500);
 
           // tell our shared report cache about the new report
           const report = await this.ProviderToUse.GetEntityObject<ReportEntity>('Reports', this.ProviderToUse.CurrentUser);
@@ -168,6 +169,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
           });
 
           this.NewReportCreated.emit(result.ReportID); // finally emit the event
+          this._isCreatingReport = false; // Reset the flag on success
         } else {
           this.RaiseUserNotification('Error saving report', 'error', 2500);
           this._isCreatingReport = false;

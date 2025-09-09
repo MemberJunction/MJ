@@ -1,0 +1,49 @@
+{
+  "name": "VelocityHeatmap",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/velocity-heatmap.js",
+  "functionalRequirements": "## Velocity Heatmap\n\n### Purpose\nVisualize deal velocity across stages using a heatmap.\n\n### Features\n- Grid-based heatmap\n- Color intensity for velocity\n- Stage labels\n- Time period labels\n- Hover tooltips\n- Legend",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Visualizes deal velocity metrics across stages and time periods",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal data for velocity calculations",
+        "displayFields": ["Stage", "CloseDate", "__mj_CreatedAt"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Velocity data pre-calculated by parent into heatmap matrix"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- velocityData: 2D array of velocity values\n- stages: Array of stage names\n- periods: Array of time periods\n\n### Visualization\n- Grid cells with color gradients\n- ECharts heatmap chart",
+  "properties": [
+    {
+      "name": "velocityData",
+      "type": "Array<Array<number>>",
+      "required": true,
+      "description": "2D array of velocity values"
+    },
+    {
+      "name": "stages",
+      "type": "Array<string>",
+      "required": true,
+      "description": "Stage names for rows"
+    },
+    {
+      "name": "periods",
+      "type": "Array<string>",
+      "required": true,
+      "description": "Time period labels for columns"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

@@ -1,0 +1,83 @@
+{
+  "name": "AIModelFilter",
+  "title": "AI Model Filter",
+  "description": "Collapsible filter panel for filtering models by type, status, developer, and provider",
+  "type": "form",
+  "functionalRequirements": "Provide filters for model type, status, developer, and provider with active filter indicators",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Receives filter options derived from AI model entities",
+    "entities": [
+      {
+        "name": "AI Model Types",
+        "description": "Model type options for filtering",
+        "displayFields": ["ID", "Name", "Description"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Populates model type dropdown filter"
+      },
+      {
+        "name": "AI Vendors",
+        "description": "Vendor options for filtering",
+        "displayFields": ["ID", "Name"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Populates vendor dropdown filters"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "",
+  "properties": [
+    {
+      "name": "filters",
+      "type": "{modelType?: string, status?: string, developer?: string, provider?: string}",
+      "required": true,
+      "description": "Current filter state object"
+    },
+    {
+      "name": "modelTypes",
+      "type": "Array<{ID: string, Name: string, Description?: string}>",
+      "required": true,
+      "description": "Array of available model types for filtering"
+    },
+    {
+      "name": "vendors",
+      "type": "Array<{ID: string, Name: string, Type?: string}>",
+      "required": true,
+      "description": "Array of available vendors for filtering"
+    },
+    {
+      "name": "isCollapsed",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the filter panel is collapsed"
+    }
+  ],
+  "events": [
+    {
+      "name": "onFilterChange",
+      "description": "Fired when filters are changed",
+      "parameters": [
+        {
+          "name": "filters",
+          "type": "object",
+          "description": "New filter state"
+        }
+      ]
+    },
+    {
+      "name": "onToggleCollapse",
+      "description": "Fired when the collapse state should toggle",
+      "parameters": []
+    }
+  ],
+  "exampleUsage": "<AIModelFilter ... />",
+  "code": "@file:../code/ai-model-filter.js",
+  "dependencies": [],
+  "libraries": []
+}

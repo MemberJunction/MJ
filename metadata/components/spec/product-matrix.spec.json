@@ -1,0 +1,69 @@
+{
+  "name": "ProductMatrix",
+  "namespace": "CRM/Analytics",
+  "type": "Table",
+  "location": "embedded",
+  "code": "@file:../code/product-matrix.js",
+  "functionalRequirements": "## Product Matrix\n\n### Purpose\nDisplay products vs customers revenue matrix.\n\n### Features\n- Grid matrix layout\n- Products as rows\n- Customers as columns\n- Revenue values in cells\n- Heat coloring\n- Totals row/column",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays product-customer revenue matrix",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product entities for matrix rows",
+        "displayFields": ["ID", "ProductName"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Product names as matrix row headers"
+      },
+      {
+        "name": "Accounts",
+        "description": "Customer entities for matrix columns",
+        "displayFields": ["ID", "AccountName"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Customer names as matrix column headers"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Revenue data for matrix cells",
+        "displayFields": ["ProductID", "TotalPrice"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Revenue values for product-customer intersections"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- matrixData: 2D revenue array\n- products: Product names\n- customers: Customer names\n\n### Display\n- Table with fixed headers\n- Scrollable content\n- Color coding",
+  "properties": [
+    {
+      "name": "matrixData",
+      "type": "Array<Array<number>>",
+      "required": true,
+      "description": "2D array of revenue values"
+    },
+    {
+      "name": "products",
+      "type": "Array<string>",
+      "required": true,
+      "description": "Product names for rows"
+    },
+    {
+      "name": "customers",
+      "type": "Array<string>",
+      "required": true,
+      "description": "Customer names for columns"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

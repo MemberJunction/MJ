@@ -1,0 +1,43 @@
+{
+  "name": "ReasonBreakdown",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/reason-breakdown.js",
+  "functionalRequirements": "## Reason Breakdown\n\n### Purpose\nAnalyze reasons for wins and losses.\n\n### Features\n- Categorized reasons\n- Frequency analysis\n- Impact scoring\n- Actionable insights",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Analyzes reasons for wins and losses",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records with win/loss reasons",
+        "displayFields": ["ID", "Name", "Stage", "WonLostReason", "Amount"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Win/loss reason analysis"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- reasons: Array of win/loss reasons\n- type: 'wins' or 'losses'",
+  "properties": [
+    {
+      "name": "reasons",
+      "type": "Array<{reason: string, count: number, impact: number, percentage: number}>",
+      "required": true,
+      "description": "Win/loss reason data"
+    },
+    {
+      "name": "type",
+      "type": "'wins' | 'losses'",
+      "required": true,
+      "description": "Analysis type (wins/losses)"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

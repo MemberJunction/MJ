@@ -1,4 +1,4 @@
-import { Metadata, RunView } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -260,12 +260,12 @@ export class ValidationService {
    */
   private async validateFields(
     fields: Record<string, any>,
-    entityInfo: any,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
-    const fieldMap = new Map(entityFields.map((f: any) => [f.Name, f]));
+    const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
 
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
       const fieldInfo = fieldMap.get(fieldName);
@@ -274,6 +274,11 @@ export class ValidationService {
         // Check if this might be a virtual property (getter/setter)
         try {
           const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
+          // we use this approach instead of checking Entity Fields because
+          // some sub-classes implement setter properties that allow you to set
+          // values that are not physically in the database but are resolved by the sub-class
+          // a good example is the sub-class for AI Prompts that has a property called TemplateText
+          // that is automatically resolved into a separate record in the Templates/Template Contents entity
           const hasProperty = fieldName in entityInstance;
 
           if (!hasProperty) {
@@ -288,8 +293,6 @@ export class ValidationService {
             continue;
           }
 
-          // It's a virtual property, validate the value
-          await this.validateFieldValue(fieldValue, { Name: fieldName }, entityInfo, filePath, parentContext);
           continue;
         } catch (error) {
           // If we can't create an entity instance, fall back to error
@@ -306,14 +309,14 @@ export class ValidationService {
       }
 
       // Check if field is settable (not system field)
-      if ((fieldInfo as any).IsSystemField || fieldName.startsWith('__mj_')) {
+      if (fieldInfo.ReadOnly || fieldName.startsWith('__mj_')) {
         this.addError({
           type: 'field',
           severity: 'error',
           entity: entityInfo.Name,
           field: fieldName,
           file: filePath,
-          message: `Field "${fieldName}" is a system field and cannot be set`,
+          message: `Field "${fieldName}" is a read-only or system field and cannot be set`,
           suggestion: 'Remove this field from your metadata file',
         });
         continue;
@@ -345,7 +348,7 @@ export class ValidationService {
         }
 
         // Skip fields that are marked as AutoUpdateOnly or ReadOnly
-        if ((field as any).AutoUpdateOnly || (field as any).ReadOnly) {
+        if (field.AutoIncrement || field.ReadOnly) {
           continue;
         }
 
@@ -382,14 +385,19 @@ export class ValidationService {
    */
   private async validateFieldValue(
     value: any,
-    fieldInfo: any,
-    entityInfo: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
-    if (typeof value === 'string' && value.startsWith('@')) {
+    if (typeof value === 'string' && this.isValidReference(value)) {
       await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext);
+      // Skip further validation for references as they will be resolved later
+      return;
     }
+
+    // Validate field value against value list if applicable
+    await this.validateFieldValueList(value, fieldInfo, entityInfo, filePath);
 
     // Validate UserID fields against allowed roles
     if (fieldInfo.Name === 'UserID' && typeof value === 'string' && value.length > 0) {
@@ -424,12 +432,102 @@ export class ValidationService {
   }
 
   /**
+   * Validates field value against the field's value list if applicable
+   */
+  private async validateFieldValueList(
+    value: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
+    filePath: string
+  ): Promise<void> {
+    // Skip validation if value is null/undefined (handled by required field check)
+    if (value === null || value === undefined || value === '') {
+      return;
+    }
+
+    // Check if this field has a value list constraint
+    if (fieldInfo.ValueListType !== 'List') {
+      return;
+    }
+
+    // Get the allowed values from EntityFieldValues
+    const entityFieldValues = fieldInfo.EntityFieldValues;
+    if (!entityFieldValues || !Array.isArray(entityFieldValues) || entityFieldValues.length === 0) {
+      // No values defined, skip validation
+      return;
+    }
+
+    // Extract the allowed values
+    const allowedValues = entityFieldValues.map((efv: any) => efv.Value);
+    
+    // Convert value to string for comparison (in case it's a number or boolean)
+    const stringValue = String(value);
+    
+    // Check if the value is in the allowed list
+    if (!allowedValues.includes(stringValue)) {
+      // Check case-insensitive match as a warning
+      const caseInsensitiveMatch = allowedValues.find((av: string) => 
+        av.toLowerCase() === stringValue.toLowerCase()
+      );
+      
+      if (caseInsensitiveMatch) {
+        this.addWarning({
+          type: 'validation',
+          severity: 'warning',
+          entity: entityInfo.Name,
+          field: fieldInfo.Name,
+          file: filePath,
+          message: `Field "${fieldInfo.Name}" has value "${stringValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
+          suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
+        });
+      } else {
+        // Format the allowed values list for display
+        const allowedValuesList = allowedValues.length <= 10 
+          ? allowedValues.join(', ')
+          : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
+        
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          field: fieldInfo.Name,
+          file: filePath,
+          message: `Field "${fieldInfo.Name}" has invalid value "${stringValue}"`,
+          suggestion: `Allowed values are: ${allowedValuesList}`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Check if a string is actually a MetadataSync reference (not just any @ string)
+   */
+  private isValidReference(value: string): boolean {
+    if (typeof value !== 'string' || !value.startsWith('@')) {
+      return false;
+    }
+    
+    // List of valid reference prefixes
+    const validPrefixes = [
+      '@file:',
+      '@lookup:',
+      '@template:',
+      '@parent:',
+      '@root:',
+      '@env:',
+      '@include',  // Can be @include or @include.
+    ];
+    
+    return validPrefixes.some(prefix => value.startsWith(prefix));
+  }
+
+  /**
    * Validates special references (@file:, @lookup:, etc.)
    */
   private async validateReference(
     reference: string,
-    fieldInfo: any,
-    entityInfo: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
   ): Promise<void> {
@@ -536,9 +634,27 @@ export class ValidationService {
   /**
    * Validates @file: references
    */
-  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string): Promise<void> {
+  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string, visitedFiles?: Set<string>): Promise<void> {
     const dir = path.dirname(sourceFile);
     const resolvedPath = path.resolve(dir, filePath);
+
+    // Initialize visited files set if not provided (for circular reference detection)
+    const visited = visitedFiles || new Set<string>();
+    
+    // Check for circular references
+    if (visited.has(resolvedPath)) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: fieldName,
+        file: sourceFile,
+        message: `Circular @file reference detected: "${filePath}"`,
+        details: `Path ${resolvedPath} is already being processed`,
+        suggestion: 'Restructure your file references to avoid circular dependencies',
+      });
+      return;
+    }
 
     if (!fs.existsSync(resolvedPath)) {
       this.addError({
@@ -553,10 +669,38 @@ export class ValidationService {
       return;
     }
 
-    // Read the file and check for {@include} references
+    // Add to visited set
+    visited.add(resolvedPath);
+
+    // Read the file and check for references
     try {
       const content = fs.readFileSync(resolvedPath, 'utf-8');
+      
+      // Check for {@include} references in all file types
       await this.validateIncludeReferences(content, resolvedPath, new Set([resolvedPath]));
+      
+      // If it's a JSON file, parse and validate nested @ references
+      if (resolvedPath.endsWith('.json')) {
+        try {
+          const jsonContent = JSON.parse(content);
+          
+          // Check if JSON contains @include directives that need preprocessing
+          const jsonString = JSON.stringify(jsonContent);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+          
+          if (hasIncludes) {
+            await this.validateJsonIncludes(jsonContent, resolvedPath);
+          }
+          
+          // Recursively validate all @ references in the JSON structure
+          await this.validateJsonReferences(jsonContent, resolvedPath, entityName, visited);
+        } catch (parseError) {
+          // Not valid JSON or error parsing, treat as text file (already validated {@include} above)
+          if (this.options.verbose) {
+            console.log(`File ${resolvedPath} is not valid JSON, treating as text file`);
+          }
+        }
+      }
     } catch (error) {
       this.addError({
         type: 'reference',
@@ -1151,6 +1295,131 @@ export class ValidationService {
           message: `Failed to read {@include} file: "${trimmedPath}"`,
           details: error instanceof Error ? error.message : String(error),
         });
+      }
+    }
+  }
+
+  /**
+   * Validates @include directives in JSON files
+   */
+  private async validateJsonIncludes(jsonContent: any, sourceFile: string): Promise<void> {
+    // Process based on data type
+    if (Array.isArray(jsonContent)) {
+      for (const item of jsonContent) {
+        if (typeof item === 'string' && item.startsWith('@include:')) {
+          const includePath = item.substring(9).trim();
+          await this.validateIncludeFile(includePath, sourceFile);
+        } else if (item && typeof item === 'object') {
+          await this.validateJsonIncludes(item, sourceFile);
+        }
+      }
+    } else if (jsonContent && typeof jsonContent === 'object') {
+      for (const [key, value] of Object.entries(jsonContent)) {
+        if (key === '@include' || key.startsWith('@include.')) {
+          let includeFile: string;
+          if (typeof value === 'string') {
+            includeFile = value;
+          } else if (value && typeof value === 'object' && 'file' in value) {
+            includeFile = (value as any).file;
+          } else {
+            this.addError({
+              type: 'reference',
+              severity: 'error',
+              file: sourceFile,
+              message: `Invalid @include directive format for key "${key}"`,
+              suggestion: 'Use either a string path or an object with a "file" property',
+            });
+            continue;
+          }
+          await this.validateIncludeFile(includeFile, sourceFile);
+        } else if (value && typeof value === 'object') {
+          await this.validateJsonIncludes(value, sourceFile);
+        }
+      }
+    }
+  }
+
+  /**
+   * Validates a single include file path
+   */
+  private async validateIncludeFile(includePath: string, sourceFile: string): Promise<void> {
+    const dir = path.dirname(sourceFile);
+    const resolvedPath = path.resolve(dir, includePath);
+    
+    if (!fs.existsSync(resolvedPath)) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        file: sourceFile,
+        message: `@include file not found: "${includePath}"`,
+        suggestion: `Create file at: ${resolvedPath}`,
+      });
+    }
+  }
+
+  /**
+   * Recursively validates all @ references in a JSON structure
+   */
+  private async validateJsonReferences(
+    obj: any,
+    sourceFile: string,
+    entityName: string,
+    visitedFiles: Set<string>,
+    parentContext?: { entity: string; field: string }
+  ): Promise<void> {
+    if (obj === null || obj === undefined) {
+      return;
+    }
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        await this.validateJsonReferences(item, sourceFile, entityName, visitedFiles, parentContext);
+      }
+    } else if (typeof obj === 'object') {
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'string' && this.isValidReference(value)) {
+          // Process different reference types
+          if (value.startsWith('@file:')) {
+            const filePath = value.substring(6);
+            // Recursively validate the file reference (with circular detection)
+            await this.validateFileReference(filePath, sourceFile, entityName, key, visitedFiles);
+          } else if (value.startsWith('@lookup:')) {
+            // Parse and validate lookup reference
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              await this.validateLookupReference(parsed, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@template:')) {
+            const templatePath = value.substring(10);
+            await this.validateTemplateReference(templatePath, sourceFile, entityName, key);
+          } else if (value.startsWith('@parent:')) {
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              this.validateParentReference(parsed.value, parentContext, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@root:')) {
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              this.validateRootReference(parsed.value, parentContext, sourceFile, entityName, key);
+            }
+          } else if (value.startsWith('@env:')) {
+            const envVar = value.substring(5);
+            if (!process.env[envVar]) {
+              this.addWarning({
+                type: 'validation',
+                severity: 'warning',
+                entity: entityName,
+                field: key,
+                file: sourceFile,
+                message: `Environment variable "${envVar}" is not currently set`,
+                suggestion: `Ensure this variable is set before running push operations`,
+              });
+            }
+          }
+        } else if (value && typeof value === 'object') {
+          // Recursively process nested objects
+          await this.validateJsonReferences(value, sourceFile, entityName, visitedFiles, parentContext);
+        }
       }
     }
   }

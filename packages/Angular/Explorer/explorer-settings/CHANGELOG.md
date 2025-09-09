@@ -1,5 +1,315 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.99.0
+
+### Patch Changes
+
+- Updated dependencies [eb7677d]
+- Updated dependencies [8bbb0a9]
+  - @memberjunction/core-entities@2.99.0
+  - @memberjunction/core@2.99.0
+  - @memberjunction/ng-entity-form-dialog@2.99.0
+  - @memberjunction/ng-entity-permissions@2.99.0
+  - @memberjunction/ng-shared@2.99.0
+  - @memberjunction/ng-simple-record-list@2.99.0
+  - @memberjunction/ng-user-view-grid@2.99.0
+  - @memberjunction/ng-notifications@2.99.0
+  - @memberjunction/ng-base-forms@2.99.0
+  - @memberjunction/ng-container-directives@2.99.0
+  - @memberjunction/ng-tabstrip@2.99.0
+  - @memberjunction/global@2.99.0
+
+## 2.98.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.98.0
+- @memberjunction/ng-entity-form-dialog@2.98.0
+- @memberjunction/ng-entity-permissions@2.98.0
+- @memberjunction/ng-shared@2.98.0
+- @memberjunction/ng-simple-record-list@2.98.0
+- @memberjunction/ng-user-view-grid@2.98.0
+- @memberjunction/ng-container-directives@2.98.0
+- @memberjunction/ng-notifications@2.98.0
+- @memberjunction/ng-tabstrip@2.98.0
+- @memberjunction/core@2.98.0
+- @memberjunction/core-entities@2.98.0
+- @memberjunction/global@2.98.0
+
+## 2.97.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.97.0
+- @memberjunction/ng-user-view-grid@2.97.0
+- @memberjunction/ng-entity-form-dialog@2.97.0
+- @memberjunction/ng-entity-permissions@2.97.0
+- @memberjunction/ng-shared@2.97.0
+- @memberjunction/ng-simple-record-list@2.97.0
+- @memberjunction/ng-notifications@2.97.0
+- @memberjunction/ng-base-forms@2.97.0
+- @memberjunction/ng-container-directives@2.97.0
+- @memberjunction/ng-tabstrip@2.97.0
+- @memberjunction/core@2.97.0
+- @memberjunction/global@2.97.0
+
+## 2.96.0
+
+### Patch Changes
+
+- Updated dependencies [01dcfde]
+  - @memberjunction/core@2.96.0
+  - @memberjunction/ng-base-forms@2.96.0
+  - @memberjunction/ng-entity-form-dialog@2.96.0
+  - @memberjunction/ng-entity-permissions@2.96.0
+  - @memberjunction/ng-shared@2.96.0
+  - @memberjunction/ng-simple-record-list@2.96.0
+  - @memberjunction/ng-user-view-grid@2.96.0
+  - @memberjunction/ng-container-directives@2.96.0
+  - @memberjunction/ng-notifications@2.96.0
+  - @memberjunction/core-entities@2.96.0
+  - @memberjunction/ng-tabstrip@2.96.0
+  - @memberjunction/global@2.96.0
+
+## 2.95.0
+
+### Patch Changes
+
+- Updated dependencies [a54c014]
+  - @memberjunction/core@2.95.0
+  - @memberjunction/ng-base-forms@2.95.0
+  - @memberjunction/ng-entity-form-dialog@2.95.0
+  - @memberjunction/ng-entity-permissions@2.95.0
+  - @memberjunction/ng-shared@2.95.0
+  - @memberjunction/ng-simple-record-list@2.95.0
+  - @memberjunction/ng-user-view-grid@2.95.0
+  - @memberjunction/ng-container-directives@2.95.0
+  - @memberjunction/ng-notifications@2.95.0
+  - @memberjunction/core-entities@2.95.0
+  - @memberjunction/ng-tabstrip@2.95.0
+  - @memberjunction/global@2.95.0
+
+## 2.94.0
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.94.0
+- @memberjunction/ng-entity-form-dialog@2.94.0
+- @memberjunction/ng-entity-permissions@2.94.0
+- @memberjunction/ng-shared@2.94.0
+- @memberjunction/ng-simple-record-list@2.94.0
+- @memberjunction/ng-user-view-grid@2.94.0
+- @memberjunction/ng-notifications@2.94.0
+- @memberjunction/ng-base-forms@2.94.0
+- @memberjunction/ng-container-directives@2.94.0
+- @memberjunction/ng-tabstrip@2.94.0
+- @memberjunction/core@2.94.0
+- @memberjunction/global@2.94.0
+
+## 2.93.0
+
+### Patch Changes
+
+- Updated dependencies [f8757aa]
+- Updated dependencies [103e4a9]
+- Updated dependencies [7f465b5]
+  - @memberjunction/core@2.93.0
+  - @memberjunction/core-entities@2.93.0
+  - @memberjunction/ng-base-forms@2.93.0
+  - @memberjunction/ng-entity-form-dialog@2.93.0
+  - @memberjunction/ng-entity-permissions@2.93.0
+  - @memberjunction/ng-shared@2.93.0
+  - @memberjunction/ng-simple-record-list@2.93.0
+  - @memberjunction/ng-user-view-grid@2.93.0
+  - @memberjunction/ng-container-directives@2.93.0
+  - @memberjunction/ng-notifications@2.93.0
+  - @memberjunction/ng-tabstrip@2.93.0
+  - @memberjunction/global@2.93.0
+
+## 2.92.0
+
+### Patch Changes
+
+- Updated dependencies [8fb03df]
+- Updated dependencies [5817bac]
+  - @memberjunction/core@2.92.0
+  - @memberjunction/ng-base-forms@2.92.0
+  - @memberjunction/core-entities@2.92.0
+  - @memberjunction/ng-entity-form-dialog@2.92.0
+  - @memberjunction/ng-entity-permissions@2.92.0
+  - @memberjunction/ng-shared@2.92.0
+  - @memberjunction/ng-simple-record-list@2.92.0
+  - @memberjunction/ng-user-view-grid@2.92.0
+  - @memberjunction/ng-container-directives@2.92.0
+  - @memberjunction/ng-notifications@2.92.0
+  - @memberjunction/ng-tabstrip@2.92.0
+  - @memberjunction/global@2.92.0
+
+## 2.91.0
+
+### Patch Changes
+
+- Updated dependencies [f703033]
+- Updated dependencies [6476d74]
+  - @memberjunction/core@2.91.0
+  - @memberjunction/core-entities@2.91.0
+  - @memberjunction/ng-base-forms@2.91.0
+  - @memberjunction/ng-entity-form-dialog@2.91.0
+  - @memberjunction/ng-entity-permissions@2.91.0
+  - @memberjunction/ng-shared@2.91.0
+  - @memberjunction/ng-simple-record-list@2.91.0
+  - @memberjunction/ng-user-view-grid@2.91.0
+  - @memberjunction/ng-container-directives@2.91.0
+  - @memberjunction/ng-notifications@2.91.0
+  - @memberjunction/ng-tabstrip@2.91.0
+  - @memberjunction/global@2.91.0
+
+## 2.90.0
+
+### Patch Changes
+
+- Updated dependencies [146ebcc]
+- Updated dependencies [d5d26d7]
+- Updated dependencies [1e7eb76]
+  - @memberjunction/core@2.90.0
+  - @memberjunction/core-entities@2.90.0
+  - @memberjunction/ng-base-forms@2.90.0
+  - @memberjunction/ng-entity-form-dialog@2.90.0
+  - @memberjunction/ng-entity-permissions@2.90.0
+  - @memberjunction/ng-shared@2.90.0
+  - @memberjunction/ng-simple-record-list@2.90.0
+  - @memberjunction/ng-user-view-grid@2.90.0
+  - @memberjunction/ng-container-directives@2.90.0
+  - @memberjunction/ng-notifications@2.90.0
+  - @memberjunction/ng-tabstrip@2.90.0
+  - @memberjunction/global@2.90.0
+
+## 2.89.0
+
+### Patch Changes
+
+- Updated dependencies [d1911ed]
+  - @memberjunction/core-entities@2.89.0
+  - @memberjunction/ng-entity-form-dialog@2.89.0
+  - @memberjunction/ng-entity-permissions@2.89.0
+  - @memberjunction/ng-shared@2.89.0
+  - @memberjunction/ng-simple-record-list@2.89.0
+  - @memberjunction/ng-user-view-grid@2.89.0
+  - @memberjunction/ng-notifications@2.89.0
+  - @memberjunction/ng-base-forms@2.89.0
+  - @memberjunction/ng-container-directives@2.89.0
+  - @memberjunction/ng-tabstrip@2.89.0
+  - @memberjunction/core@2.89.0
+  - @memberjunction/global@2.89.0
+
+## 2.88.0
+
+### Patch Changes
+
+- Updated dependencies [df4031f]
+  - @memberjunction/core-entities@2.88.0
+  - @memberjunction/ng-shared@2.88.0
+  - @memberjunction/ng-notifications@2.88.0
+  - @memberjunction/ng-entity-form-dialog@2.88.0
+  - @memberjunction/ng-entity-permissions@2.88.0
+  - @memberjunction/ng-simple-record-list@2.88.0
+  - @memberjunction/ng-user-view-grid@2.88.0
+  - @memberjunction/ng-base-forms@2.88.0
+  - @memberjunction/ng-container-directives@2.88.0
+  - @memberjunction/ng-tabstrip@2.88.0
+  - @memberjunction/core@2.88.0
+  - @memberjunction/global@2.88.0
+
+## 2.87.0
+
+### Patch Changes
+
+- Updated dependencies [58a00df]
+  - @memberjunction/core@2.87.0
+  - @memberjunction/ng-base-forms@2.87.0
+  - @memberjunction/ng-entity-form-dialog@2.87.0
+  - @memberjunction/ng-entity-permissions@2.87.0
+  - @memberjunction/ng-shared@2.87.0
+  - @memberjunction/ng-simple-record-list@2.87.0
+  - @memberjunction/ng-user-view-grid@2.87.0
+  - @memberjunction/ng-container-directives@2.87.0
+  - @memberjunction/ng-notifications@2.87.0
+  - @memberjunction/core-entities@2.87.0
+  - @memberjunction/ng-tabstrip@2.87.0
+  - @memberjunction/global@2.87.0
+
+## 2.86.0
+
+### Patch Changes
+
+- Updated dependencies [7dd2409]
+  - @memberjunction/core-entities@2.86.0
+  - @memberjunction/ng-entity-form-dialog@2.86.0
+  - @memberjunction/ng-entity-permissions@2.86.0
+  - @memberjunction/ng-shared@2.86.0
+  - @memberjunction/ng-simple-record-list@2.86.0
+  - @memberjunction/ng-user-view-grid@2.86.0
+  - @memberjunction/ng-notifications@2.86.0
+  - @memberjunction/ng-base-forms@2.86.0
+  - @memberjunction/ng-container-directives@2.86.0
+  - @memberjunction/ng-tabstrip@2.86.0
+  - @memberjunction/core@2.86.0
+  - @memberjunction/global@2.86.0
+
+## 2.85.0
+
+### Patch Changes
+
+- Updated dependencies [747455a]
+  - @memberjunction/core-entities@2.85.0
+  - @memberjunction/ng-entity-form-dialog@2.85.0
+  - @memberjunction/ng-entity-permissions@2.85.0
+  - @memberjunction/ng-shared@2.85.0
+  - @memberjunction/ng-simple-record-list@2.85.0
+  - @memberjunction/ng-user-view-grid@2.85.0
+  - @memberjunction/ng-notifications@2.85.0
+  - @memberjunction/ng-base-forms@2.85.0
+  - @memberjunction/ng-container-directives@2.85.0
+  - @memberjunction/ng-tabstrip@2.85.0
+  - @memberjunction/core@2.85.0
+  - @memberjunction/global@2.85.0
+
+## 2.84.0
+
+### Patch Changes
+
+- Updated dependencies [0b9d691]
+  - @memberjunction/core@2.84.0
+  - @memberjunction/ng-shared@2.84.0
+  - @memberjunction/ng-notifications@2.84.0
+  - @memberjunction/ng-base-forms@2.84.0
+  - @memberjunction/ng-entity-form-dialog@2.84.0
+  - @memberjunction/ng-entity-permissions@2.84.0
+  - @memberjunction/ng-simple-record-list@2.84.0
+  - @memberjunction/ng-user-view-grid@2.84.0
+  - @memberjunction/ng-container-directives@2.84.0
+  - @memberjunction/core-entities@2.84.0
+  - @memberjunction/ng-tabstrip@2.84.0
+  - @memberjunction/global@2.84.0
+
+## 2.83.0
+
+### Patch Changes
+
+- Updated dependencies [e2e0415]
+  - @memberjunction/core@2.83.0
+  - @memberjunction/ng-base-forms@2.83.0
+  - @memberjunction/ng-entity-form-dialog@2.83.0
+  - @memberjunction/ng-entity-permissions@2.83.0
+  - @memberjunction/ng-shared@2.83.0
+  - @memberjunction/ng-simple-record-list@2.83.0
+  - @memberjunction/ng-user-view-grid@2.83.0
+  - @memberjunction/ng-container-directives@2.83.0
+  - @memberjunction/ng-notifications@2.83.0
+  - @memberjunction/core-entities@2.83.0
+  - @memberjunction/ng-tabstrip@2.83.0
+  - @memberjunction/global@2.83.0
+
 ## 2.82.0
 
 ### Patch Changes

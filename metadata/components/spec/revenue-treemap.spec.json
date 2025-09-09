@@ -1,0 +1,53 @@
+{
+  "name": "RevenueTreemap",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/revenue-treemap.js",
+  "functionalRequirements": "## Revenue Treemap\n\n### Purpose\nVisualize revenue by product hierarchy using a treemap.\n\n### Features\n- Hierarchical treemap\n- Size by revenue\n- Color by growth\n- Hover details\n- Click to drill down",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Visualizes revenue distribution in treemap format",
+    "entities": [
+      {
+        "name": "Products",
+        "description": "Product data for revenue treemap",
+        "displayFields": ["ID", "ProductName", "Category"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Products grouped hierarchically for treemap visualization"
+      },
+      {
+        "name": "Invoice Line Items",
+        "description": "Revenue data per product",
+        "displayFields": ["ProductID", "TotalPrice"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Revenue aggregation by product"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- revenueData: Hierarchical revenue data\n- onProductClick: Drill-down callback\n\n### Visualization\n- Highcharts treemap",
+  "properties": [
+    {
+      "name": "revenueData",
+      "type": "{name: string, children: Array<{name: string, value: number, children?: Array<any>}>}",
+      "required": true,
+      "description": "Hierarchical revenue data structure"
+    },
+    {
+      "name": "onProductClick",
+      "type": "(product: {name: string, value: number}) => void",
+      "required": false,
+      "description": "Product selection callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

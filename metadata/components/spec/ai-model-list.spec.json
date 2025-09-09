@@ -1,0 +1,277 @@
+{
+  "name": "AIModelList",
+  "title": "AI Model List",
+  "description": "Displays AI models in grid or list view with vendor information and sorting",
+  "type": "table",
+  "functionalRequirements": "Display models with vendor counts, support grid and list views, handle sorting and selection",
+  "technicalDesign": "",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "AI Models",
+        "description": "Core AI model definitions and specifications",
+        "displayFields": [
+          "ID",
+          "Name",
+          "APIName",
+          "Description",
+          "AIModelTypeID",
+          "InputTokenLimit",
+          "PowerRank",
+          "SpeedRank",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "AIModelTypeID",
+          "IsActive"
+        ],
+        "sortFields": [
+          "Name",
+          "InputTokenLimit",
+          "CostRank",
+          "IsActive",
+          "__mj_CreatedAt"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": true,
+            "description": "Unique identifier for the AI model"
+          },
+          {
+            "name": "Name",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "System name of the AI model"
+          },
+          {
+            "name": "APIName",
+            "sequence": 4,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "API identifier for the model"
+          },
+          {
+            "name": "InputTokenLimit",
+            "sequence": 5,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Maximum input token limit"
+          },
+          {
+            "name": "CostRank",
+            "sequence": 6,
+            "defaultInView": true,
+            "type": "int",
+            "allowsNull": true,
+            "isPrimaryKey": false,
+            "description": "Relative cost ranking (1-5)"
+          }
+        ], 
+        "usageContext": "Main list of AI models"
+      },
+      {
+        "name": "MJ: AI Model Vendors",
+        "description": "Vendor associations for AI models",
+        "displayFields": [
+          "ID",
+          "ModelID",
+          "VendorID",
+          "TypeID",
+          "Model",
+          "Vendor",
+          "Type",
+          "Status",
+          "Priority",
+          "APIName",
+          "MaxInputTokens",
+          "MaxOutputTokens",
+          "SupportsStreaming",
+          "SupportsEffortLevel"
+        ],
+        "filterFields": [
+          "ModelID",
+          "Type",
+          "Status"
+        ],
+        "sortFields": [
+          "Vendor",
+          "Priority",
+          "Type"
+        ],
+        "fieldMetadata": [
+          {
+            "name": "ModelID",
+            "sequence": 1,
+            "defaultInView": false,
+            "type": "uniqueidentifier",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Reference to AI Model"
+          },
+          {
+            "name": "Vendor",
+            "sequence": 2,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor name"
+          },
+          {
+            "name": "Type",
+            "sequence": 3,
+            "defaultInView": true,
+            "type": "nvarchar",
+            "allowsNull": false,
+            "isPrimaryKey": false,
+            "description": "Vendor type (Model Developer or Inference Provider)"
+          }
+        ], 
+        "usageContext": "Vendor associations for models"
+      },
+      {
+        "name": "AI Model Types",
+        "description": "Types/categories of AI models",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Filter dropdown for model types"
+      },
+      {
+        "name": "MJ: AI Prompt Runs",
+        "description": "Execution history for AI prompts",
+        "displayFields": [
+          "ID",
+          "PromptID",
+          "ModelID",
+          "StartTime",
+          "EndTime",
+          "TotalExecutionTime",
+          "InputTokens",
+          "OutputTokens",
+          "TotalTokens",
+          "Status",
+          "Error"
+        ],
+        "filterFields": [
+          "ModelID",
+          "PromptID",
+          "Status"
+        ],
+        "sortFields": [
+          "StartTime",
+          "TotalExecutionTime"
+        ], 
+        "usageContext": "Analytics and usage history"
+      },
+      {
+        "name": "AI Prompts",
+        "description": "AI prompt definitions",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description",
+          "CategoryID"
+        ],
+        "filterFields": [],
+        "sortFields": [
+          "Name"
+        ], 
+        "usageContext": "Enrich prompt runs with names"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "name": "models",
+      "type": "array",
+      "required": true,
+      "description": "Array of AI model objects to display"
+    },
+    {
+      "name": "modelVendors",
+      "type": "array",
+      "required": true,
+      "description": "Array of model vendor associations"
+    },
+    {
+      "name": "viewMode",
+      "type": "string",
+      "required": true,
+      "description": "Display mode - 'grid' or 'list'"
+    },
+    {
+      "name": "selectedModelId",
+      "type": "string",
+      "required": true,
+      "description": "ID of the currently selected model"
+    },
+    {
+      "name": "sortBy",
+      "type": "string",
+      "required": true,
+      "description": "Field to sort by"
+    },
+    {
+      "name": "sortDirection",
+      "type": "string",
+      "required": true,
+      "description": "Sort direction - 'asc' or 'desc'"
+    }
+  ],
+  "events": [
+    {
+      "name": "onSelectModel",
+      "description": "Fired when a model is selected",
+      "parameters": [
+        {
+          "name": "modelId",
+          "type": "string",
+          "description": "ID of the selected model"
+        }
+      ]
+    },
+    {
+      "name": "onSortChange",
+      "description": "Fired when sort criteria changes",
+      "parameters": [
+        {
+          "name": "sortBy",
+          "type": "string",
+          "description": "Field to sort by"
+        },
+        {
+          "name": "sortDirection",
+          "type": "string",
+          "description": "Sort direction"
+        }
+      ]
+    }
+  ],
+  "exampleUsage": "<AIModelList ... />",
+  "code": "@file:../code/ai-model-list.js",
+  "dependencies": [],
+  "libraries": []
+}

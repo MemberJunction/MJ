@@ -1,0 +1,55 @@
+{
+  "name": "SalesFunnelChart",
+  "namespace": "CRM/Analytics",
+  "type": "Chart",
+  "location": "embedded",
+  "code": "@file:../code/sales-funnel-chart.js",
+  "functionalRequirements": "## Sales Funnel Chart Sub-Component\n\n### Purpose\nDisplay the visual funnel representation of deal stages with interactive elements.\n\n### Core Features\n- **Funnel Visualization**: Animated funnel stages\n- **Stage Metrics**: Count and value per stage\n- **Conversion Rates**: Between stages\n- **Interactive Stages**: Click to drill down\n- **View Mode Toggle**: Count vs value display",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Visualizes sales funnel with deal stages",
+    "entities": [
+      {
+        "name": "Deals",
+        "description": "Deal records for funnel visualization",
+        "displayFields": ["ID", "Name", "Amount", "Stage", "Probability"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Funnel stage data passed via props"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Visual Design\n- Animated funnel with gradient colors\n- Responsive width based on data\n- Hover effects and transitions\n- Lost deals indicator\n\n### Interaction\n- Click handlers for drill-down\n- Smooth animations on load",
+  "properties": [
+    {
+      "name": "funnelData",
+      "type": "Array<{stage: string, count: number, value: number, percentage: number, color: string}>",
+      "description": "Array of stage data with metrics",
+      "required": true
+    },
+    {
+      "name": "viewMode",
+      "type": "'count' | 'value'",
+      "description": "Display mode: 'count' or 'value'",
+      "required": true
+    },
+    {
+      "name": "onStageClick",
+      "type": "(stage: string) => void",
+      "description": "Handler for stage click events",
+      "required": true
+    },
+    {
+      "name": "closedLost",
+      "type": "{count: number, value: number}",
+      "description": "Closed lost deals data",
+      "required": true
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

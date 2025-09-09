@@ -1,0 +1,59 @@
+{
+  "name": "RepDetailsPanel",
+  "namespace": "CRM/Dashboards",
+  "type": "Other",
+  "location": "embedded",
+  "code": "@file:../code/rep-details-panel.js",
+  "functionalRequirements": "## Rep Details Panel\n\n### Purpose\nSlide-out panel showing detailed sales rep performance metrics.\n\n### Features\n- Rep name and title header\n- Performance metrics cards\n- Deal pipeline breakdown\n- Recent activities list\n- Performance chart\n- Close button",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Displays detailed sales rep performance metrics",
+    "entities": [
+      {
+        "name": "Users",
+        "description": "Sales representative user information",
+        "displayFields": ["ID", "Name", "Email", "Title"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Sales rep profile information"
+      },
+      {
+        "name": "Deals",
+        "description": "Deals owned by the rep for performance metrics",
+        "displayFields": ["OwnerID", "Amount", "Stage", "CloseDate"],
+        "filterFields": [],
+        "sortFields": [],
+        "fieldMetadata": [],
+        "permissionLevelNeeded": ["read"],
+        "usageContext": "Performance metrics calculation"
+      }
+    ],
+    "queries": []
+  },
+  "technicalDesign": "## Implementation\n\n### Props\n- rep: Selected rep object\n- isOpen: Panel visibility\n- onClose: Close callback\n\n### Layout\n- Fixed position slide-out\n- Header with rep info\n- Metrics grid\n- Scrollable content",
+  "properties": [
+    {
+      "name": "rep",
+      "type": "{id: string, name: string, title?: string, email?: string, metrics?: {dealsClosed: number, revenue: number, winRate: number}}",
+      "required": false,
+      "description": "Selected rep data with performance metrics"
+    },
+    {
+      "name": "isOpen",
+      "type": "boolean",
+      "required": true,
+      "description": "Panel visibility state"
+    },
+    {
+      "name": "onClose",
+      "type": "() => void",
+      "required": true,
+      "description": "Close callback"
+    }
+  ],
+  "events": [],
+  "dependencies": [],
+  "libraries": []
+}

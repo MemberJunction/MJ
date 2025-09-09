@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
@@ -18,6 +18,7 @@ import {
   SkipAPIClarifyingQuestionResponse,
   SkipEntityInfo,
   SkipQueryInfo,
+  SkipQueryEntityInfo,
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
@@ -53,17 +54,144 @@ import {
   UserNotificationEntity,
   AIAgentEntityExtended
 } from '@memberjunction/core-entities';
-import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
-import { sendPostRequest } from '../util.js';
+import { GetReadWriteProvider, sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
+
+/**
+ * Store for active conversation streams
+ * Maps conversationID to the last status message received
+ */
+class ActiveConversationStreams {
+  private static instance: ActiveConversationStreams;
+  private streams: Map<string, { 
+    lastStatus: string, 
+    lastUpdate: Date,
+    startTime: Date, // When processing actually started
+    sessionIds: Set<string> // Track which sessions are listening
+  }> = new Map();
+
+  private constructor() {}
+
+  static getInstance(): ActiveConversationStreams {
+    if (!ActiveConversationStreams.instance) {
+      ActiveConversationStreams.instance = new ActiveConversationStreams();
+    }
+    return ActiveConversationStreams.instance;
+  }
+
+  updateStatus(conversationId: string, status: string, sessionId?: string) {
+    const existing = this.streams.get(conversationId);
+    if (existing) {
+      existing.lastStatus = status;
+      existing.lastUpdate = new Date();
+      if (sessionId) {
+        existing.sessionIds.add(sessionId);
+      }
+    } else {
+      const now = new Date();
+      this.streams.set(conversationId, {
+        lastStatus: status,
+        lastUpdate: now,
+        startTime: now, // Track when processing started
+        sessionIds: sessionId ? new Set([sessionId]) : new Set()
+      });
+    }
+  }
+
+  getStatus(conversationId: string): string | null {
+    const stream = this.streams.get(conversationId);
+    return stream ? stream.lastStatus : null;
+  }
+
+  getStartTime(conversationId: string): Date | null {
+    const stream = this.streams.get(conversationId);
+    return stream ? stream.startTime : null;
+  }
+
+  addSession(conversationId: string, sessionId: string) {
+    const stream = this.streams.get(conversationId);
+    if (stream) {
+      stream.sessionIds.add(sessionId);
+    } else {
+      // If no stream exists yet, create one with default status
+      const now = new Date();
+      this.streams.set(conversationId, {
+        lastStatus: 'Processing...',
+        lastUpdate: now,
+        startTime: now, // Track when processing started
+        sessionIds: new Set([sessionId])
+      });
+    }
+  }
+
+  removeConversation(conversationId: string) {
+    this.streams.delete(conversationId);
+  }
+
+  isActive(conversationId: string): boolean {
+    const stream = this.streams.get(conversationId);
+    if (!stream) return false;
+    
+    // Consider a stream inactive if no update in last 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    return stream.lastUpdate > fiveMinutesAgo;
+  }
+
+  getSessionIds(conversationId: string): string[] {
+    const stream = this.streams.get(conversationId);
+    return stream ? Array.from(stream.sessionIds) : [];
+  }
+
+  /**
+   * Clean up stale streams that haven't been updated in a while
+   * This prevents memory leaks from abandoned conversations
+   */
+  cleanupStaleStreams() {
+    const now = new Date();
+    const staleThreshold = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes
+    
+    const staleConversations: string[] = [];
+    this.streams.forEach((stream, conversationId) => {
+      if (stream.lastUpdate < staleThreshold) {
+        staleConversations.push(conversationId);
+      }
+    });
+    
+    staleConversations.forEach(conversationId => {
+      this.streams.delete(conversationId);
+      LogStatus(`Cleaned up stale stream for conversation ${conversationId}`);
+    });
+    
+    if (staleConversations.length > 0) {
+      LogStatus(`Cleaned up ${staleConversations.length} stale conversation streams`);
+    }
+  }
+}
+
+const activeStreams = ActiveConversationStreams.getInstance();
+
+// Set up periodic cleanup of stale streams (every 10 minutes)
+setInterval(() => {
+  activeStreams.cleanupStaleStreams();
+}, 10 * 60 * 1000);
+
+@ObjectType()
+class ReattachConversationResponse {
+  @Field(() => String, { nullable: true })
+  lastStatusMessage?: string;
+
+  @Field(() => Date, { nullable: true })
+  startTime?: Date;
+}
 
 /**
  * Enumeration representing the different phases of a Skip response
@@ -317,7 +445,9 @@ type BaseSkipRequest = {
   /** API key for the calling server */
   callingServerAPIKey: string,
   /** Access token for the calling server */
-  callingServerAccessToken: string
+  callingServerAccessToken: string,
+  /** Email of the user making the request */
+  userEmail: string
 }
 /**
  * Resolver for Skip AI interactions
@@ -351,7 +481,7 @@ export class AskSkipResolver {
     @Arg('ConversationId', () => String) ConversationId: string,
     @Arg('EntityName', () => String) EntityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) compositeKey: CompositeKeyInputType,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     // In this function we're simply going to call the Skip API and pass along the message from the user
@@ -370,14 +500,14 @@ export class AskSkipResolver {
       );  
     }
 
-    const md = new Metadata();
+    const md = GetReadWriteProvider(providers);
     const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipChatInitialObjectLoading(
       dataSource,
       ConversationId,
       UserQuestion,
       user,
       userPayload,
-      md,
+      md as unknown as Metadata,
       null
     );
 
@@ -430,7 +560,7 @@ export class AskSkipResolver {
    */
   @Mutation(() => AskSkipResultType)
   async ExecuteAskSkipLearningCycle(
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
   ) {
       const skipConfigInfo = configInfo.askSkip;
@@ -484,7 +614,7 @@ export class AskSkipResolver {
       }
 
       // Get the Skip agent ID
-      const md = new Metadata();
+      const md = GetReadWriteProvider(providers);
       const skipAgent = AIEngine.Instance.GetAgentByName('Skip');
       if (!skipAgent) {
         throw new Error("Skip agent not found in AIEngine");
@@ -601,7 +731,7 @@ export class AskSkipResolver {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
 
-    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, this.buildSkipPostHeaders());
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -662,7 +792,7 @@ export class AskSkipResolver {
     LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
     try {
-      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
+      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, this.buildSkipPostHeaders());
 
       if (response && response.length > 0) {
         // the last object in the response array is the final response from the Skip API
@@ -926,13 +1056,16 @@ cycle.`);
       queries,
       notes,
       noteTypes,
+      userEmail: contextUser.Email,
       requests, 
       accessToken,
       organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
-      callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
-      callingServerAPIKey: accessToken ? apiKey : undefined,
+      // Favors public URL for conciseness or when behind a proxy for local development
+      // otherwise uses base URL and GraphQL port/path from configuration
+      callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
+      callingServerAPIKey: accessToken ? callbackAPIKey : undefined,
       callingServerAccessToken: accessToken ? accessToken.Token : undefined
     };
   }
@@ -1331,6 +1464,110 @@ cycle.`);
   }
 
   /**
+   * Re-attaches the current session to receive status updates for a processing conversation
+   * This is needed after page reloads to resume receiving push notifications
+   */
+  @Query(() => ReattachConversationResponse)
+  async ReattachToProcessingConversation(
+    @Arg('ConversationId', () => String) ConversationId: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @PubSub() pubSub: PubSubEngine
+  ): Promise<ReattachConversationResponse | null> {
+    try {
+      const md = GetReadWriteProvider(providers);
+      const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+      if (!user) {
+        LogError(`User ${userPayload.email} not found in UserCache`);
+        return null;
+      }
+      
+      // Load the conversation
+      const convoEntity = await md.GetEntityObject<ConversationEntity>('Conversations', user);
+      const loadResult = await convoEntity.Load(ConversationId);
+      
+      if (!loadResult) {
+        LogError(`Could not load conversation ${ConversationId} for re-attachment`);
+        return null;
+      }
+      
+      // Check if the conversation belongs to this user
+      if (convoEntity.UserID !== user.ID) {
+        LogError(`Conversation ${ConversationId} does not belong to user ${user.Email}`);
+        return null;
+      }
+      
+      // If the conversation is processing, reattach the session to receive updates
+      if (convoEntity.Status === 'Processing') {
+        // Add this session to the active streams for this conversation
+        activeStreams.addSession(ConversationId, userPayload.sessionId);
+        
+        // Get the last known status message and start time from our cache
+        const lastStatusMessage = activeStreams.getStatus(ConversationId) || 'Processing...';
+        const startTime = activeStreams.getStartTime(ConversationId);
+        
+        // Check if the stream is still active
+        const isStreamActive = activeStreams.isActive(ConversationId);
+        
+        if (isStreamActive) {
+          // Send the last known status to the frontend
+          const statusMessage = {
+            type: 'AskSkip',
+            status: 'OK',
+            ResponsePhase: 'Processing',
+            conversationID: convoEntity.ID,
+            message: lastStatusMessage,
+          };
+          
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            pushStatusUpdates: {
+              message: JSON.stringify(statusMessage),
+              sessionId: userPayload.sessionId
+            }
+          });
+          
+          LogStatus(`Re-attached session ${userPayload.sessionId} to active stream for conversation ${ConversationId}, last status: ${lastStatusMessage}`);
+          
+          // Return the status and start time
+          return {
+            lastStatusMessage,
+            startTime: startTime || convoEntity.__mj_UpdatedAt
+          };
+        } else {
+          // Stream is inactive or doesn't exist, just send default status
+          const statusMessage = {
+            type: 'AskSkip',
+            status: 'OK',
+            ResponsePhase: 'Processing',
+            conversationID: convoEntity.ID,
+            message: 'Processing...',
+          };
+          
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            pushStatusUpdates: {
+              message: JSON.stringify(statusMessage),
+              sessionId: userPayload.sessionId
+            }
+          });
+          
+          LogStatus(`Re-attached session ${userPayload.sessionId} to conversation ${ConversationId}, but stream is inactive`);
+          
+          // Return default start time since stream is inactive
+          return {
+            lastStatusMessage: 'Processing...',
+            startTime: convoEntity.__mj_UpdatedAt
+          };
+        }
+      } else {
+        LogStatus(`Conversation ${ConversationId} is not processing (Status: ${convoEntity.Status})`);
+        return null;
+      }
+    } catch (error) {
+      LogError(`Error re-attaching to conversation: ${error}`);
+      return null;
+    }
+  }
+
+  /**
    * Executes an analysis query with Skip
    * This is the primary entry point for general Skip conversations
    * 
@@ -1347,13 +1584,13 @@ cycle.`);
   async ExecuteAskSkipAnalysisQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,
     @Arg('ConversationId', () => String) ConversationId: string,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() { dataSource, userPayload, providers }: AppContext,
     @PubSub() pubSub: PubSubEngine,
     @Arg('DataContextId', () => String, { nullable: true }) DataContextId?: string,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean,
     @Arg('StartTime', () => Date, { nullable: true }) StartTime?: Date
   ) {
-    const md = new Metadata();
+    const md = GetReadWriteProvider(providers);
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
@@ -1366,12 +1603,12 @@ cycle.`);
       UserQuestion,
       user,
       userPayload,
-      md,
+      md as unknown as Metadata,
       DataContextId
     );
 
     // Set the conversation status to 'Processing' when a request is initiated
-    await this.setConversationStatus(convoEntity, 'Processing', userPayload);
+    await this.setConversationStatus(convoEntity, 'Processing', userPayload, pubSub);
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -1391,7 +1628,7 @@ cycle.`);
       ConversationId,
       userPayload,
       pubSub,
-      md,
+      md as unknown as Metadata,
       convoEntity,
       convoDetailEntity,
       dataContext,
@@ -1440,6 +1677,9 @@ cycle.`);
         createdAt: q.__mj_CreatedAt,
         updatedAt: q.__mj_UpdatedAt,
         categoryID: q.CategoryID,
+        embeddingVector: q.EmbeddingVector,
+        embeddingModelID: q.EmbeddingModelID,
+        embeddingModelName: q.EmbeddingModel,
         fields: q.Fields.map((f) => {
           return {
             id: f.ID,
@@ -1470,6 +1710,18 @@ cycle.`);
             defaultValue: p.DefaultValue,
             createdAt: p.__mj_CreatedAt,
             updatedAt: p.__mj_UpdatedAt,
+          };
+        }),
+        entities: q.Entities.map((e) => {
+          return {
+            id: `${e.QueryID}_${e.EntityID}`, // Composite key since QueryEntityInfo doesn't have a single ID field
+            queryID: e.QueryID,
+            entityID: e.EntityID,
+            entityName: e.Entity,
+            detectionMethod: e.DetectionMethod,
+            autoDetectConfidenceScore: e.AutoDetectConfidenceScore,
+            createdAt: e.__mj_CreatedAt,
+            updatedAt: e.__mj_UpdatedAt,
           };
         })
       }
@@ -2180,7 +2432,7 @@ cycle.`);
 
     if (conversationDetailCount > 10) {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
 
       // At this point it is likely that we are stuck in a loop, so we stop here
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -2210,7 +2462,7 @@ cycle.`);
         skipConfigInfo.chatURL,
         input,
         true,
-        null,
+        this.buildSkipPostHeaders(),
         (message: {
           type: string;
           value: {
@@ -2225,22 +2477,31 @@ cycle.`);
         }) => {
           LogStatus(JSON.stringify(message, null, 4));
           if (message.type === 'status_update') {
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                type: 'AskSkip',
-                status: 'OK',
-                conversationID: ConversationId,
-                ResponsePhase: message.value.responsePhase,
-                message: message.value.messages[0].content,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            const statusContent = message.value.messages[0].content;
+            
+            // Store the status in our active streams cache
+            activeStreams.updateStatus(ConversationId, statusContent, userPayload.sessionId);
+            
+            // Publish to all sessions listening to this conversation
+            const sessionIds = activeStreams.getSessionIds(ConversationId);
+            for (const sessionId of sessionIds) {
+              pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                message: JSON.stringify({
+                  type: 'AskSkip',
+                  status: 'OK',
+                  conversationID: ConversationId,
+                  ResponsePhase: message.value.responsePhase,
+                  message: statusContent,
+                }),
+                sessionId: sessionId,
+              });
+            }
           }
         }
       );
     } catch (error) {
       // Set conversation status to Available on error so user can try again
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
       
       // Log the error for debugging
       LogError(`Error in HandleSkipChatRequest sendPostRequest: ${error}`);
@@ -2323,7 +2584,7 @@ cycle.`);
       }
     } else {
       // Set status of conversation to Available since we still want to allow the user to ask questions
-      await this.setConversationStatus(convoEntity, 'Available', userPayload);
+      await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
 
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
@@ -2345,6 +2606,12 @@ cycle.`);
         AIMessageConversationDetailId: '',
       };
     }
+  }
+
+  protected buildSkipPostHeaders(): { [key: string]: string } {
+    return {
+      'x-api-key': configInfo.askSkip?.apiKey ?? '',
+    };
   }
 
   /**
@@ -2495,7 +2762,7 @@ cycle.`);
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
     
     // Set conversation status back to Available since we need user input for the clarifying question
-    await this.setConversationStatus(convoEntity, 'Available', userPayload);
+    await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
     
     if (await convoDetailEntityAI.Save()) {
       return {
@@ -2892,13 +3159,42 @@ cycle.`);
     };
   }
 
-  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload): Promise<boolean> {
+  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload, pubSub?: PubSubEngine): Promise<boolean> {
     if (convoEntity.Status !== status) {
     convoEntity.Status = status;
 
     const convoSaveResult = await convoEntity.Save();
     if (!convoSaveResult) {
       LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
+    } else {
+      // If conversation is now Available (completed), remove it from active streams
+      if (status === 'Available') {
+        activeStreams.removeConversation(convoEntity.ID);
+        LogStatus(`Removed conversation ${convoEntity.ID} from active streams (status changed to Available)`);
+      } else if (status === 'Processing') {
+        // If conversation is starting to process, add the session to active streams
+        activeStreams.addSession(convoEntity.ID, userPayload.sessionId);
+        LogStatus(`Added session ${userPayload.sessionId} to active streams for conversation ${convoEntity.ID}`);
+      }
+      
+      if (pubSub) {
+      // Publish status update to notify frontend of conversation status change
+      const statusMessage = {
+        type: 'ConversationStatusUpdate',
+        conversationID: convoEntity.ID,
+        status: status,
+        timestamp: new Date().toISOString()
+      };
+      
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        pushStatusUpdates: {
+          message: JSON.stringify(statusMessage),
+          sessionId: userPayload.sessionId
+        }
+      });
+      
+      LogStatus(`Published conversation status update for ${convoEntity.ID}: ${status}`);
+      }
     }
     return convoSaveResult;
     }

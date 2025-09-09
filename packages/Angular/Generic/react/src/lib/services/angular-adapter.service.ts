@@ -12,12 +12,12 @@ import {
   createReactRuntime,
   CompileOptions,
   RuntimeContext,
-  ComponentStyles,
   ExternalLibraryConfig,
-  LibraryConfiguration
+  LibraryConfiguration,
+  SetupStyles
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
-import { DEFAULT_STYLES } from '../default-styles';
+import { ComponentStyles } from '@memberjunction/interactive-component-types';
 
 /**
  * Angular-specific adapter for the React runtime.
@@ -32,6 +32,7 @@ export class AngularAdapterService {
     version: string;
   };
   private runtimeContext?: RuntimeContext;
+  private initializationPromise: Promise<void> | undefined;
 
   constructor(private scriptLoader: ScriptLoaderService) {}
 
@@ -39,18 +40,42 @@ export class AngularAdapterService {
    * Initialize the React runtime with Angular-specific configuration
    * @param config Optional library configuration
    * @param additionalLibraries Optional additional libraries to merge
+   * @param options Optional options including debug flag
    * @returns Promise resolving when runtime is ready
    */
   async initialize(
     config?: LibraryConfiguration,
-    additionalLibraries?: ExternalLibraryConfig[]
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
   ): Promise<void> {
     if (this.runtime) {
       return; // Already initialized
     }
+    if (this.initializationPromise) {
+      return this.initializationPromise; // in progress
+    }
 
+    // Start initialization and store the promise immediately
+    this.initializationPromise = this.doInitialize(config, additionalLibraries, options);
+
+    try {
+        await this.initializationPromise;
+    } catch (error) {
+        // Clear the promise on error so it can be retried
+        this.initializationPromise = undefined;
+        throw error;
+    }
+
+    return;
+  }
+
+  private async doInitialize(
+    config?: LibraryConfiguration,
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
+  ): Promise<void> {
     // Load React ecosystem with optional additional libraries
-    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries);
+    const ecosystem = await this.scriptLoader.loadReactEcosystem(config, additionalLibraries, options);
     
     // Create runtime context
     this.runtimeContext = {
@@ -62,19 +87,21 @@ export class AngularAdapterService {
       }
     };
 
-    // Create the React runtime
+    // Create the React runtime with runtime context for registry support
     this.runtime = createReactRuntime(ecosystem.Babel, {
       compiler: {
         cache: true,
-        maxCacheSize: 100
+        maxCacheSize: 100,
+        debug: options?.debug
       },
       registry: {
         maxComponents: 1000,
         cleanupInterval: 60000,
         useLRU: true,
-        enableNamespaces: true
+        enableNamespaces: true,
+        debug: options?.debug
       }
-    });
+    }, this.runtimeContext, options?.debug);
   }
 
   /**
@@ -121,28 +148,13 @@ export class AngularAdapterService {
     return this.runtimeContext;
   }
 
-  /**
-   * Convert SkipComponentStyles to ComponentStyles
-   * @param skipStyles - Skip component styles
-   * @returns Component styles for React runtime
-   */
-  private convertStyles(skipStyles?: any): ComponentStyles | undefined {
-    if (!skipStyles) return undefined;
-    
-    // Extract CSS-compatible properties
-    return {
-      className: skipStyles.className,
-      style: skipStyles.style,
-      globalCss: skipStyles.globalCss
-    };
-  }
 
   /**
    * Compile a component with Angular-specific defaults
    * @param options - Compilation options
    * @returns Promise resolving to compilation result
    */
-  async compileComponent(options: CompileOptions & { styles?: any }) {
+  async compileComponent(options: CompileOptions) {
     // Validate options before initialization
     if (!options) {
       throw new Error(
@@ -175,7 +187,7 @@ export class AngularAdapterService {
     // Apply default styles if not provided
     const optionsWithDefaults = {
       ...options,
-      styles: options.styles || DEFAULT_STYLES
+      styles: options.styles || SetupStyles()
     };
 
     return this.runtime!.compiler.compile(optionsWithDefaults);
