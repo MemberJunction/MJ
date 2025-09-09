@@ -294,44 +294,87 @@ export class ComponentResolver {
         }
       }
     } else {
-      // Embedded component - get from local registry
+      // Embedded/Local component
       // Use the component's specified namespace if it has one, otherwise use parent's namespace
       const componentNamespace = spec.namespace || namespace;
-      if (this.debug) {
-        console.log(`🔍 [ComponentResolver] Looking for embedded component: ${spec.name} in namespace: ${componentNamespace}`);
-      }
       
-      const component = this.registry.get(spec.name, componentNamespace);
-      if (component) {
-        resolved[spec.name] = component;
+      // First check if component has inline code that needs compilation
+      if (spec.code && this.compiler) {
         if (this.debug) {
-          console.log(`✅ [ComponentResolver] Found embedded component: ${spec.name}, type: ${typeof component}`);
+          console.log(`🔨 [ComponentResolver] Component ${spec.name} has inline code, compiling...`);
         }
-        if (this.debug) {
-          console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}, type:`, typeof component);
+        
+        try {
+          // Compile the component with its code
+          const compilationResult = await this.compiler.compile({
+            componentName: spec.name,
+            componentCode: spec.code,
+            libraries: spec.libraries,
+            dependencies: spec.dependencies,
+            allLibraries: [] // TODO: Get from ComponentMetadataEngine if needed
+          });
+          
+          if (compilationResult.success && compilationResult.component) {
+            // Get the component object from the factory (only if we have runtimeContext)
+            if (!this.runtimeContext) {
+              console.error(`❌ [ComponentResolver] Cannot compile without runtime context`);
+              return;
+            }
+            const componentObject = compilationResult.component.factory(this.runtimeContext);
+            
+            // Register it in the local registry for future use
+            this.registry.register(spec.name, componentObject, componentNamespace, spec.version || 'latest');
+            
+            // Add to resolved
+            resolved[spec.name] = componentObject;
+            
+            if (this.debug) {
+              console.log(`✅ [ComponentResolver] Successfully compiled and registered inline component: ${spec.name}`);
+            }
+          } else {
+            console.error(`❌ [ComponentResolver] Failed to compile inline component ${spec.name}:`, compilationResult.error);
+          }
+        } catch (error) {
+          console.error(`❌ [ComponentResolver] Error compiling inline component ${spec.name}:`, error);
         }
       } else {
-        // If not found with specified namespace, try the parent namespace as fallback
+        // No inline code, try to get from local registry
         if (this.debug) {
-          console.log(`⚠️ [ComponentResolver] Not found in namespace ${componentNamespace}, trying fallback namespace: ${namespace}`);
+          console.log(`🔍 [ComponentResolver] Looking for embedded component: ${spec.name} in namespace: ${componentNamespace}`);
         }
-        const fallbackComponent = this.registry.get(spec.name, namespace);
-        if (fallbackComponent) {
-          resolved[spec.name] = fallbackComponent;
+        
+        const component = this.registry.get(spec.name, componentNamespace);
+        if (component) {
+          resolved[spec.name] = component;
           if (this.debug) {
-            console.log(`✅ [ComponentResolver] Found embedded component in fallback namespace: ${spec.name}, type: ${typeof fallbackComponent}`);
+            console.log(`✅ [ComponentResolver] Found embedded component: ${spec.name}, type: ${typeof component}`);
           }
           if (this.debug) {
-            console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`, typeof fallbackComponent);
+            console.log(`📄 Resolved embedded component: ${spec.name} from namespace ${componentNamespace}, type:`, typeof component);
           }
         } else {
-          // Component not found - this might cause issues later
-          console.error(`❌ [ComponentResolver] Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+          // If not found with specified namespace, try the parent namespace as fallback
           if (this.debug) {
-            console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+            console.log(`⚠️ [ComponentResolver] Not found in namespace ${componentNamespace}, trying fallback namespace: ${namespace}`);
           }
-          // Store undefined explicitly so we know it failed to resolve
-          resolved[spec.name] = undefined;
+          const fallbackComponent = this.registry.get(spec.name, namespace);
+          if (fallbackComponent) {
+            resolved[spec.name] = fallbackComponent;
+            if (this.debug) {
+              console.log(`✅ [ComponentResolver] Found embedded component in fallback namespace: ${spec.name}, type: ${typeof fallbackComponent}`);
+            }
+            if (this.debug) {
+              console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`, typeof fallbackComponent);
+            }
+          } else {
+            // Component not found - this might cause issues later
+            console.error(`❌ [ComponentResolver] Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+            if (this.debug) {
+              console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+            }
+            // Store undefined explicitly so we know it failed to resolve
+            resolved[spec.name] = undefined;
+          }
         }
       }
     }

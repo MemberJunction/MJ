@@ -1,0 +1,21 @@
+{
+  "entity": "MJ: Component Registries",
+  "filePattern": ".*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".component-registries.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": ["SystemPrompt"],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "lookupFields": {
+    },
+    "relatedEntities": {}
+  }
+}

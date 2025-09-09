@@ -22,6 +22,13 @@ import {
   ComponentMetadataEngine
 } from '@memberjunction/core-entities';
 
+// Type-only import for TypeScript - won't be included in UMD bundle
+import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+// Dynamic import of GraphQLComponentRegistryClient to avoid breaking UMD build
+let GraphQLComponentRegistryClient: any;
+
+
 /**
  * Cached compiled component with metadata
  */
@@ -100,6 +107,69 @@ export class ComponentRegistryService {
     if (this.debug) {
       console.log('✅ GraphQL client configured for component registry');
     }
+  }
+  
+  /**
+   * Cached GraphQL client instance created from Metadata.Provider
+   */
+  private cachedProviderClient: IComponentRegistryClient | null = null;
+  
+  /**
+   * Get the GraphQL client, using the provided one or falling back to creating one with Metadata.Provider
+   * @returns The GraphQL client if available
+   */
+  private async getGraphQLClient(): Promise<IComponentRegistryClient | null> {
+    // If explicitly set, use that
+    if (this.graphQLClient) {
+      return this.graphQLClient;
+    }
+    
+    // If we've already created one from the provider, reuse it
+    if (this.cachedProviderClient) {
+      return this.cachedProviderClient;
+    }
+    
+    // Try to create GraphQLComponentRegistryClient with Metadata.Provider
+    try {
+      const provider = Metadata?.Provider;
+      if (provider && (provider as any).ExecuteGQL !== undefined) {
+        // Dynamically load GraphQLComponentRegistryClient if not already loaded
+        if (!GraphQLComponentRegistryClient) {
+          try {
+            const graphqlModule = await import('@memberjunction/graphql-dataprovider');
+            GraphQLComponentRegistryClient = graphqlModule.GraphQLComponentRegistryClient;
+          } catch (importError) {
+            if (this.debug) {
+              console.log('⚠️ [ComponentRegistryService] @memberjunction/graphql-dataprovider not available');
+            }
+            return null;
+          }
+        }
+        
+        // Create the client if we have the class
+        if (GraphQLComponentRegistryClient) {
+          try {
+            const client = new GraphQLComponentRegistryClient(provider as GraphQLDataProvider);
+            this.cachedProviderClient = client;
+            if (this.debug) {
+              console.log('📡 [ComponentRegistryService] Created GraphQL client from Metadata.Provider');
+            }
+            return client;
+          } catch (error) {
+            if (this.debug) {
+              console.log('⚠️ [ComponentRegistryService] Failed to create GraphQL client:', error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Provider might not be available in all environments
+      if (this.debug) {
+        console.log('⚠️ [ComponentRegistryService] Could not access Metadata.Provider:', error);
+      }
+    }
+    
+    return null;
   }
   
   /**
@@ -275,9 +345,10 @@ export class ComponentRegistryService {
       console.log(`✅ [ComponentRegistryService] Found registry: ${registry.Name} (ID: ${registry.ID})`);
     }
     
-    // Use GraphQL client to fetch from external registry
-    if (!this.graphQLClient) {
-      throw new Error('GraphQL client not available for external registry fetching');
+    // Get GraphQL client - use provided one or fallback to Metadata.Provider
+    const graphQLClient = await this.getGraphQLClient();
+    if (!graphQLClient) {
+      throw new Error('GraphQL client not available for external registry fetching. No client provided and Metadata.Provider is not a GraphQLDataProvider.');
     }
     
     // Check if we have a cached version first
@@ -287,7 +358,7 @@ export class ComponentRegistryService {
     try {
       // Fetch component spec from external registry via MJServer
       // Pass cached hash if available for efficient caching
-      const spec = await this.graphQLClient.GetRegistryComponent({
+      const spec = await graphQLClient.GetRegistryComponent({
         registryName: registry.Name,  // Pass registry name, not ID
         namespace,
         name,

@@ -443,6 +443,39 @@ const componentSpec = {
 // 4. Compile and cache the component
 ```
 
+#### GraphQL Client Configuration
+
+The `ComponentRegistryService` requires a GraphQL client for fetching from external registries. It supports two configuration approaches:
+
+1. **Automatic Fallback** (Recommended): If no client is explicitly provided, the service automatically creates a `GraphQLComponentRegistryClient` using `Metadata.Provider`
+   ```typescript
+   // No explicit client needed - will create one from Metadata.Provider
+   const registryService = ComponentRegistryService.getInstance(compiler, context);
+   // The service will automatically:
+   // 1. Check if a client was provided
+   // 2. If not, dynamically import @memberjunction/graphql-dataprovider
+   // 3. Create a GraphQLComponentRegistryClient with Metadata.Provider
+   // 4. Cache and reuse this client for subsequent calls
+   ```
+
+2. **Explicit Client**: Provide a custom GraphQL client that implements `IComponentRegistryClient`
+   ```typescript
+   // Custom client implementation
+   const customClient: IComponentRegistryClient = {
+     GetRegistryComponent: async (params) => { /* ... */ }
+   };
+   
+   // Pass during creation
+   const registryService = ComponentRegistryService.getInstance(
+     compiler, context, debug, customClient
+   );
+   
+   // Or set later
+   registryService.setGraphQLClient(customClient);
+   ```
+
+The automatic fallback ensures external registry fetching works out-of-the-box in MemberJunction environments where `Metadata.Provider` is configured. The dynamic import approach allows the React runtime to function even when `@memberjunction/graphql-dataprovider` is not available.
+
 #### Component Caching with SHA-256 Validation
 
 The runtime uses SHA-256 hashing to ensure cached components are up-to-date:

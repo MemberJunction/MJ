@@ -199,6 +199,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private isDestroying = false;
   private componentId: string;
   private componentVersion: string = '';  // Store the version for resolver
+  private resolvedComponents: ResolvedComponents = {};  // Store resolved components from initialization
   hasError = false;
 
   constructor(
@@ -240,19 +241,29 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
       
-      // Register component hierarchy (this compiles and registers all components)
-      await this.registerComponentHierarchy();
+      // Initialize metadata engine once
+      await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
       
-      // Get the already-registered component from the registry
-      const registry = this.adapter.getRegistry();
-      const componentWrapper = registry.get(
-        this.component.name, 
-        this.component.namespace || 'Global', 
-        this.componentVersion
+      // Set version for consistency
+      this.componentVersion = this.component.version || this.generateComponentHash(this.component);
+      
+      // Use resolver for EVERYTHING - it handles local/external, compilation, caching
+      const resolver = this.adapter.getResolver();
+      const resolved = await resolver.resolveComponents(
+        this.component,
+        this.component.namespace || 'Global',
+        Metadata.Provider.CurrentUser
       );
       
+      // Store all resolved components for use in rendering
+      this.resolvedComponents = resolved;
+      
+      // Get the root component from resolved components
+      const componentWrapper = resolved[this.component.name];
+      
       if (!componentWrapper) {
-        throw new Error(`Component ${this.component.name} was not found in registry after registration`);
+        const source = this.component.registry ? `external registry ${this.component.registry}` : 'local registry';
+        throw new Error(`Component ${this.component.name} was not resolved from ${source}`);
       }
       
       // The registry now stores ComponentObjects directly

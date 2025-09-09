@@ -12,20 +12,7 @@ import {
     RegistryErrorCode
 } from '@memberjunction/component-registry-client-sdk';
 import { AppContext } from '../types';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Load configuration using cosmiconfig pattern
-let mjConfig: any = {};
-try {
-    // Try to load from mj.config.cjs in the repository root
-    const configPath = path.resolve(process.cwd(), 'mj.config.cjs');
-    if (fs.existsSync(configPath)) {
-        mjConfig = require(configPath);
-    }
-} catch (error) {
-    console.warn('Could not load mj.config.cjs:', error);
-}
+import { configInfo } from '../config';
 
 /**
  * GraphQL types for Component Registry operations
@@ -303,6 +290,14 @@ class ComponentDependencyTreeType {
 
 /**
  * Resolver for Component Registry operations
+ * 
+ * Environment Variables for Development:
+ * - REGISTRY_URI_OVERRIDE_<REGISTRY_NAME>: Override the URI for a specific registry
+ *   Example: REGISTRY_URI_OVERRIDE_MJ_CENTRAL=http://localhost:8080
+ *   Registry names are converted to uppercase with non-alphanumeric chars replaced by underscores
+ * 
+ * - REGISTRY_API_KEY_<REGISTRY_NAME>: API key for authenticating with the registry
+ *   Example: REGISTRY_API_KEY_MJ_CENTRAL=your-api-key-here
  */
 @Resolver()
 export class ComponentRegistryExtendedResolver {
@@ -568,12 +563,37 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
+     * Get the registry URI, checking for environment variable override first
+     * Environment variable format: REGISTRY_URI_OVERRIDE_<REGISTRY_NAME>
+     * Example: REGISTRY_URI_OVERRIDE_MJ_CENTRAL=http://localhost:8080
+     */
+    private getRegistryUri(registry: ComponentRegistryEntity): string {
+        if (!registry.Name) {
+            return registry.URI || '';
+        }
+        
+        // Convert registry name to environment variable format
+        // Replace spaces, hyphens, and other non-alphanumeric chars with underscores
+        const envVarName = `REGISTRY_URI_OVERRIDE_${registry.Name.replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`;
+        
+        // Check for environment variable override
+        const override = process.env[envVarName];
+        if (override) {
+            LogStatus(`Using URI override for registry ${registry.Name}: ${override}`);
+            return override;
+        }
+        
+        // Use production URI from database
+        return registry.URI || '';
+    }
+
+    /**
      * Create a client for a registry on-demand
      * Checks configuration first, then falls back to default settings
      */
     private createClientForRegistry(registry: ComponentRegistryEntity): ComponentRegistryClient {
         // Check if there's a configuration for this registry
-        const config = mjConfig.componentRegistries?.find((r: any) => 
+        const config = configInfo.componentRegistries?.find(r => 
             r.id === registry.ID || r.name === registry.Name
         );
         
@@ -582,17 +602,23 @@ export class ComponentRegistryExtendedResolver {
                       process.env[`REGISTRY_API_KEY_${registry.Name?.replace(/-/g, '_').toUpperCase()}`] ||
                       config?.apiKey;
         
+        // Get the registry URI (with possible override)
+        const baseUrl = this.getRegistryUri(registry);
+        
+        // Build retry policy with defaults
+        const retryPolicy = {
+            maxRetries: config?.retryPolicy?.maxRetries ?? 3,
+            initialDelay: config?.retryPolicy?.initialDelay ?? 1000,
+            maxDelay: config?.retryPolicy?.maxDelay ?? 10000,
+            backoffMultiplier: config?.retryPolicy?.backoffMultiplier ?? 2
+        };
+        
         // Use config settings if available, otherwise defaults
         return new ComponentRegistryClient({
-            baseUrl: registry.URI || '',
+            baseUrl: baseUrl,
             apiKey: apiKey,
             timeout: config?.timeout || 30000,
-            retryPolicy: config?.retryPolicy || {
-                maxRetries: 3,
-                initialDelay: 1000,
-                maxDelay: 10000,
-                backoffMultiplier: 2
-            },
+            retryPolicy: retryPolicy,
             headers: config?.headers
         });
     }
@@ -602,7 +628,9 @@ export class ComponentRegistryExtendedResolver {
      */
     private shouldCache(registry: ComponentRegistryEntity): boolean {
         // Check config for caching settings
-        const config = mjConfig.componentRegistries?.find((r: any) => r.id === registry.ID);
+        const config = configInfo.componentRegistries?.find(r => 
+            r.id === registry.ID || r.name === registry.Name
+        );
         return config?.cache !== false; // Cache by default
     }
     
