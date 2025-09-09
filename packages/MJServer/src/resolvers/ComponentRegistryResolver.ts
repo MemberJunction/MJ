@@ -1,10 +1,11 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
-import { UserInfo, Metadata, LogError } from '@memberjunction/core';
+import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { ComponentEntity, ComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { 
     ComponentRegistryClient,
+    ComponentResponse,
     ComponentSearchResult,
     DependencyTree,
     RegistryError,
@@ -222,6 +223,21 @@ class ComponentSpecType {
     dependencies?: ComponentSpecType[];
 }
 
+@ObjectType()
+class ComponentSpecWithHashType {
+    @Field(() => ComponentSpecType, { nullable: true })
+    specification?: ComponentSpecType;
+    
+    @Field(() => String)
+    hash: string;
+    
+    @Field(() => Boolean)
+    notModified: boolean;
+    
+    @Field(() => String, { nullable: true })
+    message?: string;
+}
+
 @InputType()
 class SearchRegistryComponentsInput {
     @Field({ nullable: true })
@@ -297,16 +313,17 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Get a component from a registry
+     * Get a component from a registry with optional hash for caching
      */
-    @Query(() => ComponentSpecType, { nullable: true })
+    @Query(() => ComponentSpecWithHashType)
     async GetRegistryComponent(
         @Arg('registryName') registryName: string,
         @Arg('namespace') namespace: string,
         @Arg('name') name: string,
         @Ctx() { userPayload }: AppContext,
-        @Arg('version', { nullable: true }) version?: string
-    ): Promise<ComponentSpec | null> {
+        @Arg('version', { nullable: true }) version?: string,
+        @Arg('hash', { nullable: true }) hash?: string
+    ): Promise<ComponentSpecWithHashType> {
         try {
             // Get user from cache
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
@@ -327,26 +344,58 @@ export class ComponentRegistryExtendedResolver {
             // Create client on-demand for this registry
             const registryClient = this.createClientForRegistry(registry);
             
-            // Fetch component from registry
-            const component = await registryClient.getComponent({
+            // Fetch component from registry with hash support
+            const response = await registryClient.getComponentWithHash({
                 registry: registry.Name,
                 namespace,
                 name,
-                version: version || 'latest'
+                version: version || 'latest',
+                hash: hash
             });
+            
+            // If not modified (304), return response with notModified flag
+            if (response.notModified) {
+                LogStatus(`Component ${namespace}/${name} not modified (hash: ${response.hash})`);
+                return {
+                    specification: undefined,
+                    hash: response.hash,
+                    notModified: true,
+                    message: response.message || 'Not modified'
+                };
+            }
+            
+            // Extract the specification from the response
+            const component = response.specification;
+            if (!component) {
+                throw new Error(`Component ${namespace}/${name} returned without specification`);
+            }
             
             // Optional: Cache in database if configured
             if (this.shouldCache(registry)) {
                 await this.cacheComponent(component, registryName, user);
             }
             
-            return component;
+            // Convert to GraphQL type and return with hash
+            const convertedSpec = this.convertComponentSpec(component);
+            
+            return {
+                specification: convertedSpec,
+                hash: response.hash,
+                notModified: false,
+                message: undefined
+            };
         } catch (error) {
             if (error instanceof RegistryError) {
                 // Log specific registry errors
                 LogError(`Registry error [${error.code}]: ${error.message}`);
                 if (error.code === RegistryErrorCode.COMPONENT_NOT_FOUND) {
-                    return null;
+                    // Return an error response structure
+                    return {
+                        specification: undefined,
+                        hash: '',
+                        notModified: false,
+                        message: 'Component not found'
+                    };
                 }
             }
             LogError(error);

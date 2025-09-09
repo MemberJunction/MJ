@@ -26,6 +26,36 @@ export interface GetRegistryComponentParams {
      * Component version (optional, defaults to 'latest')
      */
     version?: string;
+    
+    /**
+     * Optional hash for caching - if provided and matches, returns null
+     */
+    hash?: string;
+}
+
+/**
+ * Response from GetRegistryComponent with hash and caching metadata
+ */
+export interface ComponentSpecWithHash {
+    /**
+     * The component specification (undefined if not modified)
+     */
+    specification?: ComponentSpec;
+    
+    /**
+     * SHA-256 hash of the specification
+     */
+    hash: string;
+    
+    /**
+     * Indicates if the component was not modified (304 response)
+     */
+    notModified: boolean;
+    
+    /**
+     * Optional message from server
+     */
+    message?: string;
 }
 
 /**
@@ -209,28 +239,34 @@ export class GraphQLComponentRegistryClient {
                     $registryName: String!,
                     $namespace: String!,
                     $name: String!,
-                    $version: String
+                    $version: String,
+                    $hash: String
                 ) {
                     GetRegistryComponent(
                         registryName: $registryName,
                         namespace: $namespace,
                         name: $name,
-                        version: $version
+                        version: $version,
+                        hash: $hash
                     ) {
-                        name
-                        location
-                        registry
-                        namespace
-                        version
-                        selectionReasoning
-                        createNewVersion
-                        description
-                        title
-                        type
-                        code
-                        functionalRequirements
-                        dataRequirements {
-                            entities {
+                        hash
+                        notModified
+                        message
+                        specification {
+                            name
+                            location
+                            registry
+                            namespace
+                            version
+                            selectionReasoning
+                            createNewVersion
+                            description
+                            title
+                            type
+                            code
+                            functionalRequirements
+                            dataRequirements {
+                                entities {
                                 name
                                 type
                                 description
@@ -293,6 +329,7 @@ export class GraphQLComponentRegistryClient {
                             code
                         }
                     }
+                    }
                 }
             `;
 
@@ -306,19 +343,193 @@ export class GraphQLComponentRegistryClient {
             if (params.version !== undefined) {
                 variables.version = params.version;
             }
+            
+            if (params.hash !== undefined) {
+                variables.hash = params.hash;
+            }
 
             // Execute the query
             const result = await this._dataProvider.ExecuteGQL(query, variables);
 
-            // Return the component spec
+            // Handle new response structure with hash
             if (result && result.GetRegistryComponent) {
-                return result.GetRegistryComponent as ComponentSpec;
+                const response = result.GetRegistryComponent as ComponentSpecWithHash;
+                
+                // If not modified and no specification, return null (client should use cache)
+                if (response.notModified && !response.specification) {
+                    return null;
+                }
+                
+                // Return the specification if available
+                return response.specification || null;
             }
 
             return null;
         } catch (e) {
             LogError(e);
             throw new Error(`Failed to get registry component: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Get a component from registry with hash and caching metadata.
+     * Returns the full response including hash and notModified flag.
+     * 
+     * @param params - Parameters for fetching the component
+     * @returns Full response with specification, hash, and caching metadata
+     * 
+     * @example
+     * ```typescript
+     * const response = await client.GetRegistryComponentWithHash({
+     *   registryName: 'MJ',
+     *   namespace: 'core/ui',
+     *   name: 'DataGrid',
+     *   version: '1.0.0',
+     *   hash: 'abc123...'
+     * });
+     * 
+     * if (response.notModified) {
+     *   // Use cached version
+     * } else {
+     *   // Use response.specification
+     * }
+     * ```
+     */
+    public async GetRegistryComponentWithHash(params: GetRegistryComponentParams): Promise<ComponentSpecWithHash> {
+        try {
+            // Build the query - same as GetRegistryComponent
+            const query = gql`
+                query GetRegistryComponent(
+                    $registryName: String!,
+                    $namespace: String!,
+                    $name: String!,
+                    $version: String,
+                    $hash: String
+                ) {
+                    GetRegistryComponent(
+                        registryName: $registryName,
+                        namespace: $namespace,
+                        name: $name,
+                        version: $version,
+                        hash: $hash
+                    ) {
+                        hash
+                        notModified
+                        message
+                        specification {
+                            name
+                            location
+                            registry
+                            namespace
+                            version
+                            selectionReasoning
+                            createNewVersion
+                            description
+                            title
+                            type
+                            code
+                            functionalRequirements
+                            dataRequirements {
+                                entities {
+                                    name
+                                    type
+                                    description
+                                    fields
+                                    filters
+                                    sortBy
+                                    joins {
+                                        sourceEntity
+                                        sourceField
+                                        targetEntity
+                                        targetField
+                                        type
+                                    }
+                                }
+                                queries {
+                                    name
+                                    description
+                                    query
+                                    variables
+                                    returnType
+                                }
+                            }
+                            technicalDesign
+                            properties {
+                                name
+                                type
+                                description
+                                required
+                                defaultValue
+                            }
+                            events {
+                                name
+                                description
+                                parameters {
+                                    name
+                                    type
+                                    description
+                                    required
+                                }
+                            }
+                            libraries {
+                                name
+                                type
+                                version
+                                provider
+                                cdn
+                                description
+                            }
+                            dependencies {
+                                name
+                                location
+                                registry
+                                namespace
+                                version
+                                selectionReasoning
+                                createNewVersion
+                                description
+                                title
+                                type
+                                code
+                            }
+                        }
+                    }
+                }
+            `;
+
+            // Prepare variables
+            const variables: Record<string, any> = {
+                registryName: params.registryName,
+                namespace: params.namespace,
+                name: params.name
+            };
+
+            if (params.version !== undefined) {
+                variables.version = params.version;
+            }
+            
+            if (params.hash !== undefined) {
+                variables.hash = params.hash;
+            }
+
+            // Execute the query
+            const result = await this._dataProvider.ExecuteGQL(query, variables);
+
+            // Return the full response
+            if (result && result.GetRegistryComponent) {
+                return result.GetRegistryComponent as ComponentSpecWithHash;
+            }
+
+            // Return empty response if nothing found
+            return {
+                specification: undefined,
+                hash: '',
+                notModified: false,
+                message: 'Component not found'
+            };
+        } catch (e) {
+            LogError(e);
+            throw new Error(`Failed to get registry component with hash: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
     }
 

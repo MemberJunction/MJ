@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { createHash } from 'crypto';
 import { 
   Metadata, 
   RunView, 
@@ -436,9 +437,19 @@ export class ComponentRegistryAPIServer {
   }
   
   /**
+   * Generate SHA-256 hash of component specification
+   * @param specification - The component specification JSON string
+   * @returns SHA-256 hash as hex string
+   */
+  protected generateSpecificationHash(specification: string): string {
+    return createHash('sha256').update(specification).digest('hex');
+  }
+
+  /**
    * Handler for GET /api/v1/components/:namespace/:name
    * Get a specific component by namespace and name.
    * Optionally specify a version with ?version=x.x.x query parameter.
+   * Optionally specify a hash with ?hash=abc123 to enable caching (returns 304 if unchanged).
    * 
    * @protected
    * @virtual
@@ -446,7 +457,7 @@ export class ComponentRegistryAPIServer {
   protected async getComponent(req: Request, res: Response): Promise<void> {
     try {
       const { namespace, name } = req.params;
-      const { version } = req.query;
+      const { version, hash } = req.query;
       
       // Escape single quotes in parameters
       const escapedNamespace = namespace.replace(/'/g, "''");
@@ -473,12 +484,31 @@ export class ComponentRegistryAPIServer {
       }
       
       const component = result.Results[0];
+      
+      // Generate hash of the current specification
+      const currentHash = this.generateSpecificationHash(component.Specification);
+      
+      // If client provided a hash and it matches, return 304 Not Modified
+      if (hash && typeof hash === 'string' && hash === currentHash) {
+        res.status(304).json({
+          message: 'Not modified',
+          hash: currentHash,
+          id: component.ID,
+          namespace: component.Namespace,
+          name: component.Name,
+          version: component.Version
+        });
+        return;
+      }
+      
+      // Return full specification with hash
       res.json({
         id: component.ID,
         namespace: component.Namespace,
         name: component.Name,
         version: component.Version,
-        specification: JSON.parse(component.Specification)
+        specification: JSON.parse(component.Specification),
+        hash: currentHash
       });
     } catch (error) {
       LogError(`Failed to fetch component: ${error instanceof Error ? error.message : String(error)}`);

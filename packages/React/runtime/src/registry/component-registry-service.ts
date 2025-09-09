@@ -43,6 +43,7 @@ export interface IComponentRegistryClient {
     namespace: string;
     name: string;
     version?: string;
+    hash?: string;
   }): Promise<ComponentSpec | null>;
 }
 
@@ -279,14 +280,37 @@ export class ComponentRegistryService {
       throw new Error('GraphQL client not available for external registry fetching');
     }
     
+    // Check if we have a cached version first
+    const key = `external:${registryName}:${namespace}:${name}:${version}`;
+    const cached = this.compiledComponentCache.get(key);
+    
     try {
       // Fetch component spec from external registry via MJServer
+      // Pass cached hash if available for efficient caching
       const spec = await this.graphQLClient.GetRegistryComponent({
         registryName: registry.Name,  // Pass registry name, not ID
         namespace,
         name,
-        version
+        version,
+        hash: cached?.specHash  // Pass cached hash if available
       });
+      
+      // If null returned, it means not modified (304)
+      if (!spec && cached?.specHash) {
+        if (this.debug) {
+          console.log(`♻️ [ComponentRegistryService] Component not modified, using cached: ${key}`);
+        }
+        cached.lastUsed = new Date();
+        cached.useCount++;
+        
+        // Track reference
+        if (referenceId) {
+          this.addComponentReference(key, referenceId);
+        }
+        
+        // Call the factory function to get the ComponentObject
+        return cached.component(this.runtimeContext);
+      }
       
       if (!spec) {
         throw new Error(`Component not found in registry ${registryName}: ${namespace}/${name}@${version}`);
@@ -296,36 +320,29 @@ export class ComponentRegistryService {
         console.log(`✅ [ComponentRegistryService] Fetched spec from external registry: ${spec.name}`);
       }
       
-      // Compile the fetched spec
-      const key = `external:${registryName}:${namespace}:${name}:${version}`;
-      
       // Calculate hash of the fetched spec
       const specHash = await this.calculateSpecHash(spec);
       
-      // Check if already compiled
-      const cached = this.compiledComponentCache.get(key);
-      if (cached) {
-        // Compare spec hash to see if the component has changed
-        if (cached.specHash === specHash) {
-          if (this.debug) {
-            console.log(`♻️ [ComponentRegistryService] Using cached compilation for: ${key} (hash match)`);
-          }
-          cached.lastUsed = new Date();
-          cached.useCount++;
-          
-          // Track reference
-          if (referenceId) {
-            this.addComponentReference(key, referenceId);
-          }
-          
-          // Call the factory function to get the ComponentObject
-          return cached.component(this.runtimeContext);
-        } else {
-          if (this.debug) {
-            console.log(`🔄 [ComponentRegistryService] Spec changed for: ${key}, recompiling (old hash: ${cached.specHash?.substring(0, 8)}..., new hash: ${specHash.substring(0, 8)}...)`);
-          }
-          // Spec has changed, need to recompile
+      // Check if hash matches cached version (shouldn't happen if server works correctly)
+      if (cached && cached.specHash === specHash) {
+        if (this.debug) {
+          console.log(`♻️ [ComponentRegistryService] Using cached compilation for: ${key} (hash match)`);
         }
+        cached.lastUsed = new Date();
+        cached.useCount++;
+        
+        // Track reference
+        if (referenceId) {
+          this.addComponentReference(key, referenceId);
+        }
+        
+        // Call the factory function to get the ComponentObject
+        return cached.component(this.runtimeContext);
+      }
+      
+      // Spec has changed or is new, need to compile
+      if (cached && this.debug) {
+        console.log(`🔄 [ComponentRegistryService] Spec changed for: ${key}, recompiling (old hash: ${cached.specHash?.substring(0, 8)}..., new hash: ${specHash.substring(0, 8)}...)`);
       }
       
       // Load all libraries from metadata engine

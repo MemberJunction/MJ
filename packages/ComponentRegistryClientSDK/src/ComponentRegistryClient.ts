@@ -4,6 +4,7 @@ import {
   GetComponentParams,
   SearchComponentsParams,
   ComponentSearchResult,
+  ComponentResponse,
   ResolvedVersion,
   RegistryInfo,
   Namespace,
@@ -40,22 +41,58 @@ export class ComponentRegistryClient {
   }
 
   /**
-   * Get a specific component from the registry
+   * Get a specific component from the registry (backward compatible)
    */
   async getComponent(params: GetComponentParams): Promise<ComponentSpec> {
-    const { registry, namespace, name, version = 'latest' } = params;
+    const response = await this.getComponentWithHash(params);
     
-    const path = `/api/v1/components/${encodeURIComponent(registry)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+    if (!response.specification) {
+      throw new RegistryError(
+        `Component ${params.namespace}/${params.name} returned without specification`,
+        RegistryErrorCode.UNKNOWN
+      );
+    }
+    
+    return response.specification;
+  }
+
+  /**
+   * Get a specific component from the registry with hash support
+   * Returns ComponentResponse which includes hash and notModified flag
+   */
+  async getComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
+    const { namespace, name, version = 'latest', hash } = params;
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    if (version !== 'latest') {
+      queryParams.append('version', version);
+    }
+    if (hash) {
+      queryParams.append('hash', hash);
+    }
+    
+    const queryString = queryParams.toString();
+    const path = `/api/v1/components/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${queryString ? `?${queryString}` : ''}`;
     
     try {
       const response = await this.makeRequest('GET', path);
-      return response as ComponentSpec;
+      
+      // Handle 304 Not Modified response
+      if (response && typeof response === 'object' && 'message' in response && response.message === 'Not modified') {
+        return {
+          ...response,
+          notModified: true
+        } as ComponentResponse;
+      }
+      
+      return response as ComponentResponse;
     } catch (error) {
       if (error instanceof RegistryError) {
         throw error;
       }
       throw new RegistryError(
-        `Failed to get component ${registry}/${namespace}/${name}@${version}`,
+        `Failed to get component ${namespace}/${name}@${version}`,
         RegistryErrorCode.UNKNOWN,
         undefined,
         error
@@ -244,8 +281,8 @@ export class ComponentRegistryClient {
       
       clearTimeout(timeoutId);
       
-      // Handle response
-      if (response.ok) {
+      // Handle response - include 304 Not Modified as success
+      if (response.ok || response.status === 304) {
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           return await response.json();

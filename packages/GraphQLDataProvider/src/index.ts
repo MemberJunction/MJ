@@ -22,5 +22,6 @@ export type {
     GetRegistryComponentParams,
     SearchRegistryComponentsParams,
     RegistryComponentSearchResult,
-    ComponentDependencyTree
+    ComponentDependencyTree,
+    ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';
