@@ -3,6 +3,12 @@
   "version": "2.99.0",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./Server": "./dist/Server.js",
+    "./config": "./dist/config.js"
+  },
   "bin": {
     "MemberJunction": "./dist/index.js"
   },
@@ -21,7 +27,7 @@
     "@memberjunction/core-entities": "2.99.0",
     "@memberjunction/interactive-component-types": "2.99.0",
     "@memberjunction/sqlserver-dataprovider": "2.99.0",
-    "express": "^4.18.2",
+    "express": "^5.1.0",
     "cors": "^2.8.5",
     "mssql": "^11.0.1",
     "cosmiconfig": "9.0.0",
@@ -30,6 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "20.14.2",
+    "@types/express": "^5.0.3",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   }

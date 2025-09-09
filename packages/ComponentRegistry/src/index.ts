@@ -26,6 +26,7 @@ import { startComponentRegistryServer } from './Server.js';
 // Export all server components for library use
 export * from './Server.js';
 export * from './config.js';
+export * from './types.js';
 
 // Start the server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {

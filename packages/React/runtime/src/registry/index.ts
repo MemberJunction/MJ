@@ -5,7 +5,7 @@
 
 export { ComponentRegistry } from './component-registry';
 export { ComponentResolver, ResolvedComponents } from './component-resolver';
-export { ComponentRegistryService } from './component-registry-service';
+export { ComponentRegistryService, IComponentRegistryClient } from './component-registry-service';
 export { 
   RegistryProvider,
   RegistryComponentMetadata,

@@ -1,0 +1,53 @@
+{
+  "name": "QueryGrid",
+  "title": "Query Grid",
+  "description": "A specialized grid component that displays all queries in the system using the generic DataGrid component",
+  "type": "table",
+  "location": "embedded",
+  "functionalRequirements": "## Simple Query Viewer\n\n### Purpose\n- Provide a zero-configuration grid for viewing system queries\n- Demonstrate simple composition by wrapping DataGrid\n- Automatically load and display all queries\n\n### Key Features\n- Auto-loads all queries on mount\n- Pre-configured optimal columns for query display\n- All DataGrid features available (filtering, sorting, paging)\n- No configuration needed - just drop in and use",
+  "technicalDesign": "## Minimal Wrapper Design\n\n### Architecture\n- Ultra-thin wrapper around DataGrid\n- Uses RunView to fetch queries\n- Passes data directly to DataGrid\n- No props or events - purely self-contained\n\n### Registry Pattern\n- Loads DataGrid from components registry\n- Shows component composition without coupling",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Queries",
+        "description": "System queries for data access",
+        "displayFields": [
+          "ID",
+          "Name",
+          "Description",
+          "Category",
+          "Status",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "Name",
+          "Description",
+          "Category"         
+        ],
+        "sortFields": [
+          "Name",
+          "Category",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "usageContext": "Display all system queries in a filterable, sortable grid"
+      }
+    ]
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI",
+      "location": "registry",
+      "registry": "MJ",
+      "description": "Generic data grid"
+    }
+  ],
+  "libraries": [],
+  "code": "@file:../code/query-grid.js",
+  "exampleUsage": "<QueryGrid\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
+}
