@@ -9,6 +9,7 @@ import {
   ComponentCompiler,
   ComponentRegistry,
   ComponentResolver,
+  ComponentManager,
   createReactRuntime,
   CompileOptions,
   RuntimeContext,
@@ -29,6 +30,7 @@ export class AngularAdapterService {
     compiler: ComponentCompiler;
     registry: ComponentRegistry;
     resolver: ComponentResolver;
+    manager: ComponentManager;
     version: string;
   };
   private runtimeContext?: RuntimeContext;
@@ -146,6 +148,17 @@ export class AngularAdapterService {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtimeContext;
+  }
+
+  /**
+   * Get the unified component manager
+   * @returns Component manager instance
+   */
+  getComponentManager(): ComponentManager {
+    if (!this.runtime) {
+      throw new Error('React runtime not initialized. Call initialize() first.');
+    }
+    return this.runtime.manager;
   }
 
 

@@ -33,9 +33,104 @@ import * as Babel from '@babel/standalone';
 
 // Create runtime with Babel instance
 const runtime = createReactRuntime(Babel);
+
+// The runtime now includes the unified ComponentManager
+const { compiler, registry, resolver, manager } = runtime;
 ```
 
-### Compiling a Component
+## NEW: Unified ComponentManager (Recommended)
+
+The ComponentManager is a new unified API that simplifies component loading by handling fetching, compilation, registration, and caching in a single, efficient operation. It eliminates duplicate work and provides better performance.
+
+### Why Use ComponentManager?
+
+- **Single API**: One method handles everything - no need to coordinate multiple components
+- **Efficient**: Automatically prevents duplicate fetching and compilation
+- **Smart Caching**: Multi-level caching with automatic invalidation
+- **Registry Tracking**: Built-in usage tracking for licensing compliance
+- **Better Error Handling**: Comprehensive error reporting with phases
+
+### Loading a Component Hierarchy
+
+```typescript
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+
+const componentSpec: ComponentSpec = {
+  name: 'Dashboard',
+  location: 'registry',
+  registry: 'SkipAI',
+  namespace: 'analytics',
+  version: '1.0.0',
+  dependencies: [
+    { name: 'Chart', location: 'registry', registry: 'SkipAI' },
+    { name: 'Grid', location: 'embedded', code: '...' }
+  ]
+};
+
+// Load the entire hierarchy with one call
+const result = await runtime.manager.loadHierarchy(componentSpec, {
+  contextUser: currentUser,
+  defaultNamespace: 'Global',
+  defaultVersion: 'latest',
+  returnType: 'both'
+});
+
+if (result.success) {
+  // Everything is loaded and ready
+  const rootComponent = result.rootComponent;
+  const resolvedSpec = result.resolvedSpec;
+  
+  console.log(`Loaded ${result.loadedComponents.length} components`);
+  console.log(`Stats:`, result.stats);
+}
+```
+
+### Loading a Single Component
+
+```typescript
+// For simple single component loading
+const result = await runtime.manager.loadComponent(componentSpec, {
+  contextUser: currentUser,
+  forceRefresh: false, // Use cache if available
+  trackUsage: true     // Track usage for licensing
+});
+
+if (result.success) {
+  const component = result.component;
+  const wasFromCache = result.fromCache;
+}
+```
+
+### Configuration Options
+
+```typescript
+const runtime = createReactRuntime(Babel, {
+  manager: {
+    debug: true,                  // Enable debug logging
+    maxCacheSize: 100,            // Max cached specs
+    cacheTTL: 3600000,           // 1 hour cache TTL
+    enableUsageTracking: true,    // Track registry usage
+    dependencyBatchSize: 5,       // Parallel dependency loading
+    fetchTimeout: 30000          // 30 second timeout
+  }
+});
+```
+
+### Cache Management
+
+```typescript
+// Clear all caches
+runtime.manager.clearCache();
+
+// Get cache statistics
+const stats = runtime.manager.getCacheStats();
+console.log(`Cached specs: ${stats.fetchCacheSize}`);
+console.log(`Usage notifications: ${stats.notificationsCount}`);
+```
+
+## Legacy Approach (Still Supported)
+
+### Compiling a Component (Old Way)
 
 ```typescript
 const componentCode = `

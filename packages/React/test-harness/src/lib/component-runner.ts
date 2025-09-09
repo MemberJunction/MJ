@@ -228,6 +228,7 @@ export class ComponentRunner {
             ComponentCompiler,
             ComponentRegistry,
             ComponentHierarchyRegistrar,
+            ComponentManager,
             SetupStyles
           } = MJRuntime;
 
@@ -297,10 +298,12 @@ export class ComponentRunner {
 
           const registry = new ComponentRegistry();
           
-          const registrar = new ComponentHierarchyRegistrar(
+          // NEW: Use ComponentManager instead of ComponentHierarchyRegistrar
+          const manager = new ComponentManager(
             compiler,
             registry,
-            runtimeContext
+            runtimeContext,
+            { debug, enableUsageTracking: false } // Disable usage tracking for tests
           );
 
           // Use the utilities we already created with mock metadata
@@ -359,13 +362,24 @@ export class ComponentRunner {
           }
           
           let registrationResult;
+          let loadResult: any; // Declare loadResult in outer scope
           try {
-            registrationResult = await registrar.registerHierarchy(spec, {
-              styles,
-              namespace: 'Global',
-              version: 'v1', // Use v1 to match the registry defaults
-              allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
+            // NEW: Use ComponentManager.loadHierarchy instead of registrar.registerHierarchy
+            loadResult = await manager.loadHierarchy(spec, {
+              contextUser: options.contextUser,
+              defaultNamespace: 'Global',
+              defaultVersion: 'v1',
+              returnType: 'both'
             });
+            
+            // Convert to old format for compatibility
+            registrationResult = {
+              success: loadResult.success,
+              registeredComponents: loadResult.loadedComponents,
+              errors: loadResult.errors.map((e: any) => ({ componentName: e.componentName || '', error: e.message, phase: e.phase })),
+              warnings: [],
+              resolvedSpec: loadResult.resolvedSpec
+            };
           } catch (registrationError: any) {
             // Capture the actual error before it gets obscured
             console.error('🔴 Component registration error:', registrationError);
@@ -401,13 +415,17 @@ export class ComponentRunner {
             // We can see what was registered through the registrationResult
           }
 
-          // Get the root component object - explicitly pass namespace and version
-          const RootComponentObject = registry.get(spec.name, 'Global', 'v1');
+          // NEW: With ComponentManager, we already have the components from loadResult
+          if (!loadResult) {
+            throw new Error('Component loading failed - no result returned');
+          }
+          
+          const RootComponentObject = loadResult.rootComponent;
           if (!RootComponentObject) {
             // Enhanced error message with debugging info
-            console.error('Failed to find component:', spec.name);
-            console.error('Registry keys:', Array.from(registry.components.keys()));
-            throw new Error('Root component not found: ' + spec.name);
+            console.error('Failed to load component:', spec.name);
+            console.error('Load errors:', loadResult.errors);
+            throw new Error('Root component not loaded: ' + spec.name);
           }
           
           // Extract the React component from the ComponentObject
@@ -416,13 +434,9 @@ export class ComponentRunner {
             throw new Error('Component object does not contain a valid React component');
           }
 
-          // Get all registered component objects and extract React components
-          const componentObjects = registry.getAll('Global', 'v1');
-          const components: Record<string, any> = {};
-          for (const [name, componentObj] of Object.entries(componentObjects)) {
-            // ComponentObject has a component property that's the React component
-            components[name] = (componentObj as any).component;
-          }
+          // Get all loaded components from the result
+          // ComponentManager now returns unwrapped components directly
+          const components: Record<string, any> = loadResult.components || {};
           
           if (debug) {
             console.log('📚 Registered components for dependencies:', Object.keys(components));
