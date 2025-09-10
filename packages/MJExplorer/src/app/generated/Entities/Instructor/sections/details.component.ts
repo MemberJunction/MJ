@@ -1,61 +1,61 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ContactEntity } from 'mj_generatedentities';
+import { InstructorEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Contacts.top-area') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Instructors.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-contact-form-top-area',
+    selector: 'gen-instructor-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
+            FieldName="InstructorID"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MobilePhone"
-            Type="textarea"
+            FieldName="FirstName"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="HomePhone"
-            Type="textarea"
+            FieldName="LastName"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="Email"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Bio"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ET_Field_Rep__c"
-            Type="textarea"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Institution__c"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Member__c"
-            Type="textarea"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -63,12 +63,12 @@ import { ContactEntity } from 'mj_generatedentities';
 </div>
     `
 })
-export class ContactTopComponent extends BaseFormSectionComponent {
-    @Input() override record!: ContactEntity;
+export class InstructorDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: InstructorEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadContactTopComponent() {
+export function LoadInstructorDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

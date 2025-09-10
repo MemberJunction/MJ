@@ -41,19 +41,6 @@
                             >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
-
-                    <mj-tab Name="AI Prompt Categories" [Visible]="record.IsSaved"> 
-                        AI Prompt Categories
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories','ParentID')"  
-                            [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
-                            [AllowLoad]="IsCurrentTab('AI Prompt Categories')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

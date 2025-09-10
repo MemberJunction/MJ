@@ -16,6 +16,7 @@ import { BaseLLM, GetAIAPIKey, ChatMessage } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
 import { LoadGeminiLLM } from '@memberjunction/ai-gemini'
 import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
+import { AIEngineBase } from '@memberjunction/ai-engine-base'
 
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
@@ -817,7 +818,7 @@ export class AutotagBaseEngine extends AIEngine {
         }
         
         // Multi-sheet processing with LLM sheet selection
-        const sheetSelectionPrompt = sourceParams.get('ExcelSheetSelectionPrompt');
+        const sheetSelectionPrompt = sourceParams.get('SheetSelectionPrompt');
         if (sheetSelectionPrompt) {
             console.log('Using LLM for multi-sheet Excel processing');
             const selectedSheetName = await this.selectSheetWithLLM(workbook, sheetSelectionPrompt);
@@ -846,33 +847,31 @@ export class AutotagBaseEngine extends AIEngine {
                 return `SHEET "${sheetName}":\n${content}`;
             }).join('\n\n---\n\n');
 
-            // Find Gemini model for large context processing
-            const geminiModel = AIEngine.Instance.Models.find(m => 
-                m.DriverClass === 'GeminiLLM' || m.APIName.toLowerCase().includes('gemini')
-            );
+            // Find model
+            const model = AIEngineBase.Instance.Models.find(m => m.Name === 'Gemini 2.5 Pro');
             
-            if (!geminiModel) {
-                console.warn('Gemini model not found for sheet selection, using first sheet');
+            if (!model) {
+                console.warn('Model not found for sheet selection, using first sheet');
                 return workbook.SheetNames[0];
             }
 
             const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-                BaseLLM, geminiModel.DriverClass, GetAIAPIKey(geminiModel.DriverClass)
+                BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)
             );
 
             const userPrompt = `${customPrompt}
 
-Here are all the sheets in this Excel file:
+                Here are all the sheets in this Excel file:
 
-${sheetContents}
+                ${sheetContents}
 
-Respond with ONLY the sheet name that contains the relevant data:`;
+                Respond with ONLY the sheet name that contains the relevant data:`;
 
             const response = await llm.ChatCompletion({
                 messages: [
                     { role: 'user', content: userPrompt }
                 ],
-                model: geminiModel.APIName,
+                model: model.APIName,
                 temperature: 0.0
             });
 

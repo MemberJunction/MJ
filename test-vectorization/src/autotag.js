@@ -1,5 +1,6 @@
 import { AutotagLocalFileSystem } from '../../packages/ContentAutotagging/dist/src/LocalFileSystem/index.js';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Metadata, UserInfo } from '@memberjunction/core';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
@@ -33,7 +34,7 @@ const systemUser = new UserInfo(sqlServerDataProvider, {
   ],
 });
 
-await AIEngine.Instance.Config(false, systemUser);
+await AIEngineBase.Instance.Config(false, systemUser);
 
 let autotagger = new AutotagLocalFileSystem()
 

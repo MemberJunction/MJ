@@ -1,27 +1,9 @@
 <div class="record-form-container"  >
     <form *ngIf="record" class="record-form"  #form="ngForm" >
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" >
-            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
-                <div #topArea class="record-form-group">
-                    <mj-form-section Entity="Organizations" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
-                </div>
-            </kendo-splitter-pane>
-            <kendo-splitter-pane>
+
                 <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
                     
-                    <mj-tab Name="Other">
-                        Other
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-form-section 
-                            Entity="Organizations" 
-                            Section="other" 
-                            [record]="record" 
-                            [EditMode]="this.EditMode">
-                        </mj-form-section>
-                    </mj-tab-body>
-               
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
@@ -34,125 +16,32 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Persons" [Visible]="record.IsSaved"> 
-                        Persons
+                    <mj-tab Name="Attendees" [Visible]="record.IsSaved"> 
+                        Attendees
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Persons','NimbleInstitutionID')"  
-                            [NewRecordValues]="NewRecordValues('Persons')"
-                            [AllowLoad]="IsCurrentTab('Persons')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Attendees','OrganizationID')"  
+                            [NewRecordValues]="NewRecordValues('Attendees')"
+                            [AllowLoad]="IsCurrentTab('Attendees')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Institutions" [Visible]="record.IsSaved"> 
-                        Institutions
+                    <mj-tab Name="Organization Links" [Visible]="record.IsSaved"> 
+                        Organization Links
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Organizations','NimbleAccountID')"  
-                            [NewRecordValues]="NewRecordValues('Organizations')"
-                            [AllowLoad]="IsCurrentTab('Institutions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Core Data" [Visible]="record.IsSaved"> 
-                        Core Data
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Core Datas','co_dist_code')"  
-                            [NewRecordValues]="NewRecordValues('Core Datas')"
-                            [AllowLoad]="IsCurrentTab('Core Data')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Educators" [Visible]="record.IsSaved"> 
-                        Educators
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Educators','co_dist_code')"  
-                            [NewRecordValues]="NewRecordValues('Educators')"
-                            [AllowLoad]="IsCurrentTab('Educators')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="School Assignments" [Visible]="record.IsSaved"> 
-                        School Assignments
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Schools','co_dist_code')"  
-                            [NewRecordValues]="NewRecordValues('Schools')"
-                            [AllowLoad]="IsCurrentTab('School Assignments')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Orders" [Visible]="record.IsSaved"> 
-                        Orders
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Orders','NU__BillToPrimaryAffiliation__c')"  
-                            [NewRecordValues]="NewRecordValues('Orders')"
-                            [AllowLoad]="IsCurrentTab('Orders')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Registrations" [Visible]="record.IsSaved"> 
-                        Registrations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Registrations','NU__PrimaryAffiliation__c')"  
-                            [NewRecordValues]="NewRecordValues('Registrations')"
-                            [AllowLoad]="IsCurrentTab('Registrations')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Affiliations" [Visible]="record.IsSaved"> 
-                        Affiliations
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Affiliations','NU__Account__c')"  
-                            [NewRecordValues]="NewRecordValues('Affiliations')"
-                            [AllowLoad]="IsCurrentTab('Affiliations')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Committee Memberships" [Visible]="record.IsSaved"> 
-                        Committee Memberships
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Committee Memberships','NU__SupportingOrganization__c')"  
-                            [NewRecordValues]="NewRecordValues('Committee Memberships')"
-                            [AllowLoad]="IsCurrentTab('Committee Memberships')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Organization Links','EventsOrganizationID')"  
+                            [NewRecordValues]="NewRecordValues('Organization Links')"
+                            [AllowLoad]="IsCurrentTab('Organization Links')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
                 </mj-tabstrip>
-            </kendo-splitter-pane>
-        </kendo-splitter>
     </form>
 </div>
         

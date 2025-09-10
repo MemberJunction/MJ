@@ -1,33 +1,40 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { PersonEntity } from 'mj_generatedentities';
+import { ReplySeedEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Persons.top-area') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Reply Seeds.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-person-form-top-area',
+    selector: 'gen-replyseed-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FullName"
+            FieldName="ReplySeedID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Content"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Email"
-            Type="textarea"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MembershipType"
-            Type="textarea"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -35,12 +42,12 @@ import { PersonEntity } from 'mj_generatedentities';
 </div>
     `
 })
-export class PersonTopComponent extends BaseFormSectionComponent {
-    @Input() override record!: PersonEntity;
+export class ReplySeedDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ReplySeedEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadPersonTopComponent() {
+export function LoadReplySeedDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

@@ -1,7 +1,7 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
+import { GoogleGenerativeAI, Content, Part, StartChatParams, GenerationConfig } from "@google/generative-ai";
 
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
@@ -9,7 +9,7 @@ import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
-    private _gemini: GoogleGenAI;
+    private _gemini: GoogleGenerativeAI;
     
     // State tracking for streaming thinking extraction
     private _streamingState: {
@@ -26,13 +26,13 @@ export class GeminiLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._gemini = new GoogleGenAI({ apiKey });
+        this._gemini = new GoogleGenerativeAI(apiKey);
     }
 
     /**
      * Read only getter method to get the Gemini client instance
      */
-    public get GeminiClient(): GoogleGenAI {
+    public get GeminiClient(): GoogleGenerativeAI {
         return this._gemini;
     }
     
@@ -126,28 +126,25 @@ export class GeminiLLM extends BaseLLM {
                 systemInstructions.push(...sysPrompts.map(m => 
                     typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')));
             }
-            const chat = this.GeminiClient.chats.create({
-                config: {
-                    systemInstruction: systemInstructions,
-                    thinkingConfig: {
-                        includeThoughts: true,
-                        thinkingBudget: -1
-                    }
-                },
+
+            const model = this.GeminiClient.getGenerativeModel({
                 model: modelName,
-                history: tempMessages 
+                systemInstruction: systemInstructions.join('\n') // System instructions are now part of getGenerativeModel
             });
-            
+
+            const chat = model.startChat({
+                history: tempMessages,
+                generationConfig: modelOptions // All config options are passed here
+            });
+
             // Send the latest message
             const latestMessage = params.messages[params.messages.length - 1].content;
-            const result = await chat.sendMessage({
-                message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
-                ...modelOptions
-            });
+            const parts = GeminiLLM.MapMJContentToGeminiParts(latestMessage);
+            const result = await chat.sendMessage(parts);
             
-            const rawContent = result.candidates?.[0]?.content?.parts?.find(part => part.text && !part.thought)?.text || '';
-            const thinking = result.candidates?.[0]?.content?.parts?.find(part => part.thought)?.text || '';
-            
+            const rawContent = result?.response?.candidates[0]?.content?.parts?.find(part => part.text)?.text || '';
+            const thinking = result.response[0]?.content?.parts?.find(part => part.thought)?.text || '';
+
             // Extract thinking content if present
             let content: string = rawContent.trim();
             let thinkingContent: string | undefined = undefined;
@@ -269,19 +266,17 @@ export class GeminiLLM extends BaseLLM {
             };
         }
         
-        // Use the new API structure
-        const chat = this.GeminiClient.chats.create({
-            model: modelName,
-            history: tempMessages
+        const model = this.GeminiClient.getGenerativeModel({ model: modelName });
+
+        const chat = model.startChat({
+            history: tempMessages,
+            generationConfig: modelOptions // All config options are passed here
         });
-        
+
         const latestMessage = params.messages[params.messages.length - 1].content;
-        
-        // Send message with streaming
-        const streamResult = await chat.sendMessageStream({
-            message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
-            ...modelOptions
-        });
+        const parts = GeminiLLM.MapMJContentToGeminiParts(latestMessage);
+
+        const streamResult = await chat.sendMessageStream(parts); // Pass parts array directly
         
         // Return the stream for the for-await loop to work
         return streamResult;
@@ -463,38 +458,47 @@ export class GeminiLLM extends BaseLLM {
     public static MapMJContentToGeminiParts(content: ChatMessageContent): Array<Part> {
         const parts: Array<Part> = [];
         if (Array.isArray(content)) {
-            for (const part of content) {
-                if (part.type === 'text') {
-                    parts.push({text: part.content});
+        for (const part of content) {
+            if (part.type === 'text') {
+                parts.push({ text: part.content });
+            } 
+            else {
+                // This block is updated for the new SDK
+                let mimeType: string;
+
+                switch (part.type) {
+                    case 'image_url':
+                        mimeType = 'image/jpeg';
+                        break;
+                    case 'audio_url':
+                        mimeType = 'audio/mpeg';
+                        break;
+                    case 'video_url':
+                        mimeType = 'video/mp4';
+                        break;
+                    case 'file_url':
+                        mimeType = 'application/octet-stream';
+                        break;
+                    default:
+                        // Log a warning and skip any unknown content types
+                        console.warn(`Unsupported part type "${part.type}" skipped.`);
+                        continue; // Skips to the next item in the loop
                 }
-                else {
-                    // use the inlineData property which expects a Blob property which consists of data and mimeType
-                    const blob: Blob = {
+
+                // Construct the inlineData object directly with the required properties
+                parts.push({
+                    inlineData: {
+                        mimeType,
                         data: part.content
                     }
-                    switch (part.type) {
-                        case 'image_url':
-                            blob.mimeType = 'image/jpeg';
-                            break;
-                        case 'audio_url':
-                            blob.mimeType = 'audio/mpeg';
-                            break;
-                        case 'video_url':
-                            blob.mimeType = 'video/mp4';
-                            break;
-                        case 'file_url':
-                            blob.mimeType = 'application/octet-stream';
-                            break;
-                    }
-                    parts.push({inlineData: blob});
-                }
+                });
             }
         }
-        else {
-            // we know that message.content is a string
-            parts.push({text: content});
-        }
-        return parts;
+    } else {
+        // we know that message.content is a string
+        parts.push({ text: content });
+    }
+    return parts;
     }
 
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {

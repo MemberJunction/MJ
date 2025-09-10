@@ -2,9 +2,7 @@ import { Component } from '@angular/core';
 import { OrganizationEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { LoadOrganizationOtherComponent } from "./sections/other.component"
 import { LoadOrganizationDetailsComponent } from "./sections/details.component"
-import { LoadOrganizationTopComponent } from "./sections/top.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
 @RegisterClass(BaseFormComponent, 'Organizations') // Tell MemberJunction about this class
@@ -18,7 +16,5 @@ export class OrganizationFormComponent extends BaseFormComponent {
 } 
 
 export function LoadOrganizationFormComponent() {
-    LoadOrganizationOtherComponent();
     LoadOrganizationDetailsComponent();
-    LoadOrganizationTopComponent();
 }

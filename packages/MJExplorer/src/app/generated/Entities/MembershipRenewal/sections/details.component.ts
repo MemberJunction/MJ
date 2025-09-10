@@ -1,25 +1,48 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { PersonEntity } from 'mj_generatedentities';
+import { MembershipRenewalEntity } from 'mj_generatedentities';
 
-@RegisterClass(BaseFormSectionComponent, 'Persons.other') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Membership Renewals.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-person-form-other',
+    selector: 'gen-membershiprenewal-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FirstName"
-            Type="textarea"
+            FieldName="RenewalID"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="LastName"
+            FieldName="MemberID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RenewalDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PaymentAmount"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PaymentStatus"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -37,59 +60,17 @@ import { PersonEntity } from 'mj_generatedentities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="edssn"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Region"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Institution"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="NimblePrimaryAffiliationID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="NimbleInstitutionID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="NimbleAccount"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class PersonOtherComponent extends BaseFormSectionComponent {
-    @Input() override record!: PersonEntity;
+export class MembershipRenewalDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: MembershipRenewalEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadPersonOtherComponent() {
+export function LoadMembershipRenewalDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
