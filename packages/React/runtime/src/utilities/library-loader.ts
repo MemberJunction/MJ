@@ -59,6 +59,11 @@ export class LibraryLoader {
   private static loadedResources = new Map<string, LoadedResource>();
   private static loadedLibraryStates = new Map<string, LoadedLibraryState>();
   private static dependencyResolver = new LibraryDependencyResolver({ debug: false });
+  
+  /**
+   * Enable progressive delay for library initialization (useful for test harness)
+   */
+  public static enableProgressiveDelay: boolean = false;
 
   /**
    * Load all standard libraries (core + UI + CSS)
@@ -255,32 +260,44 @@ export class LibraryLoader {
         script.removeEventListener('error', onError);
       };
 
-      const onLoad = () => {
+      const onLoad = async () => {
         cleanup();
-        const global = (window as any)[globalName];
-        if (global) {
-          if (debug) {
-            console.log(`✅ Library '${globalName}' loaded successfully from ${url}`);
+        
+        // Use progressive delay if enabled, otherwise use original behavior
+        if (LibraryLoader.enableProgressiveDelay) {
+          try {
+            const global = await LibraryLoader.waitForGlobalVariable(globalName, url, debug);
+            resolve(global);
+          } catch (error) {
+            reject(error);
           }
-          resolve(global);
         } else {
-          // Some libraries may take a moment to initialize
-          const timeoutId = resourceManager.setTimeout(
-            LIBRARY_LOADER_COMPONENT_ID,
-            () => {
-              const delayedGlobal = (window as any)[globalName];
-              if (delayedGlobal) {
-                if (debug) {
-                  console.log(`✅ Library '${globalName}' loaded successfully (delayed initialization)`);
+          // Original behavior
+          const global = (window as any)[globalName];
+          if (global) {
+            if (debug) {
+              console.log(`✅ Library '${globalName}' loaded successfully from ${url}`);
+            }
+            resolve(global);
+          } else {
+            // Some libraries may take a moment to initialize
+            const timeoutId = resourceManager.setTimeout(
+              LIBRARY_LOADER_COMPONENT_ID,
+              () => {
+                const delayedGlobal = (window as any)[globalName];
+                if (delayedGlobal) {
+                  if (debug) {
+                    console.log(`✅ Library '${globalName}' loaded successfully (delayed initialization)`);
+                  }
+                  resolve(delayedGlobal);
+                } else {
+                  reject(new Error(`${globalName} not found after script load`));
                 }
-                resolve(delayedGlobal);
-              } else {
-                reject(new Error(`${globalName} not found after script load`));
-              }
-            },
-            100,
-            { url, globalName }
-          );
+              },
+              100,
+              { url, globalName }
+            );
+          }
         }
       };
 
@@ -307,6 +324,100 @@ export class LibraryLoader {
     });
 
     return promise;
+  }
+
+  /**
+   * Check if a library global variable is properly initialized
+   * Generic check that works for any library
+   */
+  private static isLibraryReady(globalVariable: any): boolean {
+    if (!globalVariable) {
+      return false;
+    }
+    
+    // For functions, they're ready immediately
+    if (typeof globalVariable === 'function') {
+      return true;
+    }
+    
+    // For objects, check if they have properties (not an empty object)
+    if (typeof globalVariable === 'object') {
+      // Check for non-empty object with enumerable properties
+      const keys = Object.keys(globalVariable);
+      // Some libraries might have only non-enumerable properties, 
+      // so also check for common indicators of initialization
+      return keys.length > 0 || 
+             Object.getOwnPropertyNames(globalVariable).length > 1 || // > 1 to exclude just constructor
+             globalVariable.constructor !== Object; // Has a custom constructor
+    }
+    
+    // For other types (string, number, etc.), consider them ready
+    return true;
+  }
+
+  /**
+   * Wait for a global variable to be available with progressive delays
+   * @param globalName The name of the global variable to wait for
+   * @param url The URL of the script (for debugging)
+   * @param debug Whether to log debug information
+   * @returns The global variable once it's available
+   */
+  private static async waitForGlobalVariable(
+    globalName: string, 
+    url: string, 
+    debug: boolean = false
+  ): Promise<any> {
+    const delays = [0, 100, 200, 300, 400]; // Total: 1000ms max delay
+    const maxAttempts = delays.length;
+    let totalDelay = 0;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Wait for the specified delay (0ms on first attempt)
+      if (attempt > 0) {
+        const delay = delays[attempt];
+        if (debug) {
+          console.log(`⏳ Waiting ${delay}ms for ${globalName} to initialize (attempt ${attempt + 1}/${maxAttempts})...`);
+        }
+        await new Promise(resolve => {
+          resourceManager.setTimeout(
+            LIBRARY_LOADER_COMPONENT_ID,
+            () => resolve(undefined),
+            delay,
+            { globalName, attempt }
+          );
+        });
+        totalDelay += delay;
+      }
+
+      // Check if the global variable exists
+      const global = (window as any)[globalName];
+      if (global) {
+        // Use generic library readiness check
+        const isReady = this.isLibraryReady(global);
+
+        if (isReady) {
+          if (debug) {
+            if (totalDelay > 0) {
+              console.log(`✅ ${globalName} ready after ${totalDelay}ms delay`);
+            } else {
+              console.log(`✅ Library '${globalName}' loaded successfully from ${url}`);
+            }
+          }
+          return global;
+        } else if (debug && attempt < maxAttempts - 1) {
+          console.log(`🔄 ${globalName} exists but not fully initialized, will retry...`);
+        }
+      }
+    }
+
+    // Final check after all attempts
+    const finalGlobal = (window as any)[globalName];
+    if (finalGlobal) {
+      console.warn(`⚠️ ${globalName} loaded but may not be fully initialized after ${totalDelay}ms`);
+      return finalGlobal;
+    }
+
+    throw new Error(`${globalName} not found after script load and ${totalDelay}ms delay`);
   }
 
   /**

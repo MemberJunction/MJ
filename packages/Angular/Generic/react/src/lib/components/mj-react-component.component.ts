@@ -378,151 +378,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.cdr.detectChanges();
     }
   }
-
-  /**
-   * Build the fully resolved component specification including all external code
-   * This allows consumers to inspect the complete resolved specification
-   */
-  private async buildResolvedSpec(): Promise<void> {
-    try {
-      // Deep clone the original spec to avoid mutations
-      const resolvedSpec = JSON.parse(JSON.stringify(this.component));
-      
-      // If this is an external registry component, fetch the actual spec with code
-      if (this.component.location === 'registry' && this.component.registry) {
-        // Get the registry service to fetch the actual spec
-        const registryService = ComponentRegistryService.getInstance(
-          this.adapter.getCompiler(),
-          this.adapter.getRuntimeContext(),
-          this.enableLogging
-        );
-        
-        // Get GraphQL client from Metadata.Provider
-        let graphQLClient = null;
-        try {
-          const provider = Metadata?.Provider;
-          if (provider && (provider as any).ExecuteGQL !== undefined) {
-            const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
-            graphQLClient = new GraphQLComponentRegistryClient(provider as any);
-          }
-        } catch (error) {
-          console.warn('Could not get GraphQL client for fetching external spec:', error);
-        }
-        
-        if (graphQLClient) {
-          // Fetch the actual spec from external registry
-          const externalSpec = await graphQLClient.GetRegistryComponent({
-            registryName: this.component.registry,
-            namespace: this.component.namespace || 'Global',
-            name: this.component.name,
-            version: this.component.version || 'latest'
-          });
-          
-          if (externalSpec) {
-            // Merge the external spec into our resolved spec
-            resolvedSpec.code = externalSpec.code;
-            resolvedSpec.description = externalSpec.description || resolvedSpec.description;
-            resolvedSpec.title = externalSpec.title || resolvedSpec.title;
-            resolvedSpec.type = externalSpec.type || resolvedSpec.type;
-            resolvedSpec.properties = externalSpec.properties || resolvedSpec.properties;
-            resolvedSpec.events = externalSpec.events || resolvedSpec.events;
-            resolvedSpec.libraries = externalSpec.libraries || resolvedSpec.libraries;
-            resolvedSpec.dataRequirements = externalSpec.dataRequirements || resolvedSpec.dataRequirements;
-            resolvedSpec.functionalRequirements = externalSpec.functionalRequirements || resolvedSpec.functionalRequirements;
-            resolvedSpec.technicalDesign = externalSpec.technicalDesign || resolvedSpec.technicalDesign;
-          }
-        }
-      } else if (this.component.location === 'registry' && !this.component.registry) {
-        // Local registry component - fetch from database
-        const componentEngine = ComponentMetadataEngine.Instance;
-        
-        const dbComponent = componentEngine.Components?.find(
-          (c: any) => c.Name === this.component.name && 
-                       c.Namespace === (this.component.namespace || 'Global')
-        );
-        
-        if (dbComponent && dbComponent.Specification) {
-          const localSpec = JSON.parse(dbComponent.Specification);
-          // Merge the local spec into our resolved spec
-          resolvedSpec.code = localSpec.code || resolvedSpec.code;
-          resolvedSpec.description = localSpec.description || resolvedSpec.description;
-          resolvedSpec.title = localSpec.title || resolvedSpec.title;
-          resolvedSpec.type = localSpec.type || resolvedSpec.type;
-          resolvedSpec.properties = localSpec.properties || resolvedSpec.properties;
-          resolvedSpec.events = localSpec.events || resolvedSpec.events;
-          resolvedSpec.libraries = localSpec.libraries || resolvedSpec.libraries;
-          resolvedSpec.dataRequirements = localSpec.dataRequirements || resolvedSpec.dataRequirements;
-          resolvedSpec.functionalRequirements = localSpec.functionalRequirements || resolvedSpec.functionalRequirements;
-          resolvedSpec.technicalDesign = localSpec.technicalDesign || resolvedSpec.technicalDesign;
-        }
-      }
-      
-      // Recursively resolve dependencies
-      if (resolvedSpec.dependencies && resolvedSpec.dependencies.length > 0) {
-        for (let i = 0; i < resolvedSpec.dependencies.length; i++) {
-          const dep = resolvedSpec.dependencies[i];
-          
-          // For each dependency, try to get its resolved form
-          if (dep.location === 'registry' && dep.registry) {
-            // External registry dependency
-            try {
-              const provider = Metadata?.Provider;
-              if (provider && (provider as any).ExecuteGQL !== undefined) {
-                const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
-                const graphQLClient = new GraphQLComponentRegistryClient(provider as any);
-                
-                const depSpec = await graphQLClient.GetRegistryComponent({
-                  registryName: dep.registry,
-                  namespace: dep.namespace || 'Global',
-                  name: dep.name,
-                  version: dep.version || 'latest'
-                });
-                
-                if (depSpec) {
-                  // Replace the dependency with the fully resolved version
-                  resolvedSpec.dependencies[i] = depSpec;
-                }
-              }
-            } catch (error) {
-              console.warn(`Could not resolve external dependency ${dep.name}:`, error);
-            }
-          } else if (dep.location === 'registry' && !dep.registry) {
-            // Local registry dependency
-            const componentEngine = ComponentMetadataEngine.Instance;
-            const dbDep = componentEngine.Components?.find(
-              (c: any) => c.Name === dep.name && 
-                           c.Namespace === (dep.namespace || 'Global')
-            );
-            
-            if (dbDep && dbDep.Specification) {
-              const localDepSpec = JSON.parse(dbDep.Specification);
-              // Replace the dependency with the fully resolved version
-              resolvedSpec.dependencies[i] = localDepSpec;
-            }
-          }
-          // Embedded dependencies already have their code inline
-        }
-      }
-      
-      // Store the fully resolved spec
-      this.resolvedComponentSpec = resolvedSpec;
-      
-      if (this.enableLogging) {
-        console.log('📋 Fully resolved component spec built:', {
-          name: resolvedSpec.name,
-          hasCode: !!resolvedSpec.code,
-          codeLength: resolvedSpec.code?.length || 0,
-          dependencyCount: resolvedSpec.dependencies?.length || 0,
-          source: this.component.registry ? `external:${this.component.registry}` : 
-                  this.component.location === 'registry' ? 'local registry' : 'embedded'
-        });
-      }
-    } catch (error) {
-      console.warn('Could not build fully resolved spec:', error);
-      // Fall back to original spec
-      this.resolvedComponentSpec = this.component;
-    }
-  }
+ 
 
   /**
    * Generate a hash from component code for versioning
@@ -608,7 +464,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       }
       
       // Store the results (handle undefined values)
-      this.resolvedComponentSpec = result.resolvedSpec || null;
+      this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       this.compiledComponent = result.rootComponent || null;
       this.componentVersion = result.resolvedSpec?.version || this.component.version || 'latest';
       
@@ -745,7 +601,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     
     // Store the resolved spec from the registration result
     if (result.resolvedSpec) {
-      this.resolvedComponentSpec = result.resolvedSpec;
+      this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       console.log(`📋 [registerComponentHierarchy] Received resolved spec from runtime:`, {
         name: result.resolvedSpec.name,
         hasCode: !!result.resolvedSpec.code,
@@ -765,6 +621,72 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       version: version,
       componentType: verifyComponent ? typeof verifyComponent : 'not found'
     });
+  }
+
+  /**
+   * Post-process resolved spec to ensure all components show their true registry source.
+   * This enriches the spec for UI display purposes to show where components actually came from.
+   * Applied to all resolved specs so any consumer of this wrapper benefits.
+   */
+  private enrichSpecWithRegistryInfo(spec: ComponentSpec | null): ComponentSpec | null {
+    if (!spec || !this.component) return spec;
+    
+    // Create a deep copy to avoid mutating the original
+    const enrichedSpec = JSON.parse(JSON.stringify(spec));
+    
+    // Recursive function to process spec and all dependencies
+    // Takes the original spec at the same level to find registry info
+    const processSpec = (currentSpec: ComponentSpec, originalSpec: ComponentSpec) => {
+      // If this component has code but shows location as 'embedded', 
+      // check the original spec to see where it came from
+      if (currentSpec.code && currentSpec.location === 'embedded' && currentSpec.name) {
+        // Try to find this component in the original spec at the same level
+        // First check if the original spec itself matches by name
+        if (originalSpec.name === currentSpec.name) {
+          // Use the original's registry info if it had any
+          if (originalSpec.location === 'registry' || originalSpec.registry) {
+            currentSpec.location = 'registry';
+            if (originalSpec.registry) {
+              currentSpec.registry = originalSpec.registry;
+            }
+            if (originalSpec.namespace) {
+              currentSpec.namespace = originalSpec.namespace;
+            }
+          }
+        }
+        
+        // Also check in original's dependencies for a match
+        if (originalSpec.dependencies) {
+          const originalDep = originalSpec.dependencies.find(d => d.name === currentSpec.name);
+          if (originalDep && (originalDep.location === 'registry' || originalDep.registry)) {
+            currentSpec.location = 'registry';
+            if (originalDep.registry) {
+              currentSpec.registry = originalDep.registry;
+            }
+            if (originalDep.namespace) {
+              currentSpec.namespace = originalDep.namespace;
+            }
+          }
+        }
+      }
+      
+      // Process all dependencies recursively
+      if (currentSpec.dependencies && Array.isArray(currentSpec.dependencies)) {
+        currentSpec.dependencies.forEach((dep, index) => {
+          // Find the corresponding original dependency by name or use the one at same index
+          let originalDep = originalSpec.dependencies?.find(d => d.name === dep.name);
+          if (!originalDep && originalSpec.dependencies && index < originalSpec.dependencies.length) {
+            originalDep = originalSpec.dependencies[index];
+          }
+          if (originalDep) {
+            processSpec(dep, originalDep);
+          }
+        });
+      }
+    };
+    
+    processSpec(enrichedSpec, this.component);
+    return enrichedSpec;
   }
 
   /**
