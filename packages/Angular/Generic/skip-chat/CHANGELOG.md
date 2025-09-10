@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.100.0
+
+### Patch Changes
+
+- 4f3ad43: Fix auto-creation of new conversation when deleting the last
+  one
+
+  When all conversations are deleted, automatically create a new
+  empty conversation instead of showing just a loading spinner.
+  This provides better UX by allowing users to immediately start
+  typing without manually creating a new conversation.
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [b3132ec]
+- Updated dependencies [6dfe03c]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/graphql-dataprovider@2.100.0
+  - @memberjunction/ng-react@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ng-base-types@2.100.0
+  - @memberjunction/ng-code-editor@2.100.0
+  - @memberjunction/ng-container-directives@2.100.0
+  - @memberjunction/ng-data-context@2.100.0
+  - @memberjunction/ng-notifications@2.100.0
+  - @memberjunction/ng-resource-permissions@2.100.0
+  - @memberjunction/interactive-component-types@2.100.0
+  - @memberjunction/data-context@2.100.0
+  - @memberjunction/skip-types@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

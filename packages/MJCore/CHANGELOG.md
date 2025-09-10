@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/core
 
+## 2.100.0
+
+### Minor Changes
+
+- 5f76e3a: feat: Add standard MJ components with improved framework
+  patterns
+
+  ### Summary
+
+  Introduces four new standard MemberJunction components that
+  follow established framework patterns for library access,
+  metadata usage, and component composition.
+
+  ### New Components
+
+  - **SimpleChart**: Lightweight charting component with
+    automatic data aggregation, smart chart type selection, and
+    proper date formatting
+  - **SimpleDrilldownChart**: Extends SimpleChart with integrated
+    drill-down capability to show detailed records in a DataGrid
+  - **OpenRecordButton**: Smart navigation button that uses
+    entity metadata to automatically detect primary keys
+  - **SingleRecordView**: Metadata-driven record display with
+    multiple layout options and optional OpenRecord button
+    integration
+
+### Patch Changes
+
+- @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

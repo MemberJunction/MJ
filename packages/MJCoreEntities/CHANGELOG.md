@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.100.0
+
+### Minor Changes
+
+- ffc2c1a: migration
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/interactive-component-types@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # @memberjunction/react-test-harness
 
+## 2.100.0
+
+### Patch Changes
+
+- 6dfe03c: tweaks
+- Updated dependencies [6dfe03c]
+  - @memberjunction/react-runtime@2.100.0
+  - @memberjunction/interactive-component-types@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @memberjunction/ng-react
 
+## 2.100.0
+
+### Patch Changes
+
+- 6dfe03c: tweaks
+- Updated dependencies [5f76e3a]
+- Updated dependencies [6dfe03c]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/react-runtime@2.100.0
+  - @memberjunction/interactive-component-types@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes
