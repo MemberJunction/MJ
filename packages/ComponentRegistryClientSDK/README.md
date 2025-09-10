@@ -10,6 +10,7 @@ A TypeScript SDK for interacting with Component Registry servers. This package p
 - 🔍 **Type Safety**: Full TypeScript support with comprehensive types
 - 📦 **Component Management**: Get, search, and resolve component dependencies
 - 🔒 **Authentication**: Support for API key and Bearer token authentication
+- 🏗️ **Registry Integration**: Used by MJServer for external registry communication
 
 ## Installation
 
@@ -132,9 +133,10 @@ import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprov
 
 const graphQLClient = new GraphQLComponentRegistryClient(dataProvider);
 const component = await graphQLClient.GetRegistryComponent({
-    registryId: 'registry-id',
-    namespace: 'namespace',
-    name: 'component-name'
+    registryName: 'MJ',  // Registry name (globally unique)
+    namespace: 'core/ui',
+    name: 'DataGrid',
+    version: 'latest'
 });
 ```
 
@@ -152,6 +154,26 @@ const registryService = ComponentRegistryService.getInstance(
     graphQLClient
 );
 ```
+
+## Architecture Overview
+
+### Registry Communication Flow
+
+1. **React Runtime** → Requests component with `registry` field in spec
+2. **React Runtime** → Calls GraphQL API via `GraphQLComponentRegistryClient`
+3. **MJServer** → Receives GraphQL request with registry name
+4. **MJServer** → Creates `ComponentRegistryClient` on-demand
+5. **MJServer** → Fetches component from external registry using API key
+6. **External Registry** → Returns component specification
+7. **MJServer** → Returns spec to React Runtime
+8. **React Runtime** → Compiles and caches component
+
+### Key Design Decisions
+
+- **On-Demand Client Creation**: MJServer creates registry clients per-request, not pre-initialized
+- **Registry Name Resolution**: Components reference registries by globally unique names, not IDs
+- **API Key Management**: All API keys handled server-side in MJServer, never exposed to client
+- **No Client-Side Caching**: This SDK doesn't cache responses; caching happens at higher layers
 
 ## API Reference
 

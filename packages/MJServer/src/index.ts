@@ -92,7 +92,7 @@ export * from './generic/DeleteOptionsInput.js';
 
 export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
-export { ComponentRegistryExtendedResolver } from './resolvers/ComponentRegistryResolver.js';
+export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';

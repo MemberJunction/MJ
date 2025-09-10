@@ -132,6 +132,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    * To control React builds, use ReactDebugConfig.setDebugMode() at app startup.
    */
   @Input() enableLogging: boolean = false;
+  @Input() useComponentManager: boolean = true; // NEW: Use unified ComponentManager by default
   
   // Auto-initialize utilities if not provided
   private _utilities: any;
@@ -191,6 +192,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   
   private reactRootId: string | null = null;
   private compiledComponent: ComponentObject | null = null;
+  private loadedDependencies: Record<string, ComponentObject> = {};
   private destroyed$ = new Subject<void>();
   private currentCallbacks: ComponentCallbacks | null = null;
   isInitialized = false;
@@ -200,6 +202,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private componentId: string;
   private componentVersion: string = '';  // Store the version for resolver
   hasError = false;
+  
+  /**
+   * Public property containing the fully resolved component specification.
+   * This includes all external code fetched from registries, allowing consumers
+   * to inspect the complete resolved specification including dependencies.
+   * Only populated after successful component initialization.
+   */
+  public resolvedComponentSpec: ComponentSpec | null = null;
 
   constructor(
     private reactBridge: ReactBridgeService,
@@ -211,6 +221,25 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   async ngAfterViewInit() {
+    // Try to get registry size safely
+    let registrySize = 'N/A';
+    try {
+      if (this.adapter.isInitialized()) {
+        registrySize = this.adapter.getRegistry().size().toString();
+      } else {
+        registrySize = 'Not initialized yet';
+      }
+    } catch (e) {
+      registrySize = 'Not available';
+    }
+    
+    console.log(`🎬 [ngAfterViewInit] Starting component initialization:`, {
+      componentId: this.componentId,
+      componentName: this.component?.name,
+      timestamp: new Date().toISOString(),
+      registrySize: registrySize
+    });
+    
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
     await this.initializeComponent();
@@ -234,43 +263,87 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private async initializeComponent() {
     try {
+      console.log(`🔄 [initializeComponent] Starting initialization for ${this.component?.name}:`, {
+        location: this.component?.location,
+        registry: this.component?.registry,
+        hasCode: !!this.component?.code,
+        browserRefreshed: performance.navigation.type === 1,
+        performanceType: performance.navigation.type
+      });
+      
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
       
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
       
-      // Register component hierarchy (this compiles and registers all components)
-      await this.registerComponentHierarchy();
-      
-      // Get the already-registered component from the registry
-      const registry = this.adapter.getRegistry();
-      const componentWrapper = registry.get(
-        this.component.name, 
-        this.component.namespace || 'Global', 
-        this.componentVersion
-      );
-      
-      if (!componentWrapper) {
-        throw new Error(`Component ${this.component.name} was not found in registry after registration`);
-      }
-      
-      // The registry now stores ComponentObjects directly
-      // Validate it has the expected structure
-      if (!componentWrapper || typeof componentWrapper !== 'object') {
-        throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
-      }
-      
-      if (!componentWrapper.component) {
-        throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
-      }
-      
-      // Now that we use a regular HOC wrapper, components should always be functions
-      if (typeof componentWrapper.component !== 'function') {
-        throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
-      }
-      
-      this.compiledComponent = componentWrapper;
+      // NEW: Use ComponentManager if enabled (default: true)
+      if (this.useComponentManager) {
+        console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
+        await this.loadComponentWithManager();
+        
+        // Component is already compiled and stored in this.compiledComponent
+        // No need to fetch from registry - it's already set
+      } else {
+        console.log(`📦 [initializeComponent] Using legacy approach (will be deprecated)`);
+        // Register component hierarchy (this compiles and registers all components including from registries)
+        await this.registerComponentHierarchy();
+        
+        // The resolved spec should now be available from the registration result
+        // No need to fetch again
+        
+        // Get the already-registered component from the registry
+        const registry = this.adapter.getRegistry();
+        
+        console.log(`🔍 [initializeComponent] Looking for component in registry:`, {
+          name: this.component.name,
+          namespace: this.component.namespace || 'Global',
+          version: this.componentVersion
+        });
+        
+        // Let's also check what's actually in the registry
+        // Note: ComponentRegistry doesn't have a list() method, so we'll skip this for now
+        
+        const componentWrapper = registry.get(
+          this.component.name, 
+          this.component.namespace || 'Global', 
+          this.componentVersion
+        );
+        
+        console.log(`🔍 [initializeComponent] Registry.get result:`, {
+          found: !!componentWrapper,
+          type: componentWrapper ? typeof componentWrapper : 'undefined',
+          hasComponent: componentWrapper ? !!componentWrapper.component : false
+        });
+        
+        if (!componentWrapper) {
+          const source = this.component.registry ? `external registry ${this.component.registry}` : 'local registry';
+          console.error(`❌ [initializeComponent] Component not found! Details:`, {
+            searchedName: this.component.name,
+            searchedNamespace: this.component.namespace || 'Global',
+            searchedVersion: this.componentVersion,
+            source: source
+          });
+          throw new Error(`Component ${this.component.name} was not found in registry after registration from ${source}`);
+        }
+        
+        // The registry now stores ComponentObjects directly
+        // Validate it has the expected structure
+        if (!componentWrapper || typeof componentWrapper !== 'object') {
+          throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
+        }
+        
+        if (!componentWrapper.component) {
+          throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
+        }
+        
+        // Now that we use a regular HOC wrapper, components should always be functions
+        if (typeof componentWrapper.component !== 'function') {
+          throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
+        }
+        
+        this.compiledComponent = componentWrapper;
+      } // End of else block for legacy approach
       
       // Create managed React root
       const reactContext = this.reactBridge.getCurrentContext();
@@ -303,6 +376,151 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       });
       // Trigger change detection to show error state
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Build the fully resolved component specification including all external code
+   * This allows consumers to inspect the complete resolved specification
+   */
+  private async buildResolvedSpec(): Promise<void> {
+    try {
+      // Deep clone the original spec to avoid mutations
+      const resolvedSpec = JSON.parse(JSON.stringify(this.component));
+      
+      // If this is an external registry component, fetch the actual spec with code
+      if (this.component.location === 'registry' && this.component.registry) {
+        // Get the registry service to fetch the actual spec
+        const registryService = ComponentRegistryService.getInstance(
+          this.adapter.getCompiler(),
+          this.adapter.getRuntimeContext(),
+          this.enableLogging
+        );
+        
+        // Get GraphQL client from Metadata.Provider
+        let graphQLClient = null;
+        try {
+          const provider = Metadata?.Provider;
+          if (provider && (provider as any).ExecuteGQL !== undefined) {
+            const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
+            graphQLClient = new GraphQLComponentRegistryClient(provider as any);
+          }
+        } catch (error) {
+          console.warn('Could not get GraphQL client for fetching external spec:', error);
+        }
+        
+        if (graphQLClient) {
+          // Fetch the actual spec from external registry
+          const externalSpec = await graphQLClient.GetRegistryComponent({
+            registryName: this.component.registry,
+            namespace: this.component.namespace || 'Global',
+            name: this.component.name,
+            version: this.component.version || 'latest'
+          });
+          
+          if (externalSpec) {
+            // Merge the external spec into our resolved spec
+            resolvedSpec.code = externalSpec.code;
+            resolvedSpec.description = externalSpec.description || resolvedSpec.description;
+            resolvedSpec.title = externalSpec.title || resolvedSpec.title;
+            resolvedSpec.type = externalSpec.type || resolvedSpec.type;
+            resolvedSpec.properties = externalSpec.properties || resolvedSpec.properties;
+            resolvedSpec.events = externalSpec.events || resolvedSpec.events;
+            resolvedSpec.libraries = externalSpec.libraries || resolvedSpec.libraries;
+            resolvedSpec.dataRequirements = externalSpec.dataRequirements || resolvedSpec.dataRequirements;
+            resolvedSpec.functionalRequirements = externalSpec.functionalRequirements || resolvedSpec.functionalRequirements;
+            resolvedSpec.technicalDesign = externalSpec.technicalDesign || resolvedSpec.technicalDesign;
+          }
+        }
+      } else if (this.component.location === 'registry' && !this.component.registry) {
+        // Local registry component - fetch from database
+        const componentEngine = ComponentMetadataEngine.Instance;
+        
+        const dbComponent = componentEngine.Components?.find(
+          (c: any) => c.Name === this.component.name && 
+                       c.Namespace === (this.component.namespace || 'Global')
+        );
+        
+        if (dbComponent && dbComponent.Specification) {
+          const localSpec = JSON.parse(dbComponent.Specification);
+          // Merge the local spec into our resolved spec
+          resolvedSpec.code = localSpec.code || resolvedSpec.code;
+          resolvedSpec.description = localSpec.description || resolvedSpec.description;
+          resolvedSpec.title = localSpec.title || resolvedSpec.title;
+          resolvedSpec.type = localSpec.type || resolvedSpec.type;
+          resolvedSpec.properties = localSpec.properties || resolvedSpec.properties;
+          resolvedSpec.events = localSpec.events || resolvedSpec.events;
+          resolvedSpec.libraries = localSpec.libraries || resolvedSpec.libraries;
+          resolvedSpec.dataRequirements = localSpec.dataRequirements || resolvedSpec.dataRequirements;
+          resolvedSpec.functionalRequirements = localSpec.functionalRequirements || resolvedSpec.functionalRequirements;
+          resolvedSpec.technicalDesign = localSpec.technicalDesign || resolvedSpec.technicalDesign;
+        }
+      }
+      
+      // Recursively resolve dependencies
+      if (resolvedSpec.dependencies && resolvedSpec.dependencies.length > 0) {
+        for (let i = 0; i < resolvedSpec.dependencies.length; i++) {
+          const dep = resolvedSpec.dependencies[i];
+          
+          // For each dependency, try to get its resolved form
+          if (dep.location === 'registry' && dep.registry) {
+            // External registry dependency
+            try {
+              const provider = Metadata?.Provider;
+              if (provider && (provider as any).ExecuteGQL !== undefined) {
+                const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
+                const graphQLClient = new GraphQLComponentRegistryClient(provider as any);
+                
+                const depSpec = await graphQLClient.GetRegistryComponent({
+                  registryName: dep.registry,
+                  namespace: dep.namespace || 'Global',
+                  name: dep.name,
+                  version: dep.version || 'latest'
+                });
+                
+                if (depSpec) {
+                  // Replace the dependency with the fully resolved version
+                  resolvedSpec.dependencies[i] = depSpec;
+                }
+              }
+            } catch (error) {
+              console.warn(`Could not resolve external dependency ${dep.name}:`, error);
+            }
+          } else if (dep.location === 'registry' && !dep.registry) {
+            // Local registry dependency
+            const componentEngine = ComponentMetadataEngine.Instance;
+            const dbDep = componentEngine.Components?.find(
+              (c: any) => c.Name === dep.name && 
+                           c.Namespace === (dep.namespace || 'Global')
+            );
+            
+            if (dbDep && dbDep.Specification) {
+              const localDepSpec = JSON.parse(dbDep.Specification);
+              // Replace the dependency with the fully resolved version
+              resolvedSpec.dependencies[i] = localDepSpec;
+            }
+          }
+          // Embedded dependencies already have their code inline
+        }
+      }
+      
+      // Store the fully resolved spec
+      this.resolvedComponentSpec = resolvedSpec;
+      
+      if (this.enableLogging) {
+        console.log('📋 Fully resolved component spec built:', {
+          name: resolvedSpec.name,
+          hasCode: !!resolvedSpec.code,
+          codeLength: resolvedSpec.code?.length || 0,
+          dependencyCount: resolvedSpec.dependencies?.length || 0,
+          source: this.component.registry ? `external:${this.component.registry}` : 
+                  this.component.location === 'registry' ? 'local registry' : 'embedded'
+        });
+      }
+    } catch (error) {
+      console.warn('Could not build fully resolved spec:', error);
+      // Fall back to original spec
+      this.resolvedComponentSpec = this.component;
     }
   }
 
@@ -367,25 +585,122 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
 
   /**
+   * NEW: Load component using unified ComponentManager - MUCH SIMPLER!
+   */
+  private async loadComponentWithManager() {
+    try {
+      const manager = this.adapter.getComponentManager();
+      
+      console.log(`🚀 [ComponentManager] Loading component hierarchy: ${this.component.name}`);
+      
+      // Load the entire hierarchy with one simple call
+      const result = await manager.loadHierarchy(this.component, {
+        contextUser: Metadata.Provider.CurrentUser,
+        defaultNamespace: 'Global',
+        defaultVersion: this.component.version || this.generateComponentHash(this.component),
+        returnType: 'both'
+      });
+      
+      if (!result.success) {
+        const errorMessages = result.errors.map(e => `${e.componentName}: ${e.message}`).join(', ');
+        console.error(`❌ [ComponentManager] Failed to load hierarchy:`, errorMessages);
+        throw new Error(`Component loading failed: ${errorMessages}`);
+      }
+      
+      // Store the results (handle undefined values)
+      this.resolvedComponentSpec = result.resolvedSpec || null;
+      this.compiledComponent = result.rootComponent || null;
+      this.componentVersion = result.resolvedSpec?.version || this.component.version || 'latest';
+      
+      // IMPORTANT: Store the loaded dependencies for use in renderComponent
+      this.loadedDependencies = result.components || {};
+      
+      console.log(`✅ [ComponentManager] Successfully loaded hierarchy:`, {
+        rootComponent: result.resolvedSpec?.name,
+        loadedCount: result.loadedComponents.length,
+        dependencies: Object.keys(this.loadedDependencies),
+        stats: result.stats
+      });
+      
+      // Component is ready to render
+      return true;
+      
+    } catch (error) {
+      console.error(`❌ [ComponentManager] Error loading component:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Register all components in the hierarchy
+   * @deprecated Use loadComponentWithManager() instead
    */
   private async registerComponentHierarchy() {
     // Use semantic version from spec or generate hash-based version for uniqueness
     const version = this.component.version || this.generateComponentHash(this.component);
     this.componentVersion = version;  // Store for use in resolver
     
-    if (this.enableLogging) {
-      console.log(`Registering ${this.component.name}@${version}`);
-    }
+    console.log(`🔍 [registerComponentHierarchy] Starting registration for ${this.component.name}@${version}`, {
+      location: this.component.location,
+      registry: this.component.registry,
+      namespace: this.component.namespace,
+      hasCode: !!this.component.code,
+      codeLength: this.component.code?.length || 0
+    });
     
     // Check if already registered to avoid duplication
     const registry = this.adapter.getRegistry();
-    const existingComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
+    const checkNamespace = this.component.namespace || 'Global';
+    
+    console.log(`🔍 [registerComponentHierarchy] Checking registry for existing component:`, {
+      name: this.component.name,
+      namespace: checkNamespace,
+      version: version,
+      registrySize: registry.size(),
+      registryId: registry.registryId || 'unknown'
+    });
+    
+    // Log registry state for debugging
+    console.log(`📦 [registerComponentHierarchy] Registry state:`, {
+      totalSize: registry.size(),
+      registryInstance: registry.registryId || 'unknown'
+    });
+    
+    const existingComponent = registry.get(this.component.name, checkNamespace, version);
+    
     if (existingComponent) {
-      if (this.enableLogging) {
-        console.log(`Component ${this.component.name}@${version} already registered`);
+      console.log(`⚠️ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered!`, {
+        existingType: typeof existingComponent,
+        hasComponent: !!(existingComponent as any).component,
+        registrationTime: (existingComponent as any).registeredAt || 'unknown',
+        runtimeContextLibraries: Object.keys(this.adapter.getRuntimeContext().libraries || {})
+      });
+      
+      // For registry components, we need to check the resolved spec's libraries, not the input spec
+      // The input spec from Angular doesn't have library information for registry components
+      if (this.component.location === 'registry' && this.component.registry) {
+        console.log(`📋 [registerComponentHierarchy] Component is from registry, need to fetch full spec to check libraries`);
+        // Continue to fetch the full spec below - don't return early
+      } else {
+        // For local components, check using the input spec
+        const requiredLibraries = this.component.libraries || [];
+        const runtimeLibraries = this.adapter.getRuntimeContext().libraries || {};
+        const missingLibraries = requiredLibraries.filter(lib => !runtimeLibraries[lib.globalVariable]);
+        
+        if (missingLibraries.length > 0) {
+          console.warn(`⚠️ [registerComponentHierarchy] Component registered but libraries missing:`, {
+            required: requiredLibraries.map(l => l.globalVariable),
+            loaded: Object.keys(runtimeLibraries),
+            missing: missingLibraries.map(l => l.globalVariable)
+          });
+          // Don't return early - continue to load libraries
+        } else {
+          console.log(`✅ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered with all libraries, skipping`);
+          return;
+        }
       }
-      return;
+    } else {
+      console.log(`🆕 [registerComponentHierarchy] Component not found in registry, proceeding with registration`);
     }
     
     // Initialize metadata engine
@@ -398,27 +713,58 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       this.adapter.getRuntimeContext()
     );
     
+    console.log(`📦 [registerComponentHierarchy] Calling registrar.registerHierarchy for ${this.component.name}`, {
+      hasStyles: !!this.styles,
+      namespace: this.component.namespace || 'Global',
+      version: version,
+      libraryCount: ComponentMetadataEngine.Instance.ComponentLibraries?.length || 0,
+      hasCode: !!this.component.code,
+      codeLength: this.component.code?.length || 0
+    });
+    
     // Register with proper configuration
+    // Pass the partial spec - the React runtime will handle fetching from registries
     const result = await registrar.registerHierarchy(
-      this.component,
+      this.component,  // Pass the original spec, not fetched
       {
         styles: this.styles as ComponentStyles,
         namespace: this.component.namespace || 'Global',
         version: version,
         allowOverride: false,  // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
-        debug: true
+        debug: true,
+        contextUser: Metadata.Provider.CurrentUser
       }
     );
     
     if (!result.success) {
       const errors = result.errors.map(e => e.error).join(', ');
+      console.error(`❌ [registerComponentHierarchy] Registration failed:`, errors);
       throw new Error(`Component registration failed: ${errors}`);
     }
     
-    if (this.enableLogging) {
-      console.log(`Registered ${result.registeredComponents.length} components`);
+    // Store the resolved spec from the registration result
+    if (result.resolvedSpec) {
+      this.resolvedComponentSpec = result.resolvedSpec;
+      console.log(`📋 [registerComponentHierarchy] Received resolved spec from runtime:`, {
+        name: result.resolvedSpec.name,
+        hasCode: !!result.resolvedSpec.code,
+        libraryCount: result.resolvedSpec.libraries?.length || 0,
+        dependencyCount: result.resolvedSpec.dependencies?.length || 0
+      });
     }
+    
+    console.log(`✅ [registerComponentHierarchy] Successfully registered ${result.registeredComponents.length} components:`, result.registeredComponents);
+    
+    // Verify the component is actually in the registry
+    const verifyComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
+    console.log(`🔍 [registerComponentHierarchy] Verification - component in registry after registration:`, {
+      found: !!verifyComponent,
+      name: this.component.name,
+      namespace: this.component.namespace || 'Global',
+      version: version,
+      componentType: verifyComponent ? typeof verifyComponent : 'not found'
+    });
   }
 
   /**
@@ -449,12 +795,24 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const { React } = context;
     
     // Resolve components with the correct version using runtime's resolver
-    const components = await this.resolveComponentsWithVersion(this.component, this.componentVersion);
+    // SKIP this if using ComponentManager - components are already loaded!
+    let components = {};
+    if (!this.useComponentManager) {
+      components = await this.resolveComponentsWithVersion(this.component, this.componentVersion);
+    } else {
+      // Use the dependencies that were already loaded and unwrapped by ComponentManager
+      components = this.loadedDependencies;
+      console.log(`🎯 [renderComponent] Using dependencies from ComponentManager:`, Object.keys(components));
+    }
     
     // Create callbacks once per component instance
     if (!this.currentCallbacks) {
       this.currentCallbacks = this.createCallbacks();
     }
+    
+    // Get libraries from runtime context
+    const runtimeContext = this.adapter.getRuntimeContext();
+    const libraries = runtimeContext.libraries || {};
     
     // Build props with savedUserSettings pattern
     const props = {
@@ -462,6 +820,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       callbacks: this.currentCallbacks,
       components,
       styles: this.styles as any,
+      libraries, // Pass the loaded libraries to components
       savedUserSettings: this._savedUserSettings,
       onSaveUserSettings: this.handleSaveUserSettings.bind(this)
     };

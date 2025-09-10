@@ -33,9 +33,104 @@ import * as Babel from '@babel/standalone';
 
 // Create runtime with Babel instance
 const runtime = createReactRuntime(Babel);
+
+// The runtime now includes the unified ComponentManager
+const { compiler, registry, resolver, manager } = runtime;
 ```
 
-### Compiling a Component
+## NEW: Unified ComponentManager (Recommended)
+
+The ComponentManager is a new unified API that simplifies component loading by handling fetching, compilation, registration, and caching in a single, efficient operation. It eliminates duplicate work and provides better performance.
+
+### Why Use ComponentManager?
+
+- **Single API**: One method handles everything - no need to coordinate multiple components
+- **Efficient**: Automatically prevents duplicate fetching and compilation
+- **Smart Caching**: Multi-level caching with automatic invalidation
+- **Registry Tracking**: Built-in usage tracking for licensing compliance
+- **Better Error Handling**: Comprehensive error reporting with phases
+
+### Loading a Component Hierarchy
+
+```typescript
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+
+const componentSpec: ComponentSpec = {
+  name: 'Dashboard',
+  location: 'registry',
+  registry: 'SkipAI',
+  namespace: 'analytics',
+  version: '1.0.0',
+  dependencies: [
+    { name: 'Chart', location: 'registry', registry: 'SkipAI' },
+    { name: 'Grid', location: 'embedded', code: '...' }
+  ]
+};
+
+// Load the entire hierarchy with one call
+const result = await runtime.manager.loadHierarchy(componentSpec, {
+  contextUser: currentUser,
+  defaultNamespace: 'Global',
+  defaultVersion: 'latest',
+  returnType: 'both'
+});
+
+if (result.success) {
+  // Everything is loaded and ready
+  const rootComponent = result.rootComponent;
+  const resolvedSpec = result.resolvedSpec;
+  
+  console.log(`Loaded ${result.loadedComponents.length} components`);
+  console.log(`Stats:`, result.stats);
+}
+```
+
+### Loading a Single Component
+
+```typescript
+// For simple single component loading
+const result = await runtime.manager.loadComponent(componentSpec, {
+  contextUser: currentUser,
+  forceRefresh: false, // Use cache if available
+  trackUsage: true     // Track usage for licensing
+});
+
+if (result.success) {
+  const component = result.component;
+  const wasFromCache = result.fromCache;
+}
+```
+
+### Configuration Options
+
+```typescript
+const runtime = createReactRuntime(Babel, {
+  manager: {
+    debug: true,                  // Enable debug logging
+    maxCacheSize: 100,            // Max cached specs
+    cacheTTL: 3600000,           // 1 hour cache TTL
+    enableUsageTracking: true,    // Track registry usage
+    dependencyBatchSize: 5,       // Parallel dependency loading
+    fetchTimeout: 30000          // 30 second timeout
+  }
+});
+```
+
+### Cache Management
+
+```typescript
+// Clear all caches
+runtime.manager.clearCache();
+
+// Get cache statistics
+const stats = runtime.manager.getCacheStats();
+console.log(`Cached specs: ${stats.fetchCacheSize}`);
+console.log(`Usage notifications: ${stats.notificationsCount}`);
+```
+
+## Legacy Approach (Still Supported)
+
+### Compiling a Component (Old Way)
 
 ```typescript
 const componentCode = `
@@ -420,6 +515,81 @@ console.log(`Total components: ${stats.totalComponents}`);
 const removed = runtime.registry.cleanup();
 console.log(`Removed ${removed} unused components`);
 ```
+
+### External Registry Components
+
+The React Runtime supports loading components from external registries through the `ComponentRegistryService`:
+
+```typescript
+// Component specs can reference external registries
+const componentSpec = {
+  name: 'DataGrid',
+  location: 'registry',
+  registry: 'MJ',  // Registry name (globally unique)
+  namespace: 'core/ui',
+  version: 'latest',
+  // ... other spec fields
+};
+
+// The runtime will:
+// 1. Look up the registry by name in ComponentRegistries
+// 2. Fetch the component via GraphQL/MJServer
+// 3. Calculate SHA-256 hash of the spec for cache validation
+// 4. Compile and cache the component
+```
+
+#### GraphQL Client Configuration
+
+The `ComponentRegistryService` requires a GraphQL client for fetching from external registries. It supports two configuration approaches:
+
+1. **Automatic Fallback** (Recommended): If no client is explicitly provided, the service automatically creates a `GraphQLComponentRegistryClient` using `Metadata.Provider`
+   ```typescript
+   // No explicit client needed - will create one from Metadata.Provider
+   const registryService = ComponentRegistryService.getInstance(compiler, context);
+   // The service will automatically:
+   // 1. Check if a client was provided
+   // 2. If not, dynamically import @memberjunction/graphql-dataprovider
+   // 3. Create a GraphQLComponentRegistryClient with Metadata.Provider
+   // 4. Cache and reuse this client for subsequent calls
+   ```
+
+2. **Explicit Client**: Provide a custom GraphQL client that implements `IComponentRegistryClient`
+   ```typescript
+   // Custom client implementation
+   const customClient: IComponentRegistryClient = {
+     GetRegistryComponent: async (params) => { /* ... */ }
+   };
+   
+   // Pass during creation
+   const registryService = ComponentRegistryService.getInstance(
+     compiler, context, debug, customClient
+   );
+   
+   // Or set later
+   registryService.setGraphQLClient(customClient);
+   ```
+
+The automatic fallback ensures external registry fetching works out-of-the-box in MemberJunction environments where `Metadata.Provider` is configured. The dynamic import approach allows the React runtime to function even when `@memberjunction/graphql-dataprovider` is not available.
+
+#### Component Caching with SHA-256 Validation
+
+The runtime uses SHA-256 hashing to ensure cached components are up-to-date:
+
+```typescript
+// When fetching external components:
+// 1. Fetch spec from registry
+// 2. Calculate SHA-256 hash using Web Crypto API
+// 3. Compare with cached component's hash
+// 4. Recompile only if spec has changed
+
+// Note: Requires secure context (HTTPS or localhost)
+// Web Crypto API is used for consistent hashing across environments
+```
+
+#### Registry Types
+
+- **Local Registry** (`registry` field undefined): Components stored in local database
+- **External Registry** (`registry` field defined): Components fetched from remote registries via MJServer
 
 ## Configuration
 

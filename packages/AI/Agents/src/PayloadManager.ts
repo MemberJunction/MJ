@@ -537,6 +537,9 @@ export class PayloadManager {
             }
         }
         
+        // Clean up any empty objects that resulted from property deletions in arrays
+        this.cleanupEmptyArrayElements(result);
+        
         // Initialize counts
         const counts = { additions: 0, updates: 0, deletions: 0 };
         const warnings: string[] = [];
@@ -704,6 +707,55 @@ export class PayloadManager {
         }
         
         return paths;
+    }
+
+    /**
+     * Recursively cleans up empty objects from arrays after merge operations.
+     * This is necessary because property-level deletions can leave empty object shells in arrays.
+     * 
+     * @private
+     */
+    private cleanupEmptyArrayElements(obj: any): void {
+        if (!obj || typeof obj !== 'object') {
+            return;
+        }
+
+        if (Array.isArray(obj)) {
+            // Filter out empty objects from the array
+            // We need to modify the array in place to maintain references
+            let writeIndex = 0;
+            for (let readIndex = 0; readIndex < obj.length; readIndex++) {
+                const element = obj[readIndex];
+                
+                // Keep the element if it's not an empty object
+                // An empty object is one that is an object with no own properties
+                const shouldKeep = !(
+                    element !== null && 
+                    typeof element === 'object' && 
+                    !Array.isArray(element) && 
+                    Object.keys(element).length === 0
+                );
+                
+                if (shouldKeep) {
+                    // First recurse into the element to clean up any nested arrays
+                    this.cleanupEmptyArrayElements(element);
+                    
+                    // Then keep the element in the array
+                    if (writeIndex !== readIndex) {
+                        obj[writeIndex] = element;
+                    }
+                    writeIndex++;
+                }
+            }
+            
+            // Truncate the array to remove the empty slots at the end
+            obj.length = writeIndex;
+        } else {
+            // For objects, recursively clean up any nested arrays
+            for (const key of Object.keys(obj)) {
+                this.cleanupEmptyArrayElements(obj[key]);
+            }
+        }
     }
 
     /**

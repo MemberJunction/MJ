@@ -12,6 +12,7 @@
     "agents",
     "query-categories",
     "queries",
+    "component-registries",
     "component-libraries",
     "components"
   ],

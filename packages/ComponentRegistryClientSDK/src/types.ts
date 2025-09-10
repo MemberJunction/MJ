@@ -78,6 +78,56 @@ export interface GetComponentParams {
    * Component version (defaults to 'latest')
    */
   version?: string;
+  
+  /**
+   * Optional hash for caching - if provided and matches current spec, returns 304
+   */
+  hash?: string;
+}
+
+/**
+ * Component response with hash and caching support
+ */
+export interface ComponentResponse {
+  /**
+   * Component ID
+   */
+  id: string;
+  
+  /**
+   * Component namespace
+   */
+  namespace: string;
+  
+  /**
+   * Component name
+   */
+  name: string;
+  
+  /**
+   * Component version
+   */
+  version: string;
+  
+  /**
+   * Component specification (undefined if not modified - 304 response)
+   */
+  specification?: ComponentSpec;
+  
+  /**
+   * SHA-256 hash of the specification
+   */
+  hash: string;
+  
+  /**
+   * Indicates if the component was not modified (304 response)
+   */
+  notModified?: boolean;
+  
+  /**
+   * Message from server (e.g., "Not modified")
+   */
+  message?: string;
 }
 
 /**
