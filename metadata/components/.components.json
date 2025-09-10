@@ -2044,5 +2044,27 @@
       "lastModified": "2025-09-09T17:04:13.848Z",
       "checksum": "f59539fdec7e0f7146b74dcdb4aa92a2b74c87ad5d7829af8d7dd221799f8d93"
     }
+  },
+  {
+    "fields": {
+      "Name": "SimpleChart",
+      "Namespace": "Generic/UI",
+      "Description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
+      "Title": "Simple Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/simple-chart.spec.json",
+      "FunctionalRequirements": "Zero-configuration charting automatically creates appropriate charts from entity data; Common chart types including bar line pie donut area charts with smart defaults; Group-by aggregation automatically aggregates data by specified field; Interactive exploration with click events enabling drill-down workflows; Responsive design adapts to container size automatically; Automatic data aggregation by any field with count sum or average; Smart chart type selection based on data characteristics; Built-in color schemes optimized for accessibility; Click events on data points for drill-down scenarios; Automatic formatting of values dates and currencies; Loading states and empty data handling; Export chart as image functionality; Configurable but works with minimal props; Quick dashboard widgets showing entity counts by category; Revenue charts grouped by time period or product; Status distribution pie charts; Trend lines over time; Top N items by any metric; Comparison charts between categories",
+      "TechnicalDesign": "Convention over configuration with smart defaults for everything; Single-purpose component focused solely on charting; Data-agnostic works with any entity data structure; Event-driven integrates with parent components via events; Uses Chart.js for rendering canvas-based and lightweight; Automatic data aggregation using JavaScript reduce and group operations; Smart type detection for appropriate formatting; Memoized calculations prevent unnecessary re-renders; Dynamic color palette based on data point count; Data processing pipeline receives raw entity data groups by field aggregates using specified method sorts and applies limits formats for chart library and renders; Chart type selection with bar as default for categorical data line for date time fields pie doughnut for distribution percentages area for cumulative time series; Event system includes chart type series name data point value and label original records percentage of total enabling drill-down to detailed views"
+    },
+    "primaryKey": {
+      "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T00:00:16.293Z",
+      "checksum": "b6ced5d13d4d9db016a6e34c14968da5ef6e242b750b731c46d2b8b4d5e5e64b"
+    }
   }
 ]

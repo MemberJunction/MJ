@@ -1,0 +1,151 @@
+{
+  "name": "SimpleChart",
+  "title": "Simple Chart",
+  "description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "## Simple Chart Component for Quick Data Visualization\n\n### Core Purpose\n- **Zero-configuration charting** - automatically creates appropriate charts from entity data\n- **Common chart types** - bar, line, pie, donut, area charts with smart defaults\n- **Group-by aggregation** - automatically aggregates data by specified field\n- **Interactive exploration** - click events enable drill-down workflows\n- **Responsive design** - adapts to container size automatically\n\n### Key Capabilities\n- Automatic data aggregation by any field with count, sum, or average\n- Smart chart type selection based on data characteristics\n- Built-in color schemes optimized for accessibility\n- Click events on data points for drill-down scenarios\n- Automatic formatting of values, dates, and currencies\n- Loading states and empty data handling\n- Export chart as image functionality\n- Configurable but works with minimal props\n\n### Use Cases\n- Quick dashboard widgets showing entity counts by category\n- Revenue charts grouped by time period or product\n- Status distribution pie charts\n- Trend lines over time\n- Top N items by any metric\n- Comparison charts between categories",
+  "technicalDesign": "## Lightweight Chart Architecture\n\n### Design Philosophy\n- **Convention over configuration** - smart defaults for everything\n- **Single-purpose component** - focused solely on charting\n- **Data-agnostic** - works with any entity data structure\n- **Event-driven** - integrates with parent components via events\n\n### Technical Implementation\n- Uses Chart.js for rendering (canvas-based, lightweight)\n- Automatic data aggregation using JavaScript reduce/group operations\n- Smart type detection for appropriate formatting\n- Memoized calculations prevent unnecessary re-renders\n- Dynamic color palette based on data point count\n\n### Data Processing Pipeline\n1. Receive raw entity data array\n2. Group by specified field\n3. Aggregate using specified method (count/sum/average)\n4. Sort by value or label as configured\n5. Apply limits if specified (e.g., top 10)\n6. Format for chart library\n7. Render with appropriate chart type\n\n### Chart Type Selection\n- **Bar**: Default for categorical data\n- **Line**: When groupBy field is date/time\n- **Pie/Doughnut**: When showing distribution/percentages\n- **Area**: For cumulative time series\n- User can override automatic selection\n\n### Event System\n- Click events include:\n  - Chart type and series name\n  - Data point value and label\n  - Original records that comprise the data point\n  - Percentage of total if applicable\n- Enables drill-down to detailed views",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Component receives entity data through props and performs client-side aggregation"
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity being visualized",
+      "required": true
+    },
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of entity objects to visualize",
+      "required": true
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "description": "Field name to group data by",
+      "required": true
+    },
+    {
+      "name": "valueField",
+      "type": "string",
+      "description": "Field to aggregate for values. If not specified, counts records",
+      "required": false
+    },
+    {
+      "name": "aggregateMethod",
+      "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
+      "description": "How to aggregate values",
+      "required": false,
+      "defaultValue": "count",
+      "possibleValues": ["count", "sum", "average", "min", "max"]
+    },
+    {
+      "name": "chartType",
+      "type": "'auto' | 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | 'scatter'",
+      "description": "Chart type to render. 'auto' selects based on data",
+      "required": false,
+      "defaultValue": "auto",
+      "possibleValues": ["auto", "bar", "line", "pie", "doughnut", "area", "scatter"]
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Chart title. If not provided, generates from entity and groupBy field",
+      "required": false
+    },
+    {
+      "name": "height",
+      "type": "number",
+      "description": "Chart height in pixels",
+      "required": false,
+      "defaultValue": 400
+    },
+    {
+      "name": "sortBy",
+      "type": "'label' | 'value' | 'none'",
+      "description": "How to sort the chart data",
+      "required": false,
+      "defaultValue": "value",
+      "possibleValues": ["label", "value", "none"]
+    },
+    {
+      "name": "sortOrder",
+      "type": "'asc' | 'desc'",
+      "description": "Sort direction",
+      "required": false,
+      "defaultValue": "desc",
+      "possibleValues": ["asc", "desc"]
+    },
+    {
+      "name": "limit",
+      "type": "number",
+      "description": "Limit number of data points shown (e.g., top 10)",
+      "required": false
+    },
+    {
+      "name": "colors",
+      "type": "Array<string>",
+      "description": "Custom color palette for the chart",
+      "required": false
+    },
+    {
+      "name": "showLegend",
+      "type": "boolean",
+      "description": "Whether to show the legend",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "showDataLabels",
+      "type": "boolean",
+      "description": "Whether to show data labels on chart",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "enableExport",
+      "type": "boolean",
+      "description": "Show export button to download chart as image",
+      "required": false,
+      "defaultValue": true
+    }
+  ],
+  "events": [
+    {
+      "name": "dataPointClick",
+      "description": "Fired when user clicks on a data point",
+      "parameters": [
+        {
+          "name": "clickData",
+          "type": "object",
+          "description": "Object containing series name, data value, label, original records, and chart type"
+        }
+      ]
+    },
+    {
+      "name": "chartRendered",
+      "description": "Fired when chart has finished rendering",
+      "parameters": [
+        {
+          "name": "chartInfo",
+          "type": "object",
+          "description": "Information about the rendered chart including type, data point count, and aggregation method"
+        }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "chart.js",
+      "version": "4.4.1",
+      "globalVariable": "Chart"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../code/simple-chart.js",
+  "exampleUsage": "<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Product Category\"\n  limit={10}\n  onDataPointClick={handleDrillDown}\n/>"
+}
