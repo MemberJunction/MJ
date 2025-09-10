@@ -4,7 +4,13 @@
 
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
+import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 import { ComponentObject } from '../types';
+
+/**
+ * Resolution mode for specs
+ */
+export type ResolutionMode = 'embed' | 'preserve-metadata';
 
 /**
  * Options for loading a component
@@ -49,6 +55,19 @@ export interface LoadOptions {
    * Version to use if not specified in spec
    */
   defaultVersion?: string;
+  
+  /**
+   * How to format resolved specs:
+   * - 'preserve-metadata': Keep registry/namespace/name intact (for UI display)
+   * - 'embed': Convert to embedded format (for test harness)
+   * @default 'preserve-metadata'
+   */
+  resolutionMode?: ResolutionMode;
+  
+  /**
+   * All available component libraries (for browser context where ComponentMetadataEngine isn't available)
+   */
+  allLibraries?: ComponentLibraryEntity[];
 }
 
 /**

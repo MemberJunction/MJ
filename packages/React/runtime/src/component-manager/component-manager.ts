@@ -15,7 +15,8 @@ import {
   LoadResult,
   HierarchyResult,
   ComponentManagerConfig,
-  CacheEntry
+  CacheEntry,
+  ResolutionMode
 } from './types';
 
 /**
@@ -140,7 +141,9 @@ export class ComponentManager {
       if (this.needsFetch(spec)) {
         this.log(`Fetching component spec: ${spec.name}`);
         try {
-          fullSpec = await this.fetchComponentSpec(spec, options.contextUser);
+          fullSpec = await this.fetchComponentSpec(spec, options.contextUser, {
+            resolutionMode: options.resolutionMode
+          });
           
           // Cache the fetched spec
           this.fetchCache.set(componentKey, {
@@ -271,8 +274,10 @@ export class ComponentManager {
     });
     
     try {
-      // Initialize component engine if needed
-      await this.componentEngine.Config(false, options.contextUser);
+      // Initialize component engine if needed (skip in browser context where it doesn't exist)
+      if (this.componentEngine && typeof this.componentEngine.Config === 'function') {
+        await this.componentEngine.Config(false, options.contextUser);
+      }
       
       // Load the root component and all its dependencies
       const result = await this.loadComponentRecursive(
@@ -433,7 +438,8 @@ export class ComponentManager {
    */
   private async fetchComponentSpec(
     spec: ComponentSpec,
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    options?: { resolutionMode?: ResolutionMode }
   ): Promise<ComponentSpec> {
     // Check cache first
     const cacheKey = this.getComponentKey(spec, {});
@@ -499,16 +505,61 @@ export class ComponentManager {
       throw new Error(`Component not found in registry: ${spec.registry}/${spec.name}`);
     }
     
+    // Apply resolution mode if specified
+    const processedSpec = this.applyResolutionMode(fullSpec, spec, options?.resolutionMode);
+    
     // Cache it
     this.fetchCache.set(cacheKey, {
-      spec: fullSpec,
+      spec: processedSpec,
       fetchedAt: new Date(),
       usageNotified: false
     });
     
-    return fullSpec;
+    return processedSpec;
   }
   
+  /**
+   * Apply resolution mode to a fetched spec (recursively including dependencies)
+   */
+  private applyResolutionMode(
+    fullSpec: ComponentSpec,
+    originalSpec: ComponentSpec,
+    resolutionMode?: ResolutionMode
+  ): ComponentSpec {
+    let processedSpec: ComponentSpec;
+    
+    if (resolutionMode === 'embed') {
+      // Convert to embedded format for test harness
+      processedSpec = {
+        ...fullSpec,
+        location: 'embedded',
+        registry: undefined,
+        // namespace and name can stay for identification
+      };
+    } else {
+      // Default: preserve-metadata mode
+      // Keep original registry metadata but include fetched code
+      processedSpec = {
+        ...fullSpec,
+        location: originalSpec.location,
+        registry: originalSpec.registry,
+        namespace: originalSpec.namespace || fullSpec.namespace,
+        name: originalSpec.name || fullSpec.name
+      };
+    }
+    
+    // Recursively apply resolution mode to dependencies
+    if (processedSpec.dependencies && processedSpec.dependencies.length > 0) {
+      processedSpec.dependencies = processedSpec.dependencies.map(dep => {
+        // For dependencies, use the dep itself as both full and original spec
+        // since they've already been fetched and processed
+        return this.applyResolutionMode(dep, dep, resolutionMode);
+      });
+    }
+    
+    return processedSpec;
+  }
+
   /**
    * Compile a component specification
    */
@@ -516,8 +567,8 @@ export class ComponentManager {
     spec: ComponentSpec,
     options: LoadOptions
   ): Promise<ComponentObject> {
-    // Get all available libraries
-    const allLibraries = this.componentEngine.ComponentLibraries || [];
+    // Get all available libraries - use passed libraries or fall back to ComponentMetadataEngine
+    const allLibraries = options.allLibraries || this.componentEngine.ComponentLibraries || [];
     
     // Filter valid libraries
     const validLibraries = spec.libraries?.filter(lib => 
