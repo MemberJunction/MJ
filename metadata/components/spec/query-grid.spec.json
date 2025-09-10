@@ -41,7 +41,7 @@
   "dependencies": [
     {
       "name": "DataGrid",
-      "namespace": "Generic/UI",
+      "namespace": "Generic/UI/Table",
       "location": "registry",
       "description": "Generic data grid"
     }

@@ -1,0 +1,154 @@
+{
+  "name": "SimpleDrilldownChart",
+  "title": "Simple Drilldown Chart",
+  "description": "Chart component with built-in drill-down capability that shows detailed records when clicking on data points",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "Chart with click-to-drill functionality. Extends SimpleChart with split view: chart above, data grid below. Clicking chart segments shows filtered records in grid. Highlights selected segment, displays record count, provides clear selection. Uses: dashboards with detail inspection, category breakdowns with listings, time series with period details.",
+  "technicalDesign": "Composes SimpleChart and DataGrid components. Manages selection state between chart and grid. Click on chart segment → filter records → display in grid below. Layout: chart (top) → selection info bar → data grid (bottom). Preserves original records for filtering. Handles expand/collapse transitions.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives data through props, uses it for both chart and drill-down"
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity being visualized",
+      "required": true
+    },
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of entity objects to visualize",
+      "required": true
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "description": "Field name to group data by",
+      "required": true
+    },
+    {
+      "name": "valueField",
+      "type": "string",
+      "description": "Field to aggregate for values",
+      "required": false
+    },
+    {
+      "name": "aggregateMethod",
+      "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
+      "description": "How to aggregate values",
+      "required": false,
+      "defaultValue": "count"
+    },
+    {
+      "name": "chartType",
+      "type": "'auto' | 'bar' | 'line' | 'pie' | 'doughnut' | 'area'",
+      "description": "Chart type to render",
+      "required": false,
+      "defaultValue": "auto"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Chart title",
+      "required": false
+    },
+    {
+      "name": "gridFields",
+      "type": "Array<string>",
+      "description": "Fields to show in drill-down grid",
+      "required": false
+    },
+    {
+      "name": "showDrilldown",
+      "type": "boolean",
+      "description": "Whether to enable drill-down functionality",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "drilldownHeight",
+      "type": "number",
+      "description": "Height of drill-down panel in pixels",
+      "required": false,
+      "defaultValue": 300
+    },
+    {
+      "name": "showSingleRecordView",
+      "type": "boolean",
+      "description": "Whether to show SingleRecordView when a row is selected in the grid",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "singleRecordViewFields",
+      "type": "Array<string>",
+      "description": "Fields to display in the SingleRecordView",
+      "required": false
+    }
+  ],
+  "events": [
+    {
+      "name": "segmentSelected",
+      "description": "Fired when a chart segment is selected",
+      "parameters": [
+        {
+          "name": "segment",
+          "type": "{ segment: { label: string; value: number; records: Array<object>; percentage?: number } }",
+          "description": "Selected segment info including label, value, and records"
+        }
+      ]
+    },
+    {
+      "name": "selectionCleared",
+      "description": "Fired when selection is cleared",
+      "parameters": []
+    },
+    {
+      "name": "dataPointClick",
+      "description": "Bubbled event from chart when any data point is clicked",
+      "parameters": [
+        {
+          "name": "clickData",
+          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "description": "Click data from the chart including label, value, and records"
+        }
+      ]
+    },
+    {
+      "name": "rowSelected",
+      "description": "Fired when a row is selected in the drill-down grid",
+      "parameters": [
+        {
+          "name": "selectionData",
+          "type": "{ record: object; segment: { label: string; value: number; records: Array<object> } }",
+          "description": "Object containing selected record and current segment context"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/UI/Chart",
+      "location": "registry",
+      "description": "Chart component for visualization"
+    },
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry",
+      "description": "Generic data grid for drill-down display"
+    },
+    {
+      "name": "SingleRecordView",
+      "namespace": "Generic/UI/Form",
+      "location": "registry",
+      "description": "Single record display component for selected row details"
+    }
+  ],
+  "code": "@file:../code/simple-drilldown-chart.js",
+  "exampleUsage": "<SimpleDrilldownChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Category - Click to drill down\"\n  gridFields={['ProductName', 'Quantity', 'TotalAmount', 'InvoiceDate']}\n  showSingleRecordView={true}\n  singleRecordViewFields={['ProductName', 'Description', 'Quantity', 'UnitPrice', 'TotalAmount']}\n  onDataPointClick={handleChartClick}\n  onRowSelected={handleRowSelection}\n/>"
+}

@@ -1982,7 +1982,7 @@
   {
     "fields": {
       "Name": "DataGrid",
-      "Namespace": "Generic/UI",
+      "Namespace": "Generic/UI/Table",
       "Description": "A flexible, MJ-aware data grid component wrapping Ant Design Table with sorting, filtering, paging, and selection capabilities",
       "Title": "Data Grid",
       "Type": "Table",
@@ -1997,8 +1997,8 @@
       "ID": "DB1253D8-5B43-4FB1-880D-908EE2E5B37F"
     },
     "sync": {
-      "lastModified": "2025-09-09T15:32:35.064Z",
-      "checksum": "679dd018fbf4e9bfdf7fce7b291212d9b069b50b10b29205264302c51530dfeb"
+      "lastModified": "2025-09-10T15:45:05.455Z",
+      "checksum": "c8a54699f7ee848ed454b045dfba509afa452d8f22d30edb0c9652085636ca56"
     }
   },
   {
@@ -2019,8 +2019,8 @@
       "ID": "B9F675F4-BD9F-4044-8FF0-66D3F41C01D8"
     },
     "sync": {
-      "lastModified": "2025-09-09T17:04:13.831Z",
-      "checksum": "b2e95c692305b1d97f56b8341569e8881aeafb4eda0cd6a9667ef3e50497b33a"
+      "lastModified": "2025-09-10T15:45:05.476Z",
+      "checksum": "424426c8f066dac336e0d2cca857a360afea5be214ddfee763ac77bbac277556"
     }
   },
   {
@@ -2041,8 +2041,96 @@
       "ID": "031F320D-52E4-43EF-941D-0C28A029C614"
     },
     "sync": {
-      "lastModified": "2025-09-09T17:04:13.848Z",
-      "checksum": "f59539fdec7e0f7146b74dcdb4aa92a2b74c87ad5d7829af8d7dd221799f8d93"
+      "lastModified": "2025-09-10T15:45:05.507Z",
+      "checksum": "adc5e6b9e073f32aab4adc468166a380d739fc555741f790737e5d35af6709db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SimpleChart",
+      "Namespace": "Generic/UI/Chart",
+      "Description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
+      "Title": "Simple Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/simple-chart.spec.json",
+      "FunctionalRequirements": "Zero-configuration charting automatically creates appropriate charts from entity data; Common chart types including bar line pie donut area charts with smart defaults; Group-by aggregation automatically aggregates data by specified field; Interactive exploration with click events enabling drill-down workflows; Responsive design adapts to container size automatically; Automatic data aggregation by any field with count sum or average; Smart chart type selection based on data characteristics; Built-in color schemes optimized for accessibility; Click events on data points for drill-down scenarios; Automatic formatting of values dates and currencies; Loading states and empty data handling; Export chart as image functionality; Configurable but works with minimal props; Quick dashboard widgets showing entity counts by category; Revenue charts grouped by time period or product; Status distribution pie charts; Trend lines over time; Top N items by any metric; Comparison charts between categories",
+      "TechnicalDesign": "Convention over configuration with smart defaults for everything; Single-purpose component focused solely on charting; Data-agnostic works with any entity data structure; Event-driven integrates with parent components via events; Uses Chart.js for rendering canvas-based and lightweight; Automatic data aggregation using JavaScript reduce and group operations; Smart type detection for appropriate formatting; Memoized calculations prevent unnecessary re-renders; Dynamic color palette based on data point count; Data processing pipeline receives raw entity data groups by field aggregates using specified method sorts and applies limits formats for chart library and renders; Chart type selection with bar as default for categorical data line for date time fields pie doughnut for distribution percentages area for cumulative time series; Event system includes chart type series name data point value and label original records percentage of total enabling drill-down to detailed views"
+    },
+    "primaryKey": {
+      "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T21:17:21.551Z",
+      "checksum": "1020712c8b7d4cd3b9834a0ffa6797e6dec8496ea33f3e47b94af4a12c465869"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SimpleDrilldownChart",
+      "Namespace": "Generic/UI/Chart",
+      "Description": "Chart component with built-in drill-down capability that shows detailed records when clicking on data points",
+      "Title": "Simple Drilldown Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/simple-drilldown-chart.spec.json",
+      "FunctionalRequirements": "All SimpleChart features inherits all charting capabilities; Click-to-drill clicking data points reveals underlying records; Split view chart on top data grid below; Contextual data shows only records for selected segment; Clear selection button to reset and show chart only; Everything from SimpleChart aggregation chart types etc; Automatic data grid generation for drill-down; Smooth expand collapse animation; Selected segment highlighting; Record count indicators; Export capabilities for both chart and data; Responsive layout adjustment; Sales dashboards with detail views; Performance metrics with record inspection; Category breakdowns with item lists; Time series with period details; Top N analysis with full rankings",
+      "TechnicalDesign": "Composition over inheritance uses SimpleChart and DataGrid; State coordination manages selection between components; Data preservation keeps original records for drill-down; Progressive disclosure details only when needed; Wraps SimpleChart component for chart rendering; Uses DataGrid component for drill-down display; Manages selected segment state; Filters records based on selection; Handles expand collapse transitions"
+    },
+    "primaryKey": {
+      "ID": "90293530-7C0B-42B8-B8B1-38FD7D5C97DA"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T21:17:21.597Z",
+      "checksum": "7b8bffde79851a8c9e51a86cad641b5ee1708f8ff471cbaaae3d96b26ddda939"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenRecordButton",
+      "Namespace": "Generic/Navigation",
+      "Description": "A simple button component that intelligently opens entity records using metadata to determine primary keys",
+      "Title": "Open Record Button",
+      "Type": "Navigation",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/open-record-button.spec.json",
+      "FunctionalRequirements": "Smart record opening uses metadata to determine primary keys; Zero configuration just needs entity name and record; Handles complex keys supports composite primary keys; MJ Explorer integration opens records in the standard way; Minimal props abstracts all complexity; Automatically determines primary key fields from metadata; Handles single and composite primary keys; Extracts key values from record object; Customizable button text and styling; Disabled state when record missing; Error handling for missing metadata; Open buttons in data grids; Record cards with view actions; After-save navigation; Quick access in dashboards; Drill-down from charts",
+      "TechnicalDesign": "Metadata aware uses entity metadata for intelligence; Minimal surface area only entityName and record props; Convention over configuration smart defaults; Abstracted complexity handles all key logic internally; Looks up entity in utilities.md.Entities array; Finds primary key fields from entity metadata; Extracts key values from provided record; Builds proper OpenEntityRecord callback parameters; Handles both single and composite keys; Key detection logic Find entity by name in metadata Get primary key fields from entity definition Extract values from record for each key field Pass field value pairs to OpenEntityRecord; Error handling Missing entity metadata Record without key values Invalid entity names Callback failures"
+    },
+    "primaryKey": {
+      "ID": "2C0A6E59-3B78-43B3-BF84-446AA9280E86"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T21:17:21.616Z",
+      "checksum": "aacee30e390bf27483d050008cce78395eaa585711638a3d9a1823033ee14ccd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SingleRecordView",
+      "Namespace": "Generic/UI/Form",
+      "Description": "A component that displays a single entity record in a formatted view with metadata-driven field formatting",
+      "Title": "Single Record View",
+      "Type": "Form",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/single-record-view.spec.json",
+      "FunctionalRequirements": "Record visualization displays entity record fields in clean format; Metadata-driven formatting uses field types for proper display; Selective field display shows only specified fields in order; Smart formatting dates numbers currencies booleans; Compact or expanded multiple layout options; Displays record fields in specified order; Automatic formatting based on field types; Currency formatting for amount fields; Date formatting with locale support; Boolean display as Yes No or checkmarks; Null empty value handling; Related entity name display; Long text truncation with expand option; Responsive layout options; Record detail panels; Card views in lists; Tooltip previews; Summary displays; Print-friendly views; Email templates",
+      "TechnicalDesign": "Metadata awareness uses entity field definitions; Type-based formatting automatic based on data types; Minimal configuration smart defaults; Accessibility semantic HTML and ARIA labels; Uses entity metadata for field information; Applies formatting based on field types; Handles various data types appropriately; Supports custom field ordering; Responsive to container size; Field type formatting Strings trim and display Numbers locale formatting Decimals 2 decimal places Currency symbol and formatting Dates locale date string Booleans Yes No IDs hidden by default Long text truncate with ellipsis; Layout options List label-value pairs Table two-column Inline compact horizontal Card styled with sections"
+    },
+    "primaryKey": {
+      "ID": "6DABEEC4-803B-4149-9DC4-5A1201AC1EF9"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T21:39:08.268Z",
+      "checksum": "a1bf92eb91cd8f4109a47deef3998965c4dfbca6f2454fc5603e9b3abda7246b"
     }
   }
 ]
