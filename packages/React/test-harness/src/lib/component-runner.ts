@@ -325,7 +325,16 @@ export class ComponentRunner {
           // IMPORTANT: Configure the LibraryRegistry in the browser context
           // This is needed for the compiler to know about approved libraries
           if ((window as any).MJReactRuntime && (window as any).MJReactRuntime.LibraryRegistry) {
-            const { LibraryRegistry } = (window as any).MJReactRuntime;
+            const { LibraryRegistry, LibraryLoader } = (window as any).MJReactRuntime;
+            
+            // Enable progressive delay for library initialization in test harness
+            if (LibraryLoader) {
+              LibraryLoader.enableProgressiveDelay = true;
+              if (debug) {
+                console.log('⚙️ Enabled progressive delay for library initialization');
+              }
+            }
+            
             // Configure the registry with the component libraries
             // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
             await LibraryRegistry.Config(false, componentLibraries || []);
