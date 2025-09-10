@@ -94,8 +94,26 @@ function SimpleChart({
       // Group data by the specified field
       const grouped = {};
       
+      // Check if groupBy field appears to be a date
+      const sampleValue = data.length > 0 ? data[0][groupBy] : null;
+      const isDateField = sampleValue && (
+        sampleValue instanceof Date ||
+        (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))) ||
+        (typeof sampleValue === 'number' && sampleValue > 1000000000) // Likely a timestamp
+      );
+      
       data.forEach(record => {
-        const key = record[groupBy] || 'Unknown';
+        let key = record[groupBy] || 'Unknown';
+        
+        // Format date values for display
+        if (isDateField && key !== 'Unknown') {
+          const date = new Date(key);
+          if (!isNaN(date.getTime())) {
+            // Format as YYYY-MM-DD for grouping
+            key = date.toISOString().split('T')[0];
+          }
+        }
+        
         if (!grouped[key]) {
           grouped[key] = {
             label: key,
@@ -188,7 +206,8 @@ function SimpleChart({
     const sampleValue = data && data.length > 0 ? data[0][groupBy] : null;
     const isDateField = sampleValue && (
       sampleValue instanceof Date ||
-      (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+      (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))) ||
+      (typeof sampleValue === 'number' && sampleValue > 1000000000) // Likely a timestamp
     );
     
     if (isDateField) {
@@ -317,6 +336,12 @@ function SimpleChart({
   // Render chart
   React.useEffect(() => {
     if (processData.isEmpty || !canvasRef.current) {
+      return;
+    }
+
+    if (!ChartJS) {
+      console.error('[SimpleChart] Chart.js library not loaded');
+      setError('Chart.js library not loaded. Please ensure it is included in the component libraries.');
       return;
     }
 

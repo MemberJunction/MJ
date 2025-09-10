@@ -1,0 +1,115 @@
+{
+  "name": "SimpleDrilldownChart",
+  "title": "Simple Drilldown Chart",
+  "description": "Chart component with built-in drill-down capability that shows detailed records when clicking on data points",
+  "type": "chart",
+  "location": "embedded",
+  "functionalRequirements": "## Chart with Integrated Drill-down Panel\n\n### Core Purpose\n- **All SimpleChart features** - inherits all charting capabilities\n- **Click-to-drill** - clicking data points reveals underlying records\n- **Split view** - chart on top, data grid below\n- **Contextual data** - shows only records for selected segment\n- **Clear selection** - button to reset and show chart only\n\n### Key Capabilities\n- Everything from SimpleChart (aggregation, chart types, etc.)\n- Automatic data grid generation for drill-down\n- Smooth expand/collapse animation\n- Selected segment highlighting\n- Record count indicators\n- Export capabilities for both chart and data\n- Responsive layout adjustment\n\n### Use Cases\n- Sales dashboards with detail views\n- Performance metrics with record inspection\n- Category breakdowns with item lists\n- Time series with period details\n- Top N analysis with full rankings",
+  "technicalDesign": "## Extended Chart Architecture\n\n### Design Philosophy\n- **Composition over inheritance** - uses SimpleChart and DataGrid\n- **State coordination** - manages selection between components\n- **Data preservation** - keeps original records for drill-down\n- **Progressive disclosure** - details only when needed\n\n### Technical Implementation\n- Wraps SimpleChart component for chart rendering\n- Uses DataGrid component for drill-down display\n- Manages selected segment state\n- Filters records based on selection\n- Handles expand/collapse transitions\n\n### Layout Structure\n```\n+------------------------+\n|    Chart (SimpleChart) |\n|  [highlighted segment] |\n+------------------------+\n|  Selected: Category A   |\n|  Records: 25           |\n|  [Clear Selection]     |\n+------------------------+\n|   DataGrid (filtered)  |\n|   [... records ...]    |\n+------------------------+\n```",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives data through props, uses it for both chart and drill-down"
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity being visualized",
+      "required": true
+    },
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of entity objects to visualize",
+      "required": true
+    },
+    {
+      "name": "groupBy",
+      "type": "string",
+      "description": "Field name to group data by",
+      "required": true
+    },
+    {
+      "name": "valueField",
+      "type": "string",
+      "description": "Field to aggregate for values",
+      "required": false
+    },
+    {
+      "name": "aggregateMethod",
+      "type": "'count' | 'sum' | 'average' | 'min' | 'max'",
+      "description": "How to aggregate values",
+      "required": false,
+      "defaultValue": "count"
+    },
+    {
+      "name": "chartType",
+      "type": "'auto' | 'bar' | 'line' | 'pie' | 'doughnut' | 'area'",
+      "description": "Chart type to render",
+      "required": false,
+      "defaultValue": "auto"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Chart title",
+      "required": false
+    },
+    {
+      "name": "gridFields",
+      "type": "Array<string>",
+      "description": "Fields to show in drill-down grid",
+      "required": false
+    },
+    {
+      "name": "showDrilldown",
+      "type": "boolean",
+      "description": "Whether to enable drill-down functionality",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "drilldownHeight",
+      "type": "number",
+      "description": "Height of drill-down panel in pixels",
+      "required": false,
+      "defaultValue": 300
+    }
+  ],
+  "events": [
+    {
+      "name": "segmentSelected",
+      "description": "Fired when a chart segment is selected",
+      "parameters": [
+        {
+          "name": "segment",
+          "type": "object",
+          "description": "Selected segment info including label, value, and records"
+        }
+      ]
+    },
+    {
+      "name": "selectionCleared",
+      "description": "Fired when selection is cleared",
+      "parameters": []
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "namespace": "Generic/Chart",
+      "location": "registry",
+      "registry": "MJ",
+      "description": "Chart component for visualization"
+    },
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI",
+      "location": "registry",
+      "registry": "MJ",
+      "description": "Generic data grid for drill-down display"
+    }
+  ],
+  "code": "@file:../code/simple-drilldown-chart.js",
+  "exampleUsage": "<SimpleDrilldownChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Revenue by Category - Click to drill down\"\n  gridFields={['ProductName', 'Quantity', 'TotalAmount', 'InvoiceDate']}\n/>"
+}

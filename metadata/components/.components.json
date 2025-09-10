@@ -2048,7 +2048,7 @@
   {
     "fields": {
       "Name": "SimpleChart",
-      "Namespace": "Generic/UI",
+      "Namespace": "Generic/Chart",
       "Description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
       "Title": "Simple Chart",
       "Type": "Chart",
@@ -2063,8 +2063,74 @@
       "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
     },
     "sync": {
-      "lastModified": "2025-09-10T00:00:16.293Z",
-      "checksum": "b6ced5d13d4d9db016a6e34c14968da5ef6e242b750b731c46d2b8b4d5e5e64b"
+      "lastModified": "2025-09-10T06:08:40.967Z",
+      "checksum": "d85b1d2eb6afe6139d5e9f11b67572ee518c8fff8f123db5823e04ee4e9cb347"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SimpleDrilldownChart",
+      "Namespace": "Generic/Chart",
+      "Description": "Chart component with built-in drill-down capability that shows detailed records when clicking on data points",
+      "Title": "Simple Drilldown Chart",
+      "Type": "Chart",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/simple-drilldown-chart.spec.json",
+      "FunctionalRequirements": "All SimpleChart features inherits all charting capabilities; Click-to-drill clicking data points reveals underlying records; Split view chart on top data grid below; Contextual data shows only records for selected segment; Clear selection button to reset and show chart only; Everything from SimpleChart aggregation chart types etc; Automatic data grid generation for drill-down; Smooth expand collapse animation; Selected segment highlighting; Record count indicators; Export capabilities for both chart and data; Responsive layout adjustment; Sales dashboards with detail views; Performance metrics with record inspection; Category breakdowns with item lists; Time series with period details; Top N analysis with full rankings",
+      "TechnicalDesign": "Composition over inheritance uses SimpleChart and DataGrid; State coordination manages selection between components; Data preservation keeps original records for drill-down; Progressive disclosure details only when needed; Wraps SimpleChart component for chart rendering; Uses DataGrid component for drill-down display; Manages selected segment state; Filters records based on selection; Handles expand collapse transitions"
+    },
+    "primaryKey": {
+      "ID": "90293530-7C0B-42B8-B8B1-38FD7D5C97DA"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T06:37:23.121Z",
+      "checksum": "2e4f0b4e97fd9289c137f34dec2f434f6abb2968980515b3e6fc607bd992f5be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenRecordButton",
+      "Namespace": "Generic/Navigation",
+      "Description": "A simple button component that intelligently opens entity records using metadata to determine primary keys",
+      "Title": "Open Record Button",
+      "Type": "Navigation",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/open-record-button.spec.json",
+      "FunctionalRequirements": "Smart record opening uses metadata to determine primary keys; Zero configuration just needs entity name and record; Handles complex keys supports composite primary keys; MJ Explorer integration opens records in the standard way; Minimal props abstracts all complexity; Automatically determines primary key fields from metadata; Handles single and composite primary keys; Extracts key values from record object; Customizable button text and styling; Disabled state when record missing; Error handling for missing metadata; Open buttons in data grids; Record cards with view actions; After-save navigation; Quick access in dashboards; Drill-down from charts",
+      "TechnicalDesign": "Metadata aware uses entity metadata for intelligence; Minimal surface area only entityName and record props; Convention over configuration smart defaults; Abstracted complexity handles all key logic internally; Looks up entity in utilities.md.Entities array; Finds primary key fields from entity metadata; Extracts key values from provided record; Builds proper OpenEntityRecord callback parameters; Handles both single and composite keys; Key detection logic Find entity by name in metadata Get primary key fields from entity definition Extract values from record for each key field Pass field value pairs to OpenEntityRecord; Error handling Missing entity metadata Record without key values Invalid entity names Callback failures"
+    },
+    "primaryKey": {
+      "ID": "2C0A6E59-3B78-43B3-BF84-446AA9280E86"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T06:37:23.139Z",
+      "checksum": "30916b56129b1334ff6d9be6a00983929b9dde9e0fdf5d09c5bb1fcc07e9052f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SingleRecordView",
+      "Namespace": "Generic/Form",
+      "Description": "A component that displays a single entity record in a formatted view with metadata-driven field formatting",
+      "Title": "Single Record View",
+      "Type": "Form",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/single-record-view.spec.json",
+      "FunctionalRequirements": "Record visualization displays entity record fields in clean format; Metadata-driven formatting uses field types for proper display; Selective field display shows only specified fields in order; Smart formatting dates numbers currencies booleans; Compact or expanded multiple layout options; Displays record fields in specified order; Automatic formatting based on field types; Currency formatting for amount fields; Date formatting with locale support; Boolean display as Yes No or checkmarks; Null empty value handling; Related entity name display; Long text truncation with expand option; Responsive layout options; Record detail panels; Card views in lists; Tooltip previews; Summary displays; Print-friendly views; Email templates",
+      "TechnicalDesign": "Metadata awareness uses entity field definitions; Type-based formatting automatic based on data types; Minimal configuration smart defaults; Accessibility semantic HTML and ARIA labels; Uses entity metadata for field information; Applies formatting based on field types; Handles various data types appropriately; Supports custom field ordering; Responsive to container size; Field type formatting Strings trim and display Numbers locale formatting Decimals 2 decimal places Currency symbol and formatting Dates locale date string Booleans Yes No IDs hidden by default Long text truncate with ellipsis; Layout options List label-value pairs Table two-column Inline compact horizontal Card styled with sections"
+    },
+    "primaryKey": {
+      "ID": "6DABEEC4-803B-4149-9DC4-5A1201AC1EF9"
+    },
+    "sync": {
+      "lastModified": "2025-09-10T06:17:22.196Z",
+      "checksum": "db9c8cc8b15343765bd39a617dc06b2ae0add180b9bdef00529c7b72410f85ae"
     }
   }
 ]
