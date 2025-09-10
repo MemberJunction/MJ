@@ -417,7 +417,7 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         // Try to get from React component
         const reactComponent = this.getReactComponentForOption(optionIndex);
         if (reactComponent?.resolvedComponentSpec) {
-            // Cache it for future use
+            // Cache it for future use (already enriched by the wrapper)
             this.resolvedSpecCache.set(optionIndex, reactComponent.resolvedComponentSpec);
             return reactComponent.resolvedComponentSpec;
         }
