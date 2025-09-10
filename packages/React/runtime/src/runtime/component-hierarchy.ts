@@ -14,7 +14,7 @@ import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
 import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, Metadata } from '@memberjunction/core';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -25,6 +25,8 @@ export interface HierarchyRegistrationResult {
   registeredComponents: string[];
   errors: ComponentRegistrationError[];
   warnings: string[];
+  /** The fully resolved component specification with all dependencies and libraries */
+  resolvedSpec?: ComponentSpec;
 }
 
 /**
@@ -55,6 +57,8 @@ export interface HierarchyRegistrationOptions {
    */
   allLibraries: ComponentLibraryEntity[];
   debug?: boolean;
+  /** Optional user context for fetching from external registries */
+  contextUser?: UserInfo;
 }
 
 /**
@@ -66,6 +70,44 @@ export class ComponentHierarchyRegistrar {
     private registry: ComponentRegistry,
     private runtimeContext: RuntimeContext
   ) {}
+  
+  /**
+   * Fetches a component specification from an external registry
+   */
+  private async fetchExternalComponent(
+    spec: ComponentSpec,
+    contextUser?: UserInfo
+  ): Promise<ComponentSpec | null> {
+    try {
+      const provider = Metadata?.Provider;
+      if (!provider || !(provider as any).ExecuteGQL) {
+        console.warn('⚠️ [ComponentHierarchyRegistrar] No GraphQL provider available for external registry fetch');
+        return null;
+      }
+      
+      // Dynamically import the GraphQL client to avoid circular dependencies
+      const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
+      const graphQLClient = new GraphQLComponentRegistryClient(provider as any);
+      
+      const fullSpec = await graphQLClient.GetRegistryComponent({
+        registryName: spec.registry!,
+        namespace: spec.namespace || 'Global',
+        name: spec.name,
+        version: spec.version || 'latest'
+      });
+      
+      if (fullSpec && fullSpec.code) {
+        console.log(`✅ [ComponentHierarchyRegistrar] Fetched external component ${spec.name} with code (${fullSpec.code.length} chars)`);
+        return fullSpec;
+      } else {
+        console.warn(`⚠️ [ComponentHierarchyRegistrar] Failed to fetch external component ${spec.name} or no code`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ [ComponentHierarchyRegistrar] Error fetching external component ${spec.name}:`, error);
+      return null;
+    }
+  }
 
   /**
    * Registers a complete component hierarchy from a root specification
@@ -77,6 +119,12 @@ export class ComponentHierarchyRegistrar {
     rootSpec: ComponentSpec,
     options: HierarchyRegistrationOptions
   ): Promise<HierarchyRegistrationResult> {
+    // If this is an external registry component without code, fetch it first
+    let resolvedRootSpec = rootSpec;
+    if (rootSpec.location === 'registry' && rootSpec.registry && !rootSpec.code) {
+      console.log(`🌐 [ComponentHierarchyRegistrar] Fetching external registry component: ${rootSpec.registry}/${rootSpec.name}`);
+      resolvedRootSpec = await this.fetchExternalComponent(rootSpec, options.contextUser) || rootSpec;
+    }
     const {
       styles,
       namespace = 'Global',
@@ -86,10 +134,10 @@ export class ComponentHierarchyRegistrar {
     } = options;
 
     console.log('🌳 ComponentHierarchyRegistrar.registerHierarchy:', {
-      rootComponent: rootSpec.name,
-      hasLibraries: !!(rootSpec.libraries && rootSpec.libraries.length > 0),
-      libraryCount: rootSpec.libraries?.length || 0,
-      libraries: rootSpec.libraries?.map(l => l.name)
+      rootComponent: resolvedRootSpec.name,
+      hasLibraries: !!(resolvedRootSpec.libraries && resolvedRootSpec.libraries.length > 0),
+      libraryCount: resolvedRootSpec.libraries?.length || 0,
+      libraries: resolvedRootSpec.libraries?.map(l => l.name)
     });
 
     const registeredComponents: string[] = [];
@@ -99,17 +147,26 @@ export class ComponentHierarchyRegistrar {
     // PHASE 1: Compile all components first (but defer factory execution)
     const compiledMap = new Map<string, CompiledComponent>();
     const specMap = new Map<string, ComponentSpec>();
+    const allLoadedLibraries = new Map<string, any>(); // Track all loaded libraries
     
     // Helper to compile a component without calling its factory
     const compileOnly = async (spec: ComponentSpec): Promise<{ success: boolean; error?: ComponentRegistrationError }> => {
       if (!spec.code) return { success: true };
       
       try {
+        // Filter out invalid library entries before compilation
+        const validLibraries = spec.libraries?.filter(lib => {
+          if (!lib || typeof lib !== 'object') return false;
+          if (!lib.name || lib.name === 'unknown' || lib.name === 'null' || lib.name === 'undefined') return false;
+          if (!lib.globalVariable || lib.globalVariable === 'undefined' || lib.globalVariable === 'null') return false;
+          return true;
+        });
+        
         const compileOptions: CompileOptions = {
           componentName: spec.name,
           componentCode: spec.code,
           styles,
-          libraries: spec.libraries,
+          libraries: validLibraries,
           dependencies: spec.dependencies,
           allLibraries: options.allLibraries
         };
@@ -118,6 +175,17 @@ export class ComponentHierarchyRegistrar {
         if (result.success && result.component) {
           compiledMap.set(spec.name, result.component);
           specMap.set(spec.name, spec);
+          
+          // Extract and accumulate loaded libraries from the compilation
+          if (result.loadedLibraries) {
+            result.loadedLibraries.forEach((value, key) => {
+              if (!allLoadedLibraries.has(key)) {
+                allLoadedLibraries.set(key, value);
+                console.log(`📚 [registerHierarchy] Added library ${key} to accumulated libraries`);
+              }
+            });
+          }
+          
           return { success: true };
         } else {
           return {
@@ -142,25 +210,47 @@ export class ComponentHierarchyRegistrar {
     };
     
     // Compile all components in hierarchy
-    const compileQueue = [rootSpec];
+    const compileQueue = [resolvedRootSpec];
     const visited = new Set<string>();
     
     while (compileQueue.length > 0) {
-      const spec = compileQueue.shift()!;
+      let spec = compileQueue.shift()!;
       if (visited.has(spec.name)) continue;
       visited.add(spec.name);
+      
+      // If this is an external registry component without code, fetch it first
+      if (spec.location === 'registry' && spec.registry && !spec.code) {
+        const fetched = await this.fetchExternalComponent(spec, options.contextUser);
+        if (fetched) {
+          spec = fetched;
+        } else {
+          console.warn(`⚠️ [ComponentHierarchyRegistrar] Could not fetch external component ${spec.name}, skipping`);
+          continue;
+        }
+      }
       
       const result = await compileOnly(spec);
       if (!result.success) {
         errors.push(result.error!);
         if (!continueOnError) {
-          return { success: false, registeredComponents, errors, warnings };
+          return { success: false, registeredComponents, errors, warnings, resolvedSpec: resolvedRootSpec };
         }
       }
       
       if (spec.dependencies) {
         compileQueue.push(...spec.dependencies);
       }
+    }
+    
+    // Add all accumulated libraries to runtime context
+    if (allLoadedLibraries.size > 0) {
+      if (!this.runtimeContext.libraries) {
+        this.runtimeContext.libraries = {};
+      }
+      allLoadedLibraries.forEach((value, key) => {
+        this.runtimeContext.libraries![key] = value;
+        console.log(`✅ [registerHierarchy] Added ${key} to runtime context libraries`);
+      });
     }
     
     // PHASE 2: Execute all factories with components available
@@ -193,7 +283,8 @@ export class ComponentHierarchyRegistrar {
       success: errors.length === 0,
       registeredComponents,
       errors,
-      warnings
+      warnings,
+      resolvedSpec: resolvedRootSpec
     };
   }
 
@@ -237,19 +328,28 @@ export class ComponentHierarchyRegistrar {
         };
       }
 
+      // Filter out invalid library entries before compilation
+      const validLibraries = spec.libraries?.filter(lib => {
+        if (!lib || typeof lib !== 'object') return false;
+        if (!lib.name || lib.name === 'unknown' || lib.name === 'null' || lib.name === 'undefined') return false;
+        if (!lib.globalVariable || lib.globalVariable === 'undefined' || lib.globalVariable === 'null') return false;
+        return true;
+      });
+      
       // Compile the component
       const compileOptions: CompileOptions = {
         componentName: spec.name,
         componentCode: spec.code,
         styles,
-        libraries: spec.libraries, // Pass along library dependencies from the spec
+        libraries: validLibraries, // Pass along filtered library dependencies
         dependencies: spec.dependencies, // Pass along child component dependencies
         allLibraries: options.allLibraries
       };
 
       console.log(`🔧 Compiling component ${spec.name} with libraries:`, {
-        libraryCount: spec.libraries?.length || 0,
-        libraries: spec.libraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable }))
+        originalCount: spec.libraries?.length || 0,
+        filteredCount: validLibraries?.length || 0,
+        validLibraries: validLibraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable }))
       });
 
       const compilationResult = await this.compiler.compile(compileOptions);
@@ -263,6 +363,17 @@ export class ComponentHierarchyRegistrar {
             phase: 'compilation'
           }
         };
+      }
+
+      // Add loaded libraries to runtime context
+      if (compilationResult.loadedLibraries && compilationResult.loadedLibraries.size > 0) {
+        if (!this.runtimeContext.libraries) {
+          this.runtimeContext.libraries = {};
+        }
+        compilationResult.loadedLibraries.forEach((value, key) => {
+          this.runtimeContext.libraries![key] = value;
+          console.log(`✅ [registerSingleComponent] Added ${key} to runtime context libraries`);
+        });
       }
 
       // Call the factory to create the ComponentObject

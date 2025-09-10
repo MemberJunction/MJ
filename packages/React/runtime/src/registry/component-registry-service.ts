@@ -22,15 +22,36 @@ import {
   ComponentMetadataEngine
 } from '@memberjunction/core-entities';
 
+// Type-only import for TypeScript - won't be included in UMD bundle
+import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+
+// Dynamic import of GraphQLComponentRegistryClient to avoid breaking UMD build
+let GraphQLComponentRegistryClient: any;
+
+
 /**
  * Cached compiled component with metadata
  */
 interface CachedCompiledComponent {
-  component: ComponentObject;
+  component: (context: RuntimeContext, styles?: any, components?: Record<string, any>) => ComponentObject;
   metadata: RegistryComponentResponse['metadata'];
   compiledAt: Date;
   lastUsed: Date;
   useCount: number;
+  specHash?: string;  // SHA-256 hash of the spec used for compilation
+}
+
+/**
+ * GraphQL client interface for registry operations
+ */
+export interface IComponentRegistryClient {
+  GetRegistryComponent(params: {
+    registryName: string;
+    namespace: string;
+    name: string;
+    version?: string;
+    hash?: string;
+  }): Promise<ComponentSpec | null>;
 }
 
 /**
@@ -49,15 +70,18 @@ export class ComponentRegistryService {
   private componentEngine = ComponentMetadataEngine.Instance;
   private registryProviders = new Map<string, RegistryProvider>();
   private debug: boolean = false;
+  private graphQLClient?: IComponentRegistryClient;
   
   private constructor(
     compiler: ComponentCompiler,
     runtimeContext: RuntimeContext,
-    debug: boolean = false
+    debug: boolean = false,
+    graphQLClient?: IComponentRegistryClient
   ) {
     this.compiler = compiler;
     this.runtimeContext = runtimeContext;
     this.debug = debug;
+    this.graphQLClient = graphQLClient;
   }
   
   /**
@@ -66,12 +90,86 @@ export class ComponentRegistryService {
   static getInstance(
     compiler: ComponentCompiler, 
     context: RuntimeContext,
-    debug: boolean = false
+    debug: boolean = false,
+    graphQLClient?: IComponentRegistryClient
   ): ComponentRegistryService {
     if (!ComponentRegistryService.instance) {
-      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug);
+      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug, graphQLClient);
     }
     return ComponentRegistryService.instance;
+  }
+  
+  /**
+   * Set the GraphQL client for registry operations
+   */
+  setGraphQLClient(client: IComponentRegistryClient): void {
+    this.graphQLClient = client;
+    if (this.debug) {
+      console.log('✅ GraphQL client configured for component registry');
+    }
+  }
+  
+  /**
+   * Cached GraphQL client instance created from Metadata.Provider
+   */
+  private cachedProviderClient: IComponentRegistryClient | null = null;
+  
+  /**
+   * Get the GraphQL client, using the provided one or falling back to creating one with Metadata.Provider
+   * @returns The GraphQL client if available
+   */
+  private async getGraphQLClient(): Promise<IComponentRegistryClient | null> {
+    // If explicitly set, use that
+    if (this.graphQLClient) {
+      return this.graphQLClient;
+    }
+    
+    // If we've already created one from the provider, reuse it
+    if (this.cachedProviderClient) {
+      return this.cachedProviderClient;
+    }
+    
+    // Try to create GraphQLComponentRegistryClient with Metadata.Provider
+    try {
+      const provider = Metadata?.Provider;
+      if (provider && (provider as any).ExecuteGQL !== undefined) {
+        // Dynamically load GraphQLComponentRegistryClient if not already loaded
+        if (!GraphQLComponentRegistryClient) {
+          try {
+            const graphqlModule = await import('@memberjunction/graphql-dataprovider');
+            GraphQLComponentRegistryClient = graphqlModule.GraphQLComponentRegistryClient;
+          } catch (importError) {
+            if (this.debug) {
+              console.log('⚠️ [ComponentRegistryService] @memberjunction/graphql-dataprovider not available');
+            }
+            return null;
+          }
+        }
+        
+        // Create the client if we have the class
+        if (GraphQLComponentRegistryClient) {
+          try {
+            const client = new GraphQLComponentRegistryClient(provider as GraphQLDataProvider);
+            this.cachedProviderClient = client;
+            if (this.debug) {
+              console.log('📡 [ComponentRegistryService] Created GraphQL client from Metadata.Provider');
+            }
+            return client;
+          } catch (error) {
+            if (this.debug) {
+              console.log('⚠️ [ComponentRegistryService] Failed to create GraphQL client:', error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Provider might not be available in all environments
+      if (this.debug) {
+        console.log('⚠️ [ComponentRegistryService] Could not access Metadata.Provider:', error);
+      }
+    }
+    
+    return null;
   }
   
   /**
@@ -80,6 +178,34 @@ export class ComponentRegistryService {
   async initialize(contextUser?: UserInfo): Promise<void> {
     // Initialize metadata engine
     await this.componentEngine.Config(false, contextUser);
+  }
+  
+  /**
+   * Calculate SHA-256 hash of a component spec for cache comparison
+   * Uses Web Crypto API which is available in modern browsers and Node.js 15+
+   */
+  private async calculateSpecHash(spec: ComponentSpec): Promise<string> {
+    // Check for crypto.subtle availability
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      throw new Error(
+        'Web Crypto API not available. This typically happens when running in an insecure context. ' +
+        'Please use HTTPS or localhost for development. ' +
+        'Note: crypto.subtle is available in Node.js 15+ and all modern browsers on secure contexts.'
+      );
+    }
+    
+    const specString = JSON.stringify(spec);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(specString);
+    
+    // Calculate SHA-256 hash using Web Crypto API
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    
+    // Convert ArrayBuffer to hex string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
   }
   
   /**
@@ -114,7 +240,8 @@ export class ComponentRegistryService {
       if (this.debug) {
         console.log(`✅ Reusing compiled component from cache: ${key} (use count: ${cached.useCount})`);
       }
-      return cached.component;
+      // Call the factory function to get the ComponentObject
+      return cached.component(this.runtimeContext);
     }
     
     // Not in cache, need to load and compile
@@ -169,9 +296,9 @@ export class ComponentRegistryService {
     if (!compilationResult.component) {
       throw new Error(`Component compilation succeeded but no component returned`);
     }
-    const compiledComponent = compilationResult.component.factory(this.runtimeContext);
+    const compiledComponentFactory = compilationResult.component.factory;
     this.compiledComponentCache.set(key, {
-      component: compiledComponent,
+      component: compiledComponentFactory,
       metadata,
       compiledAt: new Date(),
       lastUsed: new Date(),
@@ -183,7 +310,158 @@ export class ComponentRegistryService {
       this.addComponentReference(key, referenceId);
     }
     
-    return compiledComponent;
+    // Call the factory function to get the ComponentObject
+    return compiledComponentFactory(this.runtimeContext);
+  }
+  
+  /**
+   * Get compiled component from external registry by registry name
+   * This is used when spec.registry field is populated
+   */
+  async getCompiledComponentFromRegistry(
+    registryName: string,
+    namespace: string,
+    name: string,
+    version: string,
+    referenceId?: string,
+    contextUser?: UserInfo
+  ): Promise<any> {
+    await this.initialize(contextUser);
+    
+    if (this.debug) {
+      console.log(`🌐 [ComponentRegistryService] Fetching from external registry: ${registryName}/${namespace}/${name}@${version}`);
+    }
+    
+    // Find the registry by name in ComponentRegistries
+    const registry = this.componentEngine.ComponentRegistries?.find(
+      r => r.Name === registryName && r.Status === 'Active'
+    );
+    
+    if (!registry) {
+      throw new Error(`Registry not found or inactive: ${registryName}`);
+    }
+    
+    if (this.debug) {
+      console.log(`✅ [ComponentRegistryService] Found registry: ${registry.Name} (ID: ${registry.ID})`);
+    }
+    
+    // Get GraphQL client - use provided one or fallback to Metadata.Provider
+    const graphQLClient = await this.getGraphQLClient();
+    if (!graphQLClient) {
+      throw new Error('GraphQL client not available for external registry fetching. No client provided and Metadata.Provider is not a GraphQLDataProvider.');
+    }
+    
+    // Check if we have a cached version first
+    const key = `external:${registryName}:${namespace}:${name}:${version}`;
+    const cached = this.compiledComponentCache.get(key);
+    
+    try {
+      // Fetch component spec from external registry via MJServer
+      // Pass cached hash if available for efficient caching
+      const spec = await graphQLClient.GetRegistryComponent({
+        registryName: registry.Name,  // Pass registry name, not ID
+        namespace,
+        name,
+        version,
+        hash: cached?.specHash  // Pass cached hash if available
+      });
+      
+      // If null returned, it means not modified (304)
+      if (!spec && cached?.specHash) {
+        if (this.debug) {
+          console.log(`♻️ [ComponentRegistryService] Component not modified, using cached: ${key}`);
+        }
+        cached.lastUsed = new Date();
+        cached.useCount++;
+        
+        // Track reference
+        if (referenceId) {
+          this.addComponentReference(key, referenceId);
+        }
+        
+        // Call the factory function to get the ComponentObject
+        return cached.component(this.runtimeContext);
+      }
+      
+      if (!spec) {
+        throw new Error(`Component not found in registry ${registryName}: ${namespace}/${name}@${version}`);
+      }
+      
+      if (this.debug) {
+        console.log(`✅ [ComponentRegistryService] Fetched spec from external registry: ${spec.name}`);
+      }
+      
+      // Calculate hash of the fetched spec
+      const specHash = await this.calculateSpecHash(spec);
+      
+      // Check if hash matches cached version (shouldn't happen if server works correctly)
+      if (cached && cached.specHash === specHash) {
+        if (this.debug) {
+          console.log(`♻️ [ComponentRegistryService] Using cached compilation for: ${key} (hash match)`);
+        }
+        cached.lastUsed = new Date();
+        cached.useCount++;
+        
+        // Track reference
+        if (referenceId) {
+          this.addComponentReference(key, referenceId);
+        }
+        
+        // Call the factory function to get the ComponentObject
+        return cached.component(this.runtimeContext);
+      }
+      
+      // Spec has changed or is new, need to compile
+      if (cached && this.debug) {
+        console.log(`🔄 [ComponentRegistryService] Spec changed for: ${key}, recompiling (old hash: ${cached.specHash?.substring(0, 8)}..., new hash: ${specHash.substring(0, 8)}...)`);
+      }
+      
+      // Load all libraries from metadata engine
+      const allLibraries = this.componentEngine.ComponentLibraries || [];
+      
+      // Compile the component
+      const compilationResult = await this.compiler.compile({
+        componentName: spec.name,
+        componentCode: spec.code || '',
+        allLibraries: allLibraries
+      });
+      
+      if (!compilationResult.success || !compilationResult.component) {
+        throw new Error(`Failed to compile component: ${compilationResult.error?.message || 'Unknown error'}`);
+      }
+      
+      // Cache the compiled component with spec hash
+      this.compiledComponentCache.set(key, {
+        component: compilationResult.component.factory,
+        metadata: {
+          name: spec.name,
+          namespace: spec.namespace || '',
+          version: spec.version || '1.0.0',
+          description: spec.description || '',
+          type: spec.type,
+          isLocal: false  // This is from an external registry
+        },
+        compiledAt: new Date(),
+        lastUsed: new Date(),
+        useCount: 1,
+        specHash: specHash  // Store the hash for future comparison
+      });
+      
+      // Track reference
+      if (referenceId) {
+        this.addComponentReference(key, referenceId);
+      }
+      
+      if (this.debug) {
+        console.log(`🎯 [ComponentRegistryService] Successfully compiled external component: ${spec.name}`);
+      }
+      
+      // Call the factory function to get the ComponentObject
+      return compilationResult.component.factory(this.runtimeContext);
+    } catch (error) {
+      console.error(`❌ [ComponentRegistryService] Failed to fetch from external registry:`, error);
+      throw error;
+    }
   }
   
   /**
@@ -226,17 +504,36 @@ export class ComponentRegistryService {
       throw new Error(`Registry not found: ${component.SourceRegistryID}`);
     }
     
-    if (!registry) {
-      throw new Error(`Registry not found: ${component.SourceRegistryID}`);
-    }
+    // Try GraphQL client first if available
+    let spec: ComponentSpec;
     
-    const spec = await this.fetchFromExternalRegistry(
-      registry.URI || '',
-      component.Name,
-      component.Namespace || '',
-      component.Version,
-      this.getRegistryApiKey(registry.ID) // API keys stored in env vars or secure config
-    );
+    if (this.graphQLClient) {
+      if (this.debug) {
+        console.log(`Fetching from registry via GraphQL: ${component.Name}`);
+      }
+      
+      const result = await this.graphQLClient.GetRegistryComponent({
+        registryName: registry.Name,
+        namespace: component.Namespace || '',
+        name: component.Name,
+        version: component.Version
+      });
+      
+      if (!result) {
+        throw new Error(`Component not found in registry: ${component.Name}`);
+      }
+      
+      spec = result;
+    } else {
+      // Fallback to direct HTTP if no GraphQL client
+      spec = await this.fetchFromExternalRegistry(
+        registry.URI || '',
+        component.Name,
+        component.Namespace || '',
+        component.Version,
+        this.getRegistryApiKey(registry.ID)
+      );
+    }
     
     // Store in local database for future use
     await this.cacheExternalComponent(componentId, spec, contextUser);

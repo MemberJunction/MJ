@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { createHash } from 'crypto';
 import { 
   Metadata, 
   RunView, 
@@ -8,8 +9,10 @@ import {
 } from '@memberjunction/core';
 import { ComponentEntity, ComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import * as sql from 'mssql';
-import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
+import sql from 'mssql';
+import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
+import createMSSQLConfig from './orm.js';
+import { DataSourceInfo } from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
@@ -36,6 +39,8 @@ export class ComponentRegistryAPIServer {
   protected registry: ComponentRegistryEntity | null = null;
   protected metadata: Metadata;
   protected pool: sql.ConnectionPool | null = null;
+  protected readOnlyPool: sql.ConnectionPool | null = null;
+  protected dataSources: DataSourceInfo[] = [];
   
   constructor() {
     this.app = express();
@@ -83,37 +88,58 @@ export class ComponentRegistryAPIServer {
   
   /**
    * Set up the database connection using MemberJunction's SQL Server provider.
-   * Override this method to use a different database provider or connection strategy.
+   * Follows the same pattern as MJServer for consistency.
    * 
    * @protected
    * @virtual
    */
   protected async setupDatabase(): Promise<void> {
-    const poolConfig: sql.config = {
-      server: dbHost,
-      port: dbPort,
-      user: dbUsername,
-      password: dbPassword,
-      database: dbDatabase,
-      requestTimeout: configInfo.databaseSettings.requestTimeout,
-      connectionTimeout: configInfo.databaseSettings.connectionTimeout,
-      options: {
-        encrypt: true,
-        enableArithAbort: true,
-        trustServerCertificate: dbTrustServerCertificate === 'Y'
-      }
-    };
-    
-    if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
-      poolConfig.options!.instanceName = dbInstanceName;
-    }
-    
-    this.pool = new sql.ConnectionPool(poolConfig);
+    // Create the main connection pool using the same config pattern as MJServer
+    this.pool = new sql.ConnectionPool(createMSSQLConfig());
     await this.pool.connect();
     
-    const config = new SQLServerProviderConfigData(this.pool, configInfo.mjCoreSchema);
+    // Get cache refresh interval from config (default to 0 if not set)
+    const cacheRefreshInterval = configInfo.databaseSettings?.metadataCacheRefreshInterval || 0;
+    
+    // Setup MemberJunction SQL Server client with cache refresh interval
+    const config = new SQLServerProviderConfigData(this.pool, configInfo.mjCoreSchema, cacheRefreshInterval);
     await setupSQLServerClient(config);
-    LogStatus('Database connection established');
+    
+    // Initialize metadata and log entity count like MJServer does
+    const md = new Metadata();
+    LogStatus(`Database connection established. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+    
+    // Create data sources array
+    this.dataSources = [new DataSourceInfo({
+      dataSource: this.pool, 
+      type: 'Read-Write', 
+      host: dbHost, 
+      port: dbPort, 
+      database: dbDatabase, 
+      userName: dbUsername
+    })];
+    
+    // Establish a second read-only connection if credentials are provided
+    if (dbReadOnlyUsername && dbReadOnlyPassword) {
+      const readOnlyConfig = {
+        ...createMSSQLConfig(),
+        user: dbReadOnlyUsername,
+        password: dbReadOnlyPassword,
+      };
+      this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+      await this.readOnlyPool.connect();
+      
+      // Add read-only pool to data sources
+      this.dataSources.push(new DataSourceInfo({
+        dataSource: this.readOnlyPool, 
+        type: 'Read-Only', 
+        host: dbHost, 
+        port: dbPort, 
+        database: dbDatabase, 
+        userName: dbReadOnlyUsername
+      }));
+      LogStatus('Read-only connection pool has been initialized.');
+    }
   }
   
   /**
@@ -411,9 +437,19 @@ export class ComponentRegistryAPIServer {
   }
   
   /**
+   * Generate SHA-256 hash of component specification
+   * @param specification - The component specification JSON string
+   * @returns SHA-256 hash as hex string
+   */
+  protected generateSpecificationHash(specification: string): string {
+    return createHash('sha256').update(specification).digest('hex');
+  }
+
+  /**
    * Handler for GET /api/v1/components/:namespace/:name
    * Get a specific component by namespace and name.
    * Optionally specify a version with ?version=x.x.x query parameter.
+   * Optionally specify a hash with ?hash=abc123 to enable caching (returns 304 if unchanged).
    * 
    * @protected
    * @virtual
@@ -421,7 +457,7 @@ export class ComponentRegistryAPIServer {
   protected async getComponent(req: Request, res: Response): Promise<void> {
     try {
       const { namespace, name } = req.params;
-      const { version } = req.query;
+      const { version, hash } = req.query;
       
       // Escape single quotes in parameters
       const escapedNamespace = namespace.replace(/'/g, "''");
@@ -448,12 +484,31 @@ export class ComponentRegistryAPIServer {
       }
       
       const component = result.Results[0];
+      
+      // Generate hash of the current specification
+      const currentHash = this.generateSpecificationHash(component.Specification);
+      
+      // If client provided a hash and it matches, return 304 Not Modified
+      if (hash && typeof hash === 'string' && hash === currentHash) {
+        res.status(304).json({
+          message: 'Not modified',
+          hash: currentHash,
+          id: component.ID,
+          namespace: component.Namespace,
+          name: component.Name,
+          version: component.Version
+        });
+        return;
+      }
+      
+      // Return full specification with hash
       res.json({
         id: component.ID,
         namespace: component.Namespace,
         name: component.Name,
         version: component.Version,
-        specification: JSON.parse(component.Specification)
+        specification: JSON.parse(component.Specification),
+        hash: currentHash
       });
     } catch (error) {
       LogError(`Failed to fetch component: ${error instanceof Error ? error.message : String(error)}`);

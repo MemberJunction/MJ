@@ -114,6 +114,21 @@ const authProviderSchema = z.object({
   domain: z.string().optional(),
 }).passthrough(); // Allow additional provider-specific fields
 
+const componentRegistrySchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  apiKey: z.string().optional(),
+  cache: z.boolean().optional().default(true),
+  timeout: z.number().optional(),
+  retryPolicy: z.object({
+    maxRetries: z.number().optional(),
+    initialDelay: z.number().optional(),
+    maxDelay: z.number().optional(),
+    backoffMultiplier: z.number().optional(),
+  }).optional(),
+  headers: z.record(z.string()).optional(),
+}).passthrough(); // Allow additional fields
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -122,6 +137,7 @@ const configInfoSchema = z.object({
   askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
   authProviders: z.array(authProviderSchema).optional(),
+  componentRegistries: z.array(componentRegistrySchema).optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -162,6 +178,7 @@ export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
+export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();

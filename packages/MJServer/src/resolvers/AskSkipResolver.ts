@@ -54,7 +54,7 @@ import {
   UserNotificationEntity,
   AIAgentEntityExtended
 } from '@memberjunction/core-entities';
-import { apiKey, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
+import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -731,7 +731,7 @@ export class AskSkipResolver {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
 
-    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, this.buildSkipPostHeaders());
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -792,7 +792,7 @@ export class AskSkipResolver {
     LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
     try {
-      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
+      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, this.buildSkipPostHeaders());
 
       if (response && response.length > 0) {
         // the last object in the response array is the final response from the Skip API
@@ -1065,7 +1065,7 @@ cycle.`);
       // Favors public URL for conciseness or when behind a proxy for local development
       // otherwise uses base URL and GraphQL port/path from configuration
       callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
-      callingServerAPIKey: accessToken ? apiKey : undefined,
+      callingServerAPIKey: accessToken ? callbackAPIKey : undefined,
       callingServerAccessToken: accessToken ? accessToken.Token : undefined
     };
   }
@@ -2462,7 +2462,7 @@ cycle.`);
         skipConfigInfo.chatURL,
         input,
         true,
-        null,
+        this.buildSkipPostHeaders(),
         (message: {
           type: string;
           value: {
@@ -2606,6 +2606,12 @@ cycle.`);
         AIMessageConversationDetailId: '',
       };
     }
+  }
+
+  protected buildSkipPostHeaders(): { [key: string]: string } {
+    return {
+      'x-api-key': configInfo.askSkip?.apiKey ?? '',
+    };
   }
 
   /**

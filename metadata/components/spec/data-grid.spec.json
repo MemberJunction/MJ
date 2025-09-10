@@ -1,0 +1,177 @@
+{
+  "name": "DataGrid",
+  "title": "Data Grid",
+  "description": "A flexible, MJ-aware data grid component wrapping Ant Design Table with sorting, filtering, paging, and selection capabilities",
+  "type": "table",
+  "location": "embedded",
+  "functionalRequirements": "## Generic Reusable Data Grid for Drill-Down Scenarios\n\n### Core Purpose\n- **Generic, reusable table component** suitable for any application needing tabular data display\n- **Ideal for drill-down interfaces** where users need to explore, filter, and select records for detailed inspection\n- **Master-detail pattern support** through row selection events that trigger detail views or navigation\n- **Universal data grid** that works with any entity type or data structure\n\n### Key Capabilities\n- Display any entity or record collection in a configurable table format\n- Support drill-down workflows through row selection and event emission\n- Enable exploratory data analysis with sorting, filtering, and paging\n- Provide multiple selection patterns for bulk operations or single-record drill-down\n- Text-based search with highlighting to quickly locate records of interest\n- Emit comprehensive events for integration with parent components and navigation\n- Responsive design adapts to any container or screen size\n- Loading states for async data and empty states with contextual messages\n- Real-time filter match counting for user feedback\n\n### Reusability Features\n- Completely data-agnostic - works with any array of objects\n- Configurable column selection through simple fields array\n- All features toggleable via props for different use cases\n- Standard event interface for easy integration\n- No hard dependencies on specific data structures",
+  "technicalDesign": "## Generic Reusable Component Architecture\n\n### Design Philosophy\n- **Fully generic and reusable** - no coupling to specific entities or schemas\n- **Drill-down optimized** - events and selection modes designed for master-detail patterns\n- **Composable** - easily embedded in dashboards, forms, or standalone pages\n- **Framework-agnostic data model** - accepts any array of objects\n\n### Component Structure\n- Single, self-contained component wrapping Ant Design Table\n- Zero assumptions about data structure beyond array of objects\n- React hooks for local state management - no external state required\n- Debounced filter input for performance with large datasets\n- Memoized data processing prevents unnecessary re-renders\n\n### Drill-Down Support\n1. Row selection triggers events with full record data\n2. Parent components can navigate or show details based on selection\n3. Multiple selection modes support different drill-down patterns\n4. Filter and sort state can be persisted for return navigation\n5. Events provide all context needed for drill-down actions\n\n### Integration Patterns\n- **Master-Detail**: Use with detail panels for record exploration\n- **Navigation**: Selection events trigger route changes\n- **Modal Details**: Open detail modals on row selection\n- **Bulk Operations**: Multi-select for batch processing\n- **Report Tables**: Display-only mode for read-only data\n- **Search Results**: Filterable, sortable result sets\n\n### Key Technical Features\n- Dynamic column generation from any field array\n- Smart type detection for sort comparisons\n- Highlight filter matches across all visible cells\n- Configurable debounce prevents filter thrashing\n- Row selection supports checkbox, radio, or row-click patterns\n- Events include full context (selected data, filter state, page info)",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Component is data-agnostic and works with any entity data passed via props"
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity being displayed",
+      "required": true
+    },
+    {
+      "name": "data",
+      "type": "Array<object>",
+      "description": "Array of entity objects to display",
+      "required": true
+    },
+    {
+      "name": "fields",
+      "type": "Array<string>",
+      "description": "Array of field names to display as columns, in order. If not provided, all fields will be displayed.",
+      "required": false
+    },
+    {
+      "name": "sorting",
+      "type": "boolean",
+      "description": "Enable/disable column sorting",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "paging",
+      "type": "boolean",
+      "description": "Enable/disable pagination",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "pageSize",
+      "type": "number",
+      "description": "Number of rows per page when paging is enabled",
+      "required": false,
+      "defaultValue": 10
+    },
+    {
+      "name": "filtering",
+      "type": "boolean",
+      "description": "Enable/disable text filtering",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "highlightFilterMatches",
+      "type": "boolean",
+      "description": "Highlight matching text when filtering",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "filterFields",
+      "type": "Array<string>",
+      "description": "Fields to search when filtering. If not specified, searches all fields",
+      "required": false
+    },
+    {
+      "name": "filterDebounceTime",
+      "type": "number",
+      "description": "Debounce time in ms for filter input",
+      "required": false,
+      "defaultValue": 300
+    },
+    {
+      "name": "selectionMode",
+      "type": "'none' | 'checkbox' | 'radio' | 'row'",
+      "description": "Row selection mode: 'none', 'checkbox', 'radio', or 'row'",
+      "required": false,
+      "defaultValue": "none",
+      "possibleValues": ["none", "checkbox", "radio", "row"]
+    },
+    {
+      "name": "longTextDisplay",
+      "type": "'truncate' | 'expand' | 'tooltip' | 'wrap' | 'none'",
+      "description": "How to display long text that exceeds the threshold: 'truncate' shows ellipsis, 'expand' allows click to expand/collapse, 'tooltip' shows full text on hover, 'wrap' shows all text with wrapping, 'none' uses default behavior",
+      "required": false,
+      "defaultValue": "expand",
+      "possibleValues": ["truncate", "expand", "tooltip", "wrap", "none"]
+    },
+    {
+      "name": "longTextThreshold",
+      "type": "number",
+      "description": "Number of characters before long text display behavior is triggered",
+      "required": false,
+      "defaultValue": 100
+    },
+    {
+      "name": "autoFitColumns",
+      "type": "boolean",
+      "description": "When true, columns auto-fit to container width. When false, columns use fixed widths with horizontal scrolling",
+      "required": false,
+      "defaultValue": true
+    }
+  ],
+  "events": [
+    {
+      "name": "selectionChanged",
+      "description": "Fired when row selection changes",
+      "parameters": [
+        {
+          "name": "selectedRows",
+          "type": "Array<object>",
+          "description": "Array of selected entity objects"
+        }
+      ]
+    },
+    {
+      "name": "pageChanged",
+      "description": "Fired when page changes",
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "type": "number",
+          "description": "Current page number (0-based)"
+        },
+        {
+          "name": "visibleRows",
+          "type": "Array<object>",
+          "description": "Array of entity objects visible on current page"
+        }
+      ]
+    },
+    {
+      "name": "sortChanged",
+      "description": "Fired when sort configuration changes",
+      "parameters": [
+        {
+          "name": "sortState",
+          "type": "{column: string, direction: 'asc' | 'desc'}",
+          "description": "Object with 'column' and 'direction' properties"
+        }
+      ]
+    },
+    {
+      "name": "filterChanged",
+      "description": "Fired when filter changes",
+      "parameters": [
+        {
+          "name": "filterValue",
+          "type": "string",
+          "description": "Current filter text"
+        },
+        {
+          "name": "matchingData",
+          "type": "Array<object>",
+          "description": "Array of all matching entity objects"
+        }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "antd",
+      "version": "5.12.0",
+      "globalVariable": "antd"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../code/data-grid.js",
+  "exampleUsage": "<DataGrid\n  entityName=\"Products\"\n  data={products}\n  fields={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"checkbox\"\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>"
+}

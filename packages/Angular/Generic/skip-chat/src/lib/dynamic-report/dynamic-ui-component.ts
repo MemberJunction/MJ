@@ -49,6 +49,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     
     // Cache for user states only - component specs come from data
     public userStates = new Map<number, any>();
+    // Cache for resolved component specs to persist across tab switches
+    private resolvedSpecCache = new Map<number, ComponentSpec>();
     // Note: utilities are now auto-initialized by mj-react-component if not provided
     public componentStyles: ComponentStyles | null = null;
     
@@ -402,10 +404,34 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
     
     /**
+     * Get the resolved spec for an option, using cache to persist across tab switches
+     */
+    private getResolvedSpec(option: ComponentOption): ComponentSpec {
+        const optionIndex = this.componentOptions.indexOf(option);
+        
+        // Check cache first
+        if (this.resolvedSpecCache.has(optionIndex)) {
+            return this.resolvedSpecCache.get(optionIndex)!;
+        }
+        
+        // Try to get from React component
+        const reactComponent = this.getReactComponentForOption(optionIndex);
+        if (reactComponent?.resolvedComponentSpec) {
+            // Cache it for future use (already enriched by the wrapper)
+            this.resolvedSpecCache.set(optionIndex, reactComponent.resolvedComponentSpec);
+            return reactComponent.resolvedComponentSpec;
+        }
+        
+        // Fallback to original spec
+        return option.option;
+    }
+
+    /**
      * Format functional requirements as HTML
      */
     public getFormattedFunctionalRequirements(option: ComponentOption): any {
-        const requirements = option.option.functionalRequirements || 'No functional requirements specified.';
+        const spec = this.getResolvedSpec(option);
+        const requirements = spec.functionalRequirements || 'No functional requirements specified.';
         const html = marked.parse(requirements);
         return this.sanitizer.sanitize(1, html); // 1 = SecurityContext.HTML
     }
@@ -414,7 +440,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
      * Format data requirements as HTML
      */
     public getFormattedDataRequirements(option: ComponentOption): any {
-        const dataReq = option.option.dataRequirements;
+        const spec = this.getResolvedSpec(option);
+        const dataReq = spec.dataRequirements;
         if (!dataReq) {
             return this.sanitizer.sanitize(1, '<p>No data requirements specified.</p>');
         }
@@ -470,7 +497,8 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
      * Format technical design as HTML
      */
     public getFormattedTechnicalDesign(option: ComponentOption): any {
-        const design = option.option.technicalDesign || 'No technical design specified.';
+        const spec = this.getResolvedSpec(option);
+        const design = spec.technicalDesign || 'No technical design specified.';
         const html = marked.parse(design);
         return this.sanitizer.sanitize(1, html);
     }
@@ -480,18 +508,20 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
      */
     public getComponentCode(option: ComponentOption): string {
         try {
-            return BuildComponentCompleteCode(option.option);
+            const spec = this.getResolvedSpec(option);
+            return BuildComponentCompleteCode(spec);
         } catch (e) {
             return `// Error building complete component code:\n// ${e}`;
         }
     }
 
     /**
-     * Get the component spec
+     * Get the component spec (resolved version with all details for registry components)
      */
     public getComponentSpec(option: ComponentOption): string {
         try {
-            return JSON.stringify(option.option, null, 2);
+            const spec = this.getResolvedSpec(option);
+            return JSON.stringify(spec, null, 2);
         } catch (e) {
             return `// Error building complete component spec:\n// ${e}`;
         }
@@ -564,6 +594,10 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
         const hadData = this._skipData ? true : false;
         this._skipData = d;
+        
+        // Clear resolved spec cache when new data is set
+        this.resolvedSpecCache.clear();
+        
         if (d) {
             // For backward compatibility, check if we have component options
             if (d.componentOptions && d.componentOptions.length > 0) {
@@ -596,6 +630,9 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 const rankB = b.AIRank ?? Number.MAX_SAFE_INTEGER;
                 return rankA - rankB;
             });
+            
+            // Clear cache when component options change
+            this.resolvedSpecCache.clear();
             
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;

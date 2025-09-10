@@ -1,0 +1,59 @@
+{
+  "name": "EntityGrid",
+  "title": "Entity Grid",
+  "description": "A specialized grid component that displays all entities in the system using the generic DataGrid component",
+  "type": "table",
+  "location": "embedded",
+  "functionalRequirements": "## Simple Entity Viewer\n\n### Purpose\n- Provide a zero-configuration grid for viewing system entities\n- Demonstrate simple composition by wrapping DataGrid\n- Automatically load and display all entities\n\n### Key Features\n- Auto-loads all entities on mount\n- Pre-configured optimal columns for entity display\n- All DataGrid features available (filtering, sorting, paging)\n- No configuration needed - just drop in and use",
+  "technicalDesign": "## Minimal Wrapper Design\n\n### Architecture\n- Ultra-thin wrapper around DataGrid\n- Uses RunView to fetch entities\n- Passes data directly to DataGrid\n- No props or events - purely self-contained\n\n### Registry Pattern\n- Loads DataGrid from components registry\n- Shows component composition without coupling",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [
+      {
+        "name": "Entities",
+        "description": "System entities metadata",
+        "displayFields": [
+          "ID",
+          "Name",
+          "DisplayName",
+          "Description",
+          "SchemaName",
+          "BaseTable",
+          "BaseView",
+          "Status",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "filterFields": [
+          "Name",
+          "DisplayName",
+          "Description",
+          "SchemaName",
+          "BaseTable",
+          "BaseView"
+        ],
+        "sortFields": [
+          "Name",
+          "DisplayName",
+          "SchemaName",
+          "__mj_CreatedAt",
+          "__mj_UpdatedAt"
+        ],
+        "usageContext": "Display all system entities in a filterable, sortable grid"
+      }
+    ]
+  },
+  "properties": [],
+  "events": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry",
+      "description": "Generic data grid"
+    }
+  ],
+  "libraries": [],
+  "code": "@file:../code/entity-grid.js",
+  "exampleUsage": "<EntityGrid\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
+}

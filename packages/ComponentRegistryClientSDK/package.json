@@ -1,0 +1,26 @@
+{
+  "name": "@memberjunction/component-registry-client-sdk",
+  "version": "2.99.0",
+  "description": "MemberJunction: Component Registry Client SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@memberjunction/global": "2.99.0",
+    "@memberjunction/core": "2.99.0",
+    "@memberjunction/interactive-component-types": "2.99.0"
+  }
+}

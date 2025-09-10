@@ -17,6 +17,34 @@ import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
  
 
+/**
+ * Pre-resolve a component spec for browser execution
+ * Converts registry components to embedded format with all code included
+ */
+async function preResolveComponentSpec(
+  spec: ComponentSpec,
+  contextUser?: UserInfo
+): Promise<ComponentSpec> {
+  // If already embedded with code, return as-is
+  if (spec.location === 'embedded' && spec.code) {
+    return spec;
+  }
+
+  // For registry components, we need to fetch and embed everything
+  if (spec.location === 'registry' && spec.registry) {
+    // In test harness context, we likely don't have GraphQL access
+    // Registry components would need to be pre-resolved before being passed to test harness
+    console.warn(`Registry component ${spec.name} cannot be resolved in test harness context - GraphQL not available`);
+    console.warn('Registry components should be pre-resolved before passing to test harness');
+    
+    // Return the spec as-is, which will likely fail in browser but at least won't crash here
+    return spec;
+  }
+
+  // For other types, return as-is
+  return spec;
+}
+
 export interface ComponentExecutionOptions {
   componentSpec: ComponentSpec;
   props?: Record<string, any>;
@@ -207,6 +235,16 @@ export class ComponentRunner {
         console.log('  - total available libraries in metadata:', allLibraries?.length || 0);
       }
 
+      // // Pre-resolve the spec for browser execution (convert registry components to embedded)
+      // const resolvedSpec = await preResolveComponentSpec(options.componentSpec, options.contextUser);
+      
+      // if (debug) {
+      //   console.log('📦 Pre-resolved spec for browser execution:', {
+      //     original: { location: options.componentSpec.location, registry: options.componentSpec.registry },
+      //     resolved: { location: resolvedSpec.location, registry: resolvedSpec.registry, hasCode: !!resolvedSpec.code }
+      //   });
+      // }
+
       // Execute the component using the real React runtime with timeout (Recommendation #1)
       const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
@@ -228,6 +266,7 @@ export class ComponentRunner {
             ComponentCompiler,
             ComponentRegistry,
             ComponentHierarchyRegistrar,
+            ComponentManager,
             SetupStyles
           } = MJRuntime;
 
@@ -286,7 +325,16 @@ export class ComponentRunner {
           // IMPORTANT: Configure the LibraryRegistry in the browser context
           // This is needed for the compiler to know about approved libraries
           if ((window as any).MJReactRuntime && (window as any).MJReactRuntime.LibraryRegistry) {
-            const { LibraryRegistry } = (window as any).MJReactRuntime;
+            const { LibraryRegistry, LibraryLoader } = (window as any).MJReactRuntime;
+            
+            // Enable progressive delay for library initialization in test harness
+            if (LibraryLoader) {
+              LibraryLoader.enableProgressiveDelay = true;
+              if (debug) {
+                console.log('⚙️ Enabled progressive delay for library initialization');
+              }
+            }
+            
             // Configure the registry with the component libraries
             // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
             await LibraryRegistry.Config(false, componentLibraries || []);
@@ -297,10 +345,12 @@ export class ComponentRunner {
 
           const registry = new ComponentRegistry();
           
-          const registrar = new ComponentHierarchyRegistrar(
+          // NEW: Use ComponentManager instead of ComponentHierarchyRegistrar
+          const manager = new ComponentManager(
             compiler,
             registry,
-            runtimeContext
+            runtimeContext,
+            { debug: true, enableUsageTracking: false } // Force debug on for better diagnostics
           );
 
           // Use the utilities we already created with mock metadata
@@ -359,13 +409,60 @@ export class ComponentRunner {
           }
           
           let registrationResult;
+          let loadResult: any; // Declare loadResult in outer scope
           try {
-            registrationResult = await registrar.registerHierarchy(spec, {
-              styles,
-              namespace: 'Global',
-              version: 'v1', // Use v1 to match the registry defaults
-              allLibraries: componentLibraries || [] // Pass the component libraries for LibraryRegistry
+            if (debug) {
+              console.log('📋 [BROWSER] Spec before loadHierarchy:', {
+                name: spec.name,
+                location: spec.location,
+                registry: spec.registry,
+                hasCode: !!spec.code,
+                codeLength: spec.code?.length,
+                libraries: spec.libraries,
+                dependencies: spec.dependencies?.map((d: any) => ({ 
+                  name: d.name, 
+                  location: d.location,
+                  hasCode: !!d.code
+                }))
+              });
+            }
+            
+            // NEW: Use ComponentManager.loadHierarchy instead of registrar.registerHierarchy
+            // Note: In browser context, we don't have access to contextUser or database
+            // This is fine for embedded components which are self-contained
+            loadResult = await manager.loadHierarchy(spec, {
+              contextUser: undefined, // No user context in browser
+              defaultNamespace: 'Global',
+              defaultVersion: 'v1',
+              returnType: 'both',
+              resolutionMode: 'embed',  // Convert to embedded format for browser execution
+              allLibraries: componentLibraries || []  // Pass libraries for compiler
             });
+            
+            if (debug) {
+              console.log('📋 [BROWSER] LoadHierarchy result:', {
+                success: loadResult.success,
+                rootComponent: !!loadResult.rootComponent,
+                resolvedSpec: loadResult.resolvedSpec ? {
+                  name: loadResult.resolvedSpec.name,
+                  location: loadResult.resolvedSpec.location,
+                  registry: loadResult.resolvedSpec.registry,
+                  libraries: loadResult.resolvedSpec.libraries,
+                  hasCode: !!loadResult.resolvedSpec.code
+                } : null,
+                loadedComponents: loadResult.loadedComponents,
+                errors: loadResult.errors
+              });
+            }
+            
+            // Convert to old format for compatibility
+            registrationResult = {
+              success: loadResult.success,
+              registeredComponents: loadResult.loadedComponents,
+              errors: loadResult.errors.map((e: any) => ({ componentName: e.componentName || '', error: e.message, phase: e.phase })),
+              warnings: [],
+              resolvedSpec: loadResult.resolvedSpec
+            };
           } catch (registrationError: any) {
             // Capture the actual error before it gets obscured
             console.error('🔴 Component registration error:', registrationError);
@@ -401,13 +498,17 @@ export class ComponentRunner {
             // We can see what was registered through the registrationResult
           }
 
-          // Get the root component object - explicitly pass namespace and version
-          const RootComponentObject = registry.get(spec.name, 'Global', 'v1');
+          // NEW: With ComponentManager, we already have the components from loadResult
+          if (!loadResult) {
+            throw new Error('Component loading failed - no result returned');
+          }
+          
+          const RootComponentObject = loadResult.rootComponent;
           if (!RootComponentObject) {
             // Enhanced error message with debugging info
-            console.error('Failed to find component:', spec.name);
-            console.error('Registry keys:', Array.from(registry.components.keys()));
-            throw new Error('Root component not found: ' + spec.name);
+            console.error('Failed to load component:', spec.name);
+            console.error('Load errors:', loadResult.errors);
+            throw new Error('Root component not loaded: ' + spec.name);
           }
           
           // Extract the React component from the ComponentObject
@@ -416,17 +517,38 @@ export class ComponentRunner {
             throw new Error('Component object does not contain a valid React component');
           }
 
-          // Get all registered component objects and extract React components
-          const componentObjects = registry.getAll('Global', 'v1');
-          const components: Record<string, any> = {};
-          for (const [name, componentObj] of Object.entries(componentObjects)) {
-            // ComponentObject has a component property that's the React component
-            components[name] = (componentObj as any).component;
-          }
+          // Get all loaded components from the result
+          // ComponentManager now returns unwrapped components directly
+          const components: Record<string, any> = loadResult.components || {};
           
           if (debug) {
             console.log('📚 Registered components for dependencies:', Object.keys(components));
             console.log('📋 Component spec dependencies:', spec.dependencies?.map((d: ComponentSpec) => d.name) || []);
+            
+            // Check what libraries are actually available in global scope
+            console.log('🌍 [BROWSER] Global library check after loading:', {
+              ApexCharts: typeof (window as any).ApexCharts,
+              antd: typeof (window as any).antd,
+              React: typeof (window as any).React,
+              ReactDOM: typeof (window as any).ReactDOM,
+              windowKeys: Object.keys(window).filter(k => 
+                k.toLowerCase().includes('apex') || 
+                k.toLowerCase().includes('antd') ||
+                k === 'ApexCharts' ||
+                k === 'antd'
+              )
+            });
+            
+            // If libraries were supposed to be loaded, check their actual presence
+            if (spec.libraries && spec.libraries.length > 0) {
+              console.log('🔍 [BROWSER] Checking required libraries:');
+              for (const lib of spec.libraries) {
+                const globalVar = lib.globalVariable;
+                const exists = !!(window as any)[globalVar];
+                const type = typeof (window as any)[globalVar];
+                console.log(`  - ${lib.name} (${globalVar}): ${exists ? `✅ Present (${type})` : '❌ Missing'}`);
+              }
+            }
           }
           
           // Note: Library components are now handled by the runtime's compiler

@@ -8,6 +8,7 @@
 import { ComponentCompiler } from './compiler';
 import { ComponentRegistry } from './registry';
 import { ComponentResolver } from './registry';
+import { ComponentManager } from './component-manager';
 
 // Export all types
 export * from './types';
@@ -30,8 +31,18 @@ export {
   ComponentResolver,
   ComponentSpec,
   ResolvedComponents,
-  ComponentRegistryService
+  ComponentRegistryService,
+  IComponentRegistryClient
 } from './registry';
+
+// Export unified ComponentManager
+export { ComponentManager } from './component-manager';
+export type {
+  LoadOptions,
+  LoadResult,
+  HierarchyResult,
+  ComponentManagerConfig
+} from './component-manager';
 
 // Export runtime APIs
 export {
@@ -163,6 +174,7 @@ export function createReactRuntime(
   config?: {
     compiler?: Partial<import('./types').CompilerConfig>;
     registry?: Partial<import('./types').RegistryConfig>;
+    manager?: Partial<import('./component-manager').ComponentManagerConfig>;
   },
   runtimeContext?: import('./types').RuntimeContext,
   debug: boolean = false
@@ -178,16 +190,30 @@ export function createReactRuntime(
     debug: config?.registry?.debug ?? debug
   };
   
+  const managerConfig = {
+    ...config?.manager,
+    debug: config?.manager?.debug ?? debug
+  };
+  
   const compiler = new ComponentCompiler(compilerConfig);
   compiler.setBabelInstance(babelInstance);
   
   const registry = new ComponentRegistry(registryConfig);
   const resolver = new ComponentResolver(registry, compiler, runtimeContext);
+  
+  // Create the unified ComponentManager
+  const manager = new ComponentManager(
+    compiler,
+    registry,
+    runtimeContext || { React: null, ReactDOM: null },
+    managerConfig
+  );
 
   return {
     compiler,
     registry,
     resolver,
+    manager,  // New unified manager
     version: VERSION,
     debug
   };
