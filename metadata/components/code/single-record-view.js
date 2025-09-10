@@ -11,6 +11,7 @@ function SingleRecordView({
   highlightFields = [],
   allowOpenRecord = false,
   onFieldClicked,
+  onOpenRecord,
   utilities,
   styles,
   components,
@@ -22,6 +23,121 @@ function SingleRecordView({
   
   // Get OpenRecordButton component from registry if needed
   const OpenRecordButton = allowOpenRecord ? components?.['OpenRecordButton'] : null;
+  
+  // Handle open record button click with cancelable event - moved outside useMemo
+  const handleOpenRecordClick = React.useCallback((recordToOpen, entityNameToOpen) => {
+    console.log('handleOpenRecordClick called for:', entityNameToOpen, recordToOpen);
+    
+    // Get primary keys from entity metadata
+    let primaryKeys = [];
+    if (entityInfo) {
+      // Handle different PrimaryKey structures in MJ metadata
+      let primaryKeyFields = [];
+      
+      if (entityInfo.PrimaryKey) {
+        if (entityInfo.PrimaryKey.Columns && Array.isArray(entityInfo.PrimaryKey.Columns)) {
+          // Multi-column primary key
+          primaryKeyFields = entityInfo.PrimaryKey.Columns;
+        } else if (entityInfo.PrimaryKey.Name) {
+          // Single column primary key with Name property
+          primaryKeyFields = [entityInfo.PrimaryKey.Name];
+        } else if (typeof entityInfo.PrimaryKey === 'string') {
+          // Primary key as string
+          primaryKeyFields = [entityInfo.PrimaryKey];
+        }
+      }
+      
+      // Fallback to ID if no primary key found
+      if (primaryKeyFields.length === 0) {
+        primaryKeyFields = ['ID'];
+      }
+      
+      primaryKeys = primaryKeyFields.map(fieldName => ({
+        FieldName: fieldName,
+        Value: recordToOpen[fieldName]
+      }));
+    }
+    
+    // Create cancelable event object
+    const eventData = {
+      record: recordToOpen,
+      entityName: entityNameToOpen,
+      cancel: false, // Parent can set this to true to cancel
+      primaryKeys // Populated with actual primary key values
+    };
+    
+    // Fire the event if handler exists
+    if (onOpenRecord) {
+      onOpenRecord(eventData);
+    }
+    
+    // Check if the event was canceled
+    if (eventData.cancel) {
+      return false; // Return false to prevent default action
+    }
+    
+    // If not canceled (or no handler), proceed with default behavior
+    // Call the OpenEntityRecord callback directly
+    if (callbacks && callbacks.OpenEntityRecord && primaryKeys.length > 0) {
+      callbacks.OpenEntityRecord(entityNameToOpen, primaryKeys);
+    } else {
+      console.error('Unable to open record - missing callback or primary keys', {
+        hasCallbacks: !!callbacks,
+        hasOpenEntityRecord: !!(callbacks && callbacks.OpenEntityRecord),
+        primaryKeysLength: primaryKeys.length
+      });
+    }
+    
+    return true;
+  }, [entityInfo, onOpenRecord, callbacks]);
+  
+  // Create wrapped OpenRecordButton with intercepted click
+  const WrappedOpenRecordButton = React.useMemo(() => {
+    if (!OpenRecordButton) return null;
+    
+    return (props) => {
+      const handleWrapperClick = (e) => {
+        // Stop all propagation first
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Call the centralized handler
+        handleOpenRecordClick(props.record, props.entityName);
+      };
+      
+      return (
+        <div 
+          onClick={handleWrapperClick} 
+          style={{ 
+            display: 'inline-block',
+            cursor: 'pointer'
+          }}
+        >
+          {/* Render a button that looks like OpenRecordButton but doesn't have onClick */}
+          <button
+            style={{
+              padding: props.size === 'small' ? '4px 8px' : props.size === 'large' ? '12px 24px' : '8px 16px',
+              backgroundColor: props.variant === 'primary' ? '#1890ff' : props.variant === 'link' ? 'transparent' : '#fff',
+              color: props.variant === 'primary' ? '#fff' : props.variant === 'link' ? '#1890ff' : '#333',
+              border: props.variant === 'link' ? 'none' : props.variant === 'primary' ? '1px solid #1890ff' : '1px solid #d9d9d9',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: props.size === 'small' ? '12px' : props.size === 'large' ? '16px' : '14px',
+              textDecoration: props.variant === 'link' ? 'underline' : 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.3s',
+              pointerEvents: 'none' // Prevent button from handling clicks
+            }}
+          >
+            {props.showIcon !== false && props.icon && <span>{props.icon}</span>}
+            {props.text || 'Open Record'}
+          </button>
+        </div>
+      );
+    };
+  }, [OpenRecordButton, handleOpenRecordClick]);
   
   // Load entity metadata
   React.useEffect(() => {
@@ -142,9 +258,16 @@ function SingleRecordView({
   // Handle field click
   const handleFieldClick = (fieldName, value) => {
     if (onFieldClicked) {
-      onFieldClicked({ fieldName, value });
+      const fieldInfo = getFieldInfo(fieldName);
+      onFieldClicked({ 
+        fieldName, 
+        value, 
+        fieldType: fieldInfo?.Type,
+        record 
+      });
     }
   };
+  
   
   // Render field based on layout
   const renderField = (fieldName) => {
@@ -292,9 +415,9 @@ function SingleRecordView({
         boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
       }}>
         {displayFields.map(renderField)}
-        {allowOpenRecord && OpenRecordButton && (
+        {allowOpenRecord && WrappedOpenRecordButton && (
           <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
-            <OpenRecordButton
+            <WrappedOpenRecordButton
               record={record}
               entityName={entityName}
               variant="primary"
@@ -323,9 +446,9 @@ function SingleRecordView({
             {displayFields.map(renderField)}
           </tbody>
         </table>
-        {allowOpenRecord && OpenRecordButton && (
+        {allowOpenRecord && WrappedOpenRecordButton && (
           <div style={{ marginTop: '12px' }}>
-            <OpenRecordButton
+            <WrappedOpenRecordButton
               record={record}
               entityName={entityName}
               variant="default"
@@ -350,9 +473,9 @@ function SingleRecordView({
         lineHeight: '1.8'
       }}>
         {displayFields.map(renderField)}
-        {allowOpenRecord && OpenRecordButton && (
+        {allowOpenRecord && WrappedOpenRecordButton && (
           <span style={{ marginLeft: '20px', display: 'inline-block' }}>
-            <OpenRecordButton
+            <WrappedOpenRecordButton
               record={record}
               entityName={entityName}
               variant="link"

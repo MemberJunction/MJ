@@ -4,8 +4,8 @@
   "description": "A simple button component that intelligently opens entity records using metadata to determine primary keys",
   "type": "navigation",
   "location": "embedded",
-  "functionalRequirements": "## Intelligent Record Opening Button\n\n### Core Purpose\n- **Smart record opening** - uses metadata to determine primary keys\n- **Zero configuration** - just needs entity name and record\n- **Handles complex keys** - supports composite primary keys\n- **MJ Explorer integration** - opens records in the standard way\n- **Minimal props** - abstracts all complexity\n\n### Key Capabilities\n- Automatically determines primary key fields from metadata\n- Handles single and composite primary keys\n- Extracts key values from record object\n- Customizable button text and styling\n- Disabled state when record missing\n- Error handling for missing metadata\n\n### Use Cases\n- Open buttons in data grids\n- Record cards with view actions\n- After-save navigation\n- Quick access in dashboards\n- Drill-down from charts",
-  "technicalDesign": "## Metadata-Driven Implementation\n\n### Design Philosophy\n- **Metadata aware** - uses entity metadata for intelligence\n- **Minimal surface area** - only entityName and record props\n- **Convention over configuration** - smart defaults\n- **Abstracted complexity** - handles all key logic internally\n\n### Technical Implementation\n- Looks up entity in utilities.md.Entities array\n- Finds primary key fields from entity metadata\n- Extracts key values from provided record\n- Builds proper OpenEntityRecord callback parameters\n- Handles both single and composite keys\n\n### Key Detection Logic\n1. Find entity by name in metadata\n2. Get primary key fields from entity definition\n3. Extract values from record for each key field\n4. Pass field/value pairs to OpenEntityRecord\n\n### Error Handling\n- Missing entity metadata\n- Record without key values\n- Invalid entity names\n- Callback failures",
+  "functionalRequirements": "Button that opens entity records using metadata-determined primary keys. Requires only entity name and record object. Auto-detects single/composite primary keys from metadata, extracts values from record. Configurable text, style, size. Uses: grid row actions, record cards, drill-down navigation, dashboard quick links.",
+  "technicalDesign": "Looks up entity in utilities.md.Entities → finds primary key fields → extracts values from record → calls OpenEntityRecord with field/value pairs. Handles single and composite keys automatically. Minimal props: just entityName and record. Error handling for missing metadata or key values.",
   "dataRequirements": {
     "mode": "props",
     "description": "Receives record data through props, uses metadata for key information"
@@ -13,7 +13,7 @@
   "properties": [
     {
       "name": "record",
-      "type": "object",
+      "type": "Record<string, any>",
       "description": "The entity record to open (must contain primary key fields)",
       "required": true
     },
@@ -75,7 +75,7 @@
       "parameters": [
         {
           "name": "record",
-          "type": "object",
+          "type": "Record<string, any>",
           "description": "The opened record"
         },
         {
@@ -85,7 +85,7 @@
         },
         {
           "name": "primaryKeys",
-          "type": "Array<object>",
+          "type": "Array<{ FieldName: string; Value: any }>",
           "description": "Primary key field/value pairs used to open"
         }
       ]

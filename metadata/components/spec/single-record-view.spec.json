@@ -4,8 +4,8 @@
   "description": "A component that displays a single entity record in a formatted view with metadata-driven field formatting",
   "type": "form",
   "location": "embedded",
-  "functionalRequirements": "## Single Record Display Component\n\n### Core Purpose\n- **Record visualization** - displays entity record fields in clean format\n- **Metadata-driven formatting** - uses field types for proper display\n- **Selective field display** - shows only specified fields in order\n- **Smart formatting** - dates, numbers, currencies, booleans\n- **Compact or expanded** - multiple layout options\n\n### Key Capabilities\n- Displays record fields in specified order\n- Automatic formatting based on field types\n- Currency formatting for amount fields\n- Date formatting with locale support\n- Boolean display as Yes/No or checkmarks\n- Null/empty value handling\n- Related entity name display\n- Long text truncation with expand option\n- Responsive layout options\n\n### Use Cases\n- Record detail panels\n- Card views in lists\n- Tooltip previews\n- Summary displays\n- Print-friendly views\n- Email templates",
-  "technicalDesign": "## Metadata-Driven Display Architecture\n\n### Design Philosophy\n- **Metadata awareness** - uses entity field definitions\n- **Type-based formatting** - automatic based on data types\n- **Minimal configuration** - smart defaults\n- **Accessibility** - semantic HTML and ARIA labels\n\n### Technical Implementation\n- Uses entity metadata for field information\n- Applies formatting based on field types\n- Handles various data types appropriately\n- Supports custom field ordering\n- Responsive to container size\n\n### Field Type Formatting\n- **Strings**: Trim and display as-is\n- **Numbers**: Locale formatting with commas\n- **Decimals**: 2 decimal places\n- **Currency**: $ symbol and formatting\n- **Dates**: Locale date string\n- **Booleans**: Yes/No or ✓/✗\n- **IDs**: Hidden by default\n- **Long text**: Truncate with ellipsis\n\n### Layout Options\n- **List**: Label-value pairs vertically\n- **Table**: Two-column layout\n- **Inline**: Compact horizontal layout\n- **Card**: Styled card with sections",
+  "functionalRequirements": "Displays single entity record with metadata-driven field formatting. Auto-formats dates, numbers, currencies, booleans based on field types. Supports field selection/ordering, multiple layouts (list/table/card/inline), text truncation, empty value handling. Uses: detail panels, card views, tooltips, summaries, print views.",
+  "technicalDesign": "Uses entity metadata to determine field types → applies type-specific formatting (dates: locale string, numbers: commas, currency: $, booleans: Yes/No). Layout options: list (vertical pairs), table (2-column), inline (horizontal), card (styled sections). Supports field selection, custom ordering, text truncation, null handling.",
   "dataRequirements": {
     "mode": "props",
     "description": "Receives record data through props"
@@ -13,7 +13,7 @@
   "properties": [
     {
       "name": "record",
-      "type": "object",
+      "type": "Record<string, any>",
       "description": "The entity record to display",
       "required": true
     },
@@ -93,14 +93,21 @@
       "description": "Fired when a field value is clicked",
       "parameters": [
         {
-          "name": "fieldName",
-          "type": "string",
-          "description": "Name of the clicked field"
-        },
+          "name": "eventData",
+          "type": "{ fieldName: string; value: any; fieldType?: string; record: Record<string, any> }",
+          "description": "Object containing field name, value, optional field type, and the full record"
+        }
+      ]
+    },
+    {
+      "name": "openRecord",
+      "description": "Cancelable event fired before opening a record. Set eventData.cancel = true to prevent default behavior",
+      "cancelable": true,
+      "parameters": [
         {
-          "name": "value",
-          "type": "any",
-          "description": "Value of the field"
+          "name": "eventData",
+          "type": "{ record: Record<string, any>; entityName: string; cancel: boolean; primaryKeys: Array<{ FieldName: string; Value: any }> }",
+          "description": "Cancelable event object. Set cancel to true to prevent the record from opening"
         }
       ]
     }
@@ -110,10 +117,9 @@
       "name": "OpenRecordButton",
       "namespace": "Generic/Navigation",
       "location": "registry",
-      "registry": "MJ",
       "description": "Button to open entity records"
     }
   ],
   "code": "@file:../code/single-record-view.js",
-  "exampleUsage": "<SingleRecordView\n  record={selectedDeal}\n  entityName=\"Deals\"\n  fields={['DealName', 'Stage', 'Amount', 'CloseDate', 'OwnerID']}\n  layout=\"card\"\n  highlightFields={['Amount', 'Stage']}\n/>"
+  "exampleUsage": "<SingleRecordView\n  record={selectedDeal}\n  entityName=\"Deals\"\n  fields={['DealName', 'Stage', 'Amount', 'CloseDate', 'OwnerID']}\n  layout=\"card\"\n  highlightFields={['Amount', 'Stage']}\n  allowOpenRecord={true}\n  onOpenRecord={(eventData) => {\n    // Example: Cancel if deal is in certain stage\n    if (selectedDeal.Stage === 'Lost') {\n      eventData.cancel = true;\n      alert('Cannot open lost deals');\n    }\n  }}\n/>"
 }

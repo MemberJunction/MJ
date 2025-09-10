@@ -4,8 +4,8 @@
   "description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
   "type": "chart",
   "location": "embedded",
-  "functionalRequirements": "## Simple Chart Component for Quick Data Visualization\n\n### Core Purpose\n- **Zero-configuration charting** - automatically creates appropriate charts from entity data\n- **Common chart types** - bar, line, pie, donut, area charts with smart defaults\n- **Group-by aggregation** - automatically aggregates data by specified field\n- **Interactive exploration** - click events enable drill-down workflows\n- **Responsive design** - adapts to container size automatically\n\n### Key Capabilities\n- Automatic data aggregation by any field with count, sum, or average\n- Smart chart type selection based on data characteristics\n- Built-in color schemes optimized for accessibility\n- Click events on data points for drill-down scenarios\n- Automatic formatting of values, dates, and currencies\n- Loading states and empty data handling\n- Export chart as image functionality\n- Configurable but works with minimal props\n\n### Use Cases\n- Quick dashboard widgets showing entity counts by category\n- Revenue charts grouped by time period or product\n- Status distribution pie charts\n- Trend lines over time\n- Top N items by any metric\n- Comparison charts between categories",
-  "technicalDesign": "## Lightweight Chart Architecture\n\n### Design Philosophy\n- **Convention over configuration** - smart defaults for everything\n- **Single-purpose component** - focused solely on charting\n- **Data-agnostic** - works with any entity data structure\n- **Event-driven** - integrates with parent components via events\n\n### Technical Implementation\n- Uses Chart.js for rendering (canvas-based, lightweight)\n- Automatic data aggregation using JavaScript reduce/group operations\n- Smart type detection for appropriate formatting\n- Memoized calculations prevent unnecessary re-renders\n- Dynamic color palette based on data point count\n\n### Data Processing Pipeline\n1. Receive raw entity data array\n2. Group by specified field\n3. Aggregate using specified method (count/sum/average)\n4. Sort by value or label as configured\n5. Apply limits if specified (e.g., top 10)\n6. Format for chart library\n7. Render with appropriate chart type\n\n### Chart Type Selection\n- **Bar**: Default for categorical data\n- **Line**: When groupBy field is date/time\n- **Pie/Doughnut**: When showing distribution/percentages\n- **Area**: For cumulative time series\n- User can override automatic selection\n\n### Event System\n- Click events include:\n  - Chart type and series name\n  - Data point value and label\n  - Original records that comprise the data point\n  - Percentage of total if applicable\n- Enables drill-down to detailed views",
+  "functionalRequirements": "Lightweight charting from entity data. Groups records by field, aggregates values (count/sum/avg), renders as bar/line/pie/area chart. Auto-selects chart type based on data. Supports click events for drill-down, data export, top-N filtering. Common uses: category distributions, time series trends, metric comparisons.",
+  "technicalDesign": "Uses Chart.js (canvas-based) for rendering. Pipeline: group data by field → aggregate (count/sum/avg) → sort/limit → render. Auto-selects chart type: bar for categories, line for dates, pie for distributions. Memoized calculations for performance. Click events return data point details and source records for drill-down.",
   "dataRequirements": {
     "mode": "props",
     "description": "Component receives entity data through props and performs client-side aggregation"
@@ -121,7 +121,7 @@
       "parameters": [
         {
           "name": "clickData",
-          "type": "object",
+          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
           "description": "Object containing series name, data value, label, original records, and chart type"
         }
       ]
@@ -132,7 +132,7 @@
       "parameters": [
         {
           "name": "chartInfo",
-          "type": "object",
+          "type": "{ chartType: string; dataPointCount: number; aggregationMethod: string; isEmpty: boolean }",
           "description": "Information about the rendered chart including type, data point count, and aggregation method"
         }
       ]

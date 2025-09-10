@@ -32,6 +32,7 @@ function SimpleChart({
   const canvasRef = React.useRef(null);
   const chartInstanceRef = React.useRef(null);
   const [error, setError] = React.useState(null);
+  const [entityInfo, setEntityInfo] = React.useState(null);
 
   // Default color palette - accessible and visually distinct
   const defaultColors = [
@@ -46,6 +47,20 @@ function SimpleChart({
     '#a0d911', // Lime
     '#eb2f96'  // Magenta
   ];
+
+  // Load entity metadata
+  React.useEffect(() => {
+    if (!entityName || !utilities?.md?.Entities) {
+      if (!entityName) console.error('Entity name not provided');
+      if (!utilities?.md?.Entities) console.error('Entity metadata not loaded.');
+      return;
+    }
+    
+    const entity = utilities.md.Entities.find(e => e.Name === entityName);
+    if (entity) {
+      setEntityInfo(entity);
+    }
+  }, [entityName, utilities]);
 
   // Helper function to format values based on type
   const formatValue = (value, isDate = false, isCurrency = false) => {
@@ -91,16 +106,58 @@ function SimpleChart({
     }
 
     try {
+      // Validate that groupBy field exists
+      if (entityInfo && entityInfo.Fields) {
+        const fieldExists = entityInfo.Fields.some(f => f.Name === groupBy);
+        if (!fieldExists) {
+          const error = `Field "${groupBy}" does not exist in entity "${entityName}". Available fields: ${entityInfo.Fields.map(f => f.Name).join(', ')}`;
+          console.error(error);
+          setError(error);
+          return { chartData: [], categories: [], values: [], isEmpty: true };
+        }
+        
+        // Also validate valueField if provided
+        if (valueField && !entityInfo.Fields.some(f => f.Name === valueField)) {
+          const error = `Value field "${valueField}" does not exist in entity "${entityName}". Available fields: ${entityInfo.Fields.map(f => f.Name).join(', ')}`;
+          console.error(error);
+          setError(error);
+          return { chartData: [], categories: [], values: [], isEmpty: true };
+        }
+      } else if (data.length > 0) {
+        // If no metadata, at least check if fields exist in data
+        if (!(groupBy in data[0])) {
+          const error = `Field "${groupBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
+          console.error(error);
+          setError(error);
+          return { chartData: [], categories: [], values: [], isEmpty: true };
+        }
+        
+        if (valueField && !(valueField in data[0])) {
+          const error = `Value field "${valueField}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
+          console.error(error);
+          setError(error);
+          return { chartData: [], categories: [], values: [], isEmpty: true };
+        }
+      }
+      
       // Group data by the specified field
       const grouped = {};
       
-      // Check if groupBy field appears to be a date
-      const sampleValue = data.length > 0 ? data[0][groupBy] : null;
-      const isDateField = sampleValue && (
-        sampleValue instanceof Date ||
-        (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))) ||
-        (typeof sampleValue === 'number' && sampleValue > 1000000000) // Likely a timestamp
-      );
+      // Check if groupBy field is a date field using entity metadata
+      let isDateField = false;
+      if (entityInfo && entityInfo.Fields) {
+        const fieldInfo = entityInfo.Fields.find(f => f.Name === groupBy);
+        isDateField = fieldInfo && (fieldInfo.Type === 'datetime' || fieldInfo.Type === 'date');
+      }
+      
+      // Fallback to value-based detection if no metadata available
+      if (!isDateField && data.length > 0) {
+        const sampleValue = data[0][groupBy];
+        isDateField = sampleValue && (
+          sampleValue instanceof Date ||
+          (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+        );
+      }
       
       data.forEach(record => {
         let key = record[groupBy] || 'Unknown';
@@ -190,7 +247,7 @@ function SimpleChart({
       setError(err.message);
       return { chartData: [], categories: [], values: [], isEmpty: true };
     }
-  }, [data, groupBy, valueField, aggregateMethod, sortBy, sortOrder, limit]);
+  }, [data, groupBy, valueField, aggregateMethod, sortBy, sortOrder, limit, entityInfo]);
 
   // Determine chart type automatically
   const determineChartType = () => {
@@ -202,13 +259,21 @@ function SimpleChart({
       return chartType;
     }
     
-    // Check if groupBy field appears to be a date
-    const sampleValue = data && data.length > 0 ? data[0][groupBy] : null;
-    const isDateField = sampleValue && (
-      sampleValue instanceof Date ||
-      (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))) ||
-      (typeof sampleValue === 'number' && sampleValue > 1000000000) // Likely a timestamp
-    );
+    // Check if groupBy field is a date field using entity metadata
+    let isDateField = false;
+    if (entityInfo && entityInfo.Fields) {
+      const fieldInfo = entityInfo.Fields.find(f => f.Name === groupBy);
+      isDateField = fieldInfo && (fieldInfo.Type === 'datetime' || fieldInfo.Type === 'date');
+    }
+    
+    // Fallback to value-based detection if no metadata available
+    if (!isDateField && data && data.length > 0) {
+      const sampleValue = data[0][groupBy];
+      isDateField = sampleValue && (
+        sampleValue instanceof Date ||
+        (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+      );
+    }
     
     if (isDateField) {
       return 'line';

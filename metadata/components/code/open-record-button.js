@@ -22,7 +22,11 @@ function OpenRecordButton({
   
   // Load entity metadata and determine primary key fields
   React.useEffect(() => {
-    if (!entityName || !utilities?.md?.Entities) return;
+    if (!entityName || !utilities?.md?.Entities) {
+      if (!entityName) console.error('Entity name not provided');
+      if (!utilities?.md?.Entities) console.error('Entity metadata not loaded.');
+      return;
+    }
     
     // Find the entity in metadata
     const entity = utilities.md.Entities.find(e => e.Name === entityName);

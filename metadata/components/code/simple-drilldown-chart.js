@@ -9,8 +9,12 @@ function SimpleDrilldownChart({
   gridFields,
   showDrilldown = true,
   drilldownHeight = 300,
+  showSingleRecordView = false,
+  singleRecordViewFields,
   onSegmentSelected,
   onSelectionCleared,
+  onDataPointClick,
+  onRowSelected,
   utilities,
   styles,
   components,
@@ -21,19 +25,26 @@ function SimpleDrilldownChart({
   // State for drill-down
   const [selectedSegment, setSelectedSegment] = React.useState(null);
   const [showGrid, setShowGrid] = React.useState(false);
+  const [selectedRecord, setSelectedRecord] = React.useState(null);
   
   // Get components from registry
-  const { SimpleChart, DataGrid } = components;
+  const { SimpleChart, DataGrid, SingleRecordView } = components;
   
   // Handle chart click
   const handleChartClick = (clickData) => {
+    // Always bubble up the chart click event
+    if (onDataPointClick) {
+      onDataPointClick(clickData);
+    }
+    
     if (!showDrilldown) return;
     
     // Set selected segment
     setSelectedSegment(clickData);
     setShowGrid(true);
+    setSelectedRecord(null); // Clear any selected record when new segment is selected
     
-    // Fire event
+    // Fire segment selected event
     if (onSegmentSelected) {
       onSegmentSelected({ segment: clickData });
     }
@@ -43,9 +54,23 @@ function SimpleDrilldownChart({
   const handleClearSelection = () => {
     setSelectedSegment(null);
     setShowGrid(false);
+    setSelectedRecord(null);
     
     if (onSelectionCleared) {
       onSelectionCleared();
+    }
+  };
+  
+  // Handle row selection in grid
+  const handleRowClick = (record) => {
+    setSelectedRecord(record);
+    
+    // Bubble up the row selection event
+    if (onRowSelected) {
+      onRowSelected({
+        record,
+        segment: selectedSegment
+      });
     }
   };
   
@@ -177,35 +202,73 @@ function SimpleDrilldownChart({
       {showDrilldown && showGrid && selectedSegment && (
         <div style={{
           marginTop: '16px',
-          height: drilldownHeight,
-          overflow: 'auto',
-          border: '1px solid #d9d9d9',
-          borderRadius: '4px',
-          animation: 'slideDown 0.3s ease'
+          display: showSingleRecordView && selectedRecord ? 'flex' : 'block',
+          gap: '16px'
         }}>
-          {DataGrid ? (
-            <DataGrid
-              entityName={entityName}
-              data={getDrilldownData()}
-              fields={getGridFields()}
-              sorting={true}
-              paging={true}
-              pageSize={10}
-              filtering={true}
-              utilities={utilities}
-              styles={styles}
-              components={components}
-              callbacks={callbacks}
-              savedUserSettings={savedUserSettings}
-              onSaveUserSettings={onSaveUserSettings}
-            />
-          ) : (
-            <div style={{ 
-              padding: '20px', 
-              textAlign: 'center',
-              color: '#ff4d4f'
+          {/* Grid Section */}
+          <div style={{
+            flex: showSingleRecordView && selectedRecord ? '1 1 60%' : '1',
+            height: drilldownHeight,
+            overflow: 'auto',
+            border: '1px solid #d9d9d9',
+            borderRadius: '4px',
+            animation: 'slideDown 0.3s ease'
+          }}>
+            {DataGrid ? (
+              <DataGrid
+                entityName={entityName}
+                data={getDrilldownData()}
+                fields={getGridFields()}
+                sorting={true}
+                paging={true}
+                pageSize={10}
+                filtering={true}
+                onRowClick={showSingleRecordView ? handleRowClick : undefined}
+                highlightedRow={selectedRecord}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+                savedUserSettings={savedUserSettings}
+                onSaveUserSettings={onSaveUserSettings}
+              />
+            ) : (
+              <div style={{ 
+                padding: '20px', 
+                textAlign: 'center',
+                color: '#ff4d4f'
+              }}>
+                Error: DataGrid component not found. Please ensure DataGrid is properly registered.
+              </div>
+            )}
+          </div>
+          
+          {/* Single Record View */}
+          {showSingleRecordView && selectedRecord && SingleRecordView && (
+            <div style={{
+              flex: '1 1 40%',
+              height: drilldownHeight,
+              overflow: 'auto',
+              border: '1px solid #d9d9d9',
+              borderRadius: '4px',
+              padding: '16px',
+              backgroundColor: '#fafafa',
+              animation: 'slideIn 0.3s ease'
             }}>
-              Error: DataGrid component not found. Please ensure DataGrid is properly registered.
+              <SingleRecordView
+                record={selectedRecord}
+                entityName={entityName}
+                fields={singleRecordViewFields}
+                layout="list"
+                showLabels={true}
+                allowOpenRecord={true}
+                utilities={utilities}
+                styles={styles}
+                components={components}
+                callbacks={callbacks}
+                savedUserSettings={savedUserSettings}
+                onSaveUserSettings={onSaveUserSettings}
+              />
             </div>
           )}
         </div>
@@ -221,6 +284,17 @@ function SimpleDrilldownChart({
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
       `}</style>

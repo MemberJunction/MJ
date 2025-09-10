@@ -1982,7 +1982,7 @@
   {
     "fields": {
       "Name": "DataGrid",
-      "Namespace": "Generic/UI",
+      "Namespace": "Generic/UI/Table",
       "Description": "A flexible, MJ-aware data grid component wrapping Ant Design Table with sorting, filtering, paging, and selection capabilities",
       "Title": "Data Grid",
       "Type": "Table",
@@ -1997,8 +1997,8 @@
       "ID": "DB1253D8-5B43-4FB1-880D-908EE2E5B37F"
     },
     "sync": {
-      "lastModified": "2025-09-09T15:32:35.064Z",
-      "checksum": "679dd018fbf4e9bfdf7fce7b291212d9b069b50b10b29205264302c51530dfeb"
+      "lastModified": "2025-09-10T15:45:05.455Z",
+      "checksum": "c8a54699f7ee848ed454b045dfba509afa452d8f22d30edb0c9652085636ca56"
     }
   },
   {
@@ -2019,8 +2019,8 @@
       "ID": "B9F675F4-BD9F-4044-8FF0-66D3F41C01D8"
     },
     "sync": {
-      "lastModified": "2025-09-09T17:04:13.831Z",
-      "checksum": "b2e95c692305b1d97f56b8341569e8881aeafb4eda0cd6a9667ef3e50497b33a"
+      "lastModified": "2025-09-10T15:45:05.476Z",
+      "checksum": "424426c8f066dac336e0d2cca857a360afea5be214ddfee763ac77bbac277556"
     }
   },
   {
@@ -2041,14 +2041,14 @@
       "ID": "031F320D-52E4-43EF-941D-0C28A029C614"
     },
     "sync": {
-      "lastModified": "2025-09-09T17:04:13.848Z",
-      "checksum": "f59539fdec7e0f7146b74dcdb4aa92a2b74c87ad5d7829af8d7dd221799f8d93"
+      "lastModified": "2025-09-10T15:45:05.507Z",
+      "checksum": "adc5e6b9e073f32aab4adc468166a380d739fc555741f790737e5d35af6709db"
     }
   },
   {
     "fields": {
       "Name": "SimpleChart",
-      "Namespace": "Generic/Chart",
+      "Namespace": "Generic/UI/Chart",
       "Description": "A lightweight chart component that automatically creates common visualizations from entity data with minimal configuration",
       "Title": "Simple Chart",
       "Type": "Chart",
@@ -2063,14 +2063,14 @@
       "ID": "21A95BC1-2CCD-4949-A90F-4262F1DBDB62"
     },
     "sync": {
-      "lastModified": "2025-09-10T06:08:40.967Z",
-      "checksum": "d85b1d2eb6afe6139d5e9f11b67572ee518c8fff8f123db5823e04ee4e9cb347"
+      "lastModified": "2025-09-10T21:17:21.551Z",
+      "checksum": "1020712c8b7d4cd3b9834a0ffa6797e6dec8496ea33f3e47b94af4a12c465869"
     }
   },
   {
     "fields": {
       "Name": "SimpleDrilldownChart",
-      "Namespace": "Generic/Chart",
+      "Namespace": "Generic/UI/Chart",
       "Description": "Chart component with built-in drill-down capability that shows detailed records when clicking on data points",
       "Title": "Simple Drilldown Chart",
       "Type": "Chart",
@@ -2085,8 +2085,8 @@
       "ID": "90293530-7C0B-42B8-B8B1-38FD7D5C97DA"
     },
     "sync": {
-      "lastModified": "2025-09-10T06:37:23.121Z",
-      "checksum": "2e4f0b4e97fd9289c137f34dec2f434f6abb2968980515b3e6fc607bd992f5be"
+      "lastModified": "2025-09-10T21:17:21.597Z",
+      "checksum": "7b8bffde79851a8c9e51a86cad641b5ee1708f8ff471cbaaae3d96b26ddda939"
     }
   },
   {
@@ -2107,14 +2107,14 @@
       "ID": "2C0A6E59-3B78-43B3-BF84-446AA9280E86"
     },
     "sync": {
-      "lastModified": "2025-09-10T06:37:23.139Z",
-      "checksum": "30916b56129b1334ff6d9be6a00983929b9dde9e0fdf5d09c5bb1fcc07e9052f"
+      "lastModified": "2025-09-10T21:17:21.616Z",
+      "checksum": "aacee30e390bf27483d050008cce78395eaa585711638a3d9a1823033ee14ccd"
     }
   },
   {
     "fields": {
       "Name": "SingleRecordView",
-      "Namespace": "Generic/Form",
+      "Namespace": "Generic/UI/Form",
       "Description": "A component that displays a single entity record in a formatted view with metadata-driven field formatting",
       "Title": "Single Record View",
       "Type": "Form",
@@ -2129,8 +2129,8 @@
       "ID": "6DABEEC4-803B-4149-9DC4-5A1201AC1EF9"
     },
     "sync": {
-      "lastModified": "2025-09-10T06:17:22.196Z",
-      "checksum": "db9c8cc8b15343765bd39a617dc06b2ae0add180b9bdef00529c7b72410f85ae"
+      "lastModified": "2025-09-10T21:39:08.268Z",
+      "checksum": "a1bf92eb91cd8f4109a47deef3998965c4dfbca6f2454fc5603e9b3abda7246b"
     }
   }
 ]
