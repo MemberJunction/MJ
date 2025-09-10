@@ -1156,7 +1156,9 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
         this.SelectConversation(this.Conversations[newIdx]);
       } 
       else {
-        this.Messages = [];
+        // When deleting the last conversation, create a new empty one
+        // This provides a better UX than showing just a loading spinner
+        await this.CreateNewConversation();
       }
     } 
     else {
