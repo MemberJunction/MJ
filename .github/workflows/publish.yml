@@ -95,12 +95,17 @@ jobs:
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
           NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
-          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
-          if [ -n "$NEW_MIGRATION_FILES" ]; then
-            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
-          fi
+          # TEMPORARY: Always use patch version (revert this after 2.100.2 is published)
+          # Commenting out migration check to force patch version for migration rename fix
+          # NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
+          # if [ -n "$NEW_MIGRATION_FILES" ]; then
+          #   echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
+          # else
+          #   echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+          # fi
+          
+          # Force patch version for this release
+          echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
 
       - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
