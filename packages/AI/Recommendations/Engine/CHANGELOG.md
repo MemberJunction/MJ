@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-recommendations
 
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/global@2.100.1
+
 ## 2.100.0
 
 ### Patch Changes

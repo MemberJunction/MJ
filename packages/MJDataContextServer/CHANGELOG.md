@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/data-context-server
 
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/data-context@2.100.1
+- @memberjunction/global@2.100.1
+
 ## 2.100.0
 
 ### Patch Changes

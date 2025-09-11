@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-record-changes
 
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ng-compare-records@2.100.1
+- @memberjunction/ng-container-directives@2.100.1
+- @memberjunction/ng-notifications@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/global@2.100.1
+
 ## 2.100.0
 
 ### Patch Changes
