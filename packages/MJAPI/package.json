@@ -29,6 +29,7 @@
     "@memberjunction/templates": "2.100.0",
     "@memberjunction/sqlserver-dataprovider": "2.100.0",
     "@memberjunction/communication-sendgrid": "2.100.0",
+    "@memberjunction/component-registry-client-sdk": "2.100.0",
     "axios": "^1.6.7",
     "class-validator": "^0.14.0",
     "mj_generatedentities": "1.0.0",
