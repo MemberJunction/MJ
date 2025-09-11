@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-vectors-pinecone
 
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.100.1
+- @memberjunction/ai-vectors@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/global@2.100.1
+
 ## 2.100.0
 
 ### Patch Changes
