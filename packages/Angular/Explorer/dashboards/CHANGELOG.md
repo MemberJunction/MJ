@@ -1,5 +1,19 @@
 # @memberjunction/ng-dashboards
 
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.100.2
+- @memberjunction/ng-shared@2.100.2
+- @memberjunction/ng-action-gallery@2.100.2
+- @memberjunction/ng-ai-test-harness@2.100.2
+- @memberjunction/ng-container-directives@2.100.2
+- @memberjunction/ng-notifications@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/templates-base-types@2.100.2
+
 ## 2.100.1
 
 ### Patch Changes

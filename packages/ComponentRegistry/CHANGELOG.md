@@ -1,5 +1,16 @@
 # @memberjunction/component-registry-server
 
+## 2.100.2
+
+### Patch Changes
+
+- 525bb13: fix: Move @types/express to dependencies in ComponentRegistry package
+  - @memberjunction/interactive-component-types@2.100.2
+  - @memberjunction/core@2.100.2
+  - @memberjunction/core-entities@2.100.2
+  - @memberjunction/global@2.100.2
+  - @memberjunction/sqlserver-dataprovider@2.100.2
+
 ## 2.100.1
 
 ### Patch Changes

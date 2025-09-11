@@ -1,5 +1,15 @@
 # @memberjunction/react-runtime
 
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.100.2
+- @memberjunction/interactive-component-types@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+
 ## 2.100.1
 
 ### Patch Changes

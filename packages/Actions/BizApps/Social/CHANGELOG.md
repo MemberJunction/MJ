@@ -1,5 +1,15 @@
 # @memberjunction/actions-bizapps-social
 
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+
 ## 2.100.1
 
 ### Patch Changes
