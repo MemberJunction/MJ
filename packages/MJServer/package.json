@@ -46,6 +46,7 @@
     "@memberjunction/actions-bizapps-crm": "2.100.0",
     "@memberjunction/actions-bizapps-lms": "2.100.0",
     "@memberjunction/actions-bizapps-social": "2.100.0",
+    "@memberjunction/component-registry-client-sdk": "2.100.0",
     "@memberjunction/core-entities": "2.100.0",
     "@memberjunction/core-entities-server": "2.100.0",
     "@memberjunction/data-context": "2.100.0",
