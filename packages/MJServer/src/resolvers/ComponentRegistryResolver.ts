@@ -11,8 +11,8 @@ import {
     RegistryError,
     RegistryErrorCode
 } from '@memberjunction/component-registry-client-sdk';
-import { AppContext } from '../types';
-import { configInfo } from '../config';
+import { AppContext } from '../types.js';
+import { configInfo } from '../config.js';
 
 /**
  * GraphQL types for Component Registry operations
