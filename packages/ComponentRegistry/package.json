@@ -27,6 +27,7 @@
     "@memberjunction/core-entities": "2.100.1",
     "@memberjunction/interactive-component-types": "2.100.1",
     "@memberjunction/sqlserver-dataprovider": "2.100.1",
+    "@types/express": "^5.0.3",
     "express": "^5.1.0",
     "cors": "^2.8.5",
     "mssql": "^11.0.1",
@@ -36,7 +37,6 @@
   },
   "devDependencies": {
     "@types/node": "20.14.2",
-    "@types/express": "^5.0.3",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   }
