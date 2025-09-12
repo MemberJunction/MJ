@@ -696,6 +696,19 @@ export class ComponentRunner {
             savedUserSettings: {},
             onSaveUserSettings: (settings: any) => {
               console.log('User settings saved:', settings);
+            },
+            callbacks: {
+              OpenEntityRecord: (entityName: string, key: any) => {
+                console.log('[Test Harness] OpenEntityRecord called:', { entityName, key });
+              },
+              RegisterMethod: (methodName: string, handler: any) => {
+                console.log('[Test Harness] RegisterMethod called:', { methodName });
+                // In test harness, we just log but don't actually register
+              },
+              CreateSimpleNotification: (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
+                console.log('[Test Harness] CreateSimpleNotification called:', { message, style, hideAfter });
+                // In test harness, we just log but don't display actual notifications
+              }
             }
           };
 
