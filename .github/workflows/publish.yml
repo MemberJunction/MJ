@@ -161,11 +161,11 @@ jobs:
           echo "Distribution zip created at $ARTIFACT" >> $GITHUB_STEP_SUMMARY
           echo "Distribution commit: \`$SHA\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Merge main into next
+      - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
         run: |
           git checkout next
           git log -n1
-          npm run mergemain
+          npm run mergemain:update-lock
 
 

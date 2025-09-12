@@ -38,6 +38,7 @@
     "docs": "typedoc",
     "change": "changeset",
     "mergemain": "node ci/merge_main.mjs",
+    "mergemain:update-lock": "node ci/merge_main_and_update_lock.mjs",
     "commitpush": "node ci/commit_push.mjs"
   },
   "repository": "https://github.com/MemberJunction/MJ.git",
