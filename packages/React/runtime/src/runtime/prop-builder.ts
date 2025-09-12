@@ -122,7 +122,8 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
   // Provide default implementations for required callbacks
   const normalized: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
-    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+    RegisterMethod: callbacks?.RegisterMethod || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Copy any additional callbacks that might exist
@@ -273,12 +274,13 @@ export function wrapCallbacksWithLogging(
 ): ComponentCallbacks {
   const wrapped: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
-    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+    RegisterMethod: callbacks?.RegisterMethod || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Wrap any additional callbacks that might exist
   Object.keys(callbacks).forEach(key => {
-    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && typeof (callbacks as any)[key] === 'function') {
+    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && key !== 'CreateSimpleNotification' && typeof (callbacks as any)[key] === 'function') {
       (wrapped as any)[key] = (...args: any[]) => {
         console.log(`[${componentName}] ${key} called with args:`, args);
         return (callbacks as any)[key](...args);
@@ -297,6 +299,13 @@ export function wrapCallbacksWithLogging(
     wrapped.RegisterMethod = (methodName: any, handler: any) => {
       console.log(`[${componentName}] RegisterMethod called for:`, methodName);
       callbacks.RegisterMethod!(methodName, handler);
+    };
+  }
+
+  if (callbacks.CreateSimpleNotification) {
+    wrapped.CreateSimpleNotification = (message: string, style?: string, hideAfter?: number) => {
+      console.log(`[${componentName}] CreateSimpleNotification called:`, { message, style, hideAfter });
+      callbacks.CreateSimpleNotification!(message, style, hideAfter);
     };
   }
 

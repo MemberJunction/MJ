@@ -31,6 +31,7 @@ import {
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
@@ -214,7 +215,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   constructor(
     private reactBridge: ReactBridgeService,
     private adapter: AngularAdapterService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private notificationService: MJNotificationService
   ) {
     // Generate unique component ID for resource tracking
     this.componentId = `mj-react-component-${Date.now()}-${Math.random()}`;
@@ -825,6 +827,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         // The component compiler wrapper will handle this internally
         // This is just a placeholder to satisfy the interface
         // The actual registration happens in the wrapper component
+      },
+      CreateSimpleNotification: (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
+        // Use the MJ notification service to display the notification
+        const notificationStyle = style as "none" | "success" | "error" | "warning" | "info" | undefined;
+        this.notificationService.CreateSimpleNotification(
+          message, 
+          style, 
+          hideAfter
+        );
       },
       OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
