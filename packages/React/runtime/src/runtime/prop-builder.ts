@@ -41,7 +41,8 @@ export function buildComponentProps(
   utilities: any = {},
   callbacks: ComponentCallbacks = {
     OpenEntityRecord: () => {},
-    RegisterMethod: () => {}
+    RegisterMethod: () => {},
+    CreateSimpleNotification: () => {}
   },
   components: Record<string, any> = {},
   styles?: ComponentStyles,
@@ -303,7 +304,7 @@ export function wrapCallbacksWithLogging(
   }
 
   if (callbacks.CreateSimpleNotification) {
-    wrapped.CreateSimpleNotification = (message: string, style?: string, hideAfter?: number) => {
+    wrapped.CreateSimpleNotification = (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
       console.log(`[${componentName}] CreateSimpleNotification called:`, { message, style, hideAfter });
       callbacks.CreateSimpleNotification!(message, style, hideAfter);
     };
