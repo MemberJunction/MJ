@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { BaseEntity, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -74,6 +74,14 @@ export class PushService {
     // If dir option is specified, load from that directory, otherwise use original CWD
     const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
     this.syncConfig = await loadSyncConfig(configDir);
+    
+    // Display warnings for special flags that are enabled
+    if (this.syncConfig?.push?.alwaysPush && !options.dryRun) {
+      callbacks?.onWarn?.('\n⚡ WARNING: alwaysPush is enabled - ALL records will be saved to database regardless of changes\n');
+    }
+    if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
+      callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
+    }
     
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
@@ -658,6 +666,12 @@ export class PushService {
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
     
+    // Force dirty state if alwaysPush is enabled
+    const alwaysPush = this.syncConfig?.push?.alwaysPush ?? false;
+    if (alwaysPush && !isNew) {
+      isDirty = true;
+    }
+    
     // Also check if file content has changed (for @file references)
     if (!isDirty && !isNew && record.sync) {
       const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
@@ -713,7 +727,9 @@ export class PushService {
     
     let saveResult;
     try {
-      saveResult = await entity.Save();
+      // Pass IgnoreDirtyState option when alwaysPush is enabled
+      const saveOptions = alwaysPush ? { IgnoreDirtyState: true } : undefined;
+      saveResult = await entity.Save(saveOptions);
     } catch (saveError: any) {
       console.error(`\n❌ SAVE EXCEPTION for ${entityName}`);
       console.error(`   Record ID: ${entityRecordId || 'NEW'}`);
