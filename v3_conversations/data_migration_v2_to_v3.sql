@@ -171,7 +171,7 @@ BEGIN TRY
         __mj_UpdatedAt
     )
     SELECT 
-        NEWID(),
+        CA.ID,  -- Reuse ConversationArtifact.ID for 1:1 relationship
         CA.ID,
         @ConversationEntityID AS LinkedEntityID,
         CAST(CA.ConversationID AS NVARCHAR(500)) AS LinkedRecordID,
@@ -312,7 +312,7 @@ BEGIN TRY
         __mj_UpdatedAt
     )
     SELECT 
-        NEWID(),
+        CA.ID,  -- Reuse ConversationArtifact.ID for 1:1 relationship
         'Artifact' AS ResourceType,
         CA.ID AS ResourceID,
         CASE 
@@ -359,11 +359,11 @@ BEGIN TRY
         __mj_UpdatedAt
     )
     SELECT 
-        NEWID(),
+        CA.ID,  -- Reuse ConversationArtifact.ID for 1:1 relationship with public artifacts
         'Artifact' AS ResourceType,
         CA.ID AS ResourceID,
-        -- Generate a unique token for each public artifact
-        LOWER(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', '')) AS Token,
+        -- Use artifact ID as token (UUID without hyphens)
+        LOWER(REPLACE(CAST(CA.ID AS VARCHAR(36)), '-', '')) AS Token,
         NULL AS PasswordHash,                -- No password by default
         NULL AS ExpiresAt,                   -- No expiration by default
         NULL AS MaxViews,                    -- Unlimited views
@@ -435,41 +435,7 @@ BEGIN TRY
     END
 
     -- ============================================================================
-    -- STEP 12: Create Default Project (Optional)
-    -- ============================================================================
-    PRINT '';
-    PRINT 'Step 12: Creating default project...';
-
-    IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Project WHERE Name = 'Migrated Conversations')
-    BEGIN
-        INSERT INTO ${flyway:defaultSchema}.Project (
-            ID,
-            EnvironmentID,
-            Name,
-            Description,
-            Color,
-            Icon,
-            IsActive,
-            __mj_CreatedAt,
-            __mj_UpdatedAt
-        )
-        VALUES (
-            NEWID(),
-            @DefaultEnvironmentID,
-            'Migrated Conversations',
-            'Auto-created project for conversations migrated from v2',
-            '#6B7280',  -- Gray color
-            'folder',
-            1,
-            GETUTCDATE(),
-            GETUTCDATE()
-        );
-
-        PRINT 'Created default project for migrated conversations.';
-    END
-
-    -- ============================================================================
-    -- STEP 13: Validation and Summary
+    -- STEP 12: Validation and Summary
     -- ============================================================================
     PRINT '';
     PRINT '========================================';
