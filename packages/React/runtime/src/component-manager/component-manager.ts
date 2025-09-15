@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, ComponentLibraryEntity, ComponentEntityExtended } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -385,8 +385,23 @@ export class ComponentManager {
       // Load dependencies
       if (result.spec?.dependencies) {
         for (const dep of result.spec.dependencies) {
+          // Normalize dependency spec for local registry lookup
+          const depSpec = { ...dep };
+          
+          
+          // If location is "registry" with undefined registry, ensure it's treated as local
+          // This follows the convention that registry components with undefined registry
+          // should be looked up in the local ComponentMetadataEngine
+          if (depSpec.location === 'registry' && !depSpec.registry) {
+            // Explicitly set to undefined for clarity (it may already be undefined)
+            depSpec.registry = undefined;
+            
+            // Log for debugging
+            this.log(`Dependency ${depSpec.name} is a local registry component (registry=undefined)`);
+          }
+          
           await this.loadComponentRecursive(
-            dep,
+            depSpec,
             { ...options, isDependent: true },
             loaded,
             errors,
@@ -435,6 +450,11 @@ export class ComponentManager {
   
   /**
    * Fetch a component specification from a registry (local or external)
+   * 
+   * Convention: When location === 'registry' and registry === undefined,
+   * the component is looked up in the local ComponentMetadataEngine.
+   * This allows components to reference local registry components without
+   * having to know if they're embedded or registry-based.
    */
   private async fetchComponentSpec(
     spec: ComponentSpec,
@@ -456,8 +476,20 @@ export class ComponentManager {
       
       // Find component in local ComponentMetadataEngine
       const localComponent = this.componentEngine.Components?.find(
-        (c: any) => c.Name === spec.name && 
-        (!spec.namespace || c.Namespace === spec.namespace)
+        (c: ComponentEntityExtended) => {
+          // Match by name (case-insensitive for better compatibility)
+          const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
+          
+          // Match by namespace if provided (handle different formats)
+          const namespaceMatch = !spec.namespace || 
+            c.Namespace === spec.namespace ||
+            c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
+          
+          if (nameMatch && !namespaceMatch) {
+          }
+          
+          return nameMatch && namespaceMatch;
+        }
       );
       
       if (!localComponent) {
