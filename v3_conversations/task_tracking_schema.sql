@@ -34,13 +34,13 @@ CREATE TABLE ${flyway:defaultSchema}.Task (
     Result NVARCHAR(MAX) NULL, -- JSON result data
     ErrorMessage NVARCHAR(MAX) NULL, -- Error if failed
     Metadata NVARCHAR(MAX) NULL, -- JSON for additional task-specific data
-    CreatedByUserID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL, -- User who created/owns the task
     CONSTRAINT PK_Task PRIMARY KEY (ID),
     CONSTRAINT FK_Task_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID),
     CONSTRAINT FK_Task_AssignedToUser FOREIGN KEY (AssignedToUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT FK_Task_AssignedToAIAgent FOREIGN KEY (AssignedToAIAgentID) REFERENCES ${flyway:defaultSchema}.AIAgent(ID),
     CONSTRAINT FK_Task_Parent FOREIGN KEY (ParentID) REFERENCES ${flyway:defaultSchema}.Task(ID),
-    CONSTRAINT FK_Task_CreatedByUser FOREIGN KEY (CreatedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT FK_Task_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT CK_Task_Status CHECK (Status IN ('pending', 'active', 'completed', 'failed', 'cancelled', 'paused')),
     CONSTRAINT CK_Task_Type CHECK (Type IN ('analysis', 'generation', 'transformation', 'research', 'execution', 'review', 'approval'))
 );

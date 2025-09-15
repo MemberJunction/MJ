@@ -34,11 +34,11 @@ CREATE TABLE ${flyway:defaultSchema}.Artifact (
     Content NVARCHAR(MAX) NULL, -- The actual artifact content
     Configuration NVARCHAR(MAX) NULL, -- JSON for type-specific metadata
     Comments NVARCHAR(MAX) NULL, -- User comments about the artifact
-    CreatedByUserID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL, -- Owner of the artifact
     CONSTRAINT PK_Artifact PRIMARY KEY (ID),
     CONSTRAINT FK_Artifact_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID),
     CONSTRAINT FK_Artifact_ArtifactType FOREIGN KEY (TypeID) REFERENCES ${flyway:defaultSchema}.ArtifactType(ID),
-    CONSTRAINT FK_Artifact_User FOREIGN KEY (CreatedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID)
+    CONSTRAINT FK_Artifact_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID)
 );
 
 -- -----------------------------------------------------------------------------
@@ -51,10 +51,10 @@ CREATE TABLE ${flyway:defaultSchema}.ArtifactVersion (
     Content NVARCHAR(MAX) NULL,
     Configuration NVARCHAR(MAX) NULL,
     Comments NVARCHAR(MAX) NULL,
-    CreatedByUserID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL, -- User who created this version
     CONSTRAINT PK_ArtifactVersion PRIMARY KEY (ID),
     CONSTRAINT FK_ArtifactVersion_Artifact FOREIGN KEY (ArtifactID) REFERENCES ${flyway:defaultSchema}.Artifact(ID),
-    CONSTRAINT FK_ArtifactVersion_User FOREIGN KEY (CreatedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT FK_ArtifactVersion_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT UQ_ArtifactVersion_ArtifactID_VersionNumber UNIQUE (ArtifactID, VersionNumber)
 );
 
@@ -69,7 +69,7 @@ CREATE TABLE ${flyway:defaultSchema}.Collection (
     Description NVARCHAR(MAX) NULL,
     Icon NVARCHAR(50) NULL, -- Font Awesome icon class
     Color NVARCHAR(7) NULL, -- Hex color for UI
-    SortOrder INT NULL,
+    Sequence INT NULL, -- For ordering collections
     CONSTRAINT PK_Collection PRIMARY KEY (ID),
     CONSTRAINT FK_Collection_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID),
     CONSTRAINT FK_Collection_Parent FOREIGN KEY (ParentID) REFERENCES ${flyway:defaultSchema}.Collection(ID)
@@ -93,62 +93,50 @@ CREATE TABLE ${flyway:defaultSchema}.Project (
 );
 
 -- =====================================================================================
--- LINKING TABLES
+-- GENERIC LINKING SYSTEM
 -- =====================================================================================
 
 -- -----------------------------------------------------------------------------
--- ArtifactLink: Links artifacts to multiple locations (conversations, collections, projects)
+-- RecordLink: Generic table for linking any two records in the system
 -- -----------------------------------------------------------------------------
-CREATE TABLE ${flyway:defaultSchema}.ArtifactLink (
-    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_ArtifactLink_ID DEFAULT (newsequentialid()),
-    ArtifactID UNIQUEIDENTIFIER NOT NULL,
-    LinkedEntityType NVARCHAR(50) NOT NULL, -- 'Conversation', 'Collection', 'Project'
-    LinkedEntityID UNIQUEIDENTIFIER NOT NULL,
-    LinkType NVARCHAR(50) NULL, -- 'created', 'saved', 'referenced', 'shared'
-    Position INT NULL, -- For ordering in libraries
-    CONSTRAINT PK_ArtifactLink PRIMARY KEY (ID),
-    CONSTRAINT FK_ArtifactLink_Artifact FOREIGN KEY (ArtifactID) REFERENCES ${flyway:defaultSchema}.Artifact(ID),
-    CONSTRAINT CK_ArtifactLink_LinkedEntityType CHECK (LinkedEntityType IN ('Conversation', 'Collection', 'Project')),
-    CONSTRAINT CK_ArtifactLink_LinkType CHECK (LinkType IN ('created', 'saved', 'referenced', 'shared'))
-);
-
--- -----------------------------------------------------------------------------
--- ConversationArtifactReference: Tracks artifact appearances in conversations
--- -----------------------------------------------------------------------------
-CREATE TABLE ${flyway:defaultSchema}.ConversationArtifactReference (
-    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_ConversationArtifactReference_ID DEFAULT (newsequentialid()),
-    ConversationID UNIQUEIDENTIFIER NOT NULL,
-    ArtifactID UNIQUEIDENTIFIER NOT NULL,
-    ConversationDetailID UNIQUEIDENTIFIER NULL, -- Which message created/referenced it
-    DisplayMode NVARCHAR(50) NULL, -- 'inline', 'panel', 'reference'
-    CONSTRAINT PK_ConversationArtifactReference PRIMARY KEY (ID),
-    CONSTRAINT FK_ConversationArtifactReference_Conversation FOREIGN KEY (ConversationID) REFERENCES ${flyway:defaultSchema}.Conversation(ID),
-    CONSTRAINT FK_ConversationArtifactReference_Artifact FOREIGN KEY (ArtifactID) REFERENCES ${flyway:defaultSchema}.Artifact(ID),
-    CONSTRAINT FK_ConversationArtifactReference_ConversationDetail FOREIGN KEY (ConversationDetailID) REFERENCES ${flyway:defaultSchema}.ConversationDetail(ID),
-    CONSTRAINT CK_ConversationArtifactReference_DisplayMode CHECK (DisplayMode IN ('inline', 'panel', 'reference'))
+CREATE TABLE ${flyway:defaultSchema}.RecordLink (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_RecordLink_ID DEFAULT (newsequentialid()),
+    SourceEntityID UNIQUEIDENTIFIER NOT NULL, -- FK to __mj.Entity.ID
+    SourceRecordID NVARCHAR(500) NOT NULL, -- Scalar PK or JSON for composite PKs
+    TargetEntityID UNIQUEIDENTIFIER NOT NULL, -- FK to __mj.Entity.ID
+    TargetRecordID NVARCHAR(500) NOT NULL, -- Scalar PK or JSON for composite PKs
+    LinkType NVARCHAR(50) NULL, -- Application-specific relationship type
+    Sequence INT NULL, -- For ordering in UI
+    Metadata NVARCHAR(MAX) NULL, -- JSON for additional link-specific data
+    CONSTRAINT PK_RecordLink PRIMARY KEY (ID),
+    CONSTRAINT FK_RecordLink_SourceEntity FOREIGN KEY (SourceEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
+    CONSTRAINT FK_RecordLink_TargetEntity FOREIGN KEY (TargetEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID)
 );
 
 -- =====================================================================================
--- PERMISSION SYSTEM
+-- ACCESS CONTROL SYSTEM
 -- =====================================================================================
 
 -- -----------------------------------------------------------------------------
--- Permission: Unified ACL-style permissions for all resources
+-- AccessControlRule: Generic ACL-style permissions for any entity record
 -- -----------------------------------------------------------------------------
-CREATE TABLE ${flyway:defaultSchema}.Permission (
-    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Permission_ID DEFAULT (newsequentialid()),
-    ResourceType NVARCHAR(50) NOT NULL, -- 'Environment', 'Artifact', 'Collection', 'Conversation', 'Project'
-    ResourceID UNIQUEIDENTIFIER NOT NULL,
+CREATE TABLE ${flyway:defaultSchema}.AccessControlRule (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_AccessControlRule_ID DEFAULT (newsequentialid()),
+    EntityID UNIQUEIDENTIFIER NOT NULL, -- FK to __mj.Entity.ID
+    RecordID NVARCHAR(500) NOT NULL, -- Scalar PK or JSON for composite PKs
     GranteeType NVARCHAR(50) NOT NULL, -- 'User', 'Role', 'Everyone', 'Public'
-    GranteeID UNIQUEIDENTIFIER NULL, -- NULL for 'Everyone' and 'Public'
-    PermissionLevel NVARCHAR(50) NOT NULL, -- 'view', 'edit', 'admin', 'owner'
+    GranteeID UNIQUEIDENTIFIER NULL, -- UserID or RoleID (NULL for Everyone/Public)
+    CanRead BIT NOT NULL CONSTRAINT DF_AccessControlRule_CanRead DEFAULT (0),
+    CanCreate BIT NOT NULL CONSTRAINT DF_AccessControlRule_CanCreate DEFAULT (0),
+    CanUpdate BIT NOT NULL CONSTRAINT DF_AccessControlRule_CanUpdate DEFAULT (0),
+    CanDelete BIT NOT NULL CONSTRAINT DF_AccessControlRule_CanDelete DEFAULT (0),
+    CanShare BIT NOT NULL CONSTRAINT DF_AccessControlRule_CanShare DEFAULT (0),
     ExpiresAt DATETIMEOFFSET NULL,
     GrantedByUserID UNIQUEIDENTIFIER NOT NULL,
-    CONSTRAINT PK_Permission PRIMARY KEY (ID),
-    CONSTRAINT FK_Permission_GrantedByUser FOREIGN KEY (GrantedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
-    CONSTRAINT CK_Permission_ResourceType CHECK (ResourceType IN ('Environment', 'Artifact', 'Collection', 'Conversation', 'Project')),
-    CONSTRAINT CK_Permission_GranteeType CHECK (GranteeType IN ('User', 'Role', 'Everyone', 'Public')),
-    CONSTRAINT CK_Permission_PermissionLevel CHECK (PermissionLevel IN ('view', 'edit', 'admin', 'owner'))
+    CONSTRAINT PK_AccessControlRule PRIMARY KEY (ID),
+    CONSTRAINT FK_AccessControlRule_Entity FOREIGN KEY (EntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
+    CONSTRAINT FK_AccessControlRule_GrantedByUser FOREIGN KEY (GrantedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT CK_AccessControlRule_GranteeType CHECK (GranteeType IN ('User', 'Role', 'Everyone', 'Public'))
 );
 
 -- -----------------------------------------------------------------------------
@@ -163,10 +151,10 @@ CREATE TABLE ${flyway:defaultSchema}.PublicLink (
     ExpiresAt DATETIMEOFFSET NULL,
     MaxViews INT NULL,
     CurrentViews INT NOT NULL CONSTRAINT DF_PublicLink_CurrentViews DEFAULT (0),
-    CreatedByUserID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL, -- User who created the public link
     IsActive BIT NOT NULL CONSTRAINT DF_PublicLink_IsActive DEFAULT (1),
     CONSTRAINT PK_PublicLink PRIMARY KEY (ID),
-    CONSTRAINT FK_PublicLink_CreatedByUser FOREIGN KEY (CreatedByUserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT FK_PublicLink_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
     CONSTRAINT UQ_PublicLink_Token UNIQUE (Token),
     CONSTRAINT CK_PublicLink_ResourceType CHECK (ResourceType IN ('Artifact', 'Conversation', 'Collection'))
 );
@@ -211,24 +199,25 @@ ADD CONSTRAINT FK_Report_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${fl
 -- Artifact indexes (TypeID is FK so auto-indexed by MJ)
 
 -- Collection indexes
-CREATE INDEX IX_Collection_SortOrder ON ${flyway:defaultSchema}.Collection(SortOrder);
+CREATE INDEX IX_Collection_Sequence ON ${flyway:defaultSchema}.Collection(Sequence);
 
 -- Project indexes
 CREATE INDEX IX_Project_IsArchived ON ${flyway:defaultSchema}.Project(IsArchived);
 
--- ArtifactLink indexes
-CREATE INDEX IX_ArtifactLink_LinkedEntityType ON ${flyway:defaultSchema}.ArtifactLink(LinkedEntityType);
-CREATE INDEX IX_ArtifactLink_LinkType ON ${flyway:defaultSchema}.ArtifactLink(LinkType);
-CREATE INDEX IX_ArtifactLink_Position ON ${flyway:defaultSchema}.ArtifactLink(Position);
+-- RecordLink indexes
+CREATE INDEX IX_RecordLink_SourceEntityID_SourceRecordID ON ${flyway:defaultSchema}.RecordLink(SourceEntityID, SourceRecordID);
+CREATE INDEX IX_RecordLink_TargetEntityID_TargetRecordID ON ${flyway:defaultSchema}.RecordLink(TargetEntityID, TargetRecordID);
+CREATE INDEX IX_RecordLink_LinkType ON ${flyway:defaultSchema}.RecordLink(LinkType);
+CREATE INDEX IX_RecordLink_Sequence ON ${flyway:defaultSchema}.RecordLink(Sequence);
 
--- ConversationArtifactReference indexes
-CREATE INDEX IX_ConversationArtifactReference_DisplayMode ON ${flyway:defaultSchema}.ConversationArtifactReference(DisplayMode);
-
--- Permission indexes
-CREATE INDEX IX_Permission_ResourceType ON ${flyway:defaultSchema}.Permission(ResourceType);
-CREATE INDEX IX_Permission_GranteeType ON ${flyway:defaultSchema}.Permission(GranteeType);
-CREATE INDEX IX_Permission_PermissionLevel ON ${flyway:defaultSchema}.Permission(PermissionLevel);
-CREATE INDEX IX_Permission_ExpiresAt ON ${flyway:defaultSchema}.Permission(ExpiresAt);
+-- AccessControlRule indexes
+CREATE INDEX IX_AccessControlRule_EntityID_RecordID ON ${flyway:defaultSchema}.AccessControlRule(EntityID, RecordID);
+CREATE INDEX IX_AccessControlRule_GranteeType_GranteeID ON ${flyway:defaultSchema}.AccessControlRule(GranteeType, GranteeID);
+CREATE INDEX IX_AccessControlRule_ExpiresAt ON ${flyway:defaultSchema}.AccessControlRule(ExpiresAt);
+CREATE INDEX IX_AccessControlRule_CanRead ON ${flyway:defaultSchema}.AccessControlRule(CanRead);
+CREATE INDEX IX_AccessControlRule_CanUpdate ON ${flyway:defaultSchema}.AccessControlRule(CanUpdate);
+CREATE INDEX IX_AccessControlRule_CanDelete ON ${flyway:defaultSchema}.AccessControlRule(CanDelete);
+CREATE INDEX IX_AccessControlRule_CanShare ON ${flyway:defaultSchema}.AccessControlRule(CanShare);
 
 -- PublicLink indexes
 CREATE INDEX IX_PublicLink_Token ON ${flyway:defaultSchema}.PublicLink(Token);
@@ -401,10 +390,10 @@ EXEC sp_addextendedproperty
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Display order for sorting collections in UI',
+    @value = N'Display sequence for ordering collections in UI',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'Collection',
-    @level2type = N'COLUMN', @level2name = 'SortOrder';
+    @level2type = N'COLUMN', @level2name = 'Sequence';
 
 -- ===========================================
 -- Project Table and Columns
@@ -451,86 +440,112 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'IsArchived';
 
 -- ===========================================
--- ArtifactLink Table and Columns
+-- RecordLink Table and Columns
 -- ===========================================
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Links artifacts to multiple locations (conversations, collections, projects) enabling artifacts to exist in multiple contexts.',
+    @value = N'Generic linking table that can connect any two records in the system, providing a flexible relationship management system.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ArtifactLink';
+    @level1type = N'TABLE', @level1name = 'RecordLink';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Type of entity this artifact is linked to (Conversation, Collection, Project)',
+    @value = N'Primary key value(s) of the source record - scalar for simple PKs or JSON KeyValuePair array for composite PKs',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ArtifactLink',
-    @level2type = N'COLUMN', @level2name = 'LinkedEntityType';
+    @level1type = N'TABLE', @level1name = 'RecordLink',
+    @level2type = N'COLUMN', @level2name = 'SourceRecordID';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'How this artifact relates to the linked entity (created, saved, referenced, shared)',
+    @value = N'Primary key value(s) of the target record - scalar for simple PKs or JSON KeyValuePair array for composite PKs',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ArtifactLink',
+    @level1type = N'TABLE', @level1name = 'RecordLink',
+    @level2type = N'COLUMN', @level2name = 'TargetRecordID';
+
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Application-specific relationship type describing how the records are related',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'RecordLink',
     @level2type = N'COLUMN', @level2name = 'LinkType';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Display order position when shown in collections or lists',
+    @value = N'Display sequence for ordering linked records in UI',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ArtifactLink',
-    @level2type = N'COLUMN', @level2name = 'Position';
-
--- ===========================================
--- ConversationArtifactReference Table and Columns
--- ===========================================
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description',
-    @value = N'Tracks where and how artifacts appear within conversations, including display mode and message association.',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ConversationArtifactReference';
+    @level1type = N'TABLE', @level1name = 'RecordLink',
+    @level2type = N'COLUMN', @level2name = 'Sequence';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'How the artifact is displayed in the conversation (inline, panel, reference)',
+    @value = N'JSON field for storing additional link-specific metadata',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'ConversationArtifactReference',
-    @level2type = N'COLUMN', @level2name = 'DisplayMode';
+    @level1type = N'TABLE', @level1name = 'RecordLink',
+    @level2type = N'COLUMN', @level2name = 'Metadata';
 
 -- ===========================================
--- Permission Table and Columns
+-- AccessControlRule Table and Columns
 -- ===========================================
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Unified ACL-style permission system for controlling access to environments, artifacts, collections, conversations, and projects.',
+    @value = N'Generic ACL-style permission system that can control access to any entity record in the system with granular CRUD permissions.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Permission';
+    @level1type = N'TABLE', @level1name = 'AccessControlRule';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Type of resource being protected (Environment, Artifact, Collection, Conversation, Project)',
+    @value = N'Primary key value(s) of the record being protected - scalar for simple PKs or JSON for composite PKs',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Permission',
-    @level2type = N'COLUMN', @level2name = 'ResourceType';
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'RecordID';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
     @value = N'Type of grantee receiving permission (User, Role, Everyone, Public)',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Permission',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
     @level2type = N'COLUMN', @level2name = 'GranteeType';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Level of access granted (view, edit, admin, owner)',
+    @value = N'Permission to read/view the record',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Permission',
-    @level2type = N'COLUMN', @level2name = 'PermissionLevel';
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'CanRead';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Optional expiration date/time for this permission',
+    @value = N'Permission to create new related records',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Permission',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'CanCreate';
+
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Permission to update/modify the record',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'CanUpdate';
+
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Permission to delete the record',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'CanDelete';
+
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Permission to share/grant permissions to other users',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
+    @level2type = N'COLUMN', @level2name = 'CanShare';
+
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description',
+    @value = N'Optional expiration date/time for this access rule',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AccessControlRule',
     @level2type = N'COLUMN', @level2name = 'ExpiresAt';
 
 -- ===========================================

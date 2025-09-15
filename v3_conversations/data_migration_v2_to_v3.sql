@@ -116,7 +116,7 @@ BEGIN TRY
         Content,
         Configuration,
         Comments,
-        CreatedByUserID,
+        UserID,
         __mj_CreatedAt,
         __mj_UpdatedAt
     )
@@ -131,8 +131,8 @@ BEGIN TRY
         -- Configuration will be populated from latest version
         NULL AS Configuration,
         CA.Comments,
-        -- CreatedByUserID comes from the conversation's UserID
-        C.UserID AS CreatedByUserID,
+        -- UserID comes from the conversation's UserID (owner)
+        C.UserID AS UserID,
         CA.__mj_CreatedAt,
         CA.__mj_UpdatedAt
     FROM ${flyway:defaultSchema}.ConversationArtifact CA
@@ -150,24 +150,33 @@ BEGIN TRY
     PRINT '';
     PRINT 'Step 4: Creating ArtifactLink records...';
 
+    -- Get the Entity ID for Conversations
+    DECLARE @ConversationEntityID UNIQUEIDENTIFIER;
+    SELECT @ConversationEntityID = ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Conversations';
+    
+    IF @ConversationEntityID IS NULL
+    BEGIN
+        RAISERROR('Conversations entity not found in Entity table.', 16, 1);
+    END
+
     -- Link artifacts to their original conversations
     INSERT INTO ${flyway:defaultSchema}.ArtifactLink (
         ID,
         ArtifactID,
-        LinkedEntityType,
         LinkedEntityID,
+        LinkedRecordID,
         LinkType,
-        DisplayOrder,
+        Sequence,
         __mj_CreatedAt,
         __mj_UpdatedAt
     )
     SELECT 
         NEWID(),
         CA.ID,
-        'Conversation' AS LinkedEntityType,
-        CA.ConversationID AS LinkedEntityID,
+        @ConversationEntityID AS LinkedEntityID,
+        CAST(CA.ConversationID AS NVARCHAR(500)) AS LinkedRecordID,
         'created' AS LinkType,              -- Original creation context
-        ROW_NUMBER() OVER (PARTITION BY CA.ConversationID ORDER BY CA.__mj_CreatedAt) AS DisplayOrder,
+        ROW_NUMBER() OVER (PARTITION BY CA.ConversationID ORDER BY CA.__mj_CreatedAt) AS Sequence,
         CA.__mj_CreatedAt,
         CA.__mj_UpdatedAt
     FROM ${flyway:defaultSchema}.ConversationArtifact CA
@@ -175,52 +184,17 @@ BEGIN TRY
         -- Skip if already linked (idempotent)
         SELECT 1 FROM ${flyway:defaultSchema}.ArtifactLink AL 
         WHERE AL.ArtifactID = CA.ID 
-        AND AL.LinkedEntityType = 'Conversation'
-        AND AL.LinkedEntityID = CA.ConversationID
+        AND AL.LinkedEntityID = @ConversationEntityID
+        AND AL.LinkedRecordID = CAST(CA.ConversationID AS NVARCHAR(500))
     );
 
     PRINT 'Created ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' artifact links.';
 
     -- ============================================================================
-    -- STEP 5: Create ConversationArtifactReference records
+    -- STEP 5: Migrate Artifact Versions
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 5: Creating ConversationArtifactReference records...';
-
-    -- Track where artifacts appear in conversations
-    -- In v2, artifacts are directly tied to conversations, so we create one reference per artifact
-    INSERT INTO ${flyway:defaultSchema}.ConversationArtifactReference (
-        ID,
-        ConversationID,
-        ArtifactID,
-        ConversationDetailID,
-        DisplayMode,
-        __mj_CreatedAt,
-        __mj_UpdatedAt
-    )
-    SELECT 
-        NEWID(),
-        CA.ConversationID,
-        CA.ID AS ArtifactID,
-        NULL AS ConversationDetailID,      -- We don't have message-level tracking in v2
-        'inline' AS DisplayMode,            -- Default display mode for migrated artifacts
-        CA.__mj_CreatedAt,
-        CA.__mj_UpdatedAt
-    FROM ${flyway:defaultSchema}.ConversationArtifact CA
-    WHERE NOT EXISTS (
-        -- Skip if already referenced (idempotent)
-        SELECT 1 FROM ${flyway:defaultSchema}.ConversationArtifactReference CAR
-        WHERE CAR.ConversationID = CA.ConversationID 
-        AND CAR.ArtifactID = CA.ID
-    );
-
-    PRINT 'Created ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' artifact references.';
-
-    -- ============================================================================
-    -- STEP 6: Migrate Artifact Versions
-    -- ============================================================================
-    PRINT '';
-    PRINT 'Step 6: Migrating ConversationArtifactVersions...';
+    PRINT 'Step 5: Migrating ConversationArtifactVersions...';
 
     -- Migrate all versions to new ArtifactVersion table
     INSERT INTO ${flyway:defaultSchema}.ArtifactVersion (
@@ -230,7 +204,7 @@ BEGIN TRY
         Content,
         Configuration,
         Comments,
-        CreatedByUserID,
+        UserID,
         __mj_CreatedAt,
         __mj_UpdatedAt
     )
@@ -241,8 +215,8 @@ BEGIN TRY
         CAV.Content,
         CAV.Configuration,
         CAV.Comments,
-        -- Get CreatedByUserID from parent artifact's conversation
-        C.UserID AS CreatedByUserID,
+        -- Get UserID from parent artifact's conversation (user who created this version)
+        C.UserID AS UserID,
         CAV.__mj_CreatedAt,
         CAV.__mj_UpdatedAt
     FROM ${flyway:defaultSchema}.ConversationArtifactVersion CAV
@@ -258,10 +232,10 @@ BEGIN TRY
     PRINT 'Migrated ' + CAST(@VersionCount AS VARCHAR(10)) + ' artifact versions.';
 
     -- ============================================================================
-    -- STEP 7: Update Artifact Content and Configuration from Latest Version
+    -- STEP 6: Update Artifact Content and Configuration from Latest Version
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 7: Updating Artifact content from latest version...';
+    PRINT 'Step 6: Updating Artifact content from latest version...';
 
     -- Update each artifact with content from its latest version
     WITH LatestVersions AS (
@@ -284,10 +258,10 @@ BEGIN TRY
     PRINT 'Updated ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' artifacts with latest content.';
 
     -- ============================================================================
-    -- STEP 8: Migrate Permissions
+    -- STEP 7: Migrate Permissions
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 8: Migrating artifact permissions...';
+    PRINT 'Step 7: Migrating artifact permissions...';
 
     -- Migrate ConversationArtifactPermission to new Permission table
     INSERT INTO ${flyway:defaultSchema}.Permission (
@@ -364,10 +338,10 @@ BEGIN TRY
     PRINT 'Created ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' scope-based permissions.';
 
     -- ============================================================================
-    -- STEP 9: Create Public Links for Public Artifacts
+    -- STEP 8: Create Public Links for Public Artifacts
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 9: Creating public links for public artifacts...';
+    PRINT 'Step 8: Creating public links for public artifacts...';
 
     -- Create PublicLink records for artifacts with Public sharing scope
     INSERT INTO ${flyway:defaultSchema}.PublicLink (
@@ -380,7 +354,7 @@ BEGIN TRY
         MaxViews,
         CurrentViews,
         IsActive,
-        CreatedByUserID,
+        UserID,
         __mj_CreatedAt,
         __mj_UpdatedAt
     )
@@ -395,7 +369,7 @@ BEGIN TRY
         NULL AS MaxViews,                    -- Unlimited views
         0 AS CurrentViews,
         1 AS IsActive,
-        C.UserID AS CreatedByUserID,
+        C.UserID AS UserID,                  -- User who created the public link
         CA.__mj_CreatedAt,
         CA.__mj_UpdatedAt
     FROM ${flyway:defaultSchema}.ConversationArtifact CA
@@ -411,10 +385,10 @@ BEGIN TRY
     PRINT 'Created ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' public links.';
 
     -- ============================================================================
-    -- STEP 10: Update Conversations with EnvironmentID
+    -- STEP 9: Update Conversations with EnvironmentID
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 10: Updating Conversations with EnvironmentID...';
+    PRINT 'Step 9: Updating Conversations with EnvironmentID...';
 
     -- Update all existing conversations to use the default environment
     UPDATE ${flyway:defaultSchema}.Conversation
@@ -425,7 +399,7 @@ BEGIN TRY
     PRINT 'Updated ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' conversations.';
 
     -- ============================================================================
-    -- STEP 11: Update Dashboards with EnvironmentID (if they exist)
+    -- STEP 10: Update Dashboards with EnvironmentID (if they exist)
     -- ============================================================================
     IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
                WHERE TABLE_SCHEMA = '${flyway:defaultSchema}' 
@@ -433,7 +407,7 @@ BEGIN TRY
                AND COLUMN_NAME = 'EnvironmentID')
     BEGIN
         PRINT '';
-        PRINT 'Step 11: Updating Dashboards with EnvironmentID...';
+        PRINT 'Step 10: Updating Dashboards with EnvironmentID...';
 
         UPDATE ${flyway:defaultSchema}.Dashboard
         SET EnvironmentID = @DefaultEnvironmentID
@@ -443,7 +417,7 @@ BEGIN TRY
     END
 
     -- ============================================================================
-    -- STEP 12: Update Reports with EnvironmentID (if they exist)
+    -- STEP 11: Update Reports with EnvironmentID (if they exist)
     -- ============================================================================
     IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
                WHERE TABLE_SCHEMA = '${flyway:defaultSchema}' 
@@ -451,7 +425,7 @@ BEGIN TRY
                AND COLUMN_NAME = 'EnvironmentID')
     BEGIN
         PRINT '';
-        PRINT 'Step 12: Updating Reports with EnvironmentID...';
+        PRINT 'Step 11: Updating Reports with EnvironmentID...';
 
         UPDATE ${flyway:defaultSchema}.Report
         SET EnvironmentID = @DefaultEnvironmentID
@@ -461,10 +435,10 @@ BEGIN TRY
     END
 
     -- ============================================================================
-    -- STEP 13: Create Default Project (Optional)
+    -- STEP 12: Create Default Project (Optional)
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 13: Creating default project...';
+    PRINT 'Step 12: Creating default project...';
 
     IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Project WHERE Name = 'Migrated Conversations')
     BEGIN
@@ -495,7 +469,7 @@ BEGIN TRY
     END
 
     -- ============================================================================
-    -- STEP 14: Validation and Summary
+    -- STEP 13: Validation and Summary
     -- ============================================================================
     PRINT '';
     PRINT '========================================';
@@ -534,10 +508,10 @@ BEGIN TRY
     PRINT 'Migration Duration: ' + CAST(DATEDIFF(SECOND, @MigrationStartTime, GETUTCDATE()) AS VARCHAR(10)) + ' seconds';
     PRINT '========================================';
     -- ============================================================================
-    -- STEP 15: Mark Old Entities as Deprecated
+    -- STEP 14: Mark Old Entities as Deprecated
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 15: Marking old entities as deprecated...';
+    PRINT 'Step 14: Marking old entities as deprecated...';
 
     -- Mark the old conversation artifact entities as deprecated
     UPDATE ${flyway:defaultSchema}.Entity 
