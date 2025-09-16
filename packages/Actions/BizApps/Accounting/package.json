@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions-bizapps-accounting",
-  "version": "2.100.2",
+  "version": "2.100.3",
   "description": "Accounting system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,10 +23,10 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/actions": "2.100.2",
-    "@memberjunction/core": "2.100.2",
-    "@memberjunction/core-entities": "2.100.2",
-    "@memberjunction/global": "2.100.2"
+    "@memberjunction/actions": "2.100.3",
+    "@memberjunction/core": "2.100.3",
+    "@memberjunction/core-entities": "2.100.3",
+    "@memberjunction/global": "2.100.3"
   },
   "devDependencies": {
     "@types/node": "20.8.7",

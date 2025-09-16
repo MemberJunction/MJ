@@ -1,5 +1,27 @@
 # @memberjunction/component-registry-server
 
+## 2.100.3
+
+### Patch Changes
+
+- 4bd084f: Add router mode support to ComponentRegistryAPIServer
+
+  Enables mounting the registry as an Express Router on existing
+  applications instead of running as a standalone service. The
+  server can now operate in 'router' mode (returns Express Router)
+  or 'standalone' mode (default, unchanged behavior).
+
+  New `ComponentRegistryServerOptions` interface supports mode
+  selection, custom base paths, and optional database setup
+  skipping
+
+- Updated dependencies [3cec75a]
+  - @memberjunction/interactive-component-types@2.100.3
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

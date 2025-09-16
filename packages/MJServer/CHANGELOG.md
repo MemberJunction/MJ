@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/server
 
+## 2.100.3
+
+### Patch Changes
+
+- 5d48c71: Component Registry Cache Fix. Pass Registry ID, not Name to cache method
+  - @memberjunction/component-registry-client-sdk@2.100.3
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/skip-types@2.100.3
+  - @memberjunction/ai-agent-manager-actions@2.100.3
+  - @memberjunction/ai-agents@2.100.3
+  - @memberjunction/ai-core-plus@2.100.3
+  - @memberjunction/aiengine@2.100.3
+  - @memberjunction/ai-prompts@2.100.3
+  - @memberjunction/actions-apollo@2.100.3
+  - @memberjunction/actions-bizapps-accounting@2.100.3
+  - @memberjunction/actions-bizapps-lms@2.100.3
+  - @memberjunction/actions-bizapps-social@2.100.3
+  - @memberjunction/core-actions@2.100.3
+  - @memberjunction/actions@2.100.3
+  - @memberjunction/entity-communications-server@2.100.3
+  - @memberjunction/doc-utils@2.100.3
+  - @memberjunction/external-change-detection@2.100.3
+  - @memberjunction/graphql-dataprovider@2.100.3
+  - @memberjunction/core-entities-server@2.100.3
+  - @memberjunction/data-context@2.100.3
+  - @memberjunction/queue@2.100.3
+  - @memberjunction/storage@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+  - @memberjunction/templates@2.100.3
+  - @memberjunction/ai-vectors-pinecone@2.100.3
+  - @memberjunction/actions-bizapps-crm@2.100.3
+  - @memberjunction/data-context-server@2.100.3
+  - @memberjunction/ai@2.100.3
+  - @memberjunction/ai-anthropic@2.100.3
+  - @memberjunction/ai-cerebras@2.100.3
+  - @memberjunction/ai-groq@2.100.3
+  - @memberjunction/ai-lmstudio@2.100.3
+  - @memberjunction/ai-local-embeddings@2.100.3
+  - @memberjunction/ai-mistral@2.100.3
+  - @memberjunction/ai-ollama@2.100.3
+  - @memberjunction/ai-openai@2.100.3
+  - @memberjunction/ai-openrouter@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

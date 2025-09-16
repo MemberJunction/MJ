@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-shared
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ng-base-types@2.100.3
+- @memberjunction/ng-notifications@2.100.3
+- @memberjunction/graphql-dataprovider@2.100.3
+- @memberjunction/core@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

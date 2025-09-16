@@ -1,5 +1,13 @@
 # @memberjunction/interactive-component-types
 
+## 2.100.3
+
+### Patch Changes
+
+- 3cec75a: CreateSimpleNotification added up and down stack
+  - @memberjunction/ai-vectors-memory@2.100.3
+  - @memberjunction/core@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

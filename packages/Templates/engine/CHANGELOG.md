@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/templates
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/aiengine@2.100.3
+- @memberjunction/templates-base-types@2.100.3
+- @memberjunction/ai@2.100.3
+- @memberjunction/ai-groq@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

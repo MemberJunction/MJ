@@ -1,5 +1,17 @@
 # @memberjunction/react-runtime
 
+## 2.100.3
+
+### Patch Changes
+
+- 3cec75a: CreateSimpleNotification added up and down stack
+- Updated dependencies [3cec75a]
+  - @memberjunction/interactive-component-types@2.100.3
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/graphql-dataprovider@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

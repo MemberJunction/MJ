@@ -1,5 +1,15 @@
 # @memberjunction/ai-core-plus
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions-base@2.100.3
+- @memberjunction/ai@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes
