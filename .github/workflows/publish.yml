@@ -26,6 +26,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Validate migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh
+
       - name: Create docker network
         run: docker network create -d bridge local-net
 
@@ -95,17 +98,12 @@ jobs:
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
           NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
-          # TEMPORARY: Always use patch version (revert this after 2.100.2 is published)
-          # Commenting out migration check to force patch version for migration rename fix
-          # NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
-          # if [ -n "$NEW_MIGRATION_FILES" ]; then
-          #   echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
-          # else
-          #   echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
-          # fi
-          
-          # Force patch version for this release
-          echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
+          if [ -n "$NEW_MIGRATION_FILES" ]; then
+            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+          fi
 
       - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
@@ -163,11 +161,11 @@ jobs:
           echo "Distribution zip created at $ARTIFACT" >> $GITHUB_STEP_SUMMARY
           echo "Distribution commit: \`$SHA\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Merge main into next
+      - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
         run: |
           git checkout next
           git log -n1
-          npm run mergemain
+          npm run mergemain:update-lock
 
 

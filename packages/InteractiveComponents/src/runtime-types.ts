@@ -14,6 +14,14 @@ export interface ComponentCallbacks {
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
     
     /**
+     * Display a short non-blocking notification message to the user. The container will determine how best to display this message.
+     * @param message - text to display
+     * @param style - display styling
+     * @param hideAfter - option to auto hide after the specified delay in milliseconds
+     */
+    CreateSimpleNotification: (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => void; 
+
+    /**
      * Allows a component to register methods that can be called by the container.
      * @param methodName - Name of the method being registered
      * @param handler - The method implementation

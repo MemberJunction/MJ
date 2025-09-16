@@ -14,11 +14,11 @@ export class DataSourceInfo {
   type: "Admin" | "Read-Write" | "Read-Only" | "Other";
 
   constructor(init: {
-    dataSource: sql.ConnectionPool, 
-    type: "Admin" | "Read-Write" | "Read-Only" | "Other", 
-    host: string, 
-    port: number, 
-    database: string, 
+    dataSource: sql.ConnectionPool,
+    type: "Admin" | "Read-Write" | "Read-Only" | "Other",
+    host: string,
+    port: number,
+    database: string,
     userName: string
   }) {
     this.dataSource = init.dataSource;
@@ -28,4 +28,28 @@ export class DataSourceInfo {
     this.userName = init.userName;
     this.type = init.type;
   }
+}
+
+/**
+ * Configuration options for ComponentRegistryAPIServer
+ */
+export interface ComponentRegistryServerOptions {
+  /**
+   * Mode of operation for the server
+   * - 'standalone': Creates its own Express app and listens on a port (default)
+   * - 'router': Returns an Express Router for mounting on existing app
+   */
+  mode?: 'standalone' | 'router';
+
+  /**
+   * Base path for API routes
+   * Default: '/api/v1'
+   */
+  basePath?: string;
+
+  /**
+   * Skip database setup if already initialized by parent application
+   * Useful in router mode when parent app manages the database connection
+   */
+  skipDatabaseSetup?: boolean;
 }

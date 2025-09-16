@@ -175,7 +175,7 @@ export class ComponentRegistryExtendedResolver {
             
             // Optional: Cache in database if configured
             if (this.shouldCache(registry)) {
-                await this.cacheComponent(component, registryName, user);
+                await this.cacheComponent(component, registry.ID, user);
             }
             
             // Return the ComponentSpec as a JSON string
