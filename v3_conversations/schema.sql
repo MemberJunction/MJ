@@ -16,10 +16,20 @@ CREATE TABLE ${flyway:defaultSchema}.Environment (
     ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Environment_ID DEFAULT (newsequentialid()),
     Name NVARCHAR(255) NOT NULL,
     Description NVARCHAR(MAX) NULL,
-    OrganizationID UNIQUEIDENTIFIER NULL, -- Future use for multi-org support
     IsDefault BIT NOT NULL CONSTRAINT DF_Environment_IsDefault DEFAULT (0),
     Settings NVARCHAR(MAX) NULL, -- JSON for environment-specific settings
     CONSTRAINT PK_Environment PRIMARY KEY (ID)
+);
+
+-- Insert default environment record with hardcoded UUID
+DECLARE @DefaultEnvironmentID UNIQUEIDENTIFIER = 'F51358F3-9447-4176-B313-BF8025FD8D09';
+INSERT INTO ${flyway:defaultSchema}.Environment (ID, Name, Description, IsDefault, Settings)
+VALUES (
+    @DefaultEnvironmentID,
+    'Default',
+    'The default environment for organizing conversations, artifacts, and collections',
+    1,
+    NULL
 );
 
 -- -----------------------------------------------------------------------------
@@ -27,12 +37,10 @@ CREATE TABLE ${flyway:defaultSchema}.Environment (
 -- -----------------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.Artifact (
     ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Artifact_ID DEFAULT (newsequentialid()),
-    EnvironmentID UNIQUEIDENTIFIER NOT NULL,
+    EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Artifact_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09',
     Name NVARCHAR(255) NOT NULL,
     Description NVARCHAR(MAX) NULL,
     TypeID UNIQUEIDENTIFIER NOT NULL, -- FK to ArtifactType table (has ContentType field)
-    Content NVARCHAR(MAX) NULL, -- The actual artifact content
-    Configuration NVARCHAR(MAX) NULL, -- JSON for type-specific metadata
     Comments NVARCHAR(MAX) NULL, -- User comments about the artifact
     UserID UNIQUEIDENTIFIER NOT NULL, -- Owner of the artifact
     CONSTRAINT PK_Artifact PRIMARY KEY (ID),
@@ -63,7 +71,7 @@ CREATE TABLE ${flyway:defaultSchema}.ArtifactVersion (
 -- -----------------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.Collection (
     ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Collection_ID DEFAULT (newsequentialid()),
-    EnvironmentID UNIQUEIDENTIFIER NOT NULL,
+    EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Collection_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09',
     ParentID UNIQUEIDENTIFIER NULL, -- For nested folder structure
     Name NVARCHAR(255) NOT NULL,
     Description NVARCHAR(MAX) NULL,
@@ -80,7 +88,7 @@ CREATE TABLE ${flyway:defaultSchema}.Collection (
 -- -----------------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.Project (
     ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Project_ID DEFAULT (newsequentialid()),
-    EnvironmentID UNIQUEIDENTIFIER NOT NULL,
+    EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Project_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09',
     ParentID UNIQUEIDENTIFIER NULL, -- For nested project hierarchy
     Name NVARCHAR(255) NOT NULL,
     Description NVARCHAR(MAX) NULL,
@@ -164,11 +172,10 @@ CREATE TABLE ${flyway:defaultSchema}.PublicLink (
 -- =====================================================================================
 
 -- Add EnvironmentID to Conversations table
-ALTER TABLE ${flyway:defaultSchema}.Conversation 
-ADD EnvironmentID UNIQUEIDENTIFIER NULL,
+ALTER TABLE ${flyway:defaultSchema}.Conversation
+ADD EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Conversation_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09',
     ProjectID UNIQUEIDENTIFIER NULL,
-    IsPinned BIT NOT NULL CONSTRAINT DF_Conversation_IsPinned DEFAULT (0),
-    LastActivityAt DATETIMEOFFSET NULL;
+    IsPinned BIT NOT NULL CONSTRAINT DF_Conversation_IsPinned DEFAULT (0);
 
 -- Add foreign key constraints after columns are added
 ALTER TABLE ${flyway:defaultSchema}.Conversation
@@ -177,56 +184,23 @@ ADD CONSTRAINT FK_Conversation_Environment FOREIGN KEY (EnvironmentID) REFERENCE
 
 -- Add EnvironmentID to Dashboard table for consistency
 ALTER TABLE ${flyway:defaultSchema}.Dashboard
-ADD EnvironmentID UNIQUEIDENTIFIER NULL;
+ADD EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Dashboard_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
 ALTER TABLE ${flyway:defaultSchema}.Dashboard
 ADD CONSTRAINT FK_Dashboard_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID);
 
--- Add EnvironmentID to Report table for consistency  
+-- Add EnvironmentID to Report table for consistency
 ALTER TABLE ${flyway:defaultSchema}.Report
-ADD EnvironmentID UNIQUEIDENTIFIER NULL;
+ADD EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Report_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
 ALTER TABLE ${flyway:defaultSchema}.Report
 ADD CONSTRAINT FK_Report_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID);
 
--- =====================================================================================
--- INDEXES FOR PERFORMANCE
--- =====================================================================================
--- Note: MJ auto-creates indexes for foreign keys, so we only add non-FK indexes here
+-- Add IsPinned to ConversationDetail table to allow pinning specific messages
+ALTER TABLE ${flyway:defaultSchema}.ConversationDetail
+ADD IsPinned BIT NOT NULL CONSTRAINT DF_ConversationDetail_IsPinned DEFAULT (0);
 
--- Environment indexes (none needed - IsDefault is boolean)
 
--- Artifact indexes (TypeID is FK so auto-indexed by MJ)
-
--- Collection indexes
-CREATE INDEX IX_Collection_Sequence ON ${flyway:defaultSchema}.Collection(Sequence);
-
--- Project indexes
-CREATE INDEX IX_Project_IsArchived ON ${flyway:defaultSchema}.Project(IsArchived);
-
--- RecordLink indexes
-CREATE INDEX IX_RecordLink_SourceEntityID_SourceRecordID ON ${flyway:defaultSchema}.RecordLink(SourceEntityID, SourceRecordID);
-CREATE INDEX IX_RecordLink_TargetEntityID_TargetRecordID ON ${flyway:defaultSchema}.RecordLink(TargetEntityID, TargetRecordID);
-CREATE INDEX IX_RecordLink_LinkType ON ${flyway:defaultSchema}.RecordLink(LinkType);
-CREATE INDEX IX_RecordLink_Sequence ON ${flyway:defaultSchema}.RecordLink(Sequence);
-
--- AccessControlRule indexes
-CREATE INDEX IX_AccessControlRule_EntityID_RecordID ON ${flyway:defaultSchema}.AccessControlRule(EntityID, RecordID);
-CREATE INDEX IX_AccessControlRule_GranteeType_GranteeID ON ${flyway:defaultSchema}.AccessControlRule(GranteeType, GranteeID);
-CREATE INDEX IX_AccessControlRule_ExpiresAt ON ${flyway:defaultSchema}.AccessControlRule(ExpiresAt);
-CREATE INDEX IX_AccessControlRule_CanRead ON ${flyway:defaultSchema}.AccessControlRule(CanRead);
-CREATE INDEX IX_AccessControlRule_CanUpdate ON ${flyway:defaultSchema}.AccessControlRule(CanUpdate);
-CREATE INDEX IX_AccessControlRule_CanDelete ON ${flyway:defaultSchema}.AccessControlRule(CanDelete);
-CREATE INDEX IX_AccessControlRule_CanShare ON ${flyway:defaultSchema}.AccessControlRule(CanShare);
-
--- PublicLink indexes
-CREATE INDEX IX_PublicLink_Token ON ${flyway:defaultSchema}.PublicLink(Token);
-CREATE INDEX IX_PublicLink_IsActive ON ${flyway:defaultSchema}.PublicLink(IsActive);
-CREATE INDEX IX_PublicLink_ExpiresAt ON ${flyway:defaultSchema}.PublicLink(ExpiresAt);
-
--- Conversation updated indexes
-CREATE INDEX IX_Conversation_LastActivityAt ON ${flyway:defaultSchema}.Conversation(LastActivityAt DESC);
-CREATE INDEX IX_Conversation_IsPinned ON ${flyway:defaultSchema}.Conversation(IsPinned);
 
 -- =====================================================================================
 -- EXTENDED PROPERTIES FOR DOCUMENTATION
@@ -287,28 +261,14 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE', @level1name = 'Artifact',
     @level2type = N'COLUMN', @level2name = 'Name';
 
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Detailed description of the artifact contents and purpose',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'Artifact',
     @level2type = N'COLUMN', @level2name = 'Description';
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description',
-    @value = N'JSON configuration and metadata for this artifact',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Artifact',
-    @level2type = N'COLUMN', @level2name = 'Configuration';
-
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description',
-    @value = N'The actual artifact content (code, markdown, JSON data, etc.)',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Artifact',
-    @level2type = N'COLUMN', @level2name = 'Content';
-
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'User comments about the artifact',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
@@ -501,7 +461,7 @@ EXEC sp_addextendedproperty
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
-    @value = N'Type of grantee receiving permission (User, Role, Everyone, Public)',
+    @value = N'Type of grantee receiving permission (User, Role, Everyone, Public). "Everyone" means all authenticated users whereas "Public" means any authenticated OR anonymous user.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'AccessControlRule',
     @level2type = N'COLUMN', @level2name = 'GranteeType';
@@ -609,16 +569,19 @@ EXEC sp_addextendedproperty
 -- ===========================================
 -- Conversation Table Updates
 -- ===========================================
-EXEC sp_addextendedproperty 
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Indicates if this conversation is pinned to the top of lists',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'Conversation',
     @level2type = N'COLUMN', @level2name = 'IsPinned';
 
-EXEC sp_addextendedproperty 
+-- ===========================================
+-- ConversationDetail Table Updates
+-- ===========================================
+EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Timestamp of the last activity in this conversation',
+    @value = N'Indicates if this message is pinned within the conversation for easy reference',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Conversation',
-    @level2type = N'COLUMN', @level2name = 'LastActivityAt';
+    @level1type = N'TABLE', @level1name = 'ConversationDetail',
+    @level2type = N'COLUMN', @level2name = 'IsPinned';
