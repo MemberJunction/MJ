@@ -3762,6 +3762,12 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Completion Time
         * * SQL Data Type: bigint
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
+    IsPinned: z.boolean().describe(`
+        * * Field Name: IsPinned
+        * * Display Name: Is Pinned
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -3852,6 +3858,23 @@ export const ConversationSchema = z.object({
     *   * Processing
     *   * Available
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    ProjectID: z.string().nullable().describe(`
+        * * Field Name: ProjectID
+        * * Display Name: Project ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    IsPinned: z.boolean().describe(`
+        * * Field Name: IsPinned
+        * * Display Name: Is Pinned
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if this conversation is pinned to the top of lists`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -4001,6 +4024,12 @@ export const DashboardSchema = z.object({
         * * Display Name: Code
         * * SQL Data Type: nvarchar(255)
         * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -7473,6 +7502,94 @@ export const ListSchema = z.object({
 export type ListEntityType = z.infer<typeof ListSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Access Control Rules
+ */
+export const AccessControlRuleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Primary key value(s) of the record being protected - scalar for simple PKs or JSON for composite PKs`),
+    GranteeType: z.union([z.literal('User'), z.literal('Role'), z.literal('Everyone'), z.literal('Public')]).describe(`
+        * * Field Name: GranteeType
+        * * Display Name: Grantee Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User
+    *   * Role
+    *   * Everyone
+    *   * Public
+        * * Description: Type of grantee receiving permission (User, Role, Everyone, Public). "Everyone" means all authenticated users whereas "Public" means any authenticated OR anonymous user.`),
+    GranteeID: z.string().nullable().describe(`
+        * * Field Name: GranteeID
+        * * Display Name: Grantee ID
+        * * SQL Data Type: uniqueidentifier`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Permission to read/view the record`),
+    CanCreate: z.boolean().describe(`
+        * * Field Name: CanCreate
+        * * Display Name: Can Create
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Permission to create new related records`),
+    CanUpdate: z.boolean().describe(`
+        * * Field Name: CanUpdate
+        * * Display Name: Can Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Permission to update/modify the record`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Permission to delete the record`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Permission to share/grant permissions to other users`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration date/time for this access rule`),
+    GrantedByUserID: z.string().describe(`
+        * * Field Name: GrantedByUserID
+        * * Display Name: Granted By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AccessControlRuleEntityType = z.infer<typeof AccessControlRuleSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Prompts
  */
 export const AIAgentPromptSchema = z.object({
@@ -8722,7 +8839,7 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -9505,6 +9622,172 @@ export const ArtifactTypeSchema = z.object({
 export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Versions
+ */
+export const ArtifactVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: int
+        * * Description: Sequential version number for this artifact`),
+    Content: z.string().nullable().describe(`
+        * * Field Name: Content
+        * * Display Name: Content
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The content of the artifact at this version`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for this version`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User comments specific to this version`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ArtifactVersionEntityType = z.infer<typeof ArtifactVersionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Artifacts
+ */
+export const ArtifactSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the artifact`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the artifact contents and purpose`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User comments about the artifact`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ArtifactEntityType = z.infer<typeof ArtifactSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Collections
+ */
+export const CollectionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the collection`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the collection purpose`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Font Awesome icon class for UI display`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(7)
+        * * Description: Hex color code for UI display (#RRGGBB format)`),
+    Sequence: z.number().nullable().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Display sequence for ordering collections in UI`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type CollectionEntityType = z.infer<typeof CollectionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Component Dependencies
  */
 export const ComponentDependencySchema = z.object({
@@ -10233,6 +10516,184 @@ export const DashboardUserStateSchema = z.object({
 export type DashboardUserStateEntityType = z.infer<typeof DashboardUserStateSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Environments
+ */
+export const EnvironmentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the environment`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the environment purpose and scope`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if this is the default environment for the organization`),
+    Settings: z.string().nullable().describe(`
+        * * Field Name: Settings
+        * * Display Name: Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for environment-specific settings and features`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type EnvironmentEntityType = z.infer<typeof EnvironmentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Projects
+ */
+export const ProjectSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the project`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the project goals and scope`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(7)
+        * * Description: Hex color code for project badges in UI (#RRGGBB format)`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Font Awesome icon class for UI display`),
+    IsArchived: z.boolean().describe(`
+        * * Field Name: IsArchived
+        * * Display Name: Is Archived
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates if this project is archived and should be hidden from active lists`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ProjectEntityType = z.infer<typeof ProjectSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Public Links
+ */
+export const PublicLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ResourceType: z.union([z.literal('Artifact'), z.literal('Conversation'), z.literal('Collection')]).describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Artifact
+    *   * Conversation
+    *   * Collection
+        * * Description: Type of resource being shared (Artifact, Conversation, Collection)`),
+    ResourceID: z.string().describe(`
+        * * Field Name: ResourceID
+        * * Display Name: Resource ID
+        * * SQL Data Type: uniqueidentifier`),
+    Token: z.string().describe(`
+        * * Field Name: Token
+        * * Display Name: Token
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique token for accessing the shared resource via URL`),
+    PasswordHash: z.string().nullable().describe(`
+        * * Field Name: PasswordHash
+        * * Display Name: Password Hash
+        * * SQL Data Type: nvarchar(255)
+        * * Description: SHA256 hash of optional password for additional security`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration date/time for this public link`),
+    MaxViews: z.number().nullable().describe(`
+        * * Field Name: MaxViews
+        * * Display Name: Max Views
+        * * SQL Data Type: int
+        * * Description: Maximum number of times this link can be viewed`),
+    CurrentViews: z.number().describe(`
+        * * Field Name: CurrentViews
+        * * Display Name: Current Views
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Current count of how many times this link has been viewed`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates if this link is currently active and accessible`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type PublicLinkEntityType = z.infer<typeof PublicLinkSchema>;
+
+/**
  * zod schema definition for the entity MJ: Query Parameters
  */
 export const QueryParameterSchema = z.object({
@@ -10321,6 +10782,64 @@ export const QueryParameterSchema = z.object({
 });
 
 export type QueryParameterEntityType = z.infer<typeof QueryParameterSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Links
+ */
+export const RecordLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SourceEntityID: z.string().describe(`
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    SourceRecordID: z.string().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Primary key value(s) of the source record - scalar for simple PKs or JSON KeyValuePair array for composite PKs`),
+    TargetEntityID: z.string().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    TargetRecordID: z.string().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Primary key value(s) of the target record - scalar for simple PKs or JSON KeyValuePair array for composite PKs`),
+    LinkType: z.string().nullable().describe(`
+        * * Field Name: LinkType
+        * * Display Name: Link Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Application-specific relationship type describing how the records are related`),
+    Sequence: z.number().nullable().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Display sequence for ordering linked records in UI`),
+    Metadata: z.string().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON field for storing additional link-specific metadata`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type RecordLinkEntityType = z.infer<typeof RecordLinkSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report User States
@@ -10425,6 +10944,188 @@ export const ReportVersionSchema = z.object({
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Task Dependencies
+ */
+export const TaskDependencySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TaskID: z.string().describe(`
+        * * Field Name: TaskID
+        * * Display Name: Task ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
+    DependsOnTaskID: z.string().describe(`
+        * * Field Name: DependsOnTaskID
+        * * Display Name: Depends On Task ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
+    DependencyType: z.union([z.literal('Prerequisite'), z.literal('Corequisite'), z.literal('Optional')]).describe(`
+        * * Field Name: DependencyType
+        * * Display Name: Dependency Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Prerequisite
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Prerequisite
+    *   * Corequisite
+    *   * Optional
+        * * Description: Type of dependency relationship (Prerequisite, Corequisite, Optional)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type TaskDependencyEntityType = z.infer<typeof TaskDependencySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Task Types
+ */
+export const TaskTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the task type`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this task type represents and when it should be used`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type TaskTypeEntityType = z.infer<typeof TaskTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Tasks
+ */
+export const TaskSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name for the task`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the task requirements and objectives`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    ProjectID: z.string().nullable().describe(`
+        * * Field Name: ProjectID
+        * * Display Name: Project ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    ConversationDetailID: z.string().nullable().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Complete'), z.literal('Cancelled'), z.literal('Failed'), z.literal('Blocked'), z.literal('Deferred')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * In Progress
+    *   * Complete
+    *   * Cancelled
+    *   * Failed
+    *   * Blocked
+    *   * Deferred
+        * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`),
+    PercentComplete: z.number().nullable().describe(`
+        * * Field Name: PercentComplete
+        * * Display Name: Percent Complete
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Completion percentage for tracking progress (0-100)`),
+    DueAt: z.date().nullable().describe(`
+        * * Field Name: DueAt
+        * * Display Name: Due At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Due date and time for task completion`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when work on the task began`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the task was completed`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type TaskEntityType = z.infer<typeof TaskSchema>;
 
 /**
  * zod schema definition for the entity Output Delivery Types
@@ -11863,6 +12564,12 @@ export const ReportSchema = z.object({
         * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -24056,6 +24763,20 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: IsPinned
+    * * Display Name: Is Pinned
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if this message is pinned within the conversation for easy reference
+    */
+    get IsPinned(): boolean {
+        return this.Get('IsPinned');
+    }
+    set IsPinned(value: boolean) {
+        this.Set('IsPinned', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -24315,6 +25036,47 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     }
     set Status(value: 'Processing' | 'Available') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ProjectID
+    * * Display Name: Project ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    */
+    get ProjectID(): string | null {
+        return this.Get('ProjectID');
+    }
+    set ProjectID(value: string | null) {
+        this.Set('ProjectID', value);
+    }
+
+    /**
+    * * Field Name: IsPinned
+    * * Display Name: Is Pinned
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if this conversation is pinned to the top of lists
+    */
+    get IsPinned(): boolean {
+        return this.Get('IsPinned');
+    }
+    set IsPinned(value: boolean) {
+        this.Set('IsPinned', value);
     }
 
     /**
@@ -24693,6 +25455,20 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
     set Code(value: string | null) {
         this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
     }
 
     /**
@@ -33479,6 +34255,224 @@ export class ListEntity extends BaseEntity<ListEntityType> {
 
 
 /**
+ * MJ: Access Control Rules - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AccessControlRule
+ * * Base View: vwAccessControlRules
+ * * @description Generic ACL-style permission system that can control access to any entity record in the system with granular CRUD permissions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Access Control Rules')
+export class AccessControlRuleEntity extends BaseEntity<AccessControlRuleEntityType> {
+    /**
+    * Loads the MJ: Access Control Rules record from the database
+    * @param ID: string - primary key value to load the MJ: Access Control Rules record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AccessControlRuleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Primary key value(s) of the record being protected - scalar for simple PKs or JSON for composite PKs
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: GranteeType
+    * * Display Name: Grantee Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User
+    *   * Role
+    *   * Everyone
+    *   * Public
+    * * Description: Type of grantee receiving permission (User, Role, Everyone, Public). "Everyone" means all authenticated users whereas "Public" means any authenticated OR anonymous user.
+    */
+    get GranteeType(): 'User' | 'Role' | 'Everyone' | 'Public' {
+        return this.Get('GranteeType');
+    }
+    set GranteeType(value: 'User' | 'Role' | 'Everyone' | 'Public') {
+        this.Set('GranteeType', value);
+    }
+
+    /**
+    * * Field Name: GranteeID
+    * * Display Name: Grantee ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get GranteeID(): string | null {
+        return this.Get('GranteeID');
+    }
+    set GranteeID(value: string | null) {
+        this.Set('GranteeID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Permission to read/view the record
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanCreate
+    * * Display Name: Can Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Permission to create new related records
+    */
+    get CanCreate(): boolean {
+        return this.Get('CanCreate');
+    }
+    set CanCreate(value: boolean) {
+        this.Set('CanCreate', value);
+    }
+
+    /**
+    * * Field Name: CanUpdate
+    * * Display Name: Can Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Permission to update/modify the record
+    */
+    get CanUpdate(): boolean {
+        return this.Get('CanUpdate');
+    }
+    set CanUpdate(value: boolean) {
+        this.Set('CanUpdate', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Permission to delete the record
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Permission to share/grant permissions to other users
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration date/time for this access rule
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: GrantedByUserID
+    * * Display Name: Granted By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get GrantedByUserID(): string {
+        return this.Get('GrantedByUserID');
+    }
+    set GrantedByUserID(value: string) {
+        this.Set('GrantedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Prompts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
@@ -36891,7 +37885,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -38989,6 +39983,450 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
 
 
 /**
+ * MJ: Artifact Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactVersion
+ * * Base View: vwArtifactVersions
+ * * @description Version history for artifacts, tracking all changes over time
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Versions')
+export class ArtifactVersionEntity extends BaseEntity<ArtifactVersionEntityType> {
+    /**
+    * Loads the MJ: Artifact Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ArtifactVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: VersionNumber
+    * * Display Name: Version Number
+    * * SQL Data Type: int
+    * * Description: Sequential version number for this artifact
+    */
+    get VersionNumber(): number {
+        return this.Get('VersionNumber');
+    }
+    set VersionNumber(value: number) {
+        this.Set('VersionNumber', value);
+    }
+
+    /**
+    * * Field Name: Content
+    * * Display Name: Content
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The content of the artifact at this version
+    */
+    get Content(): string | null {
+        return this.Get('Content');
+    }
+    set Content(value: string | null) {
+        this.Set('Content', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for this version
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments specific to this version
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Artifacts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Artifact
+ * * Base View: vwArtifacts
+ * * @description Independent content items (code, documents, charts) that can be linked to multiple conversations and collections. Supports versioning and sharing.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifacts')
+export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
+    /**
+    * Loads the MJ: Artifacts record from the database
+    * @param ID: string - primary key value to load the MJ: Artifacts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ArtifactEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the artifact
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the artifact contents and purpose
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments about the artifact
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Collections - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Collection
+ * * Base View: vwCollections
+ * * @description Organizational folders for storing and categorizing artifacts. Supports nested folder structure for hierarchical organization.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Collections')
+export class CollectionEntity extends BaseEntity<CollectionEntityType> {
+    /**
+    * Loads the MJ: Collections record from the database
+    * @param ID: string - primary key value to load the MJ: Collections record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CollectionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the collection
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the collection purpose
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Font Awesome icon class for UI display
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(7)
+    * * Description: Hex color code for UI display (#RRGGBB format)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Display sequence for ordering collections in UI
+    */
+    get Sequence(): number | null {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number | null) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Component Dependencies - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ComponentDependency
@@ -40900,6 +42338,470 @@ export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntit
 
 
 /**
+ * MJ: Environments - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Environment
+ * * Base View: vwEnvironments
+ * * @description Top-level container for organizing conversations, artifacts, and collections. Provides isolation and grouping for different teams, clients, or functional areas.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Environments')
+export class EnvironmentEntity extends BaseEntity<EnvironmentEntityType> {
+    /**
+    * Loads the MJ: Environments record from the database
+    * @param ID: string - primary key value to load the MJ: Environments record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof EnvironmentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the environment
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the environment purpose and scope
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if this is the default environment for the organization
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Settings
+    * * Display Name: Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for environment-specific settings and features
+    */
+    get Settings(): string | null {
+        return this.Get('Settings');
+    }
+    set Settings(value: string | null) {
+        this.Set('Settings', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Projects - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Project
+ * * Base View: vwProjects
+ * * @description Container for grouping related conversations around a common topic, client, or initiative. Supports nesting for sub-projects.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Projects')
+export class ProjectEntity extends BaseEntity<ProjectEntityType> {
+    /**
+    * Loads the MJ: Projects record from the database
+    * @param ID: string - primary key value to load the MJ: Projects record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ProjectEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the project
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the project goals and scope
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(7)
+    * * Description: Hex color code for project badges in UI (#RRGGBB format)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Font Awesome icon class for UI display
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: IsArchived
+    * * Display Name: Is Archived
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if this project is archived and should be hidden from active lists
+    */
+    get IsArchived(): boolean {
+        return this.Get('IsArchived');
+    }
+    set IsArchived(value: boolean) {
+        this.Set('IsArchived', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Public Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: PublicLink
+ * * Base View: vwPublicLinks
+ * * @description Shareable links for external access to artifacts and other resources. Supports password protection and expiration.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Public Links')
+export class PublicLinkEntity extends BaseEntity<PublicLinkEntityType> {
+    /**
+    * Loads the MJ: Public Links record from the database
+    * @param ID: string - primary key value to load the MJ: Public Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof PublicLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Artifact
+    *   * Conversation
+    *   * Collection
+    * * Description: Type of resource being shared (Artifact, Conversation, Collection)
+    */
+    get ResourceType(): 'Artifact' | 'Conversation' | 'Collection' {
+        return this.Get('ResourceType');
+    }
+    set ResourceType(value: 'Artifact' | 'Conversation' | 'Collection') {
+        this.Set('ResourceType', value);
+    }
+
+    /**
+    * * Field Name: ResourceID
+    * * Display Name: Resource ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ResourceID(): string {
+        return this.Get('ResourceID');
+    }
+    set ResourceID(value: string) {
+        this.Set('ResourceID', value);
+    }
+
+    /**
+    * * Field Name: Token
+    * * Display Name: Token
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique token for accessing the shared resource via URL
+    */
+    get Token(): string {
+        return this.Get('Token');
+    }
+    set Token(value: string) {
+        this.Set('Token', value);
+    }
+
+    /**
+    * * Field Name: PasswordHash
+    * * Display Name: Password Hash
+    * * SQL Data Type: nvarchar(255)
+    * * Description: SHA256 hash of optional password for additional security
+    */
+    get PasswordHash(): string | null {
+        return this.Get('PasswordHash');
+    }
+    set PasswordHash(value: string | null) {
+        this.Set('PasswordHash', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration date/time for this public link
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: MaxViews
+    * * Display Name: Max Views
+    * * SQL Data Type: int
+    * * Description: Maximum number of times this link can be viewed
+    */
+    get MaxViews(): number | null {
+        return this.Get('MaxViews');
+    }
+    set MaxViews(value: number | null) {
+        this.Set('MaxViews', value);
+    }
+
+    /**
+    * * Field Name: CurrentViews
+    * * Display Name: Current Views
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Current count of how many times this link has been viewed
+    */
+    get CurrentViews(): number {
+        return this.Get('CurrentViews');
+    }
+    set CurrentViews(value: number) {
+        this.Set('CurrentViews', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates if this link is currently active and accessible
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Query Parameters - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: QueryParameter
@@ -41112,6 +43014,162 @@ export class QueryParameterEntity extends BaseEntity<QueryParameterEntityType> {
     */
     get Query(): string {
         return this.Get('Query');
+    }
+}
+
+
+/**
+ * MJ: Record Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordLink
+ * * Base View: vwRecordLinks
+ * * @description Generic linking table that can connect any two records in the system, providing a flexible relationship management system.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Links')
+export class RecordLinkEntity extends BaseEntity<RecordLinkEntityType> {
+    /**
+    * Loads the MJ: Record Links record from the database
+    * @param ID: string - primary key value to load the MJ: Record Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof RecordLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityID
+    * * Display Name: Source Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get SourceEntityID(): string {
+        return this.Get('SourceEntityID');
+    }
+    set SourceEntityID(value: string) {
+        this.Set('SourceEntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Primary key value(s) of the source record - scalar for simple PKs or JSON KeyValuePair array for composite PKs
+    */
+    get SourceRecordID(): string {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get TargetEntityID(): string {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Primary key value(s) of the target record - scalar for simple PKs or JSON KeyValuePair array for composite PKs
+    */
+    get TargetRecordID(): string {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: LinkType
+    * * Display Name: Link Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Application-specific relationship type describing how the records are related
+    */
+    get LinkType(): string | null {
+        return this.Get('LinkType');
+    }
+    set LinkType(value: string | null) {
+        this.Set('LinkType', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Display sequence for ordering linked records in UI
+    */
+    get Sequence(): number | null {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number | null) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON field for storing additional link-specific metadata
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -41413,6 +43471,533 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     */
     get Report(): string {
         return this.Get('Report');
+    }
+}
+
+
+/**
+ * MJ: Task Dependencies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TaskDependency
+ * * Base View: vwTaskDependencies
+ * * @description Defines dependencies between tasks to create a directed acyclic graph (DAG) for workflow orchestration
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Task Dependencies')
+export class TaskDependencyEntity extends BaseEntity<TaskDependencyEntityType> {
+    /**
+    * Loads the MJ: Task Dependencies record from the database
+    * @param ID: string - primary key value to load the MJ: Task Dependencies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TaskDependencyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that a task cannot depend on itself. In other words, the dependent task and the task it depends on must be different.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTaskIDIsNotEqualToDependsOnTaskID(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that a task cannot depend on itself. In other words, the dependent task and the task it depends on must be different.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTaskIDIsNotEqualToDependsOnTaskID(result: ValidationResult) {
+    	if (this.TaskID === this.DependsOnTaskID) {
+    		result.Errors.push(new ValidationErrorInfo("TaskID", "A task cannot depend on itself. The TaskID and DependsOnTaskID must be different.", this.TaskID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TaskID
+    * * Display Name: Task ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    */
+    get TaskID(): string {
+        return this.Get('TaskID');
+    }
+    set TaskID(value: string) {
+        this.Set('TaskID', value);
+    }
+
+    /**
+    * * Field Name: DependsOnTaskID
+    * * Display Name: Depends On Task ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    */
+    get DependsOnTaskID(): string {
+        return this.Get('DependsOnTaskID');
+    }
+    set DependsOnTaskID(value: string) {
+        this.Set('DependsOnTaskID', value);
+    }
+
+    /**
+    * * Field Name: DependencyType
+    * * Display Name: Dependency Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Prerequisite
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Prerequisite
+    *   * Corequisite
+    *   * Optional
+    * * Description: Type of dependency relationship (Prerequisite, Corequisite, Optional)
+    */
+    get DependencyType(): 'Prerequisite' | 'Corequisite' | 'Optional' {
+        return this.Get('DependencyType');
+    }
+    set DependencyType(value: 'Prerequisite' | 'Corequisite' | 'Optional') {
+        this.Set('DependencyType', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Task Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TaskType
+ * * Base View: vwTaskTypes
+ * * @description Categorization system for different types of tasks that can be created and managed within the system
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Task Types')
+export class TaskTypeEntity extends BaseEntity<TaskTypeEntityType> {
+    /**
+    * Loads the MJ: Task Types record from the database
+    * @param ID: string - primary key value to load the MJ: Task Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TaskTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the task type
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this task type represents and when it should be used
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Tasks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Task
+ * * Base View: vwTasks
+ * * @description Core task management entity supporting multi-agent and multi-human collaboration with dependency tracking
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tasks')
+export class TaskEntity extends BaseEntity<TaskEntityType> {
+    /**
+    * Loads the MJ: Tasks record from the database
+    * @param ID: string - primary key value to load the MJ: Tasks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof TaskEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * PercentComplete: This rule ensures that the percent complete value must always be between 0 and 100, inclusive.
+    * * Table-Level: This rule ensures that you can have a user, or an agent, or neither, but you cannot have both set at the same time.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePercentCompleteWithinRange(result);
+        this.ValidateUserIDAndAgentIDNotBothSet(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the percent complete value must always be between 0 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePercentCompleteWithinRange(result: ValidationResult) {
+    	if (this.PercentComplete < 0 || this.PercentComplete > 100) {
+    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "Percent complete must be between 0 and 100.", this.PercentComplete, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that you can have a user, or an agent, or neither, but you cannot have both set at the same time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDAndAgentIDNotBothSet(result: ValidationResult) {
+    	if (this.UserID !== null && this.AgentID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "You cannot have both a User and an Agent specified at the same time.", this.UserID, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("AgentID", "You cannot have both an Agent and a User specified at the same time.", this.AgentID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name for the task
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the task requirements and objectives
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ProjectID
+    * * Display Name: Project ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    */
+    get ProjectID(): string | null {
+        return this.Get('ProjectID');
+    }
+    set ProjectID(value: string | null) {
+        this.Set('ProjectID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    */
+    get ConversationDetailID(): string | null {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string | null) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * In Progress
+    *   * Complete
+    *   * Cancelled
+    *   * Failed
+    *   * Blocked
+    *   * Deferred
+    * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)
+    */
+    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Cancelled' | 'Failed' | 'Blocked' | 'Deferred' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Cancelled' | 'Failed' | 'Blocked' | 'Deferred') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: PercentComplete
+    * * Display Name: Percent Complete
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Completion percentage for tracking progress (0-100)
+    */
+    get PercentComplete(): number | null {
+        return this.Get('PercentComplete');
+    }
+    set PercentComplete(value: number | null) {
+        this.Set('PercentComplete', value);
+    }
+
+    /**
+    * * Field Name: DueAt
+    * * Display Name: Due At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Due date and time for task completion
+    */
+    get DueAt(): Date | null {
+        return this.Get('DueAt');
+    }
+    set DueAt(value: Date | null) {
+        this.Set('DueAt', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when work on the task began
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the task was completed
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -45236,6 +47821,20 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     }
     set Thumbnail(value: string | null) {
         this.Set('Thumbnail', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
     }
 
     /**

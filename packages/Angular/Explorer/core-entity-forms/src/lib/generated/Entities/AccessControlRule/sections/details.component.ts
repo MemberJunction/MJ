@@ -1,18 +1,18 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { AccessControlRuleEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Conversations.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Access Control Rules.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-conversation-form-details',
+    selector: 'gen-accesscontrolrule-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -21,58 +21,70 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ExternalID"
+            FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
+            FieldName="GranteeType"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Type"
+            FieldName="GranteeID"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IsArchived"
+            FieldName="CanRead"
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="LinkedEntityID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedRecordID"
-            Type="textarea"
+            FieldName="CanCreate"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DataContextID"
+            FieldName="CanUpdate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanDelete"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanShare"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExpiresAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="GrantedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -92,70 +104,17 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="EnvironmentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ProjectID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IsPinned"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="User"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DataContext"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class ConversationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ConversationEntity;
+export class AccessControlRuleDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AccessControlRuleEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadConversationDetailsComponent() {
+export function LoadAccessControlRuleDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

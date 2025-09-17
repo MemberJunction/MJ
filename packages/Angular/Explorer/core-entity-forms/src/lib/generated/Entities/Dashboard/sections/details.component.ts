@@ -109,6 +109,15 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="EnvironmentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"

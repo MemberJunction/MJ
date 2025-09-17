@@ -1,29 +1,22 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { TaskEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Conversations.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Tasks.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-conversation-form-details',
+    selector: 'gen-task-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ExternalID"
-            Type="textarea"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -42,62 +35,11 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Type"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="IsArchived"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedEntityID"
+            FieldName="TypeID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="LinkedRecordID"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DataContextID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -120,28 +62,76 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IsPinned"
-            Type="checkbox"
+            FieldName="ConversationDetailID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AgentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="User"
+            FieldName="PercentComplete"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DueAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompletedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="LinkedEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DataContext"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -150,12 +140,12 @@ import { ConversationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ConversationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ConversationEntity;
+export class TaskDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: TaskEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadConversationDetailsComponent() {
+export function LoadTaskDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
