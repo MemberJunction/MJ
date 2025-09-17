@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, Router } from 'express';
 import cors from 'cors';
 import { createHash } from 'crypto';
 import { 
@@ -12,7 +12,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjuncti
 import sql from 'mssql';
 import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
-import { DataSourceInfo } from './types.js';
+import { DataSourceInfo, ComponentRegistryServerOptions } from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
@@ -35,34 +35,71 @@ import { DataSourceInfo } from './types.js';
  * ```
  */
 export class ComponentRegistryAPIServer {
-  protected app: express.Application;
+  protected app: express.Application | null = null;
+  protected router: express.Router | null = null;
   protected registry: ComponentRegistryEntity | null = null;
   protected metadata: Metadata;
   protected pool: sql.ConnectionPool | null = null;
   protected readOnlyPool: sql.ConnectionPool | null = null;
   protected dataSources: DataSourceInfo[] = [];
-  
-  constructor() {
-    this.app = express();
+  protected options: ComponentRegistryServerOptions;
+
+  constructor(options: ComponentRegistryServerOptions = {}) {
+    // Set default options
+    this.options = {
+      mode: 'standalone',
+      basePath: '/api/v1',
+      skipDatabaseSetup: false,
+      ...options
+    };
+
+    // Create app or router based on mode
+    if (this.options.mode === 'standalone') {
+      this.app = express();
+      this.router = null;
+    } else {
+      this.app = null;
+      this.router = express.Router();
+    }
+
     this.metadata = new Metadata();
   }
   
   /**
+   * Get the Express Router for mounting on an existing app.
+   * Only available in 'router' mode.
+   *
+   * @returns The Express Router with all registry routes configured
+   * @throws Error if called in standalone mode
+   */
+  public getRouter(): express.Router {
+    if (this.options.mode !== 'router') {
+      throw new Error('getRouter() is only available in router mode');
+    }
+    if (!this.router) {
+      throw new Error('Router not initialized. Call initialize() first.');
+    }
+    return this.router;
+  }
+
+  /**
    * Initialize the server, including database connection, middleware, and routes.
    * This method should be called before starting the server.
-   * 
+   *
    * @returns Promise that resolves when initialization is complete
    * @throws Error if database connection fails or registry cannot be loaded
    */
   public async initialize(): Promise<void> {
-    // Setup database connection
-    await this.setupDatabase();
-    
+    // Setup database connection only if not skipped
+    if (!this.options.skipDatabaseSetup) {
+      await this.setupDatabase();
+    }
+
     // Load registry metadata if ID provided
     if (componentRegistrySettings?.registryId) {
       await this.loadRegistry();
     }
-    
+
     // Setup middleware and routes
     this.setupMiddleware();
     this.setupRoutes();
@@ -71,16 +108,24 @@ export class ComponentRegistryAPIServer {
   /**
    * Start the Express server on the configured port.
    * Must be called after `initialize()`.
-   * 
+   *
    * @returns Promise that resolves when the server is listening
    */
   public async start(): Promise<void> {
+    if (this.options.mode !== 'standalone') {
+      throw new Error('start() is only available in standalone mode. Use getRouter() in router mode.');
+    }
+
+    if (!this.app) {
+      throw new Error('Express app not initialized');
+    }
+
     const port = componentRegistrySettings?.port || 3200;
-    
+
     return new Promise((resolve) => {
-      this.app.listen(port, () => {
+      this.app!.listen(port, () => {
         LogStatus(`Component Registry API Server running on port ${port}`);
-        LogStatus(`API endpoint: http://localhost:${port}/api/v1`);
+        LogStatus(`API endpoint: http://localhost:${port}${this.options.basePath}`);
         resolve();
       });
     });
@@ -167,22 +212,41 @@ export class ComponentRegistryAPIServer {
   /**
    * Set up Express middleware.
    * Override this method to add custom middleware or modify the middleware stack.
-   * 
+   *
    * @protected
    * @virtual
    */
   protected setupMiddleware(): void {
-    // CORS
-    this.app.use(cors({
-      origin: componentRegistrySettings?.corsOrigins || ['*']
-    }));
-    
-    // JSON parsing
-    this.app.use(express.json());
-    
-    // Auth middleware (if enabled)
+    // Get the target for middleware (app or router)
+    const target = this.options.mode === 'standalone' ? this.app : this.router;
+
+    if (!target) {
+      throw new Error('No app or router available for middleware setup');
+    }
+
+    // In standalone mode, setup CORS and JSON parsing
+    // In router mode, assume parent app handles these
+    if (this.options.mode === 'standalone') {
+      // CORS
+      target.use(cors({
+        origin: componentRegistrySettings?.corsOrigins || ['*']
+      }));
+
+      // JSON parsing
+      target.use(express.json());
+    }
+
+    // Auth middleware applies in both modes (if enabled)
     if (componentRegistrySettings?.requireAuth) {
-      this.app.use('/api/v1/components', this.authMiddleware.bind(this));
+      // In router mode, paths are relative to where router is mounted
+      // In standalone mode, use full paths
+      if (this.options.mode === 'router') {
+        // Apply auth to all /components routes relative to router mount point
+        target.use('/components', this.authMiddleware.bind(this));
+      } else {
+        // Apply auth to full path in standalone mode
+        target.use(`${this.options.basePath}/components`, this.authMiddleware.bind(this));
+      }
     }
   }
   
@@ -243,19 +307,34 @@ export class ComponentRegistryAPIServer {
   /**
    * Set up the API routes.
    * Override this method to add custom routes or modify existing ones.
-   * 
+   *
    * @protected
    * @virtual
    */
   protected setupRoutes(): void {
-    // Registry info
-    this.app.get('/api/v1/registry', this.getRegistryInfo.bind(this));
-    this.app.get('/api/v1/health', this.getHealth.bind(this));
-    
-    // Component operations
-    this.app.get('/api/v1/components', this.listComponents.bind(this));
-    this.app.get('/api/v1/components/search', this.searchComponents.bind(this));
-    this.app.get('/api/v1/components/:namespace/:name', this.getComponent.bind(this));
+    // Get the target for routes (app or router)
+    const target = this.options.mode === 'standalone' ? this.app : this.router;
+
+    if (!target) {
+      throw new Error('No app or router available for route setup');
+    }
+
+    if (this.options.mode === 'router') {
+      // Router mode: paths are relative to where router is mounted
+      target.get('/registry', this.getRegistryInfo.bind(this));
+      target.get('/health', this.getHealth.bind(this));
+      target.get('/components', this.listComponents.bind(this));
+      target.get('/components/search', this.searchComponents.bind(this));
+      target.get('/components/:namespace/:name', this.getComponent.bind(this));
+    } else {
+      // Standalone mode: use full paths with basePath
+      const basePath = this.options.basePath;
+      target.get(`${basePath}/registry`, this.getRegistryInfo.bind(this));
+      target.get(`${basePath}/health`, this.getHealth.bind(this));
+      target.get(`${basePath}/components`, this.listComponents.bind(this));
+      target.get(`${basePath}/components/search`, this.searchComponents.bind(this));
+      target.get(`${basePath}/components/:namespace/:name`, this.getComponent.bind(this));
+    }
   }
   
   /**

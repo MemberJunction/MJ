@@ -1,5 +1,14 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

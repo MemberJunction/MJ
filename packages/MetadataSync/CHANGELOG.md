@@ -1,5 +1,17 @@
 # @memberjunction/metadata-sync
 
+## 2.100.3
+
+### Patch Changes
+
+- 30afb26: Add alwaysPush flag for push command
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/graphql-dataprovider@2.100.3
+  - @memberjunction/core-entities-server@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

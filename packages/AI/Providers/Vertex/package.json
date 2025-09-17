@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vertex",
-  "version": "2.100.2",
+  "version": "2.100.3",
   "description": "MemberJunction Wrapper for Google Vertex AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.8.1",
-    "@memberjunction/ai": "2.100.2",
-    "@memberjunction/global": "2.100.2"
+    "@memberjunction/ai": "2.100.3",
+    "@memberjunction/global": "2.100.3"
   }
 }

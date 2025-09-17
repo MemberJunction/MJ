@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/cli
 
+## 2.100.3
+
+### Patch Changes
+
+- Updated dependencies [30afb26]
+  - @memberjunction/metadata-sync@2.100.3
+  - @memberjunction/ai-cli@2.100.3
+  - @memberjunction/codegen-lib@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

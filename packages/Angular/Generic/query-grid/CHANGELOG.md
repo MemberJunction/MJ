@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-query-grid
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ng-compare-records@2.100.3
+- @memberjunction/ng-shared@2.100.3
+- @memberjunction/ng-container-directives@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes

@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions-base@2.100.3
+- @memberjunction/ng-compare-records@2.100.3
+- @memberjunction/ng-entity-form-dialog@2.100.3
+- @memberjunction/ng-shared@2.100.3
+- @memberjunction/ng-base-types@2.100.3
+- @memberjunction/ng-entity-communications@2.100.3
+- @memberjunction/communication-types@2.100.3
+- @memberjunction/entity-communications-client@2.100.3
+- @memberjunction/templates-base-types@2.100.3
+- @memberjunction/ng-container-directives@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
 ## 2.100.2
 
 ### Patch Changes
