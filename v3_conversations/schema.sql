@@ -200,7 +200,67 @@ ADD CONSTRAINT FK_Report_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${fl
 ALTER TABLE ${flyway:defaultSchema}.ConversationDetail
 ADD IsPinned BIT NOT NULL CONSTRAINT DF_ConversationDetail_IsPinned DEFAULT (0);
 
+-- =====================================================================================
+-- TASK MANAGEMENT ENTITIES
+-- =====================================================================================
 
+-- -----------------------------------------------------------------------------
+-- TaskType: Simple categorization of tasks
+-- -----------------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.TaskType (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_TaskType_ID DEFAULT (newsequentialid()),
+    Name NVARCHAR(255) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    CONSTRAINT PK_TaskType PRIMARY KEY (ID)
+);
+
+-- -----------------------------------------------------------------------------
+-- Task: Core task entity
+-- -----------------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.Task (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Task_ID DEFAULT (newsequentialid()),
+    ParentID UNIQUEIDENTIFIER NULL, -- For subtask hierarchy
+    Name NVARCHAR(255) NOT NULL,
+    Description NVARCHAR(MAX) NULL,
+    TypeID UNIQUEIDENTIFIER NOT NULL,
+    EnvironmentID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_Task_EnvironmentID DEFAULT 'F51358F3-9447-4176-B313-BF8025FD8D09',
+    ProjectID UNIQUEIDENTIFIER NULL,
+    ConversationDetailID UNIQUEIDENTIFIER NULL, -- Link to specific message that created/relates to task
+    UserID UNIQUEIDENTIFIER NULL, -- Assigned user (mutually exclusive with AgentID)
+    AgentID UNIQUEIDENTIFIER NULL, -- Assigned AI agent (mutually exclusive with UserID)
+    Status NVARCHAR(50) NOT NULL CONSTRAINT DF_Task_Status DEFAULT ('Pending'),
+    PercentComplete INT NULL CONSTRAINT DF_Task_PercentComplete DEFAULT (0),
+    DueAt DATETIMEOFFSET NULL,
+    StartedAt DATETIMEOFFSET NULL,
+    CompletedAt DATETIMEOFFSET NULL,
+    CONSTRAINT PK_Task PRIMARY KEY (ID),
+    CONSTRAINT FK_Task_Parent FOREIGN KEY (ParentID) REFERENCES ${flyway:defaultSchema}.Task(ID),
+    CONSTRAINT FK_Task_Type FOREIGN KEY (TypeID) REFERENCES ${flyway:defaultSchema}.TaskType(ID),
+    CONSTRAINT FK_Task_Environment FOREIGN KEY (EnvironmentID) REFERENCES ${flyway:defaultSchema}.Environment(ID),
+    CONSTRAINT FK_Task_Project FOREIGN KEY (ProjectID) REFERENCES ${flyway:defaultSchema}.Project(ID),
+    CONSTRAINT FK_Task_ConversationDetail FOREIGN KEY (ConversationDetailID) REFERENCES ${flyway:defaultSchema}.ConversationDetail(ID),
+    CONSTRAINT FK_Task_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT FK_Task_Agent FOREIGN KEY (AgentID) REFERENCES ${flyway:defaultSchema}.AIAgent(ID),
+    CONSTRAINT CK_Task_Status CHECK (Status IN ('Pending', 'In Progress', 'Complete', 'Cancelled', 'Failed', 'Blocked', 'Deferred')),
+    CONSTRAINT CK_Task_PercentComplete CHECK (PercentComplete >= 0 AND PercentComplete <= 100),
+    CONSTRAINT CK_Task_Assignment CHECK ((UserID IS NULL AND AgentID IS NULL) OR (UserID IS NOT NULL AND AgentID IS NULL) OR (UserID IS NULL AND AgentID IS NOT NULL))
+);
+
+-- -----------------------------------------------------------------------------
+-- TaskDependency: DAG structure for task prerequisites
+-- -----------------------------------------------------------------------------
+CREATE TABLE ${flyway:defaultSchema}.TaskDependency (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_TaskDependency_ID DEFAULT (newsequentialid()),
+    TaskID UNIQUEIDENTIFIER NOT NULL, -- The dependent task
+    DependsOnTaskID UNIQUEIDENTIFIER NOT NULL, -- The prerequisite task
+    DependencyType NVARCHAR(50) NOT NULL CONSTRAINT DF_TaskDependency_Type DEFAULT ('Prerequisite'),
+    CONSTRAINT PK_TaskDependency PRIMARY KEY (ID),
+    CONSTRAINT FK_TaskDependency_Task FOREIGN KEY (TaskID) REFERENCES ${flyway:defaultSchema}.Task(ID),
+    CONSTRAINT FK_TaskDependency_DependsOn FOREIGN KEY (DependsOnTaskID) REFERENCES ${flyway:defaultSchema}.Task(ID),
+    CONSTRAINT CK_TaskDependency_Type CHECK (DependencyType IN ('Prerequisite', 'Corequisite', 'Optional')),
+    CONSTRAINT UQ_TaskDependency_Pair UNIQUE (TaskID, DependsOnTaskID),
+    CONSTRAINT CK_TaskDependency_NoCycle CHECK (TaskID != DependsOnTaskID)
+);
 
 -- =====================================================================================
 -- EXTENDED PROPERTIES FOR DOCUMENTATION
@@ -585,3 +645,100 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'ConversationDetail',
     @level2type = N'COLUMN', @level2name = 'IsPinned';
+
+-- ===========================================
+-- TaskType Table and Columns
+-- ===========================================
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Categorization system for different types of tasks that can be created and managed within the system',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'TaskType';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Display name for the task type',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'TaskType',
+    @level2type = N'COLUMN', @level2name = 'Name';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Detailed description of what this task type represents and when it should be used',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'TaskType',
+    @level2type = N'COLUMN', @level2name = 'Description';
+
+-- ===========================================
+-- Task Table and Columns
+-- ===========================================
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Core task management entity supporting multi-agent and multi-human collaboration with dependency tracking',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Display name for the task',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'Name';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Detailed description of the task requirements and objectives',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'Description';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'Status';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Completion percentage for tracking progress (0-100)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'PercentComplete';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Due date and time for task completion',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'DueAt';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Timestamp when work on the task began',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'StartedAt';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Timestamp when the task was completed',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'Task',
+    @level2type = N'COLUMN', @level2name = 'CompletedAt';
+
+-- ===========================================
+-- TaskDependency Table and Columns
+-- ===========================================
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Defines dependencies between tasks to create a directed acyclic graph (DAG) for workflow orchestration',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'TaskDependency';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Type of dependency relationship (Prerequisite, Corequisite, Optional)',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'TaskDependency',
+    @level2type = N'COLUMN', @level2name = 'DependencyType';
