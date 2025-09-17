@@ -107,29 +107,24 @@ BEGIN TRY
 
     -- Insert artifacts into new Artifact table
     -- Note: We preserve the original IDs to maintain relationships
+    -- Content and Configuration are now stored ONLY in ArtifactVersion
     INSERT INTO ${flyway:defaultSchema}.Artifact (
         ID,
         EnvironmentID,
         Name,
         Description,
         TypeID,
-        Content,
-        Configuration,
         Comments,
         UserID,
         __mj_CreatedAt,
         __mj_UpdatedAt
     )
-    SELECT 
+    SELECT
         CA.ID,                              -- Preserve original ID
         @DefaultEnvironmentID,               -- Use default environment
         CA.Name,
         CA.Description,
         CA.ArtifactTypeID,                  -- TypeID maps to ArtifactTypeID
-        -- Content is stored in the latest version, we'll update this in Step 4
-        NULL AS Content,                    
-        -- Configuration will be populated from latest version
-        NULL AS Configuration,
         CA.Comments,
         -- UserID comes from the conversation's UserID (owner)
         C.UserID AS UserID,
@@ -232,30 +227,37 @@ BEGIN TRY
     PRINT 'Migrated ' + CAST(@VersionCount AS VARCHAR(10)) + ' artifact versions.';
 
     -- ============================================================================
-    -- STEP 6: Update Artifact Content and Configuration from Latest Version
+    -- STEP 6: Verify ArtifactVersion Migration
     -- ============================================================================
     PRINT '';
-    PRINT 'Step 6: Updating Artifact content from latest version...';
+    PRINT 'Step 6: Verifying artifact version migration...';
 
-    -- Update each artifact with content from its latest version
-    WITH LatestVersions AS (
-        SELECT 
-            AV.ArtifactID,
-            AV.Content,
-            AV.Configuration,
-            ROW_NUMBER() OVER (PARTITION BY AV.ArtifactID ORDER BY AV.VersionNumber DESC) AS rn
-        FROM ${flyway:defaultSchema}.ArtifactVersion AV
-    )
-    UPDATE A
-    SET 
-        A.Content = LV.Content,
-        A.Configuration = LV.Configuration
+    -- Since Content and Configuration are now ONLY in ArtifactVersion table,
+    -- we just verify that each artifact has at least one version with content
+    DECLARE @ArtifactsWithoutVersions INT;
+
+    SELECT @ArtifactsWithoutVersions = COUNT(*)
     FROM ${flyway:defaultSchema}.Artifact A
-    INNER JOIN LatestVersions LV ON A.ID = LV.ArtifactID
-    WHERE LV.rn = 1
-    AND (A.Content IS NULL OR A.Configuration IS NULL);
+    WHERE NOT EXISTS (
+        SELECT 1 FROM ${flyway:defaultSchema}.ArtifactVersion AV
+        WHERE AV.ArtifactID = A.ID
+    );
 
-    PRINT 'Updated ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' artifacts with latest content.';
+    IF @ArtifactsWithoutVersions > 0
+    BEGIN
+        PRINT 'WARNING: ' + CAST(@ArtifactsWithoutVersions AS VARCHAR(10)) + ' artifacts have no versions.';
+    END
+    ELSE
+    BEGIN
+        PRINT 'All artifacts have associated versions.';
+    END
+
+    -- Log statistics about version content
+    DECLARE @VersionsWithContent INT, @TotalVersions INT;
+    SELECT @VersionsWithContent = COUNT(*) FROM ${flyway:defaultSchema}.ArtifactVersion WHERE Content IS NOT NULL;
+    SELECT @TotalVersions = COUNT(*) FROM ${flyway:defaultSchema}.ArtifactVersion;
+
+    PRINT 'Version statistics: ' + CAST(@VersionsWithContent AS VARCHAR(10)) + ' of ' + CAST(@TotalVersions AS VARCHAR(10)) + ' versions have content.';
 
     -- ============================================================================
     -- STEP 7: Migrate Permissions
@@ -392,8 +394,7 @@ BEGIN TRY
 
     -- Update all existing conversations to use the default environment
     UPDATE ${flyway:defaultSchema}.Conversation
-    SET EnvironmentID = @DefaultEnvironmentID,
-        LastActivityAt = __mj_UpdatedAt    -- Set initial LastActivityAt
+    SET EnvironmentID = @DefaultEnvironmentID
     WHERE EnvironmentID IS NULL;
 
     PRINT 'Updated ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' conversations.';
