@@ -202,8 +202,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private isDestroying = false;
   private componentId: string;
   private componentVersion: string = '';  // Store the version for resolver
-  private renderCount = 0;  // Track render count to detect double renders
-  private lastRenderTime = 0;  // Track last render time to prevent rapid re-renders
   hasError = false;
   
   /**
@@ -267,10 +265,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private async initializeComponent() {
     try {
-      // Reset render tracking when initializing a new component
-      this.renderCount = 0;
-      this.lastRenderTime = 0;
-      
       console.log(`🔄 [initializeComponent] Starting initialization for ${this.component?.name}:`, {
         location: this.component?.location,
         registry: this.component?.registry,
@@ -705,7 +699,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     if (this.isDestroying) {
       return;
     }
-
+    
     if (!this.compiledComponent || !this.reactRootId) {
       return;
     }
@@ -721,21 +715,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // Track render count and detect rapid re-renders
-    const now = Date.now();
-    const timeSinceLastRender = now - this.lastRenderTime;
-    this.renderCount++;
-
-    // Detect potential double rendering from React StrictMode or rapid state changes
-    if (timeSinceLastRender < 100 && this.renderCount > 1) {
-      if (this.enableLogging) {
-        console.log(`🔄 [renderComponent] Detected rapid re-render (${timeSinceLastRender}ms) for ${this.component.name}, render #${this.renderCount}`);
-      }
-      // In development, this might be React StrictMode - allow it but log
-      // In production, this might indicate a performance issue
-    }
-
-    this.lastRenderTime = now;
     this.isRendering = true;
     const { React } = context;
     

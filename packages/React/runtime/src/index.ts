@@ -9,7 +9,6 @@ import { ComponentCompiler } from './compiler';
 import { ComponentRegistry } from './registry';
 import { ComponentResolver } from './registry';
 import { ComponentManager } from './component-manager';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 // Export all types
 export * from './types';
@@ -44,9 +43,6 @@ export type {
   HierarchyResult,
   ComponentManagerConfig
 } from './component-manager';
-
-// Export ComponentMetadataEngine for browser access
-export { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 // Export runtime APIs
 export {

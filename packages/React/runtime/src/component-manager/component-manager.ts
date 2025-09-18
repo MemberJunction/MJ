@@ -502,10 +502,8 @@ export class ComponentManager {
           const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
           
           // Match by namespace if provided (handle different formats)
-          const namespaceMatch = !spec.namespace || 
-            c.Namespace === spec.namespace ||
-            c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
-          
+          const namespaceMatch = !spec.namespace || c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
+
           if (nameMatch && !namespaceMatch) {
           }
           
