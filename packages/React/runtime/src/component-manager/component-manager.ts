@@ -144,7 +144,7 @@ export class ComponentManager {
           fullSpec = await this.fetchComponentSpec(spec, options.contextUser, {
             resolutionMode: options.resolutionMode
           });
-          
+
           // Cache the fetched spec
           this.fetchCache.set(componentKey, {
             spec: fullSpec,
@@ -159,6 +159,23 @@ export class ComponentManager {
             componentName: spec.name
           });
           throw error;
+        }
+      } else {
+        // Log when we skip fetching because code is already provided
+        if (spec.location === 'registry' && spec.code) {
+          this.log(`Skipping fetch for registry component: ${spec.name} (code already provided)`, {
+            location: spec.location,
+            registry: spec.registry
+          });
+        }
+        // Also cache the spec if it has code to avoid re-fetching
+        if (spec.code && !this.fetchCache.has(componentKey)) {
+          this.fetchCache.set(componentKey, {
+            spec: fullSpec,
+            fetchedAt: new Date(),
+            hash: await this.calculateHash(fullSpec),
+            usageNotified: false
+          });
         }
       }
       
@@ -387,19 +404,23 @@ export class ComponentManager {
         for (const dep of result.spec.dependencies) {
           // Normalize dependency spec for local registry lookup
           const depSpec = { ...dep };
-          
-          
+          // OPTIMIZATION: If the dependency already has code (from registry population),
+          // we can skip fetching and go straight to compilation
+          if (depSpec.code) {
+            this.log(`Dependency ${depSpec.name} already has code (from registry population), optimizing load`);
+          }
+
           // If location is "registry" with undefined registry, ensure it's treated as local
           // This follows the convention that registry components with undefined registry
           // should be looked up in the local ComponentMetadataEngine
           if (depSpec.location === 'registry' && !depSpec.registry) {
             // Explicitly set to undefined for clarity (it may already be undefined)
             depSpec.registry = undefined;
-            
+
             // Log for debugging
             this.log(`Dependency ${depSpec.name} is a local registry component (registry=undefined)`);
           }
-          
+
           await this.loadComponentRecursive(
             depSpec,
             { ...options, isDependent: true },

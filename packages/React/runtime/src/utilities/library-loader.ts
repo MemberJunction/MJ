@@ -312,6 +312,10 @@ export class LibraryLoader {
       if (debug) {
         console.log(`📦 Loading library '${globalName}' from ${url}...`);
       }
+
+      // Note: Browser may show "Could not read source map" warnings for external libraries.
+      // These are harmless and expected when loading minified libraries from CDNs
+      // that reference source maps which aren't available. This doesn't affect functionality.
       document.head.appendChild(script);
       
       // Register the script element for cleanup
@@ -668,7 +672,6 @@ export class LibraryLoader {
     if (debug) {
       console.log(`📚 Loading libraries with dependencies:`, libraryNames);
       console.log(`  📦 Total available libraries: ${allLibraries.length}`);
-      console.log(`  📋 Available library list:`, allLibraries.map(l => `${l.Name}@${l.Version}`));
     }
 
     // Get combined load order for all requested libraries
