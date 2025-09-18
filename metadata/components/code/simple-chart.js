@@ -106,32 +106,17 @@ function SimpleChart({
     }
 
     try {
-      // Validate that groupBy field exists
-      if (entityInfo && entityInfo.Fields) {
-        const fieldExists = entityInfo.Fields.some(f => f.Name === groupBy);
-        if (!fieldExists) {
-          const error = `Field "${groupBy}" does not exist in entity "${entityName}". Available fields: ${entityInfo.Fields.map(f => f.Name).join(', ')}`;
-          console.error(error);
-          setError(error);
-          return { chartData: [], categories: [], values: [], isEmpty: true };
-        }
-        
-        // Also validate valueField if provided
-        if (valueField && !entityInfo.Fields.some(f => f.Name === valueField)) {
-          const error = `Value field "${valueField}" does not exist in entity "${entityName}". Available fields: ${entityInfo.Fields.map(f => f.Name).join(', ')}`;
-          console.error(error);
-          setError(error);
-          return { chartData: [], categories: [], values: [], isEmpty: true };
-        }
-      } else if (data.length > 0) {
-        // If no metadata, at least check if fields exist in data
+      // Validate that fields exist in the actual data, not just entity metadata
+      // This allows for calculated fields from queries that don't exist in base entity
+      if (data.length > 0) {
+        // Check if fields exist in data
         if (!(groupBy in data[0])) {
           const error = `Field "${groupBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
           return { chartData: [], categories: [], values: [], isEmpty: true };
         }
-        
+
         if (valueField && !(valueField in data[0])) {
           const error = `Value field "${valueField}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
