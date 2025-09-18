@@ -12,10 +12,9 @@ import {
   SimpleEmbedTextResult,
   ComponentObject
 } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended, ComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentLibraryEntity, ComponentMetadataEngine, AIModelEntityExtended } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
-import { SafeJSONParse } from '@memberjunction/global';
  
 
 /**
@@ -97,123 +96,6 @@ export class ComponentRunner {
   constructor(private browserManager: BrowserManager) {}
 
   /**
-   * Recursively find all registry component dependencies from a spec
-   */
-  private findRegistryDependencies(
-    spec: ComponentSpec,
-    visited: Set<string> = new Set(),
-    depth: number = 0
-  ): { name: string; namespace?: string; registry?: string }[] {
-    const dependencies: { name: string; namespace?: string; registry?: string }[] = [];
-    
-    // Prevent infinite recursion
-    if (depth > 10) {
-      return dependencies;
-    }
-    
-    // Track visited components to avoid cycles
-    const specKey = `${spec.name}:${spec.namespace || ''}`;
-    if (visited.has(specKey)) {
-      return dependencies;
-    }
-    visited.add(specKey);
-    
-    // Process dependencies
-    if (spec.dependencies && Array.isArray(spec.dependencies)) {
-      for (const dep of spec.dependencies) {
-        if (dep.location === 'registry') {
-          // Add this registry dependency
-          dependencies.push({
-            name: dep.name,
-            namespace: dep.namespace,
-            registry: dep.registry
-          });
-          
-          // If it's a local registry component (undefined registry), check its dependencies too
-          if (!dep.registry) {
-            const localComponent = ComponentMetadataEngine.Instance.Components?.find(
-              (c: any) => c.Name === dep.name && 
-              (!dep.namespace || c.Namespace === dep.namespace)
-            );
-            
-            if (localComponent) {
-              // Try to get and parse the specification
-              let depSpec = localComponent.spec || localComponent.Specification;
-              if (depSpec && typeof depSpec === 'string') {
-                depSpec = SafeJSONParse<ComponentSpec>(depSpec);
-              }
-
-              // Check if we successfully parsed a ComponentSpec with dependencies
-              if (depSpec && depSpec.dependencies) {
-                // Recursively find dependencies of this component
-                const nestedDeps = this.findRegistryDependencies(depSpec, visited, depth + 1);
-                dependencies.push(...nestedDeps);
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    return dependencies;
-  }
-
-  /**
-   * Pre-check if all required registry components are available
-   */
-  private async preCheckRegistryComponents(
-    spec: ComponentSpec
-  ): Promise<{ 
-    available: boolean; 
-    missing: string[]; 
-    found: string[];
-    requiredComponents: { name: string; namespace?: string; registry?: string }[] 
-  }> {
-    // Find all registry dependencies recursively
-    const requiredComponents = this.findRegistryDependencies(spec);
-    
-    // Remove duplicates
-    const uniqueComponents = requiredComponents.filter((comp, index, self) =>
-      index === self.findIndex(c => 
-        c.name === comp.name && 
-        c.namespace === comp.namespace && 
-        c.registry === comp.registry
-      )
-    );
-    
-    const missing: string[] = [];
-    const found: string[] = [];
-    
-    // Check each required component
-    for (const req of uniqueComponents) {
-      if (!req.registry) {
-        // Local registry component
-        const exists = ComponentMetadataEngine.Instance.Components?.find(
-          (c: ComponentEntityExtended) => c.Name === req.name && 
-          (!req.namespace || c.Namespace === req.namespace)
-        );
-        
-        if (exists) {
-          found.push(`${req.name} (${req.namespace || 'no namespace'})`);
-        } else {
-          missing.push(`${req.name} (${req.namespace || 'no namespace'})`);
-        }
-      } else {
-        // External registry - we'll assume it's available for now
-        // In production, you'd check the external registry
-        found.push(`${req.name} (external: ${req.registry})`);
-      }
-    }
-    
-    return {
-      available: missing.length === 0,
-      missing,
-      found,
-      requiredComponents: uniqueComponents
-    };
-  }
-
-  /**
    * Lint component code before execution
    */
   async lintComponent(
@@ -268,44 +150,6 @@ export class ComponentRunner {
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
     const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[];
-    
-    // Pre-check: Verify all required registry components are available
-    const preCheckResult = await this.preCheckRegistryComponents(options.componentSpec);
-    
-    // If components are missing, skip runtime execution
-    if (!preCheckResult.available) {
-      const missingError = `Missing registry components: ${preCheckResult.missing.join(', ')}. Cannot execute component test.`;
-      console.error(`\n❌ ${missingError}`);
-      
-      const errorViolation: Violation = {
-        rule: 'missing-registry-components',
-        severity: 'critical',
-        message: missingError,
-        line: 0,
-        column: 0
-      };
-      
-      return {
-        success: false,
-        html: '',
-        errors: [errorViolation],
-        warnings: [],
-        console: [],
-        executionTime: Date.now() - startTime,
-        renderCount: 0,
-        screenshot: undefined
-      };
-    }
-    
-
-    // Get ALL components for passing to the browser
-    // This ensures we have everything that might be needed
-    const allComponents = ComponentMetadataEngine.Instance.Components?.map((c: ComponentEntityExtended) => ({
-      Name: c.Name,
-      Namespace: c.Namespace,
-      Specification: c.Specification,
-      ID: c.ID
-    })) || [];
 
     try {
       
@@ -395,10 +239,14 @@ export class ComponentRunner {
       // const resolvedSpec = await preResolveComponentSpec(options.componentSpec, options.contextUser);
       
       // if (debug) {
+      //   console.log('📦 Pre-resolved spec for browser execution:', {
+      //     original: { location: options.componentSpec.location, registry: options.componentSpec.registry },
+      //     resolved: { location: resolvedSpec.location, registry: resolvedSpec.registry, hasCode: !!resolvedSpec.code }
+      //   });
       // }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
-      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries, allComponents }: { spec: any; props: any; debug: boolean; componentLibraries: any[]; allComponents?: any[] }) => {
+      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
           console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
@@ -419,32 +267,8 @@ export class ComponentRunner {
             ComponentRegistry,
             ComponentHierarchyRegistrar,
             ComponentManager,
-            ComponentMetadataEngine,
             SetupStyles
           } = MJRuntime;
-          
-          // Initialize ComponentMetadataEngine in the browser
-          if (ComponentMetadataEngine) {
-            // In browser test environment, we don't have database access
-            // Populate with all components passed from Node.js
-            if (allComponents && allComponents.length > 0) {
-              // Initialize the Components array if it doesn't exist
-              if (!ComponentMetadataEngine.Instance.Components) {
-                ComponentMetadataEngine.Instance.Components = [];
-              }
-
-              // Add all components
-              ComponentMetadataEngine.Instance.Components = allComponents;
-            } else {
-              // Ensure Components array exists even if empty
-              if (!ComponentMetadataEngine.Instance.Components) {
-                ComponentMetadataEngine.Instance.Components = [];
-              }
-            }
-
-          } else {
-            throw new Error('ComponentMetadataEngine is required but not available');
-          }
 
           if (debug) {
             console.log('🚀 Starting component execution with real runtime');
@@ -997,11 +821,10 @@ export class ComponentRunner {
           };
         }
       }, { 
-        spec: options.componentSpec,
-        props: options.props,
+        spec: options.componentSpec, 
+        props: options.props, 
         debug,
-        componentLibraries: allLibraries || [],
-        allComponents: allComponents || []
+        componentLibraries: allLibraries || []
       }) as Promise<{ success: boolean; error?: string; componentCount?: number }>;
       
       // Create timeout promise (Recommendation #1)
