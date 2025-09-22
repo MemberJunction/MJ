@@ -12588,21 +12588,21 @@ export const TemplateContentTypeSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Description of the template content type`),
-    CodeType: z.union([z.literal('TypeScript'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other'), z.literal('Nunjucks'), z.literal('JSON'), z.literal('Python')]).describe(`
+    CodeType: z.union([z.literal('Nunjucks'), z.literal('JSON'), z.literal('Python'), z.literal('TypeScript'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
-    *   * Nunjucks
-    *   * JSON
-    *   * Python
         * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -47206,20 +47206,20 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
-    *   * Nunjucks
-    *   * JSON
-    *   * Python
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python' {
+    get CodeType(): 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
         return this.Get('CodeType');
     }
-    set CodeType(value: 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | 'Nunjucks' | 'JSON' | 'Python') {
+    set CodeType(value: 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
         this.Set('CodeType', value);
     }
 

@@ -7,6 +7,7 @@ export class ProcessRunParams {
 
 export class ContentItemProcessParams {
     text: string;
+    name: string;
     modelID: string;
     minTags: number;
     maxTags: number;

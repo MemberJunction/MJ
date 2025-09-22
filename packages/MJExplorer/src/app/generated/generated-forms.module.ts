@@ -26,62 +26,17 @@ import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
-import { ContentFormComponent, LoadContentFormComponent } from "./Entities/Content/content.form.component";
-import { ContributorContentFormComponent, LoadContributorContentFormComponent } from "./Entities/ContributorContent/contributorcontent.form.component";
-import { ContributorFormComponent, LoadContributorFormComponent } from "./Entities/Contributor/contributor.form.component";
-import { FullRandomReviewerListFormComponent, LoadFullRandomReviewerListFormComponent } from "./Entities/FullRandomReviewerList/fullrandomreviewerlist.form.component";
-import { TargetListFormComponent, LoadTargetListFormComponent } from "./Entities/TargetList/targetlist.form.component";
-import { TargettedReviewerRecruitmentEmailFormComponent, LoadTargettedReviewerRecruitmentEmailFormComponent } from "./Entities/TargettedReviewerRecruitmentEmail/targettedreviewerrecruitmentemail.form.component";
-import { ContentDetailsComponent, LoadContentDetailsComponent } from "./Entities/Content/sections/details.component"
-import { ContributorContentDetailsComponent, LoadContributorContentDetailsComponent } from "./Entities/ContributorContent/sections/details.component"
-import { ContributorDetailsComponent, LoadContributorDetailsComponent } from "./Entities/Contributor/sections/details.component"
-import { FullRandomReviewerListDetailsComponent, LoadFullRandomReviewerListDetailsComponent } from "./Entities/FullRandomReviewerList/sections/details.component"
-import { TargetListDetailsComponent, LoadTargetListDetailsComponent } from "./Entities/TargetList/sections/details.component"
-import { TargettedReviewerRecruitmentEmailDetailsComponent, LoadTargettedReviewerRecruitmentEmailDetailsComponent } from "./Entities/TargettedReviewerRecruitmentEmail/sections/details.component"
+
+
    
 
+
+
 @NgModule({
 declarations: [
-    ContentFormComponent,
-    ContributorContentFormComponent,
-    ContributorFormComponent,
-    FullRandomReviewerListFormComponent,
-    TargetListFormComponent,
-    TargettedReviewerRecruitmentEmailFormComponent,
-    ContentDetailsComponent,
-    ContributorContentDetailsComponent,
-    ContributorDetailsComponent,
-    FullRandomReviewerListDetailsComponent,
-    TargetListDetailsComponent,
-    TargettedReviewerRecruitmentEmailDetailsComponent],
-imports: [
-    CommonModule,
-    FormsModule,
-    LayoutModule,
-    InputsModule,
-    ButtonsModule,
-    DateInputsModule,
-    UserViewGridModule,
-    LinkDirectivesModule,
-    BaseFormsModule,
-    FormToolbarModule,
-    MJTabStripModule,
-    ContainerDirectivesModule,
-    DropDownListModule,
-    ComboBoxModule
 ],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_0 { }
+imports: [
     
-
-
-@NgModule({
-declarations: [
-],
-imports: [
-    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
@@ -92,17 +47,7 @@ export function LoadGeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    LoadContentFormComponent();
-    LoadContributorContentFormComponent();
-    LoadContributorFormComponent();
-    LoadFullRandomReviewerListFormComponent();
-    LoadTargetListFormComponent();
-    LoadTargettedReviewerRecruitmentEmailFormComponent();
-    LoadContentDetailsComponent();
-    LoadContributorContentDetailsComponent();
-    LoadContributorDetailsComponent();
-    LoadFullRandomReviewerListDetailsComponent();
-    LoadTargetListDetailsComponent();
-    LoadTargettedReviewerRecruitmentEmailDetailsComponent();
+    
+    
 }
     

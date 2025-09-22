@@ -29,14 +29,31 @@ export class AutotagLocalFileSystem extends AutotagBase {
      * extracts and processes the text, and sets the results in the database.
      */
     public async Autotag(contextUser: UserInfo): Promise<void> {
-        this.contextUser = contextUser;
-        
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-        
-        // Use standard text processing (parsing was already done in SetContentItemsToProcess)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        try {
+            this.contextUser = contextUser;
+            
+            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
+            const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+            const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
+            
+            console.log(`Processing ${contentItemsToProcess.length} content items...`);
+            
+            // Use standard text processing (parsing was already done in SetContentItemsToProcess)
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+            
+            console.log('✅ Autotagging process completed successfully!');
+            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
+            
+        } catch (error) {
+            console.error('❌ Autotagging process failed:', error.message);
+            throw error;
+        } finally {
+            // Give a moment for any pending operations to complete, then exit
+            setTimeout(() => {
+                console.log('🔄 Shutting down autotagging process...');
+                process.exit(0);
+            }, 2000);
+        }
     }
 
     /**

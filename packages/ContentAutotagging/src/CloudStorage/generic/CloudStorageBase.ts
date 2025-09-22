@@ -1,7 +1,7 @@
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine } from "../../Engine";
 import { ContentSourceParams } from "../../Engine";
-import { UserInfo } from "@memberjunction/core";
+import { RunView, UserInfo } from "@memberjunction/core";
 import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
 import dotenv from 'dotenv';
 dotenv.config()
@@ -33,11 +33,53 @@ export abstract class CloudStorageBase extends AutotagBase {
     public abstract SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<ContentItemEntity[]>;
     
     public async Autotag(contextUser: UserInfo): Promise<void> {
-        this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Cloud Storage', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        try {
+            this.contextUser = contextUser;
+            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Azure Blob Storage', this.contextUser);
+            const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+            
+            console.log(`Found ${contentSources.length} Azure Blob content sources to process`);
+            
+            // const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
+
+            const contentItemsToProcess: ContentItemEntity[] = await this.GetExistingContentItemsToProcess('8C25112A-AA94-F011-8E63-6045BD34224D', this.contextUser);
+            
+            console.log(`Processing ${contentItemsToProcess.length} content items from Azure Blob Storage...`);
+            
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+            
+            console.log('✅ Azure Blob autotagging process completed successfully!');
+            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
+            
+        } catch (error) {
+            console.error('❌ Azure Blob autotagging process failed:', error.message);
+            throw error;
+        } finally {
+            // Give a moment for any pending operations to complete, then exit
+            setTimeout(() => {
+                console.log('🔄 Shutting down Azure Blob autotagging process...');
+                process.exit(0);
+            }, 2000);
+        }
+    }
+
+    public async GetExistingContentItemsToProcess(ContentSourceID: string, contextUser: UserInfo): Promise<ContentItemEntity[]> {
+        const rv = new RunView();
+        const filter = `ContentSourceID ='${ContentSourceID}' AND Description Like 'MSTA Salary%'`;
+
+        const results = await rv.RunView({
+            EntityName: 'Content Items',
+            ExtraFilter: filter, 
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        try {
+            const contentItems: ContentItemEntity[] = results.Results;
+            return contentItems;
+        } catch (error) {
+            console.error('Error fetching existing content items:', error);
+            throw error;
+        }
     }
 
     public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {

@@ -1,4 +1,5 @@
 import { AutotagLocalFileSystem } from '../../packages/ContentAutotagging/dist/src/LocalFileSystem/index.js';
+import { AutotagAzureBlob } from '../../packages/ContentAutotagging/dist/src/CloudStorage/index.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Metadata, UserInfo } from '@memberjunction/core';
@@ -36,6 +37,9 @@ const systemUser = new UserInfo(sqlServerDataProvider, {
 
 await AIEngineBase.Instance.Config(false, systemUser);
 
-let autotagger = new AutotagLocalFileSystem()
+// let autotagger = new AutotagLocalFileSystem()
+const connectionString = 'BlobEndpoint=https://mstaautotagstorage.blob.core.windows.net/;QueueEndpoint=https://mstaautotagstorage.queue.core.windows.net/;FileEndpoint=https://mstaautotagstorage.file.core.windows.net/;TableEndpoint=https://mstaautotagstorage.table.core.windows.net/;SharedAccessSignature=sv=2024-11-04&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2025-12-31T06:04:13Z&st=2025-09-12T20:49:13Z&spr=https&sig=gwS%2Bjr0i%2FBt0KlTN%2BU1GQAOnEKBLixwatfbtmD6bges%3D'
+const containerName = 'autotag-test';
+let autotagger = new AutotagAzureBlob(connectionString, containerName);
 
 await autotagger.Autotag(systemUser)

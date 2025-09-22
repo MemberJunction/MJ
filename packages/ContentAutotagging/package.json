@@ -10,6 +10,7 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "build": "tsc --build",
+    "watch": "tsc --build --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "MemberJunction.com",

@@ -17,11 +17,32 @@ export class AutotagEntity extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
     public async Autotag(contextUser: UserInfo): Promise<void> {
-        this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Entity', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        try {
+            this.contextUser = contextUser;
+            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Entity', this.contextUser);
+            const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
+            
+            console.log(`Found ${contentSources.length} Entity content sources to process`);
+            
+            const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
+            
+            console.log(`Processing ${contentItemsToProcess.length} content items from entities...`);
+            
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+            
+            console.log('✅ Entity autotagging process completed successfully!');
+            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
+            
+        } catch (error) {
+            console.error('❌ Entity autotagging process failed:', error.message);
+            throw error;
+        } finally {
+            // Give a moment for any pending operations to complete, then exit
+            setTimeout(() => {
+                console.log('🔄 Shutting down Entity autotagging process...');
+                process.exit(0);
+            }, 2000);
+        }
     }
 
     public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {

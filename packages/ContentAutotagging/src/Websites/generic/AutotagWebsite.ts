@@ -37,11 +37,32 @@ export class AutotagWebsite extends AutotagBase {
      * extracts and processes the text, and sets the results in the database.
      */
     public async Autotag(contextUser: UserInfo): Promise<void> {
-        this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Website', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        try {
+            this.contextUser = contextUser;
+            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Website', this.contextUser);
+            const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+            
+            console.log(`Found ${contentSources.length} Website content sources to process`);
+            
+            const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
+            
+            console.log(`Processing ${contentItemsToProcess.length} content items from websites...`);
+            
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+            
+            console.log('✅ Website autotagging process completed successfully!');
+            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
+            
+        } catch (error) {
+            console.error('❌ Website autotagging process failed:', error.message);
+            throw error;
+        } finally {
+            // Give a moment for any pending operations to complete, then exit
+            setTimeout(() => {
+                console.log('🔄 Shutting down Website autotagging process...');
+                process.exit(0);
+            }, 2000);
+        }
     }
 
 

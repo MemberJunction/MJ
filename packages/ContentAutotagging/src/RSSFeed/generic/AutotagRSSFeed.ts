@@ -31,11 +31,32 @@ export class AutotagRSSFeed extends AutotagBase {
      * extracts and processes the text, and sets the results in the database.
      */
     public async Autotag(contextUser: UserInfo): Promise<void> {
-        this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
-        const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
-        const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        try {
+            this.contextUser = contextUser;
+            this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
+            const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+            
+            console.log(`Found ${contentSources?.length || 0} RSS Feed content sources to process`);
+            
+            const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
+            
+            console.log(`Processing ${contentItemsToProcess.length} content items from RSS feeds...`);
+            
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+            
+            console.log('✅ RSS Feed autotagging process completed successfully!');
+            console.log(`✅ Processed ${contentItemsToProcess.length} content items`);
+            
+        } catch (error) {
+            console.error('❌ RSS Feed autotagging process failed:', error.message);
+            throw error;
+        } finally {
+            // Give a moment for any pending operations to complete, then exit
+            setTimeout(() => {
+                console.log('🔄 Shutting down RSS Feed autotagging process...');
+                process.exit(0);
+            }, 2000);
+        }
     }
 
     /**

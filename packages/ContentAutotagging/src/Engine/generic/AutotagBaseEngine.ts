@@ -52,6 +52,7 @@ export class AutotagBaseEngine extends AIEngine {
                 
                 // Parameters that depend on the content item
                 processingParams.text = contentItem.Text;
+                processingParams.name = contentItem.Name;
                 processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
                 processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
                 processingParams.contentTypeID = contentItem.ContentTypeID;
@@ -166,6 +167,7 @@ export class AutotagBaseEngine extends AIEngine {
             const processParams: ContentItemProcessParams = {
                 text: params.text, // Still include text for fallback
                 modelID: params.modelID,
+                name: params.name,
                 minTags: params.minTags,
                 maxTags: params.maxTags,
                 contentItemID: params.contentItemID,
@@ -193,9 +195,8 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
-        const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID)
+        const model = AIEngineBase.Instance.Models.find(m => m.ID === params.modelID)
         const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-        const tokenLimit = model.InputTokenLimit
         const text = this.chunkExtractedText(params.text, model.InputTokenLimit)
         let LLMResults: JsonObject = {}
         const startTime = new Date()
@@ -290,7 +291,7 @@ export class AutotagBaseEngine extends AIEngine {
         The text MUST be of the type ${contentType} for the subsequent processing.`
         const userPrompt = `
         If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
-        Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text, a short summary of the provided documents, as well as between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
+        The item you have been given is called '${params.name}'. Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text, a short summary of the provided documents, as well as between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
         If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
         Please provide the keywords in a list format.
         Make sure the response is just the json file without and formatting or code blocks, and strictly following the format below. Please don't include a greeting in the response, only output the json file:
