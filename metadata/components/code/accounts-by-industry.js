@@ -90,19 +90,19 @@ function AccountsByIndustry (props) {
   }, [accounts, maxIndustries, showOthers]);
   
   // Handle pie slice click
-  const handleSliceClick = (industry) => {
+  const handleSliceClick = useCallback((industry) => {
     const newSelection = selectedIndustry === industry ? null : industry;
     setSelectedIndustry(newSelection);
     setCurrentPage(1);
-    
+
     if (onSaveUserSettings) {
-      onSaveUserSettings({ 
-        ...savedUserSettings, 
-        selectedIndustry: newSelection 
+      onSaveUserSettings({
+        ...savedUserSettings,
+        selectedIndustry: newSelection
       });
     }
-  };
-  
+  }, [selectedIndustry, savedUserSettings, onSaveUserSettings]);
+
   // Filter and sort accounts
   const displayAccounts = useMemo(() => {
     let filtered = [];
@@ -138,41 +138,49 @@ function AccountsByIndustry (props) {
   }, [accounts, selectedIndustry, sortConfig, industryData.othersIndustries]);
   
   // Handle sort
-  const handleSort = (field) => {
-    const newDirection = 
+  const handleSort = useCallback((field) => {
+    const newDirection =
       sortConfig.field === field && sortConfig.direction === 'asc' ? 'desc' : 'asc';
     const newConfig = { field, direction: newDirection };
     setSortConfig(newConfig);
-    
+
     if (onSaveUserSettings) {
-      onSaveUserSettings({ 
-        ...savedUserSettings, 
-        sortConfig: newConfig 
+      onSaveUserSettings({
+        ...savedUserSettings,
+        sortConfig: newConfig
       });
     }
-  };
-  
+  }, [sortConfig, savedUserSettings, onSaveUserSettings]);
+
   // Handle account selection
-  const handleAccountClick = (account) => {
+  const handleAccountClick = useCallback((account) => {
     setSelectedAccount(account);
     setShowDetails(true);
-  };
+  }, []);
   
-  // Handle open record
-  const handleOpenRecord = () => {
+  // Load OpenRecordButton component
+  const OpenRecordButton = components?.OpenRecordButton;
+
+  // Handle open record (kept for backward compatibility)
+  const handleOpenRecord = useCallback(() => {
     if (callbacks?.OpenEntityRecord && selectedAccount) {
       // Pass entity name and key-value pair for the primary key
       callbacks.OpenEntityRecord('Accounts', [
         { FieldName: 'ID', Value: selectedAccount.ID }
       ]);
     }
-  };
-  
+  }, [callbacks, selectedAccount]);
+
   // Handle clear filter
-  const handleClearFilter = () => {
+  const handleClearFilter = useCallback(() => {
     handleSliceClick(selectedIndustry);
-  };
-  
+  }, [handleSliceClick, selectedIndustry]);
+
+  // Handle close details panel
+  const handleCloseDetails = useCallback(() => {
+    setShowDetails(false);
+  }, []);
+
   // Render loading state
   if (loading) {
     return (
@@ -189,8 +197,7 @@ function AccountsByIndustry (props) {
           height: '48px',
           border: '4px solid #E5E7EB',
           borderTop: '4px solid #3B82F6',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
+          borderRadius: '50%'
         }} />
         <div style={{
           fontSize: '16px',
@@ -199,12 +206,6 @@ function AccountsByIndustry (props) {
         }}>
           Loading accounts data...
         </div>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
@@ -243,16 +244,21 @@ function AccountsByIndustry (props) {
       <div style={{ height: '400px', marginBottom: '32px', position: 'relative' }}>
         {AccountsByIndustryChart && (
           <AccountsByIndustryChart
-            industryData={industryData}
-            selectedIndustry={selectedIndustry}
+            accounts={accounts}
             onSliceClick={handleSliceClick}
             colorScheme={colorScheme}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+            savedUserSettings={savedUserSettings}
+            onSaveUserSettings={onSaveUserSettings}
           />
         )}
       </div>
       
       {/* Account List */}
-      {AccountsByIndustryList && ( 
+      {AccountsByIndustryList && (
         <AccountsByIndustryList
           accounts={displayAccounts}
           selectedIndustry={selectedIndustry}
@@ -263,6 +269,12 @@ function AccountsByIndustry (props) {
           pageSize={pageSize}
           onPageChange={setCurrentPage}
           onClearFilter={handleClearFilter}
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings}
+          onSaveUserSettings={onSaveUserSettings}
         />
       )}
       
@@ -271,8 +283,14 @@ function AccountsByIndustry (props) {
         <AccountsByIndustryDetails
           account={selectedAccount}
           isOpen={showDetails}
-          onClose={() => setShowDetails(false)}
+          onClose={handleCloseDetails}
           onOpenRecord={handleOpenRecord}
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings}
+          onSaveUserSettings={onSaveUserSettings}
         />
       )}
     </div>

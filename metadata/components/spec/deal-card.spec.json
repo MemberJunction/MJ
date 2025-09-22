@@ -4,7 +4,7 @@
   "type": "Other",
   "location": "embedded",
   "code": "@file:../code/deal-card.js",
-  "functionalRequirements": "## Deal Card Component\n\n### Purpose\nDisplay individual deal information in a card format with interactive elements.\n\n### Features\n- Deal name and amount display\n- Currency formatting\n- Date formatting\n- Probability indicator with color coding\n- Hover effects\n- Click to open deal record\n\n### Visual Design\n- Card with border and padding\n- Hover scale effect\n- Probability badge with semantic colors\n- Clean typography",
+  "functionalRequirements": "## Deal Card Component\n\n### Purpose\nDisplay individual deal information in a card format with interactive elements.\n\n### Features\n- Deal name and amount display\n- Currency formatting\n- Date formatting\n- Probability indicator with color coding\n- Hover effects\n- Uses OpenRecordButton component for opening deal records\n\n### Visual Design\n- Card with border and padding\n- Hover scale effect\n- Probability badge with semantic colors\n- Clean typography",
   "dataRequirements": {
     "mode": "views",
     "description": "Displays individual deal information passed via props",
@@ -22,23 +22,24 @@
     ],
     "queries": []
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- deal: Deal entity object\n- onOpenDeal: Callback to open deal record\n\n### Styling\n- Background color based on state\n- Border and shadow effects\n- Probability color coding:\n  - >= 70%: Green\n  - >= 40%: Yellow\n  - < 40%: Red",
+  "technicalDesign": "## Implementation\n\n### Props\n- deal: Deal entity object\n\n### Dependencies\n- OpenRecordButton: Generic button component for opening entity records\n\n### Styling\n- Background color based on state\n- Border and shadow effects\n- Probability color coding:\n  - >= 70%: Green\n  - >= 40%: Yellow\n  - < 40%: Red",
   "properties": [
     {
       "name": "deal",
       "type": "{ID: string, DealName: string, Amount: number, CloseDate: string, Probability: number, Stage?: string}",
       "required": true,
       "description": "Deal entity object with key fields"
-    },
-    {
-      "name": "onOpenDeal",
-      "type": "(dealId: string) => void",
-      "required": true,
-      "description": "Callback to open deal record"
     }
   ],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "dayjs",

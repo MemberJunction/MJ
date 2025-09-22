@@ -1,14 +1,15 @@
 function AIDetailTable({ data, activeTab, styles, utilities, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   console.log('[AIDetailTable] Rendering with', data?.length || 0, 'items');
-  
-  // Load DataExportPanel component
+
+  // Load DataGrid and DataExportPanel components
+  const DataGrid = components['DataGrid'];
   const DataExportPanel = components['DataExportPanel'];
-  
+
   const [sortField, setSortField] = useState(savedUserSettings?.sortField || 'timestamp');
   const [sortDirection, setSortDirection] = useState(savedUserSettings?.sortDirection || 'desc');
   const [currentPage, setCurrentPage] = useState(0);
   const [expandedRows, setExpandedRows] = useState(new Set());
-  
+
   const rowsPerPage = 25;
   
   // Get the correct timestamp field
@@ -141,6 +142,91 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
     return columns;
   };
   
+  // Define columns for DataGrid
+  const gridColumns = [
+    {
+      field: timestampField,
+      header: 'Timestamp',
+      sortable: true,
+      width: '150px',
+      render: (value) => formatTimestamp(value)
+    },
+    {
+      field: nameField,
+      header: activeTab === 'agents' ? 'Agent' : 'Prompt',
+      sortable: true,
+      width: 'auto',
+      render: (value, row) => value || row[idField] || '-'
+    },
+    {
+      field: 'Success',
+      header: 'Status',
+      sortable: true,
+      width: '80px',
+      render: (value) => (
+        <span style={{
+          display: 'inline-block',
+          padding: `2px 8px`,
+          borderRadius: '12px',
+          backgroundColor: value ? styles.colors.success + '20' : styles.colors.error + '20',
+          color: value ? styles.colors.success : styles.colors.error,
+          fontSize: '11px',
+          fontWeight: '600'
+        }}>
+          {value ? 'Success' : 'Failed'}
+        </span>
+      )
+    },
+    {
+      field: 'TotalTokensUsed',
+      header: 'Tokens',
+      sortable: true,
+      width: '100px',
+      render: (value, row) => {
+        const tokens = value || row.TokensUsed;
+        return tokens ? tokens.toLocaleString() : '-';
+      }
+    },
+    {
+      field: 'TotalCost',
+      header: 'Cost',
+      sortable: true,
+      width: '100px',
+      render: (value) => value ? `$${value.toFixed(4)}` : '-'
+    }
+  ];
+
+  // Add Duration column only for Prompt Runs (Agent Runs don't have ExecutionTimeMS)
+  if (activeTab === 'prompts') {
+    gridColumns.push({
+      field: 'ExecutionTimeMS',
+      header: 'Duration',
+      sortable: true,
+      width: '100px',
+      render: (value) => formatDuration(value)
+    });
+  }
+
+  // Handle sort change for DataGrid
+  const handleSortChange = useCallback((field, direction) => {
+    setSortField(field);
+    setSortDirection(direction);
+    onSaveUserSettings?.({
+      ...savedUserSettings,
+      sortField: field,
+      sortDirection: direction
+    });
+    setCurrentPage(0);
+  }, [savedUserSettings, onSaveUserSettings]);
+
+  // Handle row selection to show details (could expand row or show modal)
+  const handleRowSelect = useCallback((selectedRows) => {
+    if (selectedRows && selectedRows.length > 0) {
+      const row = selectedRows[0];
+      toggleRowExpansion(row.ID);
+    }
+  }, []);
+
   const columns = [
     { field: timestampField, label: 'Timestamp', width: '150px' },
     { field: nameField, label: activeTab === 'agents' ? 'Agent' : 'Prompt', width: 'auto' },
@@ -148,7 +234,7 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
     { field: 'TotalTokens', label: 'Tokens', width: '100px' },
     { field: 'TotalCost', label: 'Cost', width: '100px' }
   ];
-  
+
   // Add Duration column only for Prompt Runs (Agent Runs don't have ExecutionTimeMS)
   if (activeTab === 'prompts') {
     columns.push({ field: 'ExecutionTimeMS', label: 'Duration', width: '100px' });
@@ -209,7 +295,7 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
       
       {/* Table */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        {paginatedData.length === 0 ? (
+        {sortedData.length === 0 ? (
           <div style={{
             padding: styles.spacing.xl,
             textAlign: 'center',
@@ -218,243 +304,124 @@ function AIDetailTable({ data, activeTab, styles, utilities, components, callbac
             No records to display
           </div>
         ) : (
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse'
-          }}>
-            <thead style={{
-              position: 'sticky',
-              top: 0,
-              backgroundColor: styles.colors.surface,
-              borderBottom: `2px solid ${styles.colors.border}`
+          DataGrid ? (
+            <DataGrid
+              data={sortedData}
+              columns={gridColumns}
+              pageSize={rowsPerPage}
+              showFilters={true}
+              showExport={false}
+              selectionMode="single"
+              onRowSelect={handleRowSelect}
+              sortBy={sortField}
+              sortDirection={sortDirection}
+              onSortChange={handleSortChange}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
+            />
+          ) : (
+            <div style={{
+              padding: styles.spacing.xl,
+              textAlign: 'center',
+              color: styles.colors.textSecondary
             }}>
-              <tr>
-                <th style={{ width: '30px', padding: styles.spacing.sm }} />
-                {columns.map(col => (
-                  <th
-                    key={col.field}
-                    onClick={() => handleSort(col.field)}
-                    style={{
-                      padding: styles.spacing.sm,
-                      textAlign: 'left',
+              DataGrid component not available
+            </div>
+          )
+        )}
+
+        {/* Expanded row details - show below DataGrid if expanded */}
+        {expandedRows.size > 0 && (
+          <div style={{
+            marginTop: styles.spacing.md,
+            padding: styles.spacing.md,
+            backgroundColor: styles.colors.background,
+            borderRadius: styles.borders?.radius || '4px',
+            border: `1px solid ${styles.colors.border}`
+          }}>
+            {Array.from(expandedRows).map(expandedId => {
+              const row = sortedData.find(r => r.ID === expandedId);
+              if (!row) return null;
+
+              return (
+                <div key={expandedId} style={{
+                  marginBottom: styles.spacing.md
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: styles.spacing.sm
+                  }}>
+                    <h4 style={{
+                      margin: 0,
                       color: styles.colors.text,
-                      fontSize: styles.typography.fontSize.sm,
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                      width: col.width
-                    }}
-                  >
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: styles.spacing.xs
+                      fontSize: styles.typography.fontSize.md
                     }}>
-                      {col.label}
-                      {sortField === col.field && (
-                        <span style={{ fontSize: '10px' }}>
-                          {sortDirection === 'asc' ? '▲' : '▼'}
-                        </span>
-                      )}
+                      Record Details: {row[nameField] || row[idField]}
+                    </h4>
+                    <button
+                      onClick={() => toggleRowExpansion(row.ID)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: styles.colors.textSecondary,
+                        fontSize: styles.typography.fontSize.lg
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: styles.spacing.md,
+                    fontSize: styles.typography.fontSize.sm
+                  }}>
+                    <div>
+                      <strong style={{ color: styles.colors.textSecondary }}>ID:</strong>
+                      <div style={{ color: styles.colors.text, fontFamily: 'monospace' }}>
+                        {row.ID}
+                      </div>
                     </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((row, index) => {
-                const isExpanded = expandedRows.has(row.ID);
-                return (
-                  <React.Fragment key={row.ID || index}>
-                    <tr style={{
-                      borderBottom: `1px solid ${styles.colors.border}`,
-                      transition: 'background-color 0.2s',
-                      backgroundColor: index % 2 === 0 ? 'transparent' : styles.colors.background
-                    }}>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        textAlign: 'center'
-                      }}>
-                        <button
-                          onClick={() => toggleRowExpansion(row.ID)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: styles.colors.textSecondary,
-                            padding: 0,
-                            fontSize: '12px'
-                          }}
-                        >
-                          {isExpanded ? '▼' : '▶'}
-                        </button>
-                      </td>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        fontSize: styles.typography.fontSize.sm,
-                        color: styles.colors.text
-                      }}>
-                        {formatTimestamp(row[timestampField])}
-                      </td>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        fontSize: styles.typography.fontSize.sm,
-                        color: styles.colors.text,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '200px'
-                      }}>
-                        {row[nameField] || row[idField] || '-'}
-                      </td>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        fontSize: styles.typography.fontSize.sm
-                      }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: `2px 8px`,
-                          borderRadius: '12px',
-                          backgroundColor: row.Success ? styles.colors.success + '20' : styles.colors.error + '20',
-                          color: row.Success ? styles.colors.success : styles.colors.error,
-                          fontSize: '11px',
-                          fontWeight: '600'
-                        }}>
-                          {row.Success ? 'Success' : 'Failed'}
-                        </span>
-                      </td>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        fontSize: styles.typography.fontSize.sm,
-                        color: styles.colors.text,
-                        textAlign: 'right'
-                      }}>
-                        {(row.TotalTokensUsed || row.TokensUsed) ? (row.TotalTokensUsed || row.TokensUsed).toLocaleString() : '-'}
-                      </td>
-                      <td style={{
-                        padding: styles.spacing.sm,
-                        fontSize: styles.typography.fontSize.sm,
-                        color: styles.colors.text,
-                        textAlign: 'right'
-                      }}>
-                        {row.TotalCost ? `$${row.TotalCost.toFixed(4)}` : '-'}
-                      </td>
-                      {activeTab === 'prompts' && (
-                        <td style={{
-                          padding: styles.spacing.sm,
-                          fontSize: styles.typography.fontSize.sm,
-                          color: styles.colors.text,
-                          textAlign: 'right'
-                        }}>
-                          {formatDuration(row.ExecutionTimeMS)}
-                        </td>
-                      )}
-                    </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={columns.length + 1} style={{
-                          padding: styles.spacing.md,
-                          backgroundColor: styles.colors.background,
-                          borderBottom: `1px solid ${styles.colors.border}`
-                        }}>
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                            gap: styles.spacing.md,
-                            fontSize: styles.typography.fontSize.sm
-                          }}>
-                            <div>
-                              <strong style={{ color: styles.colors.textSecondary }}>ID:</strong>
-                              <div style={{ color: styles.colors.text, fontFamily: 'monospace' }}>
-                                {row.ID}
-                              </div>
-                            </div>
-                            {row.ErrorMessage && (
-                              <div style={{ gridColumn: '1 / -1' }}>
-                                <strong style={{ color: styles.colors.textSecondary }}>Error:</strong>
-                                <div style={{ color: styles.colors.error }}>
-                                  {row.ErrorMessage}
-                                </div>
-                              </div>
-                            )}
-                            {row.Model && (
-                              <div>
-                                <strong style={{ color: styles.colors.textSecondary }}>Model:</strong>
-                                <div style={{ color: styles.colors.text }}>
-                                  {row.Model}
-                                </div>
-                              </div>
-                            )}
-                            {row.CompletedAt && (
-                              <div>
-                                <strong style={{ color: styles.colors.textSecondary }}>Completed:</strong>
-                                <div style={{ color: styles.colors.text }}>
-                                  {formatTimestamp(row.CompletedAt)}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                    {row.ErrorMessage && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <strong style={{ color: styles.colors.textSecondary }}>Error:</strong>
+                        <div style={{ color: styles.colors.error }}>
+                          {row.ErrorMessage}
+                        </div>
+                      </div>
                     )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                    {row.Model && (
+                      <div>
+                        <strong style={{ color: styles.colors.textSecondary }}>Model:</strong>
+                        <div style={{ color: styles.colors.text }}>
+                          {row.Model}
+                        </div>
+                      </div>
+                    )}
+                    {row.CompletedAt && (
+                      <div>
+                        <strong style={{ color: styles.colors.textSecondary }}>Completed:</strong>
+                        <div style={{ color: styles.colors.text }}>
+                          {formatTimestamp(row.CompletedAt)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
       
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{
-          padding: styles.spacing.md,
-          borderTop: `1px solid ${styles.colors.border}`,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: styles.spacing.sm
-        }}>
-          <button
-            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
-            style={{
-              padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
-              backgroundColor: currentPage === 0 ? styles.colors.background : styles.colors.primary,
-              color: currentPage === 0 ? styles.colors.textSecondary : 'white',
-              border: `1px solid ${styles.colors.border}`,
-              borderRadius: styles.borders?.radius || '4px',
-              cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
-              fontSize: styles.typography.fontSize.sm
-            }}
-          >
-            Previous
-          </button>
-          
-          <span style={{
-            color: styles.colors.text,
-            fontSize: styles.typography.fontSize.sm
-          }}>
-            Page {currentPage + 1} of {totalPages}
-          </span>
-          
-          <button
-            onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-            disabled={currentPage === totalPages - 1}
-            style={{
-              padding: `${styles.spacing.xs} ${styles.spacing.sm}`,
-              backgroundColor: currentPage === totalPages - 1 ? styles.colors.background : styles.colors.primary,
-              color: currentPage === totalPages - 1 ? styles.colors.textSecondary : 'white',
-              border: `1px solid ${styles.colors.border}`,
-              borderRadius: styles.borders?.radius || '4px',
-              cursor: currentPage === totalPages - 1 ? 'not-allowed' : 'pointer',
-              fontSize: styles.typography.fontSize.sm
-            }}
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
 }

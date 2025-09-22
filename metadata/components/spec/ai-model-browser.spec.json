@@ -210,7 +210,13 @@
     "@include:ai-model-list.spec.json",
     "@include:ai-model-details.spec.json",
     "@include:ai-model-filter.spec.json",
-    "@include:ai-model-analytics.spec.json"
+    "@include:ai-model-analytics.spec.json",
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [],
   "code": "@file:../code/ai-model-browser.js"

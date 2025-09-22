@@ -26,5 +26,13 @@
   "technicalDesign": "## Implementation\n\n### Data Loading\n- Use RunView to load recent deals\n- Sort by CreatedDate DESC or CloseDate ASC\n- Limit to configurable number of rows (default 15)\n\n### Stage Styling\n- Prospecting: Gray\n- Qualification: Blue\n- Proposal: Yellow\n- Negotiation: Orange\n- Closed Won: Green\n- Closed Lost: Red\n\n### Calculations\n- Days to close: CloseDate - today\n- Expected revenue: Amount * Probability / 100\n- Format amounts with currency symbol",
   "properties": [],
   "exampleUsage": "<RecentDealsList\n  maxRows={20}\n  sortBy=\"CloseDate\"\n  onDealClick={handleDealClick}\n/>",
-  "code": "@file:../code/recent-deals-list.js"
+  "code": "@file:../code/recent-deals-list.js",
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ]
 }

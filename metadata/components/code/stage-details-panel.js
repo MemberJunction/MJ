@@ -4,6 +4,9 @@ function StageDetailsPanel ({ stage, deals, isOpen, onClose, utilities, styles, 
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterText, setFilterText] = useState('');
 
+  // Load SingleRecordView from component registry
+  const SingleRecordView = components?.SingleRecordView;
+
   const sortedAndFilteredDeals = useMemo(() => {
     if (!deals) return [];
     
@@ -152,7 +155,7 @@ function StageDetailsPanel ({ stage, deals, isOpen, onClose, utilities, styles, 
 
         <div>
           {sortedAndFilteredDeals.map((deal, index) => (
-            <div 
+            <div
               key={deal.id || index}
               style={{
                 padding: '10px',
@@ -162,33 +165,65 @@ function StageDetailsPanel ({ stage, deals, isOpen, onClose, utilities, styles, 
                 backgroundColor: '#fafafa'
               }}
             >
-              <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-                {deal.name}
-              </div>
-              <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>
-                {deal.accountName}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {/* Use SingleRecordView for consistent deal display */}
+              {SingleRecordView ? (
                 <div>
-                  <span style={{ fontWeight: 'bold' }}>${(deal.value || 0).toLocaleString()}</span>
-                  <span style={{ marginLeft: '10px', color: '#888' }}>{deal.daysInStage} days</span>
+                  <SingleRecordView
+                    entityName="Deals"
+                    record={deal}
+                    fields={["DealName", "Amount", "Stage", "Account"]}
+                    layout="inline"
+                    showLabels={false}
+                    showEmptyFields={false}
+                    allowOpenRecord={true}
+                    utilities={utilities}
+                    styles={styles}
+                    components={components}
+                    callbacks={callbacks}
+                    savedUserSettings={savedUserSettings}
+                    onSaveUserSettings={onSaveUserSettings}
+                    onOpenRecord={(eventData) => {
+                      // Use our custom handler for deal opening
+                      handleOpenDeal(deal.id);
+                      eventData.cancel = true; // Prevent default behavior
+                    }}
+                  />
+                  <div style={{ marginTop: '5px', fontSize: '12px', color: '#888' }}>
+                    {deal.daysInStage} days in stage
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleOpenDeal(deal.id)}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    border: '1px solid #007bff',
-                    borderRadius: '3px',
-                    background: '#fff',
-                    color: '#007bff',
-                    cursor: 'pointer'
-                  }}
-                  title="Open in Explorer"
-                >
-                  ↗
-                </button>
-              </div>
+              ) : (
+                // Fallback display if SingleRecordView is not available
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                    {deal.name || deal.DealName}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>
+                    {deal.accountName || deal.Account}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontWeight: 'bold' }}>${(deal.value || deal.Amount || 0).toLocaleString()}</span>
+                      <span style={{ marginLeft: '10px', color: '#888' }}>{deal.daysInStage} days</span>
+                    </div>
+                    <button
+                      onClick={() => handleOpenDeal(deal.id)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #007bff',
+                        borderRadius: '3px',
+                        background: '#fff',
+                        color: '#007bff',
+                        cursor: 'pointer'
+                      }}
+                      title="Open in Explorer"
+                    >
+                      ↗
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

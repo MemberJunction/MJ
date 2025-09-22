@@ -71,6 +71,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // Favorites
   public favoriteComponents: Set<string> = new Set(); // Set of component IDs
   public showOnlyFavorites = false; // Filter to show only favorites
+  public showDeprecatedComponents = false; // Filter to show/hide deprecated components
   private metadata: Metadata = new Metadata();
   
   // Error handling
@@ -239,6 +240,14 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.combineAndFilterComponents();
   }
 
+  /**
+   * Toggle showing deprecated components
+   */
+  public toggleShowDeprecatedComponents(): void {
+    this.showDeprecatedComponents = !this.showDeprecatedComponents;
+    this.combineAndFilterComponents();
+  }
+
   public onSearchChange(query: string): void {
     this.searchQuery = query;
     this.combineAndFilterComponents();
@@ -257,7 +266,15 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Apply filters
     let filtered = [...this.allComponents];
 
-    // Apply favorites filter first if enabled
+    // Filter out deprecated components unless explicitly shown
+    if (!this.showDeprecatedComponents) {
+      filtered = filtered.filter(c => {
+        const status = this.getComponentStatus(c);
+        return status !== 'Deprecated';
+      });
+    }
+
+    // Apply favorites filter if enabled
     if (this.showOnlyFavorites) {
       filtered = filtered.filter(c => this.isFavorite(c));
     }
