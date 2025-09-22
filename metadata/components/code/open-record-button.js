@@ -148,9 +148,9 @@ function OpenRecordButton({
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       },
       default: {
-        backgroundColor: '#f5f5f5',
-        color: '#333',
-        border: '1px solid #d9d9d9'
+        backgroundColor: '#3B82F6',
+        color: '#fff',
+        border: 'none'
       },
       text: {
         backgroundColor: 'transparent',
@@ -181,8 +181,7 @@ function OpenRecordButton({
         backgroundColor: '#40a9ff'
       },
       default: {
-        borderColor: '#40a9ff',
-        color: '#40a9ff'
+        backgroundColor: '#2563EB'
       },
       text: {
         backgroundColor: '#f0f5ff'
@@ -237,6 +236,7 @@ function OpenRecordButton({
         </span>
       )}
       <span>{text}</span>
+      <span style={{ fontSize: '14px', marginLeft: '4px' }}>↗</span>
     </button>
   );
 }

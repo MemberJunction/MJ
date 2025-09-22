@@ -116,23 +116,23 @@ function SingleRecordView({
           {/* Render a button that looks like OpenRecordButton but doesn't have onClick */}
           <button
             style={{
-              padding: props.size === 'small' ? '4px 8px' : props.size === 'large' ? '12px 24px' : '8px 16px',
-              backgroundColor: props.variant === 'primary' ? '#1890ff' : props.variant === 'link' ? 'transparent' : '#fff',
-              color: props.variant === 'primary' ? '#fff' : props.variant === 'link' ? '#1890ff' : '#333',
-              border: props.variant === 'link' ? 'none' : props.variant === 'primary' ? '1px solid #1890ff' : '1px solid #d9d9d9',
-              borderRadius: '4px',
+              padding: '8px 16px',
+              backgroundColor: '#3B82F6',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: props.size === 'small' ? '12px' : props.size === 'large' ? '16px' : '14px',
-              textDecoration: props.variant === 'link' ? 'underline' : 'none',
+              fontSize: '14px',
+              fontWeight: '500',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              transition: 'all 0.3s',
+              transition: 'none',
               pointerEvents: 'none' // Prevent button from handling clicks
             }}
           >
-            {props.showIcon !== false && props.icon && <span>{props.icon}</span>}
             {props.text || 'Open Record'}
+            <span style={{ fontSize: '14px' }}>↗</span>
           </button>
         </div>
       );

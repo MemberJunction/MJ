@@ -12,6 +12,8 @@ function SimpleChart({
   limit,
   colors,
   showLegend = true,
+  legendPosition = 'auto', // New prop: 'auto', 'top', 'bottom', 'left', 'right'
+  legendFontSize = 12, // New prop for legend font size
   showDataLabels = false,
   enableExport = true,
   onDataPointClick,
@@ -333,7 +335,14 @@ function SimpleChart({
           },
           legend: {
             display: showLegend && (isPieOrDoughnut || processData.categories.length <= 10),
-            position: isPieOrDoughnut ? 'bottom' : 'top'
+            position: legendPosition === 'auto'
+              ? (isPieOrDoughnut ? 'bottom' : 'top')
+              : legendPosition,
+            labels: {
+              font: {
+                size: legendFontSize
+              }
+            }
           },
           datalabels: showDataLabels ? {
             display: true,
@@ -432,7 +441,7 @@ function SimpleChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [processData, actualChartType, title, height, colors, showLegend, showDataLabels, enableExport, ChartJS]);
+  }, [processData, actualChartType, title, height, colors, showLegend, legendPosition, legendFontSize, showDataLabels, enableExport, ChartJS]);
 
   // Download chart as image
   React.useEffect(() => {

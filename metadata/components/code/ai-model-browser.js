@@ -264,7 +264,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
     });
   }, [savedUserSettings, onSaveUserSettings]);
   
-  // Handle opening model record
+  // Handle opening model record (kept for backward compatibility with details panel)
   const handleOpenRecord = useCallback((modelName) => {
     console.log('Opening AI Model record:', modelName);
     if (callbacks?.OpenEntityRecord && modelName) {

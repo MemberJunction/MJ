@@ -1,60 +1,40 @@
-function AIModelList({ 
-  models, 
+function AIModelList({
+  models,
   modelVendors,
-  viewMode, 
-  selectedModelId, 
-  onSelectModel, 
-  sortBy, 
-  sortDirection, 
+  viewMode,
+  selectedModelId,
+  onSelectModel,
+  sortBy,
+  sortDirection,
   onSortChange,
-  utilities, 
-  styles, 
-  components, 
-  callbacks, 
-  savedUserSettings, 
-  onSaveUserSettings 
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings
 }) {
+  // Load DataGrid component from registry
+  const DataGrid = components['DataGrid'];
+
   // Helper function to get border radius value
   const getBorderRadius = (size) => {
     return typeof styles.borders?.radius === 'object' ? styles.borders.radius[size] : styles.borders?.radius || '4px';
   };
-  
+
   // Get vendor info for a model
   const getModelVendorInfo = useCallback((modelId) => {
     const vendors = modelVendors.filter(v => v.ModelID === modelId);
     const inferenceProviders = vendors.filter(v => v.Type === 'Inference Provider');
     const modelDeveloper = vendors.find(v => v.Type === 'Model Developer');
-    
+
     return {
       inferenceProviders,
       modelDeveloper,
       vendorCount: vendors.length
     };
   }, [modelVendors]);
-  
-  // Handle sort column click
-  const handleSort = useCallback((field) => {
-    if (sortBy === field) {
-      onSortChange?.(field, sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      onSortChange?.(field, 'asc');
-    }
-  }, [sortBy, sortDirection, onSortChange]);
-  
-  // Render sort indicator
-  const renderSortIndicator = (field) => {
-    if (sortBy !== field) return null;
-    
-    return (
-      <span style={{
-        marginLeft: styles.spacing.xs,
-        fontSize: styles.typography.fontSize.sm
-      }}>
-        {sortDirection === 'asc' ? '▲' : '▼'}
-      </span>
-    );
-  };
-  
+
   // Render status badge
   const renderStatusBadge = (status) => {
     const statusColors = {
@@ -63,9 +43,9 @@ function AIModelList({
       'Deprecated': styles.colors.error || styles.colors.secondary,
       'Preview': styles.colors.info || styles.colors.primary
     };
-    
+
     const color = statusColors[status] || styles.colors.textSecondary;
-    
+
     return (
       <span style={{
         display: 'inline-block',
@@ -80,14 +60,14 @@ function AIModelList({
       </span>
     );
   };
-  
+
   // Render cost rank
   const renderCostRank = (rank) => {
     if (rank == null) return '-';
-    
+
     const maxStars = 5;
     const filledStars = Math.min(rank, maxStars);
-    
+
     return (
       <span style={{
         color: styles.colors.warning || styles.colors.secondary,
@@ -100,7 +80,7 @@ function AIModelList({
       </span>
     );
   };
-  
+
   // Format token limit
   const formatTokens = (tokens) => {
     if (!tokens) return '-';
@@ -108,6 +88,108 @@ function AIModelList({
     if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
     return tokens.toString();
   };
+
+  // Define columns for DataGrid
+  const gridColumns = [
+    {
+      field: 'Name',
+      header: 'Model Name',
+      sortable: true,
+      width: '200px'
+    },
+    {
+      field: 'APIName',
+      header: 'API Name',
+      sortable: false,
+      width: '150px',
+      render: (value) => value ? (
+        <span style={{ fontFamily: 'monospace', fontSize: styles.typography.fontSize.sm }}>
+          {value}
+        </span>
+      ) : '-'
+    },
+    {
+      field: 'IsActive',
+      header: 'Status',
+      sortable: true,
+      width: '100px',
+      render: (value) => renderStatusBadge(value ? 'Active' : 'Inactive')
+    },
+    {
+      field: 'ModelDeveloper',
+      header: 'Developer',
+      sortable: false,
+      width: '120px',
+      render: (value, row) => {
+        const vendorInfo = getModelVendorInfo(row.ID);
+        return vendorInfo.modelDeveloper?.Vendor || '-';
+      }
+    },
+    {
+      field: 'InferenceProviders',
+      header: 'Providers',
+      sortable: false,
+      width: '150px',
+      render: (value, row) => {
+        const vendorInfo = getModelVendorInfo(row.ID);
+        if (vendorInfo.inferenceProviders.length === 0) {
+          return <span style={{ color: styles.colors.textSecondary }}>-</span>;
+        }
+
+        return (
+          <div style={{
+            display: 'flex',
+            gap: styles.spacing.xs,
+            flexWrap: 'wrap'
+          }}>
+            {vendorInfo.inferenceProviders.slice(0, 3).map((provider, idx) => (
+              <span
+                key={idx}
+                style={{
+                  padding: `2px ${styles.spacing.xs}`,
+                  backgroundColor: styles.colors.primary + '15',
+                  color: styles.colors.primary,
+                  borderRadius: getBorderRadius('xs') || getBorderRadius('sm'),
+                  fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm
+                }}
+              >
+                {provider.Vendor}
+              </span>
+            ))}
+            {vendorInfo.inferenceProviders.length > 3 && (
+              <span style={{
+                color: styles.colors.textSecondary,
+                fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm
+              }}>
+                +{vendorInfo.inferenceProviders.length - 3}
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      field: 'InputTokenLimit',
+      header: 'Input Limit',
+      sortable: true,
+      width: '100px',
+      render: (value) => formatTokens(value)
+    },
+    {
+      field: 'CostRank',
+      header: 'Cost',
+      sortable: true,
+      width: '80px',
+      render: (value) => renderCostRank(value)
+    }
+  ];
+
+  // Handle row selection
+  const handleRowSelect = useCallback((selectedRows) => {
+    if (selectedRows && selectedRows.length > 0) {
+      onSelectModel?.(selectedRows[0].ID);
+    }
+  }, [onSelectModel]);
   
   // Grid view rendering
   const renderGridView = () => (
@@ -119,7 +201,7 @@ function AIModelList({
       {models.map((model) => {
         const vendorInfo = getModelVendorInfo(model.ID);
         const isSelected = model.ID === selectedModelId;
-        
+
         return (
           <div
             key={model.ID}
@@ -130,10 +212,10 @@ function AIModelList({
               padding: styles.spacing.lg,
               cursor: 'pointer',
               transition: 'all 0.2s',
-              border: isSelected 
+              border: isSelected
                 ? `2px solid ${styles.colors.primary}`
                 : `1px solid ${styles.colors.border}`,
-              boxShadow: isSelected 
+              boxShadow: isSelected
                 ? `0 4px 12px ${styles.colors.shadow || 'rgba(0, 0, 0, 0.1)'}`
                 : 'none'
             }}
@@ -179,7 +261,7 @@ function AIModelList({
               </div>
               {renderStatusBadge(model.IsActive ? 'Active' : 'Inactive')}
             </div>
-            
+
             {/* Model Description */}
             {model.Description && (
               <div style={{
@@ -195,7 +277,7 @@ function AIModelList({
                 {model.Description}
               </div>
             )}
-            
+
             {/* Model Specs */}
             <div style={{
               display: 'grid',
@@ -243,7 +325,7 @@ function AIModelList({
                 </div>
               </div>
             </div>
-            
+
             {/* Vendor Info */}
             <div style={{
               paddingTop: styles.spacing.md,
@@ -259,7 +341,7 @@ function AIModelList({
                   gap: styles.spacing.xs
                 }}>
                   <span style={{ color: styles.colors.textSecondary }}>Dev:</span>
-                  <span style={{ 
+                  <span style={{
                     color: styles.colors.text,
                     fontWeight: styles.typography.fontWeight?.medium || '500'
                   }}>
@@ -274,7 +356,7 @@ function AIModelList({
                   gap: styles.spacing.xs
                 }}>
                   <span style={{ color: styles.colors.textSecondary }}>Providers:</span>
-                  <span style={{ 
+                  <span style={{
                     color: styles.colors.primary,
                     fontWeight: styles.typography.fontWeight?.medium || '500'
                   }}>
@@ -288,230 +370,41 @@ function AIModelList({
       })}
     </div>
   );
-  
+
   // List view rendering
   const renderListView = () => (
-    <div style={{
-      backgroundColor: styles.colors.surface,
-      borderRadius: getBorderRadius('md'),
-      overflow: 'hidden'
-    }}>
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse'
-      }}>
-        <thead>
-          <tr style={{
-            borderBottom: `2px solid ${styles.colors.border}`
-          }}>
-            <th
-              onClick={() => handleSort('Name')}
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary,
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
-              Model Name
-              {renderSortIndicator('Name')}
-            </th>
-            <th
-              onClick={() => handleSort('Status')}
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary,
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
-              Status
-              {renderSortIndicator('Status')}
-            </th>
-            <th
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary
-              }}
-            >
-              Developer
-            </th>
-            <th
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary
-              }}
-            >
-              Providers
-            </th>
-            <th
-              onClick={() => handleSort('InputTokenLimit')}
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'right',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary,
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
-              Input Limit
-              {renderSortIndicator('InputTokenLimit')}
-            </th>
-            <th
-              onClick={() => handleSort('CostRank')}
-              style={{
-                padding: styles.spacing.md,
-                textAlign: 'center',
-                fontSize: styles.typography.fontSize.sm,
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                color: styles.colors.textSecondary,
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
-              Cost
-              {renderSortIndicator('CostRank')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {models.map((model, index) => {
-            const vendorInfo = getModelVendorInfo(model.ID);
-            const isSelected = model.ID === selectedModelId;
-            
-            return (
-              <tr
-                key={model.ID}
-                onClick={() => onSelectModel?.(model.ID)}
-                style={{
-                  borderBottom: index < models.length - 1 
-                    ? `1px solid ${styles.colors.borderLight || styles.colors.border}` 
-                    : 'none',
-                  backgroundColor: isSelected 
-                    ? styles.colors.primaryLight || styles.colors.primary + '10'
-                    : 'transparent',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = styles.colors.surfaceHover || styles.colors.surface;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md
-                }}>
-                  <div>
-                    <div style={{
-                      fontWeight: isSelected 
-                        ? (styles.typography.fontWeight?.semibold || '600')
-                        : (styles.typography.fontWeight?.regular || '400'),
-                      color: styles.colors.text
-                    }}>
-                      {model.Name}
-                    </div>
-                    {model.APIName && (
-                      <div style={{
-                        fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm,
-                        color: styles.colors.textSecondary,
-                        fontFamily: 'monospace'
-                      }}>
-                        {model.APIName}
-                      </div>
-                    )}
-                  </div>
-                </td>
-                <td style={{
-                  padding: styles.spacing.md
-                }}>
-                  {renderStatusBadge(model.IsActive ? 'Active' : 'Inactive')}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text
-                }}>
-                  {vendorInfo.modelDeveloper?.Vendor || '-'}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md
-                }}>
-                  {vendorInfo.inferenceProviders.length > 0 ? (
-                    <div style={{
-                      display: 'flex',
-                      gap: styles.spacing.xs,
-                      flexWrap: 'wrap'
-                    }}>
-                      {vendorInfo.inferenceProviders.slice(0, 3).map((provider, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            padding: `2px ${styles.spacing.xs}`,
-                            backgroundColor: styles.colors.primary + '15',
-                            color: styles.colors.primary,
-                            borderRadius: getBorderRadius('xs') || getBorderRadius('sm'),
-                            fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm
-                          }}
-                        >
-                          {provider.Vendor}
-                        </span>
-                      ))}
-                      {vendorInfo.inferenceProviders.length > 3 && (
-                        <span style={{
-                          color: styles.colors.textSecondary,
-                          fontSize: styles.typography.fontSize.xs || styles.typography.fontSize.sm
-                        }}>
-                          +{vendorInfo.inferenceProviders.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span style={{ color: styles.colors.textSecondary }}>-</span>
-                  )}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  textAlign: 'right',
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text
-                }}>
-                  {formatTokens(model.InputTokenLimit)}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  textAlign: 'center'
-                }}>
-                  {renderCostRank(model.CostRank)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div style={{ width: '100%' }}>
+      {DataGrid ? (
+        <DataGrid
+          data={models}
+          columns={gridColumns}
+          pageSize={25}
+          showFilters={true}
+          showExport={false}
+          selectionMode="single"
+          selectedRows={selectedModelId ? models.filter(m => m.ID === selectedModelId) : []}
+          onRowSelect={handleRowSelect}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSortChange={onSortChange}
+          utilities={utilities}
+          styles={styles}
+          components={components}
+          callbacks={callbacks}
+          savedUserSettings={savedUserSettings}
+          onSaveUserSettings={onSaveUserSettings}
+        />
+      ) : (
+        <div style={{
+          padding: styles.spacing.lg,
+          textAlign: 'center',
+          color: styles.colors.textSecondary
+        }}>
+          DataGrid component not available
+        </div>
+      )}
     </div>
   );
-  
+
   return viewMode === 'grid' ? renderGridView() : renderListView();
 }

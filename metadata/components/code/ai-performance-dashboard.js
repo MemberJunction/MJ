@@ -8,6 +8,7 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
   const AIDetailTable = components?.AIDetailTable;
   const AIMetricsSummary = components?.AIMetricsSummary;
   const AIInsightsPanel = components?.AIInsightsPanel;
+  const DataExportPanel = components?.DataExportPanel;
   
   // Check if required components are available
   if (!AITimeSeriesChart || !AIDistributionChart || !AIDetailTable || !AIMetricsSummary || !AIInsightsPanel) {
@@ -249,10 +250,43 @@ function AIPerformanceDashboard({ utilities, styles, components, callbacks, save
       avgCostPerRun: data.length > 0 ? data.reduce((sum, item) => sum + (item.TotalCost || 0), 0) / data.length : 0
     };
   }, [activeTab, agentRuns, promptRuns]);
+
+  // Prepare data for export - memoized to prevent re-computation
+  const prepareExportData = React.useMemo(() => {
+    const currentData = activeTab === 'agents' ? agentRuns : promptRuns;
+    const dateField = activeTab === 'agents' ? 'StartedAt' : 'RunAt';
+
+    return currentData.map(item => ({
+      ID: item.ID || '',
+      Name: activeTab === 'agents' ? (item.Agent || '') : (item.Prompt || ''),
+      Type: activeTab === 'agents' ? 'Agent Run' : 'Prompt Run',
+      Model: item.Model || '',
+      ExecutionDate: item[dateField] ? new Date(item[dateField]).toLocaleDateString() : '',
+      Success: item.Success ? 'Yes' : 'No',
+      TokensUsed: item.TotalTokensUsed || item.TokensUsed || 0,
+      Cost: item.TotalCost ? `$${item.TotalCost.toFixed(4)}` : '$0.0000',
+      CompletedAt: item.CompletedAt ? new Date(item.CompletedAt).toLocaleDateString() : ''
+    }));
+  }, [activeTab, agentRuns, promptRuns]);
+
+  // Define export columns - memoized to prevent re-creation
+  const getExportColumns = React.useMemo(() => {
+    return [
+      { key: 'ID', label: 'ID' },
+      { key: 'Name', label: activeTab === 'agents' ? 'Agent Name' : 'Prompt Name' },
+      { key: 'Type', label: 'Type' },
+      { key: 'Model', label: 'Model' },
+      { key: 'ExecutionDate', label: 'Execution Date' },
+      { key: 'Success', label: 'Success' },
+      { key: 'TokensUsed', label: 'Tokens Used' },
+      { key: 'Cost', label: 'Cost' },
+      { key: 'CompletedAt', label: 'Completed At' }
+    ];
+  }, [activeTab]);
   
 
-  // Generate AI Insights
-  const generateAIInsights = async () => {
+  // Generate AI Insights - wrap with useCallback
+  const generateAIInsights = React.useCallback(async () => {
     setLoadingInsights(true);
     setInsightsError(null);
     
@@ -354,7 +388,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     } finally {
       setLoadingInsights(false);
     }
-  };
+  }, [activeTab, agentRuns, promptRuns, utilities.ai]);
   
   console.log('[AIPerformanceDashboard] Current state:', {
     timeRange,
@@ -508,6 +542,38 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             <option value="quarter">By Quarter</option>
           </select>
           
+          {/* Export Button */}
+          {DataExportPanel && (
+            <DataExportPanel
+              key="export-panel"  // Add stable key
+              data={prepareExportData}
+              columns={getExportColumns}
+              filename={`ai-performance-${activeTab}-${new Date().toISOString().split('T')[0]}`}
+              formats={['csv', 'excel', 'pdf']}
+              buttonStyle="dropdown"
+              buttonText="Export"
+              icon="fa-download"
+              customStyles={{
+                button: {
+                  padding: `${styles.spacing.sm} ${styles.spacing.md}`,
+                  backgroundColor: '#10B981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: styles.borders?.radius || '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: styles.spacing.xs
+                }
+              }}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          )}
+
           {/* AI Insights Button */}
           <button
             onClick={generateAIInsights}
