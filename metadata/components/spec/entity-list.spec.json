@@ -381,6 +381,13 @@
   ],
   "exampleUsage": "<EntityList\n  entities={entities}\n  viewMode={viewMode}\n  selectedEntityId={selectedEntityId}\n  onSelectEntity={handleSelectEntity}\n  sortBy={sortBy}\n  sortDirection={sortDirection}\n  onSortChange={handleSortChange}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
   "code": "@file:../code/entity-list.js",
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

@@ -173,7 +173,7 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
     });
   }, [filterPanelCollapsed, savedUserSettings, onSaveUserSettings]);
   
-  // Handle opening entity record
+  // Handle opening entity record (kept for backward compatibility with details panel)
   const handleOpenRecord = useCallback((entityName) => {
     console.log('Root handleOpenRecord called with entityName:', entityName);
     console.log('Callbacks object:', callbacks);

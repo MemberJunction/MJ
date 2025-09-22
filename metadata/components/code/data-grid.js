@@ -1,7 +1,7 @@
-function DataGrid({ 
+function DataGrid({
   entityName,
   data,
-  fields,
+  columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]
   sorting = true,
   paging = true,
   pageSize = 10,
@@ -17,12 +17,13 @@ function DataGrid({
   onPageChanged,
   onSortChanged,
   onFilterChanged,
-  utilities, 
-  styles, 
-  components, 
-  callbacks, 
-  savedUserSettings, 
-  onSaveUserSettings 
+  onRowClick,
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings
 }) {
   // Always use the MJ unwrapLibraryComponents function to get components from global libraries like antd, this ensures
   // that various library build/package formats are handled correctly and transparently for your code!
@@ -223,38 +224,51 @@ function DataGrid({
     return () => clearTimeout(timer);
   }, [filterText, filterDebounceTime]);
   
-  // Determine fields to display - use provided fields or extract from data
-  // This handles both explicit field lists and auto-discovery from data
+  // Normalize column definitions - support both simple strings and full column definitions
+  const normalizedColumns = React.useMemo(() => {
+    if (!columns || columns.length === 0) {
+      // Auto-discover columns from data if none provided
+      if (data && Array.isArray(data) && data.length > 0) {
+        const allKeys = new Set();
+        data.forEach(row => {
+          if (row && typeof row === 'object') {
+            Object.keys(row).forEach(key => {
+              if (key !== 'key') {
+                allKeys.add(key);
+              }
+            });
+          }
+        });
+        return Array.from(allKeys).map(key => ({ field: key }));
+      }
+      return [];
+    }
+
+    // Normalize columns to standard format
+    return columns.map(col => {
+      if (typeof col === 'string') {
+        // Simple string field name - use defaults
+        return { field: col };
+      } else if (typeof col === 'object' && col.field) {
+        // Already a column definition object
+        return col;
+      } else {
+        console.warn('Invalid column configuration:', col);
+        return null;
+      }
+    }).filter(Boolean);
+  }, [columns, data]);
+
+  // Extract just the field names for filtering and other operations
   const displayFields = React.useMemo(() => {
-    // If fields are explicitly provided, use them
-    if (fields && fields.length > 0) {
-      return fields;
-    }
-    
-    // If no fields specified, try to extract all unique keys from data
-    // But gracefully handle null/undefined/empty data
-    if (data && Array.isArray(data) && data.length > 0) {
-      const allKeys = new Set();
-      data.forEach(row => {
-        if (row && typeof row === 'object') {
-          Object.keys(row).forEach(key => {
-            // Skip internal keys like 'key' that we add for row selection
-            if (key !== 'key') {
-              allKeys.add(key);
-            }
-          });
-        }
-      });
-      return Array.from(allKeys);
-    }
-    
-    // Return empty array if no fields and no data to extract from
-    return [];
-  }, [fields, data]);
+    return normalizedColumns.map(col => col.field);
+  }, [normalizedColumns]);
   
-  // Build columns from fields with metadata-aware formatting
-  const columns = React.useMemo(() => {
-    return displayFields.map(fieldName => {
+  // Build table columns from column definitions with metadata-aware formatting
+  const tableColumns = React.useMemo(() => {
+    return normalizedColumns.map(colDef => {
+      const fieldName = colDef.field;
+
       // Get field metadata if available
       const fieldInfo = entityInfo?.Fields?.find(f => f.Name === fieldName);
       const fieldType = fieldInfo?.Type?.toLowerCase() || '';
@@ -323,23 +337,26 @@ function DataGrid({
       const useEllipsis = isLongTextField;
       
       // Handle special __mj fields display names
-      let displayName = fieldInfo?.DisplayName || fieldName;
-      if (fieldName === '__mj_CreatedAt') {
-        displayName = 'Created At';
-      } else if (fieldName === '__mj_UpdatedAt') {
-        displayName = 'Updated At';
-      } else if (fieldName === '__mj_DeletedAt') {
-        displayName = 'Deleted At';
+      // Priority: colDef.header > fieldInfo.DisplayName > default handling
+      let displayName = colDef.header || fieldInfo?.DisplayName || fieldName;
+      if (!colDef.header) {
+        if (fieldName === '__mj_CreatedAt') {
+          displayName = 'Created At';
+        } else if (fieldName === '__mj_UpdatedAt') {
+          displayName = 'Updated At';
+        } else if (fieldName === '__mj_DeletedAt') {
+          displayName = 'Deleted At';
+        }
       }
-      
+
       return {
         title: displayName,
         dataIndex: fieldName,
         key: fieldName,
         align: align,
-        width: columnWidth,
+        width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
-        sorter: sorting ? (a, b) => {
+        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
           const valA = a[fieldName];
           const valB = b[fieldName];
           if (valA == null) return 1;
@@ -350,13 +367,19 @@ function DataGrid({
           return valA - valB;
         } : false,
         render: (value, record) => {
+          // Check for custom render function first
+          if (colDef.render && typeof colDef.render === 'function') {
+            return colDef.render(value, record, fieldInfo);
+          }
+
+          // Default handling for null values
           if (value == null) return '-';
-          
+
           // Create a unique key for this cell
           const cellKey = `${record.key || record.ID || record.id}_${fieldName}`;
           const isExpanded = expandedCells[cellKey];
-          
-          // Format based on field type
+
+          // Format based on field type (default behavior)
           let displayValue = value;
           let formattedContent = null;
           
@@ -388,7 +411,7 @@ function DataGrid({
           }
           // Handle numeric fields with formatting
           else if (fieldType.includes('money')) {
-            displayValue = typeof value === 'number' 
+            displayValue = typeof value === 'number'
               ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
               : value;
             formattedContent = displayValue;
@@ -522,7 +545,7 @@ function DataGrid({
         }
       };
     });
-  }, [displayFields, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults
@@ -639,6 +662,24 @@ function DataGrid({
   
   return (
     <div className="data-grid-component" style={{ width: '100%' }}>
+      <style>{`
+        .data-grid-component .ant-table-wrapper,
+        .data-grid-component .ant-table,
+        .data-grid-component .ant-table-tbody,
+        .data-grid-component .ant-table-row,
+        .data-grid-component .ant-table-cell,
+        .data-grid-component .ant-table-tbody > tr {
+          animation: none !important;
+          transition: none !important;
+        }
+        .data-grid-component .ant-table-tbody > tr.ant-table-row {
+          animation: none !important;
+        }
+        .data-grid-component * {
+          animation-duration: 0s !important;
+          transition-duration: 0s !important;
+        }
+      `}</style>
       {filtering && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
           <div style={{ position: 'relative' }}>
@@ -665,7 +706,7 @@ function DataGrid({
       )}
       
       <Table
-        columns={columns}
+        columns={tableColumns}
         dataSource={dataWithKeys}
         rowSelection={rowSelection}
         pagination={pagination}
@@ -676,6 +717,16 @@ function DataGrid({
           emptyText: `No ${entityName || 'records'} found`
         }}
         size="middle"
+        onRow={(record) => ({
+          onClick: () => {
+            if (onRowClick) {
+              onRowClick(record);
+            }
+          },
+          style: {
+            cursor: onRowClick ? 'pointer' : 'default'
+          }
+        })}
       />
     </div>
   );

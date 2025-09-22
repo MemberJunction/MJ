@@ -4,7 +4,7 @@
   "type": "Panel",
   "location": "embedded",
   "code": "@file:../code/product-revenue-detail-panel.js",
-  "functionalRequirements": "## Product Revenue Detail Panel Sub-Component\n\n### Purpose\nSlide-out panel displaying detailed product metrics and trends.\n\n### Core Features\n- **Performance Metrics**: Revenue, units, margin, customers\n- **Pricing Details**: List price, cost, average selling price\n- **Revenue Trend Chart**: 12-month trend visualization\n- **Explorer Link**: Open full product record\n- **Smooth Animations**: Slide-in/out transitions",
+  "functionalRequirements": "## Product Revenue Detail Panel Sub-Component\n\n### Purpose\nSlide-out panel displaying detailed product metrics and trends using SingleRecordView for basic product information.\n\n### Core Features\n- **Basic Product Info**: Uses SingleRecordView for standardized product field display\n- **Performance Metrics**: Revenue, units, margin, customers with custom formatting\n- **Pricing Details**: List price, cost, average selling price\n- **Revenue Trend Chart**: 12-month trend visualization\n- **Explorer Link**: Open full product record\n- **Smooth Animations**: Slide-in/out transitions",
   "dataRequirements": {
     "mode": "views",
     "description": "Displays detailed metrics for a selected product passed via props",
@@ -44,7 +44,14 @@
     }
   ],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "SingleRecordView",
+      "location": "registry",
+      "namespace": "Generic/UI/Form",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": [
     {
       "name": "Chart.js",

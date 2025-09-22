@@ -80,5 +80,13 @@
     }
   ],
   "exampleUsage": "<AccountsByIndustryList\n  accounts={filteredAccounts}\n  selectedIndustry={selectedIndustry}\n  sortConfig={sortConfig}\n  onSort={handleSort}\n  onAccountClick={handleAccountClick}\n  currentPage={currentPage}\n  pageSize={pageSize}\n  onPageChange={setCurrentPage}\n  onClearFilter={handleClearFilter}\n/>",
-  "code": "@file:../code/accounts-by-industry-list.js"
+  "code": "@file:../code/accounts-by-industry-list.js",
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    }
+  ]
 }

@@ -100,6 +100,21 @@
       "defaultValue": true
     },
     {
+      "name": "legendPosition",
+      "type": "'auto' | 'top' | 'bottom' | 'left' | 'right'",
+      "description": "Position of the legend. 'auto' uses bottom for pie/doughnut, top for others",
+      "required": false,
+      "defaultValue": "auto",
+      "possibleValues": ["auto", "top", "bottom", "left", "right"]
+    },
+    {
+      "name": "legendFontSize",
+      "type": "number",
+      "description": "Font size for legend labels in pixels",
+      "required": false,
+      "defaultValue": 12
+    },
+    {
       "name": "showDataLabels",
       "type": "boolean",
       "description": "Whether to show data labels on chart",

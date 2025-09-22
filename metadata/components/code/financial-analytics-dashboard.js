@@ -30,17 +30,28 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
 
-  useEffect(() => {
-    loadFinancialData();
+  const getDateFilter = React.useCallback(() => {
+    const now = new Date();
+    let months = 3;
+
+    switch (timeRange) {
+      case 'month': months = 1; break;
+      case 'quarter': months = 3; break;
+      case 'year': months = 12; break;
+      default: months = 3;
+    }
+
+    const startDate = new Date(now.setMonth(now.getMonth() - months));
+    return startDate.toISOString().split('T')[0];
   }, [timeRange]);
 
-  const loadFinancialData = async () => {
+  const loadFinancialData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const dateFilter = getDateFilter();
-      
+
       const [invoicesResult, dealsResult, productsResult] = await Promise.all([
         utilities.rv.RunView({
           EntityName: 'Invoices',
@@ -67,7 +78,7 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
       if (productsResult.Success) {
         setProducts(productsResult.Results || []);
       }
-      
+
       if (!invoicesResult.Success) {
         setError('Failed to load financial data');
       }
@@ -76,24 +87,13 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange, getDateFilter, utilities.rv]);
 
-  const getDateFilter = () => {
-    const now = new Date();
-    let months = 3;
-    
-    switch (timeRange) {
-      case 'month': months = 1; break;
-      case 'quarter': months = 3; break;
-      case 'year': months = 12; break;
-      default: months = 3;
-    }
-    
-    const startDate = new Date(now.setMonth(now.getMonth() - months));
-    return startDate.toISOString().split('T')[0];
-  };
+  useEffect(() => {
+    loadFinancialData();
+  }, [timeRange]);
 
-  const calculateMetrics = () => {
+  const metrics = React.useMemo(() => {
     const actualRevenue = invoices
       .filter(inv => inv.Status === 'Paid')
       .reduce((sum, inv) => sum + (inv.TotalAmount || 0), 0);
@@ -131,28 +131,16 @@ function FinancialAnalyticsDashboard({ utilities, styles, components, callbacks,
       cashFlow: actualRevenue - outstandingRevenue,
       revenueGrowth
     };
-  };
+  }, [invoices, deals, products]);
 
-  // Calculate metrics only when data is loaded
-  const metrics = loading ? {
-    actualRevenue: 0,
-    projectedRevenue: 0,
-    outstandingRevenue: 0,
-    grossMargin: 0,
-    revenueGrowth: 0,
-    avgDealSize: 0,
-    totalRevenue: 0,
-    cashFlow: 0
-  } : calculateMetrics();
-  
   // Format insights text using marked library for proper markdown rendering
 
-  const generateAIInsights = async () => {
+  const generateAIInsights = React.useCallback(async () => {
     setLoadingInsights(true);
     setInsightsError(null);
     
     try {
-      const trendData = prepareTrendData();
+      // trendData is already calculated via useMemo
       
       const prompt = `Analyze this financial analytics data and provide insights:
 
@@ -203,9 +191,9 @@ Focus on actionable business insights that can help improve financial performanc
     } finally {
       setLoadingInsights(false);
     }
-  };
+  }, [invoices, deals, metrics, utilities.ai]);
 
-  const prepareTrendData = () => {
+  const trendData = React.useMemo(() => {
     const monthlyData = {};
     
     invoices.forEach(inv => {
@@ -233,13 +221,13 @@ Focus on actionable business insights that can help improve financial performanc
         deals: data.deals,
         total: data.revenue + data.deals
       }));
-  };
+  }, [invoices, deals]);
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = React.useCallback((amount) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
     return `$${amount?.toFixed(0) || 0}`;
-  };
+  }, []);
 
   // Sub-component: KPI Gauges
   const KPIGauges = () => {
@@ -319,7 +307,7 @@ Focus on actionable business insights that can help improve financial performanc
 
   // Sub-component: Revenue Trend Chart
   const RevenueTrendChart = () => {
-    const trendData = prepareTrendData();
+    // trendData is already calculated via useMemo
     
     useEffect(() => {
       if (!loading && chartRefs.current.trendChart && trendData.length > 0) {
@@ -443,7 +431,7 @@ Focus on actionable business insights that can help improve financial performanc
   // Sub-component: Forecast Model
   const ForecastModel = () => {
     const generateForecast = () => {
-      const historicalData = prepareTrendData();
+      const historicalData = trendData;
       const lastValue = historicalData[historicalData.length - 1]?.total || 0;
       const growthRate = 1.05; // 5% growth
       
@@ -567,8 +555,8 @@ Focus on actionable business insights that can help improve financial performanc
           <div style={{ display: 'flex', gap: '10px' }}>
             {DataExportPanel ? (
               <DataExportPanel
-                data={prepareExportData()}
-                columns={getExportColumns()}
+                data={exportData}
+                columns={exportColumns}
                 htmlElement={dashboardRef.current}
                 filename={`financial-report-${new Date().toISOString().split('T')[0]}`}
                 formats={['csv', 'excel', 'pdf']}
@@ -599,18 +587,18 @@ Focus on actionable business insights that can help improve financial performanc
   };
 
   // Prepare data for export
-  const prepareExportData = () => {
+  const exportData = React.useMemo(() => {
     // Return empty array if data is not loaded
     if (!invoices || invoices.length === 0) {
       return [];
     }
-    
-    const metrics = calculateMetrics();
-    const monthlyTrends = prepareTrendData();
-    
+
+    // metrics is already calculated via useMemo
+    const monthlyTrends = trendData;
+
     // Combine all financial data into a flat structure for export
     const exportData = [];
-    
+
     // Add monthly revenue data
     monthlyTrends.forEach(month => {
       exportData.push({
@@ -628,7 +616,7 @@ Focus on actionable business insights that can help improve financial performanc
         type: 'Projected'
       });
     });
-    
+
     // Add summary metrics
     const currentDate = new Date().toISOString().split('T')[0];
     exportData.push(
@@ -682,13 +670,13 @@ Focus on actionable business insights that can help improve financial performanc
         type: 'Percentage'
       }
     );
-    
+
     // Add top invoices
     const topInvoices = invoices
       .filter(inv => inv.Status === 'Paid')
       .sort((a, b) => (b.TotalAmount || 0) - (a.TotalAmount || 0))
       .slice(0, 5);
-      
+
     topInvoices.forEach(invoice => {
       exportData.push({
         category: 'Top Invoices',
@@ -698,12 +686,12 @@ Focus on actionable business insights that can help improve financial performanc
         type: 'Invoice'
       });
     });
-    
+
     return exportData;
-  };
-  
-  // Get export columns configuration
-  const getExportColumns = () => {
+  }, [invoices, deals, metrics]);
+
+  // Export columns configuration - memoized value
+  const exportColumns = React.useMemo(() => {
     return [
       { key: 'category', label: 'Category', type: 'string' },
       { key: 'date', label: 'Date', type: 'date' },
@@ -711,7 +699,7 @@ Focus on actionable business insights that can help improve financial performanc
       { key: 'value', label: 'Value', type: 'currency' },
       { key: 'type', label: 'Type', type: 'string' }
     ];
-  };
+  }, []);
 
 
   if (loading) {
@@ -830,8 +818,8 @@ Focus on actionable business insights that can help improve financial performanc
                   aiInsightsRefCurrent: aiInsightsRef.current
                 }) ||
                 <DataExportPanel
-                  data={prepareExportData()}
-                  columns={getExportColumns()}
+                  data={exportData}
+                  columns={exportColumns}
                   getHtmlElement={() => dashboardRef.current}
                   aiInsightsText={aiInsights}  // Pass raw markdown text only
                   filename={`financial-report-${new Date().toISOString().split('T')[0]}`}

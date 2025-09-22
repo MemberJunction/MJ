@@ -71,7 +71,7 @@
           <div class="panel-header-top">
             <h3>Components</h3>
             <div class="header-actions">
-              <button 
+              <button
                 class="favorites-toggle"
                 [class.active]="showOnlyFavorites"
                 (click)="toggleShowOnlyFavorites()"
@@ -80,6 +80,17 @@
                   <i class="fa-solid fa-star"></i> Favorites
                 } @else {
                   <i class="fa-regular fa-star"></i> All
+                }
+              </button>
+              <button
+                class="deprecated-toggle"
+                [class.active]="showDeprecatedComponents"
+                (click)="toggleShowDeprecatedComponents()"
+                title="Toggle deprecated components">
+                @if (showDeprecatedComponents) {
+                  <i class="fa-solid fa-exclamation-triangle"></i> Show Deprecated
+                } @else {
+                  <i class="fa-regular fa-exclamation-triangle"></i> Hide Deprecated
                 }
               </button>
               <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
@@ -194,6 +205,8 @@
                         } @else {
                           <span class="status-badge file">File</span>
                         }
+                      } @else if (getComponentStatus(component) === 'Deprecated') {
+                        <span class="status-badge deprecated">Deprecated</span>
                       } @else if (getComponentStatus(component) === 'Published') {
                         <span class="status-badge published">Published</span>
                       } @else {

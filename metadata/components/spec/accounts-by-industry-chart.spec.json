@@ -58,5 +58,13 @@
     }
   ],
   "exampleUsage": "<AccountsByIndustryChart\n  industryData={industryData}\n  selectedIndustry={selectedIndustry}\n  onSliceClick={handleSliceClick}\n  colorScheme=\"default\"\n/>",
-  "code": "@file:../code/accounts-by-industry-chart.js"
+  "code": "@file:../code/accounts-by-industry-chart.js",
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "namespace": "Generic/UI/Chart",
+      "version": "^1.0.0"
+    }
+  ]
 }

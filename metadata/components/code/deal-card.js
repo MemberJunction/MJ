@@ -1,5 +1,7 @@
 // DealCard Sub-component
-function DealCard ({ deal, onOpen, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+function DealCard ({ deal, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load OpenRecordButton component
+  const OpenRecordButton = components['OpenRecordButton'];
   const getStageColor = (stage) => {
     const colors = {
       'Prospecting': '#17a2b8',
@@ -12,32 +14,26 @@ function DealCard ({ deal, onOpen, utilities, styles, components, callbacks, sav
     return colors[stage] || '#6c757d';
   };
 
-  const handleOpen = () => {
-    if (onOpen) {
-      onOpen(deal.id);
-    } else if (callbacks?.OpenEntityRecord) {
-      callbacks.OpenEntityRecord('Deals', deal.id);
-    }
+
+  const cardStyle = {
+    border: '1px solid #e0e0e0',
+    borderRadius: '8px',
+    padding: '15px',
+    marginBottom: '10px',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+    transition: 'box-shadow 0.2s'
   };
 
   return (
-    <div style={{
-      border: '1px solid #e0e0e0',
-      borderRadius: '8px',
-      padding: '15px',
-      marginBottom: '10px',
-      backgroundColor: '#fff',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-      transition: 'box-shadow 0.2s',
-      cursor: 'pointer'
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
-    }}
-    onClick={handleOpen}
+    <div
+      style={cardStyle}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+      }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
@@ -67,17 +63,37 @@ function DealCard ({ deal, onOpen, utilities, styles, components, callbacks, sav
         </div>
       </div>
       
-      <div style={{ 
-        marginTop: '10px', 
-        paddingTop: '10px', 
+      <div style={{
+        marginTop: '10px',
+        paddingTop: '10px',
         borderTop: '1px solid #f0f0f0',
         display: 'flex',
         justifyContent: 'space-between',
+        alignItems: 'center',
         fontSize: '12px',
         color: '#999'
       }}>
-        <span>Close Date: {deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : 'TBD'}</span>
-        <span>Probability: {deal.probability || 0}%</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span>Close Date: {deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : 'TBD'}</span>
+          <span>Probability: {deal.probability || 0}%</span>
+        </div>
+        {OpenRecordButton && (
+          <OpenRecordButton
+            entityName="Deals"
+            record={deal}
+            text="Open"
+            variant="text"
+            size="small"
+            icon="↗"
+            showIcon={true}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+            savedUserSettings={savedUserSettings}
+            onSaveUserSettings={onSaveUserSettings}
+          />
+        )}
       </div>
     </div>
   );
