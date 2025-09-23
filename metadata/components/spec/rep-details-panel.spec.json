@@ -4,7 +4,7 @@
   "type": "Other",
   "location": "embedded",
   "code": "@file:../code/rep-details-panel.js",
-  "functionalRequirements": "## Rep Details Panel\n\n### Purpose\nSlide-out panel showing detailed sales rep performance metrics.\n\n### Features\n- Rep name and title header\n- Performance metrics cards\n- Deal pipeline breakdown\n- Recent activities list\n- Performance chart\n- Close button",
+  "functionalRequirements": "## Rep Details Panel\n\n### Purpose\nSlide-out panel showing detailed sales rep performance metrics using SingleRecordView for basic rep information.\n\n### Features\n- Rep name and title header using SingleRecordView for standardized display\n- Performance metrics cards with custom formatting\n- Deal pipeline breakdown\n- Recent activities list\n- Performance chart\n- Close button",
   "dataRequirements": {
     "mode": "views",
     "description": "Displays detailed sales rep performance metrics",
@@ -54,6 +54,13 @@
     }
   ],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "SingleRecordView",
+      "location": "registry",
+      "namespace": "Generic/UI/Form",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

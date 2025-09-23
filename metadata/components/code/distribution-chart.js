@@ -1,62 +1,48 @@
 // DistributionChart Sub-component
 function DistributionChart ({ data, onDataClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  const chartRef = useRef(null);
-  const chartInstance = useRef(null);
+  // Load SimpleChart from the components registry
+  const SimpleChart = components['SimpleChart'];
 
-  useEffect(() => {
-    if (!chartRef.current || !data || !window.ApexCharts) return;
+  const handleChartClick = React.useCallback((event) => {
+    if (event && onDataClick) {
+      onDataClick(event);
+    }
+  }, [onDataClick]);
 
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
+  // Memoize the chart content to prevent unnecessary re-renders
+  const chartContent = React.useMemo(() => {
+    if (!SimpleChart) {
+      return (
+        <div style={{ padding: '20px', textAlign: 'center', color: '#6B7280' }}>
+          SimpleChart component not available
+        </div>
+      );
     }
 
-    const options = {
-      chart: {
-        type: 'line',
-        height: 350,
-        toolbar: { show: true }
-      },
-      series: data.series || [{
-        name: 'Series 1',
-        data: data.values || []
-      }],
-      xaxis: {
-        categories: data.categories || [],
-        title: { text: data.xAxisLabel || 'X Axis' }
-      },
-      yaxis: {
-        title: { text: data.yAxisLabel || 'Y Axis' }
-      },
-      colors: ['#007bff', '#28a745', '#dc3545'],
-      stroke: { curve: 'smooth', width: 2 },
-      markers: { size: 4 },
-      grid: { borderColor: '#e0e0e0' },
-      tooltip: {
-        shared: true,
-        intersect: false
-      }
-    };
+    // SimpleChart expects raw data array, not pre-processed chart data
+    // The parent component should pass raw records instead of chart series/categories
+    return (
+      <SimpleChart
+        key="distribution-chart"
+        data={data}
+        groupBy="Category"  // Adjust this field name based on actual data structure
+        aggregateMethod="count"
+        chartType="pie"
+        title="Distribution Analysis"
+        onDataPointClick={handleChartClick}
+        utilities={utilities}
+        styles={styles}
+        components={components}
+        callbacks={callbacks}
+        savedUserSettings={savedUserSettings}
+        onSaveUserSettings={onSaveUserSettings}
+      />
+    );
+  }, [SimpleChart, data, handleChartClick, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings]);
 
-    chartInstance.current = new window.ApexCharts(chartRef.current, options);
-    chartInstance.current.render();
-
-    if (onDataClick) {
-      chartInstance.current.addEventListener('dataPointSelection', function(event, chartContext, config) {
-        onDataClick({
-          seriesIndex: config.seriesIndex,
-          dataPointIndex: config.dataPointIndex,
-          value: config.w.globals.series[config.seriesIndex][config.dataPointIndex]
-        });
-      });
-    }
-
-    return () => {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-        chartInstance.current = null;
-      }
-    };
-  }, [data, onDataClick]);
-
-  return <div ref={chartRef} style={{ width: '100%', height: '350px' }} />;
+  return (
+    <div style={{ width: '100%', height: '350px' }}>
+      {chartContent}
+    </div>
+  );
 };

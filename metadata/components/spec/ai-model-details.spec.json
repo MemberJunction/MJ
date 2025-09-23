@@ -133,6 +133,13 @@
   ],
   "exampleUsage": "<AIModelDetails ... />",
   "code": "@file:../code/ai-model-details.js",
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

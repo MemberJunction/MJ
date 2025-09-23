@@ -1,6 +1,9 @@
-function ProductRevenueDetailPanel({ product, isOpen, onClose, callbacks }) {
+function ProductRevenueDetailPanel({ product, isOpen, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   const trendChartRef = useRef(null);
   const productTrendChart = useRef(null);
+
+  // Load SingleRecordView from component registry
+  const SingleRecordView = components?.SingleRecordView;
   
   useEffect(() => {
     if (product && isOpen && trendChartRef.current) {
@@ -112,13 +115,35 @@ function ProductRevenueDetailPanel({ product, isOpen, onClose, callbacks }) {
       </div>
       
       <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+        {/* Basic Product Information using SingleRecordView */}
         <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 'bold' }}>
-            {product.name}
-          </h4>
-          <div style={{ fontSize: '13px', color: '#6B7280' }}>
-            {product.category}
-          </div>
+          {SingleRecordView ? (
+            <SingleRecordView
+              entityName="Products"
+              record={product}
+              fields={["ProductName", "Category", "UnitPrice", "Cost"]}
+              layout="card"
+              showLabels={true}
+              showEmptyFields={false}
+              allowOpenRecord={false}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
+            />
+          ) : (
+            // Fallback display
+            <div>
+              <h4 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 'bold' }}>
+                {product.name || product.ProductName}
+              </h4>
+              <div style={{ fontSize: '13px', color: '#6B7280' }}>
+                {product.category || product.Category}
+              </div>
+            </div>
+          )}
         </div>
         
         <div style={{ marginBottom: '24px' }}>

@@ -163,6 +163,12 @@
   "code": "@file:../code/ai-detail-table.js",
   "dependencies": [
     {
+      "name": "DataGrid",
+      "location": "registry",
+      "namespace": "Generic/UI/Table",
+      "version": "^1.0.0"
+    },
+    {
       "name": "DataExportPanel",
       "location": "registry",
       "namespace": "Generic/UI/Export",
