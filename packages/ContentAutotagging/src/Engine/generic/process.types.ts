@@ -45,3 +45,15 @@ export class ContentItemProcessParamsExtended extends ContentItemProcessParams {
     preserveTableStructure?: boolean;
     pdfBuffer?: Buffer; // For vision model processing
 }
+
+export interface ContentDiscoveryResult {
+    identifier: string;        // Source-specific unique identifier
+    contentSourceId: string;   
+    lastModified?: Date;
+    action: 'create' | 'update';
+    sourceType: string;        // 'LocalFileSystem', 'AzureBlob', etc.
+    metadata?: {
+        url?: string;          // Actual URL when different from identifier
+        [key: string]: any;    // Other source-specific data
+    };
+}

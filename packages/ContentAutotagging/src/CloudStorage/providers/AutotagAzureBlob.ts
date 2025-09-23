@@ -1,9 +1,9 @@
 import { CloudStorageBase } from "../generic/CloudStorageBase";
-import { UserInfo, RunView } from "@memberjunction/core";
+import { UserInfo, RunView, Metadata } from "@memberjunction/core";
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import dotenv from 'dotenv';
-import { ContentItemEntity, ContentFileTypeEntity } from "@memberjunction/core-entities";
-import { Metadata } from "@memberjunction/core";
+import { ContentItemEntity, ContentFileTypeEntity, ContentSourceEntity } from "@memberjunction/core-entities";
+import { ContentDiscoveryResult } from "../../Engine/generic/process.types";
 import path from "path";
 import * as fs from 'fs';
 import * as os from 'os';
@@ -44,6 +44,233 @@ export class AutotagAzureBlob extends CloudStorageBase {
             throw new Error(`Error authenticating to Azure Blob Storage: ${error.message}`)
         }
     }
+    
+    // NEW CLOUD-FRIENDLY METHODS
+    
+    /**
+     * Discovery phase: List Azure Blob Storage items and identify new/modified blobs
+     * @param contentSources - Azure Blob content sources to discover items from
+     * @param contextUser - User context
+     * @returns Array of blobs that need processing
+     */
+    public async DiscoverContentToProcess(
+        contentSources: ContentSourceEntity[], 
+        contextUser: UserInfo
+    ): Promise<ContentDiscoveryResult[]> {
+        const discoveries: ContentDiscoveryResult[] = [];
+        this.contextUser = contextUser;
+
+        for (const contentSource of contentSources) {
+            try {
+                console.log(`Discovering blobs from Azure container: ${this.containerName}`);
+                await this.Authenticate();
+                
+                const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSource.ID, contextUser);
+                
+                for await (const blob of this.containerClient.listBlobsFlat()) {
+                    try {
+                        if (!this.isSupportedFileType(blob.name)) {
+                            continue;
+                        }
+                        
+                        const blobPath = path.join(this.containerName, blob.name);
+                        
+                        // Check if blob already exists as ContentItem
+                        const existingContentItemId = await this.getExistingContentItemIdForBlob(blobPath, contentSource.ID, contextUser);
+                        
+                        if (!existingContentItemId && blob.properties.createdOn && blob.properties.createdOn > lastRunDate) {
+                            // New blob
+                            discoveries.push({
+                                identifier: blob.name, // Use blob name as identifier
+                                contentSourceId: contentSource.ID,
+                                lastModified: blob.properties.lastModified || blob.properties.createdOn,
+                                action: 'create',
+                                sourceType: 'AzureBlob',
+                                metadata: {
+                                    blobName: blob.name,
+                                    blobPath: blobPath,
+                                    containerName: this.containerName,
+                                    connectionString: this.connectionString,
+                                    size: blob.properties.contentLength,
+                                    extension: path.extname(blob.name).toLowerCase()
+                                }
+                            });
+                        } else if (existingContentItemId && blob.properties.lastModified && blob.properties.lastModified > lastRunDate) {
+                            // Modified blob
+                            discoveries.push({
+                                identifier: blob.name,
+                                contentSourceId: contentSource.ID,
+                                lastModified: blob.properties.lastModified,
+                                action: 'update',
+                                sourceType: 'AzureBlob',
+                                metadata: {
+                                    blobName: blob.name,
+                                    blobPath: blobPath,
+                                    containerName: this.containerName,
+                                    connectionString: this.connectionString,
+                                    existingContentItemId,
+                                    size: blob.properties.contentLength,
+                                    extension: path.extname(blob.name).toLowerCase()
+                                }
+                            });
+                        }
+                    } catch (blobError) {
+                        console.warn(`Error processing blob ${blob.name}:`, blobError.message);
+                        continue;
+                    }
+                }
+            } catch (sourceError) {
+                console.error(`Error processing Azure Blob content source ${contentSource.Name}:`, sourceError.message);
+                continue;
+            }
+        }
+
+        console.log(`Discovered ${discoveries.length} Azure Blob items to process`);
+        return discoveries;
+    }
+    
+    /**
+     * Creation phase: Create or update a single ContentItem from an Azure blob
+     * @param discoveryItem - Discovery result identifying the blob to process
+     * @param contextUser - User context
+     * @returns Created or updated ContentItem
+     */
+    public async SetSingleContentItem(
+        discoveryItem: ContentDiscoveryResult, 
+        contextUser: UserInfo
+    ): Promise<ContentItemEntity> {
+        const blobName = discoveryItem.identifier;
+        const blobPath = discoveryItem.metadata.blobPath;
+        const md = new Metadata();
+
+        try {
+            // Ensure authentication
+            if (!this.containerClient) {
+                await this.Authenticate();
+            }
+            
+            let contentItem: ContentItemEntity;
+
+            if (discoveryItem.action === 'update' && discoveryItem.metadata?.existingContentItemId) {
+                // Update existing ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                await contentItem.Load(discoveryItem.metadata.existingContentItemId);
+            } else {
+                // Create new ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                contentItem.NewRecord();
+                contentItem.ContentSourceID = discoveryItem.contentSourceId;
+                
+                // Get content source info for other required fields
+                const contentSource = await this.getContentSource(discoveryItem.contentSourceId, contextUser);
+                contentItem.ContentTypeID = contentSource.ContentTypeID;
+                contentItem.ContentSourceTypeID = contentSource.ContentSourceTypeID;
+                contentItem.Name = blobName;
+                contentItem.URL = blobPath;
+                
+                // Dynamic file type detection
+                contentItem.ContentFileTypeID = await this.getContentFileTypeFromExtension(blobName, {
+                    contentSourceID: discoveryItem.contentSourceId,
+                    name: contentSource.Name,
+                    ContentTypeID: contentSource.ContentTypeID,
+                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                    ContentFileTypeID: contentSource.ContentFileTypeID,
+                    URL: contentSource.URL
+                }, contextUser);
+                
+                contentItem.Description = await this.engine.getContentItemDescription({
+                    contentSourceID: discoveryItem.contentSourceId,
+                    ContentTypeID: contentSource.ContentTypeID,
+                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                    ContentFileTypeID: contentItem.ContentFileTypeID,
+                    URL: blobPath,
+                    name: blobName
+                }, contextUser);
+            }
+
+            // Download blob and parse content
+            const tempBuffer = await this.downloadBlobToBuffer(blobName);
+            const tempFilePath = await this.createTempFile(blobName, tempBuffer);
+            const originalURL = contentItem.URL;
+            contentItem.URL = tempFilePath; // Temporarily point to temp file for parsing
+            
+            try {
+                // Parse using centralized method
+                const parsedText = await this.engine.parseContentItem(contentItem, contextUser);
+                contentItem.Text = parsedText;
+                contentItem.Checksum = await this.engine.getChecksumFromText(parsedText);
+                contentItem.URL = originalURL; // Restore original blob path
+
+                // Save the ContentItem
+                const saveResult = await contentItem.Save();
+                if (saveResult) {
+                    console.log(`Successfully ${discoveryItem.action}d content item for blob: ${blobName}`);
+                    return contentItem;
+                } else {
+                    throw new Error(`Failed to save content item for blob ${blobName}`);
+                }
+            } finally {
+                // Clean up temp file
+                await this.cleanupTempFile(tempFilePath);
+            }
+        } catch (error) {
+            console.error(`Failed to process blob ${blobName}:`, error.message);
+            throw error;
+        }
+    }
+    
+    // HELPER METHODS
+    
+    /**
+     * Check if file type is supported
+     */
+    private isSupportedFileType(blobName: string): boolean {
+        const extension = path.extname(blobName).toLowerCase();
+        const supportedExtensions = ['.pdf', '.docx', '.xlsx'];
+        return supportedExtensions.includes(extension);
+    }
+    
+    /**
+     * Check if ContentItem already exists for this blob
+     */
+    private async getExistingContentItemIdForBlob(blobPath: string, contentSourceId: string, contextUser: UserInfo): Promise<string | null> {
+        try {
+            const rv = new RunView();
+            const extraFilter = `ContentSourceID='${contentSourceId}' AND URL='${blobPath}'`;
+            const result = await rv.RunView<ContentItemEntity>({
+                EntityName: 'Content Items',
+                ExtraFilter: extraFilter,
+                ResultType: 'entity_object'
+            }, contextUser);
+            
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0].ID;
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    
+    /**
+     * Get ContentSource entity by ID
+     */
+    private async getContentSource(contentSourceId: string, contextUser: UserInfo): Promise<ContentSourceEntity> {
+        const rv = new RunView();
+        const result = await rv.RunView<ContentSourceEntity>({
+            EntityName: 'Content Sources',
+            ExtraFilter: `ID='${contentSourceId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        } else {
+            throw new Error(`ContentSource with ID ${contentSourceId} not found`);
+        }
+    }
+
+    // LEGACY METHODS (for backward compatibility)
 
     public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo, prefix=''): Promise<ContentItemEntity[]> {
         const contentItemsToProcess: ContentItemEntity[] = []

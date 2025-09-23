@@ -2,7 +2,8 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
+import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity } from '@memberjunction/core-entities';
+import { ContentDiscoveryResult } from '../../Engine/generic/process.types';
 import { RSSItem } from './RSS.types';
 import axios from 'axios'
 import crypto from 'crypto'
@@ -13,7 +14,6 @@ dotenv.config()
 @RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {
     private contextUser: UserInfo;
-    private engine: AutotagBaseEngine;
     protected contentSourceTypeID: string
 
     constructor() {
@@ -23,6 +23,206 @@ export class AutotagRSSFeed extends AutotagBase {
 
     protected getContextUser(): UserInfo {
         return this.contextUser;
+    }
+    
+    // NEW CLOUD-FRIENDLY METHODS
+    
+    /**
+     * Discovery phase: Parse RSS feeds and identify new/modified items
+     * @param contentSources - RSS feed content sources to discover items from
+     * @param contextUser - User context
+     * @returns Array of RSS items that need processing
+     */
+    public async DiscoverContentToProcess(
+        contentSources: ContentSourceEntity[], 
+        contextUser: UserInfo
+    ): Promise<ContentDiscoveryResult[]> {
+        const discoveries: ContentDiscoveryResult[] = [];
+        this.contextUser = contextUser;
+
+        for (const contentSource of contentSources) {
+            try {
+                console.log(`Discovering RSS items from: ${contentSource.URL}`);
+                const allRSSItems: RSSItem[] = await this.parseRSSFeed(contentSource.URL);
+                
+                if (!allRSSItems || allRSSItems.length === 0) {
+                    console.log(`No RSS items found for content source: ${contentSource.Name}`);
+                    continue;
+                }
+
+                for (const rssItem of allRSSItems) {
+                    try {
+                        // Check if this RSS item already exists as a ContentItem
+                        const existingContentItemId = await this.getExistingContentItemIdForRSS(rssItem, contentSource.ID, contextUser);
+                        
+                        if (existingContentItemId) {
+                            // Check if the item has been modified
+                            const newHash = await this.getChecksumFromRSSItem(rssItem, contextUser);
+                            const existingHash = await this.getExistingContentItemHash(existingContentItemId, contextUser);
+                            
+                            if (newHash !== existingHash) {
+                                discoveries.push({
+                                    identifier: rssItem.link || rssItem.guid, 
+                                    contentSourceId: contentSource.ID,
+                                    lastModified: new Date(rssItem.pubDate || Date.now()),
+                                    action: 'update',
+                                    sourceType: 'RSSFeed',
+                                    metadata: {
+                                        rssItem: rssItem,
+                                        existingContentItemId,
+                                        newHash
+                                    }
+                                });
+                            }
+                        } else {
+                            // New RSS item
+                            discoveries.push({
+                                identifier: rssItem.link || rssItem.guid,
+                                contentSourceId: contentSource.ID,
+                                lastModified: new Date(rssItem.pubDate || Date.now()),
+                                action: 'create',
+                                sourceType: 'RSSFeed',
+                                metadata: {
+                                    rssItem: rssItem
+                                }
+                            });
+                        }
+                    } catch (itemError) {
+                        console.warn(`Error processing RSS item ${rssItem.title}:`, itemError.message);
+                        continue;
+                    }
+                }
+            } catch (sourceError) {
+                console.error(`Error processing RSS content source ${contentSource.Name}:`, sourceError.message);
+                continue;
+            }
+        }
+
+        console.log(`Discovered ${discoveries.length} RSS items to process`);
+        return discoveries;
+    }
+    
+    /**
+     * Creation phase: Create or update a single ContentItem from an RSS item
+     * @param discoveryItem - Discovery result identifying the RSS item to process
+     * @param contextUser - User context
+     * @returns Created or updated ContentItem
+     */
+    public async SetSingleContentItem(
+        discoveryItem: ContentDiscoveryResult, 
+        contextUser: UserInfo
+    ): Promise<ContentItemEntity> {
+        const rssItem: RSSItem = discoveryItem.metadata.rssItem;
+        const md = new Metadata();
+
+        try {
+            let contentItem: ContentItemEntity;
+
+            if (discoveryItem.action === 'update' && discoveryItem.metadata?.existingContentItemId) {
+                // Update existing ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                await contentItem.Load(discoveryItem.metadata.existingContentItemId);
+            } else {
+                // Create new ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                contentItem.NewRecord();
+                contentItem.ContentSourceID = discoveryItem.contentSourceId;
+                
+                // Get content source info for other required fields
+                const contentSource = await this.getContentSource(discoveryItem.contentSourceId, contextUser);
+                contentItem.ContentTypeID = contentSource.ContentTypeID;
+                contentItem.ContentSourceTypeID = contentSource.ContentSourceTypeID;
+                contentItem.ContentFileTypeID = contentSource.ContentFileTypeID;
+                contentItem.Name = rssItem.title || contentSource.Name;
+                contentItem.URL = rssItem.link || contentSource.URL;
+                contentItem.Description = rssItem.description || await this.engine.getContentItemDescription({
+                    contentSourceID: discoveryItem.contentSourceId,
+                    ContentTypeID: contentSource.ContentTypeID,
+                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                    ContentFileTypeID: contentSource.ContentFileTypeID,
+                    URL: rssItem.link || contentSource.URL,
+                    name: contentItem.Name
+                }, contextUser);
+            }
+
+            // Set RSS item data as JSON text
+            contentItem.Text = JSON.stringify(rssItem);
+            contentItem.Checksum = discoveryItem.metadata.newHash || await this.getChecksumFromRSSItem(rssItem, contextUser);
+
+            // Save the ContentItem
+            const saveResult = await contentItem.Save();
+            if (saveResult) {
+                console.log(`Successfully ${discoveryItem.action}d content item for RSS item: ${rssItem.title}`);
+                return contentItem;
+            } else {
+                throw new Error(`Failed to save content item for RSS item ${rssItem.title}`);
+            }
+        } catch (error) {
+            console.error(`Failed to process RSS item ${rssItem.title}:`, error.message);
+            throw error;
+        }
+    }
+    
+    // HELPER METHODS
+    
+    /**
+     * Check if ContentItem already exists for this RSS item
+     */
+    private async getExistingContentItemIdForRSS(rssItem: RSSItem, contentSourceId: string, contextUser: UserInfo): Promise<string | null> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ContentItemEntity>({
+                EntityName: 'Content Items',
+                ExtraFilter: `ContentSourceID='${contentSourceId}' AND (URL='${rssItem.link}' OR Description='${rssItem.description}')`,
+                ResultType: 'entity_object'
+            }, contextUser);
+            
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0].ID;
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    
+    /**
+     * Get existing ContentItem hash for comparison
+     */
+    private async getExistingContentItemHash(contentItemId: string, contextUser: UserInfo): Promise<string> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ContentItemEntity>({
+                EntityName: 'Content Items',
+                ExtraFilter: `ID='${contentItemId}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+            
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0].Checksum || '';
+            }
+            return '';
+        } catch {
+            return '';
+        }
+    }
+    
+    /**
+     * Get ContentSource entity by ID
+     */
+    private async getContentSource(contentSourceId: string, contextUser: UserInfo): Promise<ContentSourceEntity> {
+        const rv = new RunView();
+        const result = await rv.RunView<ContentSourceEntity>({
+            EntityName: 'Content Sources',
+            ExtraFilter: `ID='${contentSourceId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        } else {
+            throw new Error(`ContentSource with ID ${contentSourceId} not found`);
+        }
     }
 
     /**

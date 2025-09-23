@@ -2,7 +2,8 @@ import { AutotagBase } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
+import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity } from '@memberjunction/core-entities';
+import { ContentDiscoveryResult } from '../../Engine/generic/process.types';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
@@ -12,7 +13,6 @@ dotenv.config()
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
-    private engine: AutotagBaseEngine;
     protected contentSourceTypeID: string
     protected CrawlOtherSitesInTopLevelDomain: boolean;
     protected CrawlSitesInLowerLevelDomain: boolean;
@@ -29,6 +29,223 @@ export class AutotagWebsite extends AutotagBase {
 
     protected getContextUser(): UserInfo {
         return this.contextUser;
+    }
+    
+    // NEW CLOUD-FRIENDLY METHODS
+    
+    /**
+     * Discovery phase: Crawl websites and identify new/modified pages
+     * @param contentSources - Website content sources to discover items from
+     * @param contextUser - User context
+     * @returns Array of web pages that need processing
+     */
+    public async DiscoverContentToProcess(
+        contentSources: ContentSourceEntity[], 
+        contextUser: UserInfo
+    ): Promise<ContentDiscoveryResult[]> {
+        const discoveries: ContentDiscoveryResult[] = [];
+        this.contextUser = contextUser;
+
+        for (const contentSource of contentSources) {
+            try {
+                console.log(`Discovering web pages from: ${contentSource.URL}`);
+                
+                // Load content source parameters
+                const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, contextUser);
+                if (contentSourceParamsMap) {
+                    contentSourceParamsMap.forEach((value, key) => {
+                        if (key in this) {
+                            (this as any)[key] = value;
+                        }
+                    });
+                }
+                
+                const startURL = contentSource.URL;
+                const rootURL = this.RootURL ? this.RootURL : this.getBasePath(startURL);
+                const regex = this.URLPattern ? new RegExp(this.URLPattern) : new RegExp('.*');
+                
+                // Get all links from the website
+                const allContentItemLinks: string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
+                
+                if (!allContentItemLinks || allContentItemLinks.length === 0) {
+                    console.log(`No web pages found for content source: ${contentSource.Name}`);
+                    continue;
+                }
+
+                for (const webPageURL of allContentItemLinks) {
+                    try {
+                        // Check if this web page already exists as a ContentItem
+                        const newHash = await this.engine.getChecksumFromURL(webPageURL);
+                        const existingContentItemId = await this.getExistingContentItemIdForURL(webPageURL, contentSource.ID, contextUser);
+                        
+                        if (existingContentItemId) {
+                            // Check if the page has been modified
+                            const existingHash = await this.getExistingContentItemHash(existingContentItemId, contextUser);
+                            
+                            if (newHash !== existingHash) {
+                                discoveries.push({
+                                    identifier: webPageURL,
+                                    contentSourceId: contentSource.ID,
+                                    lastModified: new Date(), // Websites don't have reliable last modified dates
+                                    action: 'update',
+                                    sourceType: 'Website',
+                                    metadata: {
+                                        url: webPageURL,
+                                        existingContentItemId,
+                                        newHash
+                                    }
+                                });
+                            }
+                        } else {
+                            // New web page
+                            discoveries.push({
+                                identifier: webPageURL,
+                                contentSourceId: contentSource.ID,
+                                lastModified: new Date(),
+                                action: 'create',
+                                sourceType: 'Website',
+                                metadata: {
+                                    url: webPageURL,
+                                    newHash
+                                }
+                            });
+                        }
+                    } catch (itemError) {
+                        console.warn(`Error processing web page ${webPageURL}:`, itemError.message);
+                        continue;
+                    }
+                }
+            } catch (sourceError) {
+                console.error(`Error processing website content source ${contentSource.Name}:`, sourceError.message);
+                continue;
+            }
+        }
+
+        console.log(`Discovered ${discoveries.length} web pages to process`);
+        return discoveries;
+    }
+    
+    /**
+     * Creation phase: Create or update a single ContentItem from a web page
+     * @param discoveryItem - Discovery result identifying the web page to process
+     * @param contextUser - User context
+     * @returns Created or updated ContentItem
+     */
+    public async SetSingleContentItem(
+        discoveryItem: ContentDiscoveryResult, 
+        contextUser: UserInfo
+    ): Promise<ContentItemEntity> {
+        const webPageURL = discoveryItem.identifier;
+        const md = new Metadata();
+
+        try {
+            let contentItem: ContentItemEntity;
+
+            if (discoveryItem.action === 'update' && discoveryItem.metadata?.existingContentItemId) {
+                // Update existing ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                await contentItem.Load(discoveryItem.metadata.existingContentItemId);
+            } else {
+                // Create new ContentItem
+                contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+                contentItem.NewRecord();
+                contentItem.ContentSourceID = discoveryItem.contentSourceId;
+                
+                // Get content source info for other required fields
+                const contentSource = await this.getContentSource(discoveryItem.contentSourceId, contextUser);
+                contentItem.ContentTypeID = contentSource.ContentTypeID;
+                contentItem.ContentSourceTypeID = contentSource.ContentSourceTypeID;
+                contentItem.ContentFileTypeID = contentSource.ContentFileTypeID;
+                contentItem.Name = this.getPathName(webPageURL);
+                contentItem.URL = webPageURL;
+                contentItem.Description = await this.engine.getContentItemDescription({
+                    contentSourceID: discoveryItem.contentSourceId,
+                    ContentTypeID: contentSource.ContentTypeID,
+                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
+                    ContentFileTypeID: contentSource.ContentFileTypeID,
+                    URL: webPageURL,
+                    name: contentItem.Name
+                }, contextUser);
+            }
+
+            // Parse the web page content
+            contentItem.Text = await this.parseWebPage(webPageURL);
+            contentItem.Checksum = discoveryItem.metadata.newHash || await this.engine.getChecksumFromURL(webPageURL);
+
+            // Save the ContentItem
+            const saveResult = await contentItem.Save();
+            if (saveResult) {
+                console.log(`Successfully ${discoveryItem.action}d content item for web page: ${webPageURL}`);
+                return contentItem;
+            } else {
+                throw new Error(`Failed to save content item for web page ${webPageURL}`);
+            }
+        } catch (error) {
+            console.error(`Failed to process web page ${webPageURL}:`, error.message);
+            throw error;
+        }
+    }
+    
+    // HELPER METHODS
+    
+    /**
+     * Check if ContentItem already exists for this URL
+     */
+    private async getExistingContentItemIdForURL(url: string, contentSourceId: string, contextUser: UserInfo): Promise<string | null> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ContentItemEntity>({
+                EntityName: 'Content Items',
+                ExtraFilter: `ContentSourceID='${contentSourceId}' AND URL='${url}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+            
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0].ID;
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    
+    /**
+     * Get existing ContentItem hash for comparison
+     */
+    private async getExistingContentItemHash(contentItemId: string, contextUser: UserInfo): Promise<string> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ContentItemEntity>({
+                EntityName: 'Content Items',
+                ExtraFilter: `ID='${contentItemId}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+            
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0].Checksum || '';
+            }
+            return '';
+        } catch {
+            return '';
+        }
+    }
+    
+    /**
+     * Get ContentSource entity by ID
+     */
+    private async getContentSource(contentSourceId: string, contextUser: UserInfo): Promise<ContentSourceEntity> {
+        const rv = new RunView();
+        const result = await rv.RunView<ContentSourceEntity>({
+            EntityName: 'Content Sources',
+            ExtraFilter: `ID='${contentSourceId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        } else {
+            throw new Error(`ContentSource with ID ${contentSourceId} not found`);
+        }
     }
 
     /**

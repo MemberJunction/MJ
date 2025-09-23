@@ -1,20 +1,43 @@
 import { AutotagBase } from "../../Core";
 import { AutotagBaseEngine } from "../../Engine";
 import { ContentSourceParams } from "../../Engine";
-import { RunView, UserInfo } from "@memberjunction/core";
-import { ContentSourceEntity, ContentItemEntity } from "@memberjunction/core-entities";
+import { RunView, UserInfo, Metadata } from "@memberjunction/core";
+import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity } from "@memberjunction/core-entities";
+import { ContentDiscoveryResult } from "../../Engine/generic/process.types";
 import dotenv from 'dotenv';
 dotenv.config()
 
 export abstract class CloudStorageBase extends AutotagBase {
     protected contextUser: UserInfo;
-    protected engine: AutotagBaseEngine;
     protected contentSourceTypeID: string
 
     constructor() {
         super();
-        this.engine = AutotagBaseEngine.Instance;
     }
+
+    // NEW CLOUD-FRIENDLY METHODS
+    
+    /**
+     * Discovery phase: Find what items need processing without creating ContentItems yet
+     * @param contentSources - Content sources to discover items from
+     * @param contextUser - User context
+     * @returns Array of items that need processing
+     */
+    public abstract DiscoverContentToProcess(
+        contentSources: ContentSourceEntity[], 
+        contextUser: UserInfo
+    ): Promise<ContentDiscoveryResult[]>;
+    
+    /**
+     * Creation phase: Create/update single ContentItem with parsed text (no LLM processing)
+     * @param discoveryItem - Discovery result identifying what to process
+     * @param contextUser - User context
+     * @returns Created/updated ContentItem with parsed text
+     */
+    public abstract SetSingleContentItem(
+        discoveryItem: ContentDiscoveryResult, 
+        contextUser: UserInfo
+    ): Promise<ContentItemEntity>;
 
     /**
      * Abstract method to be implemented in the subclass. This method authenticates the user to the cloud storage.

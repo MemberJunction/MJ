@@ -42,4 +42,25 @@ const connectionString = 'BlobEndpoint=https://mstaautotagstorage.blob.core.wind
 const containerName = 'autotag-test';
 let autotagger = new AutotagAzureBlob(connectionString, containerName);
 
-await autotagger.Autotag(systemUser)
+const contentSourceTypeID = await autotagger.engine.setSubclassContentSourceType('Azure Blob Storage', systemUser);
+const contentSources = await autotagger.engine.getAllContentSources(systemUser, contentSourceTypeID)
+const discoveredItems = await autotagger.DiscoverContentToProcess(contentSources, systemUser);
+const contentItems = [];
+
+for (const [item, discoveryResult] of discoveredItems.entries()) {
+  try {
+    console.log(`Processing item: ${item.ID} - ${item.Name}`);
+    const contentItem = await autotagger.SetSingleContentItem(discoveryResult, systemUser);
+    contentItems.push(contentItem);
+
+  } catch (error) {
+    console.error(`Error processing item ${item.ID}:`, error);
+  }
+}
+
+for (const contentItem of contentItems) {
+  console.log(`Tagging item: ${contentItem.ID} - ${contentItem.Name}`);
+  await autotagger.TagSingleContentItem(contentItem, systemUser);
+}
+
+console.log('All items processed.');
