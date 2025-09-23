@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { LogError, Metadata, RunQuery } from '@memberjunction/core';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { ChipThemeColor } from '@progress/kendo-angular-buttons';
+import { CustomIconComponent } from '../shared/custom-icon/custom-icon.component';
 
 @Component({
   selector: 'mj-home',

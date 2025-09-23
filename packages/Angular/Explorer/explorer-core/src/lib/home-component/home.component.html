@@ -21,11 +21,15 @@
                             [width]="'100%'"
                             (click)="navigate(item.Route)">
                     <kendo-card-body>
-                        <i [class]="'fa-solid ' + (item.IconCSSClass || 'fa-cube') + ' mj-card-icon-large'"></i>
+                        @if (item.Name === 'Ask Skip') {
+                            <mj-custom-icon iconName="skip" class="mj-card-icon-large-wrapper"></mj-custom-icon>
+                        } @else {
+                            <i [class]="'fa-solid ' + (item.IconCSSClass || 'fa-cube') + ' mj-card-icon-large'"></i>
+                        }
                         <h3>{{item.Name}}</h3>
                         <p>{{getItemDescription(item)}}</p>
-                        <kendo-chip 
-                            [label]="getChipLabel(item)" 
+                        <kendo-chip
+                            [label]="getChipLabel(item)"
                             rounded="full"
                             [themeColor]="getThemeColor(item)"
                             size="small"

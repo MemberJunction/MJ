@@ -17,6 +17,7 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { CustomIconComponent } from '../shared/custom-icon/custom-icon.component';
 
 export interface Tab {
   id?: string;
@@ -1087,7 +1088,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Ask Skip',
       path: '/askskip',
-      icon: "fa-solid fa-robot"
+      icon: 'fa-solid fa-robot'  // Keep the fallback icon property
     }
     this.drawerItems.push(drawerItem);
   }
