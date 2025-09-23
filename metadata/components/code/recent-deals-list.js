@@ -1,4 +1,7 @@
 function RecentDealsList({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load DataGrid component from registry
+  const DataGrid = components['DataGrid'];
+
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,19 +85,133 @@ function RecentDealsList({ utilities, styles, components, callbacks, savedUserSe
     return days;
   };
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      // Toggle direction if same field
-      const newDirection = sortDirection === 'ASC' ? 'DESC' : 'ASC';
-      setSortDirection(newDirection);
-      onSaveUserSettings({ ...savedUserSettings, sortBy: field, sortDirection: newDirection });
-    } else {
-      // New field, default to ASC except for Amount
-      const newDirection = field === 'Amount' ? 'DESC' : 'ASC';
-      setSortBy(field);
-      setSortDirection(newDirection);
-      onSaveUserSettings({ ...savedUserSettings, sortBy: field, sortDirection: newDirection });
+  // Render stage badge
+  const renderStageBadge = (stage) => {
+    const stageStyle = stageColors[stage] || stageColors['Prospecting'];
+    return (
+      <span style={{
+        padding: '4px 12px',
+        borderRadius: '12px',
+        fontSize: '12px',
+        fontWeight: '600',
+        backgroundColor: stageStyle.bg,
+        color: stageStyle.text,
+        border: `1px solid ${stageStyle.border}`
+      }}>
+        {stage}
+      </span>
+    );
+  };
+
+  // Render probability bar
+  const renderProbabilityBar = (probability) => (
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        width: '100px',
+        height: '8px',
+        backgroundColor: '#E5E7EB',
+        borderRadius: '4px',
+        margin: '0 auto'
+      }}>
+        <div style={{
+          width: `${probability}%`,
+          height: '100%',
+          backgroundColor: probability > 75 ? '#10B981' : probability > 50 ? '#F59E0B' : '#6B7280',
+          borderRadius: '4px',
+          transition: 'width 0.3s'
+        }} />
+      </div>
+      <div style={{ fontSize: '12px', marginTop: '2px', color: '#6B7280', textAlign: 'center' }}>
+        {probability}%
+      </div>
+    </div>
+  );
+
+  // Render days to close badge
+  const renderDaysToClose = (closeDate) => {
+    const daysToClose = getDaysToClose(closeDate);
+    if (daysToClose === null) return null;
+
+    return (
+      <span style={{
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: '600',
+        backgroundColor: daysToClose < 0 ? '#FEE2E2' : daysToClose < 7 ? '#FEF3C7' : daysToClose < 30 ? '#DBEAFE' : '#F3F4F6',
+        color: daysToClose < 0 ? '#991B1B' : daysToClose < 7 ? '#92400E' : daysToClose < 30 ? '#1E40AF' : '#6B7280'
+      }}>
+        {daysToClose < 0 ? `${Math.abs(daysToClose)} overdue` : `${daysToClose} days`}
+      </span>
+    );
+  };
+
+  // Define columns for DataGrid
+  const gridColumns = [
+    {
+      field: 'DealName',
+      header: 'Deal Name',
+      sortable: true,
+      width: '200px'
+    },
+    {
+      field: 'Stage',
+      header: 'Stage',
+      sortable: false,
+      width: '130px',
+      render: (value) => renderStageBadge(value)
+    },
+    {
+      field: 'Amount',
+      header: 'Amount',
+      sortable: true,
+      width: '120px',
+      render: (value) => (
+        <span style={{ fontWeight: '600', color: '#059669' }}>
+          {formatCurrency(value)}
+        </span>
+      )
+    },
+    {
+      field: 'Probability',
+      header: 'Probability',
+      sortable: true,
+      width: '120px',
+      render: (value) => renderProbabilityBar(value)
+    },
+    {
+      field: 'CloseDate',
+      header: 'Close Date',
+      sortable: true,
+      width: '100px',
+      render: (value) => formatDate(value)
+    },
+    {
+      field: 'DaysToClose',
+      header: 'Days to Close',
+      sortable: false,
+      width: '120px',
+      render: (value, row) => renderDaysToClose(row.CloseDate)
+    },
+    {
+      field: 'DealSource',
+      header: 'Source',
+      sortable: false,
+      width: '120px',
+      render: (value) => value || '-'
     }
+  ];
+
+  // Handle row click to open deal details modal
+  const handleRowClick = useCallback((row) => {
+    // Show the modal with deal details
+    setSelectedDeal(row);
+  }, []);
+
+  const handleSort = (field, direction) => {
+    setSortBy(field);
+    setSortDirection(direction.toUpperCase());
+    onSaveUserSettings({ ...savedUserSettings, sortBy: field, sortDirection: direction.toUpperCase() });
   };
 
   const handleDateChange = (field, value) => {
@@ -220,159 +337,34 @@ function RecentDealsList({ utilities, styles, components, callbacks, savedUserSe
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-              <th 
-                onClick={() => handleSort('DealName')}
-                style={{ 
-                  padding: '12px', 
-                  textAlign: 'left', 
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  color: sortBy === 'DealName' ? '#3B82F6' : '#374151',
-                  position: 'relative'
-                }}
-              >
-                Deal Name
-                {sortBy === 'DealName' && (
-                  <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '↑' : '↓'}</span>
-                )}
-              </th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Stage</th>
-              <th 
-                onClick={() => handleSort('Amount')}
-                style={{ 
-                  padding: '12px', 
-                  textAlign: 'right', 
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  color: sortBy === 'Amount' ? '#3B82F6' : '#374151'
-                }}
-              >
-                Amount
-                {sortBy === 'Amount' && (
-                  <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '↑' : '↓'}</span>
-                )}
-              </th>
-              <th 
-                onClick={() => handleSort('Probability')}
-                style={{ 
-                  padding: '12px', 
-                  textAlign: 'center', 
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  color: sortBy === 'Probability' ? '#3B82F6' : '#374151'
-                }}
-              >
-                Probability
-                {sortBy === 'Probability' && (
-                  <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '↑' : '↓'}</span>
-                )}
-              </th>
-              <th 
-                onClick={() => handleSort('CloseDate')}
-                style={{ 
-                  padding: '12px', 
-                  textAlign: 'left', 
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  color: sortBy === 'CloseDate' ? '#3B82F6' : '#374151'
-                }}
-              >
-                Close Date
-                {sortBy === 'CloseDate' && (
-                  <span style={{ marginLeft: '4px' }}>{sortDirection === 'ASC' ? '↑' : '↓'}</span>
-                )}
-              </th>
-              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Days to Close</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deals.map((deal, index) => {
-              const daysToClose = getDaysToClose(deal.CloseDate);
-              const stageStyle = stageColors[deal.Stage] || stageColors['Prospecting'];
-              
-              return (
-                <tr 
-                  key={deal.ID}
-                  style={{ 
-                    borderBottom: '1px solid #E5E7EB',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                    backgroundColor: index % 2 === 0 ? 'white' : '#F9FAFB'
-                  }}
-                  onClick={() => setSelectedDeal(deal)}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#F9FAFB'}
-                >
-                  <td style={{ padding: '12px' }}>
-                    <div style={{ fontWeight: '500', color: '#111827' }}>{deal.DealName}</div>
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      backgroundColor: stageStyle.bg,
-                      color: stageStyle.text,
-                      border: `1px solid ${stageStyle.border}`
-                    }}>
-                      {deal.Stage}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#059669' }}>
-                    {formatCurrency(deal.Amount)}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <div style={{ position: 'relative' }}>
-                      <div style={{ 
-                        width: '100px', 
-                        height: '8px', 
-                        backgroundColor: '#E5E7EB', 
-                        borderRadius: '4px',
-                        margin: '0 auto'
-                      }}>
-                        <div style={{ 
-                          width: `${deal.Probability}%`, 
-                          height: '100%', 
-                          backgroundColor: deal.Probability > 75 ? '#10B981' : deal.Probability > 50 ? '#F59E0B' : '#6B7280',
-                          borderRadius: '4px',
-                          transition: 'width 0.3s'
-                        }} />
-                      </div>
-                      <div style={{ fontSize: '12px', marginTop: '2px', color: '#6B7280' }}>
-                        {deal.Probability}%
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    {formatDate(deal.CloseDate)}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {daysToClose !== null && (
-                      <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        backgroundColor: daysToClose < 0 ? '#FEE2E2' : daysToClose < 7 ? '#FEF3C7' : daysToClose < 30 ? '#DBEAFE' : '#F3F4F6',
-                        color: daysToClose < 0 ? '#991B1B' : daysToClose < 7 ? '#92400E' : daysToClose < 30 ? '#1E40AF' : '#6B7280'
-                      }}>
-                        {daysToClose < 0 ? `${Math.abs(daysToClose)} overdue` : `${daysToClose} days`}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px', fontSize: '14px', color: '#6B7280' }}>
-                    {deal.DealSource || '-'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {DataGrid ? (
+          <DataGrid
+            data={deals}
+            columns={gridColumns}
+            pageSize={maxRows}
+            showFilters={false}
+            showExport={false}
+            selectionMode="none"
+            onRowClick={handleRowClick}
+            sortBy={sortBy}
+            sortDirection={sortDirection.toLowerCase()}
+            onSortChange={handleSort}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+            savedUserSettings={savedUserSettings}
+            onSaveUserSettings={onSaveUserSettings}
+          />
+        ) : (
+          <div style={{
+            padding: '40px',
+            textAlign: 'center',
+            color: '#6B7280'
+          }}>
+            DataGrid component not available
+          </div>
+        )}
       </div>
 
       {deals.length === 0 && (

@@ -139,7 +139,8 @@
           align-items: center;
           gap: 12px;
           
-          .favorites-toggle {
+          .favorites-toggle,
+          .deprecated-toggle {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -152,24 +153,34 @@
             color: #6c757d;
             cursor: pointer;
             transition: all 0.2s ease;
-            
+
             &:hover {
               background: #f8f9fa;
               border-color: #adb5bd;
             }
-            
-            &.active {
-              background: #fff3cd;
-              border-color: #ffc107;
-              color: #856404;
-              
-              i {
-                color: #ffc107;
-              }
-            }
-            
+
             i {
               font-size: 14px;
+            }
+          }
+
+          .favorites-toggle.active {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+
+            i {
+              color: #ffc107;
+            }
+          }
+
+          .deprecated-toggle.active {
+            background: #ffe4e1;
+            border-color: #ff6b6b;
+            color: #c92a2a;
+
+            i {
+              color: #ff6b6b;
             }
           }
           
@@ -468,7 +479,13 @@
                   background: #fef3c7;
                   color: #92400e;
                 }
-                
+
+                &.deprecated {
+                  background: #ffe4e1;
+                  color: #c92a2a;
+                  border: 1px solid #ff6b6b;
+                }
+
                 &.file {
                   background: #e0f2fe;
                   color: #0369a1;

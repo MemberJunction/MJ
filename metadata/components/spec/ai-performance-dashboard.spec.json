@@ -158,6 +158,12 @@
       "location": "registry",
       "namespace": "Generic/UI/AI",
       "version": "^1.0.0"
+    },
+    {
+      "name": "DataExportPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/Export",
+      "version": "^1.0.0"
     }
   ],
   "libraries": []

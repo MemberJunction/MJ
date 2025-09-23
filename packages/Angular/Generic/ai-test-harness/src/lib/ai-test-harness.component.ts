@@ -1419,7 +1419,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     debug: false
                 };
                 
-                let fullResult = JSON.parse(executionResult.payload);
+                // Check if payload is already parsed (from GraphQL client)
+                let fullResult = typeof executionResult.payload === 'string'
+                    ? JSON.parse(executionResult.payload)
+                    : executionResult.payload;
                 // Apply recursive JSON parsing to extract any nested JSON strings
                 fullResult = ParseJSONRecursive(fullResult, parseOptions);
                 

@@ -55,7 +55,13 @@
   "dependencies": [
     "@include:accounts-by-industry-chart.spec.json",
     "@include:accounts-by-industry-list.spec.json",
-    "@include:accounts-by-industry-details.spec.json"
+    "@include:accounts-by-industry-details.spec.json",
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
   ],
   "exampleUsage": "<AccountsByIndustry \n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n  maxIndustries={8}\n  pageSize={15}\n  colorScheme=\"vibrant\"\n/>",
   "code": "@file:../code/accounts-by-industry.js"

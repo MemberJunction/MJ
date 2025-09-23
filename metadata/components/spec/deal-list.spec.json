@@ -4,7 +4,7 @@
   "type": "Table",
   "location": "embedded",
   "code": "@file:../code/deal-list.js",
-  "functionalRequirements": "## Deal List Component\n\n### Purpose\nDisplay deals in a tabular format with sortable columns.\n\n### Features\n- Table layout with headers\n- Deal name, amount, and probability columns\n- Currency formatting\n- Clickable rows to open deals\n- Hover effects on rows\n- Clean table styling",
+  "functionalRequirements": "## Deal List Component\n\n### Purpose\nDisplay deals in a tabular format with sortable columns.\n\n### Features\n- Table layout with headers\n- Deal name, amount, and probability columns\n- Currency formatting\n- Uses OpenRecordButton component for opening deals\n- Hover effects on rows\n- Clean table styling",
   "dataRequirements": {
     "mode": "views",
     "description": "Displays list of deals passed via props",
@@ -22,22 +22,23 @@
     ],
     "queries": []
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- deals: Array of deal objects\n- onOpenDeal: Callback to open deal record\n\n### Table Structure\n- Header row with column labels\n- Data rows with deal information\n- Click handlers on rows",
+  "technicalDesign": "## Implementation\n\n### Props\n- deals: Array of deal objects\n\n### Dependencies\n- OpenRecordButton: Generic button component for opening entity records\n\n### Table Structure\n- Header row with column labels\n- Data rows with deal information\n- Click handlers on rows",
   "properties": [
     {
       "name": "deals",
       "type": "Array<{ID: string, DealName: string, Amount: number, CloseDate: string, Probability: number, Stage?: string, Account?: string}>",
       "required": true,
       "description": "Array of deal entities"
-    },
-    {
-      "name": "onOpenDeal",
-      "type": "(dealId: string) => void",
-      "required": true,
-      "description": "Callback to open deal record"
     }
   ],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

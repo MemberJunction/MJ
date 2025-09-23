@@ -1,51 +1,82 @@
-function EntityList({ 
-  entities, 
-  viewMode, 
-  selectedEntityId, 
-  onSelectEntity, 
-  sortBy, 
-  sortDirection, 
+function EntityList({
+  entities,
+  viewMode,
+  selectedEntityId,
+  onSelectEntity,
+  sortBy,
+  sortDirection,
   onSortChange,
-  utilities, 
-  styles, 
-  components, 
-  callbacks, 
-  savedUserSettings, 
-  onSaveUserSettings 
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings
 }) {
+  // Load DataGrid component from registry
+  const DataGrid = components['DataGrid'];
+
   // Helper function to get border radius value
   const getBorderRadius = (size) => {
     return typeof styles.borders.radius === 'object' ? styles.borders.radius[size] : styles.borders.radius;
   };
-  
-  // Handle sort column click
-  const handleSortClick = useCallback((field) => {
-    if (sortBy === field) {
-      // Toggle direction if same field
-      const newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-      onSortChange?.(field, newDirection);
-    } else {
-      // New field, default to ascending
-      onSortChange?.(field, 'asc');
-    }
-  }, [sortBy, sortDirection, onSortChange]);
-  
+
   // Handle entity selection
   const handleEntityClick = useCallback((entityId) => {
     onSelectEntity?.(entityId);
   }, [onSelectEntity]);
-  
-  // Render sort indicator
-  const renderSortIndicator = (field) => {
-    if (sortBy !== field) return null;
-    
-    return (
-      <span style={{ marginLeft: styles.spacing.xs }}>
-        {sortDirection === 'asc' ? '↑' : '↓'}
-      </span>
-    );
-  };
-  
+
+  // Define columns for DataGrid
+  const gridColumns = [
+    {
+      field: 'Name',
+      header: 'Name',
+      sortable: true,
+      width: '150px'
+    },
+    {
+      field: 'DisplayName',
+      header: 'Display Name',
+      sortable: true,
+      width: '150px',
+      render: (value, row) => value || row.Name
+    },
+    {
+      field: 'Description',
+      header: 'Description',
+      sortable: false,
+      width: '300px',
+      render: (value) => value || '-'
+    },
+    {
+      field: 'SchemaName',
+      header: 'Schema',
+      sortable: false,
+      width: '120px',
+      render: (value) => value || '-'
+    },
+    {
+      field: 'BaseTable',
+      header: 'Table',
+      sortable: false,
+      width: '150px',
+      render: (value) => value || '-'
+    },
+    {
+      field: 'BaseView',
+      header: 'Base View',
+      sortable: false,
+      width: '150px',
+      render: (value) => value || '-'
+    }
+  ];
+
+  // Handle row click to open entity details
+  const handleRowClick = useCallback((row) => {
+    // When a row is clicked, select the entity and open its details
+    handleEntityClick(row.ID);
+  }, [handleEntityClick]);
+
   // Grid View
   if (viewMode === 'grid') {
     return (
@@ -53,160 +84,34 @@ function EntityList({
         width: '100%',
         overflowX: 'auto'
       }}>
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          backgroundColor: styles.colors.surface
-        }}>
-          <thead>
-            <tr style={{
-              borderBottom: `2px solid ${styles.colors.border}`
-            }}>
-              <th
-                onClick={() => handleSortClick('Name')}
-                style={{
-                  padding: styles.spacing.md,
-                  textAlign: 'left',
-                  fontWeight: styles.typography.fontWeight?.semibold || '600',
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text,
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                Name {renderSortIndicator('Name')}
-              </th>
-              <th
-                onClick={() => handleSortClick('DisplayName')}
-                style={{
-                  padding: styles.spacing.md,
-                  textAlign: 'left',
-                  fontWeight: styles.typography.fontWeight?.semibold || '600',
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text,
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                Display Name {renderSortIndicator('DisplayName')}
-              </th>
-              <th style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                fontSize: styles.typography.fontSize.md,
-                color: styles.colors.text
-              }}>
-                Description
-              </th>
-              <th style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                fontSize: styles.typography.fontSize.md,
-                color: styles.colors.text
-              }}>
-                Schema
-              </th>
-              <th style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                fontSize: styles.typography.fontSize.md,
-                color: styles.colors.text
-              }}>
-                Table
-              </th>
-              <th style={{
-                padding: styles.spacing.md,
-                textAlign: 'left',
-                fontWeight: styles.typography.fontWeight?.semibold || '600',
-                fontSize: styles.typography.fontSize.md,
-                color: styles.colors.text
-              }}>
-                Base View
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {entities.map((entity) => (
-              <tr
-                key={entity.ID}
-                onClick={() => handleEntityClick(entity.ID)}
-                style={{
-                  backgroundColor: selectedEntityId === entity.ID 
-                    ? styles.colors.primary + '20' 
-                    : 'transparent',
-                  borderBottom: `1px solid ${styles.colors.borderLight || styles.colors.border}`,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedEntityId !== entity.ID) {
-                    e.currentTarget.style.backgroundColor = styles.colors.surfaceHover || styles.colors.surface;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedEntityId !== entity.ID) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text,
-                  fontWeight: selectedEntityId === entity.ID 
-                    ? (styles.typography.fontWeight?.semibold || '600')
-                    : (styles.typography.fontWeight?.regular || '400')
-                }}>
-                  {entity.Name}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.text
-                }}>
-                  {entity.DisplayName || entity.Name}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.sm,
-                  color: styles.colors.textSecondary,
-                  maxWidth: '300px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {entity.Description || '-'}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.textSecondary
-                }}>
-                  {entity.SchemaName || '-'}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.textSecondary
-                }}>
-                  {entity.BaseTable || '-'}
-                </td>
-                <td style={{
-                  padding: styles.spacing.md,
-                  fontSize: styles.typography.fontSize.md,
-                  color: styles.colors.textSecondary
-                }}>
-                  {entity.BaseView || '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {DataGrid ? (
+          <DataGrid
+            data={entities}
+            columns={gridColumns}
+            pageSize={50}
+            showFilters={true}
+            showExport={false}
+            selectionMode="none"  // Disable selection mode since we're using row clicks
+            onRowClick={handleRowClick}  // Handle row clicks to open the entity
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            onSortChange={onSortChange}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+            savedUserSettings={savedUserSettings}
+            onSaveUserSettings={onSaveUserSettings}
+          />
+        ) : (
+          <div style={{
+            padding: styles.spacing.lg,
+            textAlign: 'center',
+            color: styles.colors.textSecondary
+          }}>
+            DataGrid component not available
+          </div>
+        )}
       </div>
     );
   }
