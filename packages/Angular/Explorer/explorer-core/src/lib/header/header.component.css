@@ -39,7 +39,7 @@
 
 .app-logo {
   width: 290px;
-  height: 40px;
+  height: 37px;
   background: url(assets/MJ_logo.svg);
 }
 
@@ -252,6 +252,8 @@
 
   .app-logo {
     width: 60px;
+    height: 34px;
+    background-size: cover;
   }
 
   .search-wrapper-toggle {
